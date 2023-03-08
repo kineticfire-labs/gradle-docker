@@ -25,7 +25,7 @@ import org.gradle.api.Task
 
 
 /**
- * A simple 'hello world' plugin.
+ *
  */
 class DockerPlugin implements Plugin<Project> {
 
@@ -34,14 +34,4 @@ class DockerPlugin implements Plugin<Project> {
         Task imageZipTask = project.task( 'docker-zip-task', type: DockerZipTask )
     }
 
-    /*
-    void apply(Project project) {
-        // Register a task
-        project.tasks.register("greeting") {
-            doLast {
-                println("Hello from plugin 'com.kineticfire.gradle.docker.greeting'")
-            }
-        }
-    }
-    */
 }

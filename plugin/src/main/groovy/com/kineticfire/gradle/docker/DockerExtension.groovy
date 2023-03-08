@@ -18,10 +18,11 @@ package com.kineticfire.gradle.docker
 
 
 /**
- * A simple 'hello world' plugin.
+ *
  */
 class DockerExtension {
 
-    private String imageReference = null  // registry[:port]/repo[:tag]
+    //todo set back to 'null'
+    private String imageReference = "hiya"  // registry[:port]/repo[:tag]
 
 }

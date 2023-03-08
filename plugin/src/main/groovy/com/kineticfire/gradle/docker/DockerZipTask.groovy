@@ -23,7 +23,7 @@ import org.gradle.api.tasks.TaskAction
 // bash -c docker save ${registry.image.ref} | gzip > registry.gz
 
 /**
- * A simple 'hello world' plugin.
+ * 
  */
 abstract class DockerZipTask extends DefaultTask {
 
