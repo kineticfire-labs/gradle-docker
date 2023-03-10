@@ -22,7 +22,7 @@ import org.gradle.testkit.runner.GradleRunner
 /**
  * functional test
  */
-class DockerPluginFunctionalTest extends Specification {
+class DockerComposePluginFunctionalTest extends Specification {
     @TempDir
     private File projectDir
 
@@ -39,7 +39,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << ""
         buildFile << """
 plugins {
-    id( 'com.kineticfire.docker' )
+    id( 'com.kineticfire.docker-compose' )
 }
 """
 
@@ -47,11 +47,11 @@ plugins {
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( "dockerZip" )
+        runner.withArguments( "dockerComposeUp" )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( "Hi from DockerZipTask hiya" )
+        result.output.contains( "Hi from DockerComposeUpTask hiya compose" )
     }
 }

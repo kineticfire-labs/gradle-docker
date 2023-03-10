@@ -20,9 +20,9 @@ package com.kineticfire.gradle.docker
 /**
  *
  */
-class DockerExtension {
+class DockerComposeExtension {
 
     //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+    String imageReference = "hiya compose"  // registry[:port]/repo[:tag]
 
 }

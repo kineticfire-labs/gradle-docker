@@ -15,14 +15,22 @@
  */
 package com.kineticfire.gradle.docker
 
-
+import org.gradle.testfixtures.ProjectBuilder
+import org.gradle.api.Project
+import spock.lang.Specification
 
 /**
- *
+ * unit test
  */
-class DockerExtension {
+class DockerRunPluginTest extends Specification {
+    def "plugin registers task"( ) {
+        given:
+        def project = ProjectBuilder.builder( ).build( )
 
-    //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+        when:
+        project.plugins.apply( "com.kineticfire.docker-run" )
 
+        then:
+        project.tasks.findByName( "docker-run-task" ) != null
+    }
 }

@@ -16,13 +16,20 @@
 package com.kineticfire.gradle.docker
 
 
+import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
+
+
 
 /**
- *
+ * 
  */
-class DockerExtension {
+abstract class DockerRunTask extends DefaultTask {
 
-    //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+    @TaskAction
+    def dockerRun( ) {
+        String imageRef = project.dockerRun.imageReference
+        println "Hi from DockerRunTask " + imageRef
+    }
 
 }

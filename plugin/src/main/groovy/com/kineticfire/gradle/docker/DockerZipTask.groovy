@@ -29,8 +29,8 @@ abstract class DockerZipTask extends DefaultTask {
 
     @TaskAction
     def dockerZip( ) {
-        //String imageRef = project.docker.imageReference
-        println "Hi from DockerZipTask"
+        String imageRef = project.docker.imageReference
+        println "Hi from DockerZipTask " + imageRef
     }
 
 }

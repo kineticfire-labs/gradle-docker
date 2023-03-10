@@ -16,13 +16,20 @@
 package com.kineticfire.gradle.docker
 
 
+import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
+
+
 
 /**
- *
+ * 
  */
-class DockerExtension {
+abstract class DockerComposeUpTask extends DefaultTask {
 
-    //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+    @TaskAction
+    def dockerComposeUp( ) {
+        String imageRef = project.dockerCompose.imageReference
+        println "Hi from DockerComposeUpTask " + imageRef
+    }
 
 }

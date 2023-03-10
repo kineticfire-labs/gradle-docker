@@ -20,9 +20,9 @@ package com.kineticfire.gradle.docker
 /**
  *
  */
-class DockerExtension {
+class DockerRunExtension {
 
     //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+    String imageReference = "hiya run"  // registry[:port]/repo[:tag]
 
 }
