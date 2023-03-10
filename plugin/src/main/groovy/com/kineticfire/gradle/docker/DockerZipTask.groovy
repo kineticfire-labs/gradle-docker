@@ -29,8 +29,21 @@ abstract class DockerZipTask extends DefaultTask {
 
     @TaskAction
     def dockerZip( ) {
+
+        String imagePointer // can be an 'image reference' or 'image ID'
+
+        if ( project.docker.imageReference != null ) {
+            imagePointer = project.docker.imageReference
+        } else if ( project.docker.imageID != null ) {
+            imagePointer = project.docker.imageID
+        } else {
+            throw StopExecutionException( "No target image defined for 'dockerZip' task." )
+        }
+
+        /*
         String imageRef = project.docker.imageReference
         println "Hi from DockerZipTask " + imageRef
+        */
     }
 
 }

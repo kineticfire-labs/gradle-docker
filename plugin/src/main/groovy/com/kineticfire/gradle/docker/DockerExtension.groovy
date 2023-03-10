@@ -22,7 +22,9 @@ package com.kineticfire.gradle.docker
  */
 class DockerExtension {
 
-    //todo set back to 'null'
-    String imageReference = "hiya"  // registry[:port]/repo[:tag]
+    // format is:  registry[:port]/repository[:tag]
+    String imageReference = null
+
+    String imageID = null
 
 }

@@ -36,7 +36,7 @@ group = 'com.kineticfire.gradle.docker'
 version = '1.0.0'
 
 gradlePlugin {
-    // Define the plugin
+    // Define the plugins
     plugins {
         dockerPlugin {
             id = 'com.kineticfire.docker'
