@@ -25,10 +25,10 @@ import org.gradle.api.tasks.TaskAction
 /**
  * 
  */
-abstract class DockerZipTask extends DefaultTask {
+abstract class DockerSaveTask extends DefaultTask {
 
     @TaskAction
-    def dockerZip( ) {
+    def dockerSave( ) {
 
         String imagePointer // can be an 'image reference' or 'image ID'
 
@@ -37,13 +37,14 @@ abstract class DockerZipTask extends DefaultTask {
         } else if ( project.docker.imageID != null ) {
             imagePointer = project.docker.imageID
         } else {
-            throw StopExecutionException( "No target image defined for 'dockerZip' task." )
+            throw StopExecutionException( "No target image defined for 'dockerSave' task." )
         }
 
         /*
         String imageRef = project.docker.imageReference
-        println "Hi from DockerZipTask " + imageRef
+        println "Hi from DockerSaveTask " + imageRef
         */
+        println "Hi from DockerSaveTask hiya"
     }
 
 }

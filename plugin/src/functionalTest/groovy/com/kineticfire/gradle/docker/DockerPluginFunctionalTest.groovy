@@ -23,6 +23,7 @@ import org.gradle.testkit.runner.GradleRunner
  * functional test
  */
 class DockerPluginFunctionalTest extends Specification {
+
     @TempDir
     private File projectDir
 
@@ -38,20 +39,26 @@ class DockerPluginFunctionalTest extends Specification {
         given:
         settingsFile << ""
         buildFile << """
+
 plugins {
     id( 'com.kineticfire.docker' )
 }
+
+docker {
+    imageReference = 'test:1.0'
+}
+
 """
 
         when:
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( "dockerZip" )
+        runner.withArguments( "dockerSave" )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( "Hi from DockerZipTask hiya" )
+        result.output.contains( "Hi from DockerSaveTask hiya" )
     }
 }

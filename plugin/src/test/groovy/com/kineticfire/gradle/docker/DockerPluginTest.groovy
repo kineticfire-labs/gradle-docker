@@ -31,6 +31,6 @@ class DockerPluginTest extends Specification {
         project.plugins.apply( "com.kineticfire.docker" )
 
         then:
-        project.tasks.findByName( "docker-zip-task" ) != null
+        project.tasks.findByName( "docker-save-task" ) != null
     }
 }
