@@ -35,6 +35,7 @@ dependencies {
 group = 'com.kineticfire.gradle.docker'
 version = '1.0.0'
 
+
 gradlePlugin {
     // Define the plugins
     plugins {

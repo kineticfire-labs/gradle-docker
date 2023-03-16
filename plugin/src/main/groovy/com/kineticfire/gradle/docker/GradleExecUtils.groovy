@@ -21,72 +21,97 @@ import java.util.HashMap
 
 
 /**
- * 
+ * Provides command line execution utilities.
+ *
  */
 final class GradleExecUtils {
 
 
-    /*
-    todo:  move to other utils
-
-    username = System.properties[ 'user.name' ]
-    uid = [ "id", "-u", username ].execute( ).text.trim( )
+   /**
+    * Executes the command as a command line process under the current working directory using Groovy's String.execute() method.
+    * <p>
+    * Returns a result as a Map<String,String> with key-value pairs:
+    * <ul>
+    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
+    *    <ol>out - the output returned by the process, which could be an empty string</ol>
+    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
+    * </ul>
+    * <p>
+    * This method is generally simpler to use than than the 'exec( String[] task )', however that method may be required over this one when using arguments that have spaces or wildcards.
+    *
+    * @param task
+    *    the task (or command) to execute as a String
+    * @return a Map of the result of the command execution
     */
+   static Map<String, String> exec( String task ) { 
+
+      Map<String, String> result = new HashMap<String, String>( )
+
+      StringBuffer sout = new StringBuffer( )
+      StringBuffer serr = new StringBuffer( )
+
+      Process proc = task.execute( )
+      proc.consumeProcessOutput( sout, serr )
+      proc.waitFor( )
+
+      int exitValue = proc.exitValue( )
+      result.put( 'exitValue', exitValue )
+
+      result.put( 'out', sout.toString( ).trim( ) ) 
+
+      if ( exitValue < 0 || exitValue > 0 ) { 
+         result.put( 'err', serr.toString( ).trim( ) ) 
+      }   
 
 
-    // generally simpler to use than the 'String[] task' version, but can't use when task has arguments that have spaces or wildcards to then use 'String[] task' version
-    static Map<String, String> exec( String task ) { 
+      return( result )
 
-       Map<String, String> result = new HashMap<String, String>( )
-
-       StringBuffer sout = new StringBuffer( )
-       StringBuffer serr = new StringBuffer( )
-
-       Process proc = task.execute( )
-       proc.consumeProcessOutput( sout, serr )
-       proc.waitFor( )
-
-       int exitValue = proc.exitValue( )
-       result.put( 'exitValue', exitValue )
-
-       result.put( 'out', sout.toString( ).trim( ) ) 
-
-       if ( exitValue < 0 || exitValue > 0 ) { 
-          result.put( 'err', serr.toString( ).trim( ) ) 
-       }   
+   }
 
 
-       return( result )
+   /**
+    * Executes the command as a command line process under the current working directory using Groovy's String[].execute() method.
+    * <p>
+    * Calls Groovy's toString() method on each item in the array.  The first item in the array is treated as the command and executed with Groovy's String.execute() method and any additional array items are treated as parameters.
+    * <p>
+    * Returns a result as a Map<String,String> with key-value pairs:
+    * <ul>
+    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
+    *    <ol>out - the output returned by the process, which could be an empty string</ol>
+    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
+    * </ul>
+    * <p>
+    * This method is needed to use over the simpler 'exec( String task )' when using arguments that have spaces or wildcards.
+    *
+    * @param task
+    *    the task (or command) to execute as a String array, where the first item is the command and any subsequent items are arguments
+    * @return a Map of the result of the command execution
+    */
+   static Map<String, String> exec( String[] task ) { 
 
-    }
+      Map<String, String> result = new HashMap<String, String>( )
+
+      StringBuffer sout = new StringBuffer( )
+      StringBuffer serr = new StringBuffer( )
+
+      Process proc = task.execute( )
+      proc.consumeProcessOutput( sout, serr )
+      proc.waitFor( )
+
+      int exitValue = proc.exitValue( )
+      result.put( 'exitValue', exitValue )
+
+      result.put( 'out', sout.toString( ).trim( ) ) 
+
+      if ( exitValue < 0 || exitValue > 0 ) { 
+         result.put( 'err', serr.toString( ).trim( ) ) 
+      }   
 
 
-    // use when task has arguments that have spaces or wildcards
-    static Map<String, String> exec( String[] task ) { 
+      return( result )
 
-       Map<String, String> result = new HashMap<String, String>( )
-
-       StringBuffer sout = new StringBuffer( )
-       StringBuffer serr = new StringBuffer( )
-
-       Process proc = task.execute( )
-       proc.consumeProcessOutput( sout, serr )
-       proc.waitFor( )
-
-       int exitValue = proc.exitValue( )
-       result.put( 'exitValue', exitValue )
-
-       result.put( 'out', sout.toString( ).trim( ) ) 
-
-       if ( exitValue < 0 || exitValue > 0 ) { 
-          result.put( 'err', serr.toString( ).trim( ) ) 
-       }   
+   }
 
 
-       return( result )
-
-    }
-
-
-    private GradleExecUtils( ) { }
+   private GradleExecUtils( ) { }
 }
