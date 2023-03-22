@@ -26,20 +26,13 @@ import java.util.Map
 final class SystemUtils {
 
 
-    /*
-    todo:
-
-    username = System.properties[ 'user.name' ]
-    uid = [ "id", "-u", username ].execute( ).text.trim( )
-    */
-
-
    /**
-    * Returns the username for the current active user as a String or an empty String if an error occurred.
+    * Returns the username for the current active user as a String.
     *
-    * @return username for the current active user as a String or an empty String if an error occurred
+    * @return username for the current active user as a String
     */
    static String getUserName( ) {
+      return( System.properties[ 'user.name' ] )
    }
 
 
@@ -49,6 +42,7 @@ final class SystemUtils {
     * @return the UID of the current active user as an int or -1 if an error occurred
     */
    static int getUid( ) {
+      return( getUid( getUserName( ) ) )
    }
 
 
@@ -60,6 +54,18 @@ final class SystemUtils {
     * @return the UID of the current active user as an int or -1 if an error occurred
     */
    static int getUid( String username ) {
+
+      int uid = -1;
+
+      String[] commandArray = [ 'id', '-u', username ]
+
+      Map<String, String> response = GradleExecUtils.exec( commandArray )
+
+      if ( response.get( 'exitValue' ) == 0 ) {
+         uid = Integer.parseInt( response.get( 'out' ) )
+      }
+
+      return( uid )
    }
 
 

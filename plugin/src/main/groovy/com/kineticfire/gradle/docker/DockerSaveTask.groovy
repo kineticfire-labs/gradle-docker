@@ -46,6 +46,12 @@ abstract class DockerSaveTask extends DefaultTask {
         */
         println "Hi from DockerSaveTask hiya"
 
+        //println GradleExecUtils.exec( 'ls' ).get( 'out' )
+        //println GradleExecUtils.exec( 'pwd' ).get( 'out' )
+        //println SystemUtils.getUserName( )
+        //println SystemUtils.getUid( )
+        //println SystemUtils.getUid( SystemUtils.getUserName( ) )
+
     }
 
 }

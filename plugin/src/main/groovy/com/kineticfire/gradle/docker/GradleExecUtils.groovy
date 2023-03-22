@@ -20,6 +20,7 @@ import java.util.Map
 import java.util.HashMap
 
 
+
 /**
  * Provides command line execution utilities.
  *
@@ -33,7 +34,7 @@ final class GradleExecUtils {
     * Returns a result as a Map<String,String> with key-value pairs:
     * <ul>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the output returned by the process, which could be an empty string</ol>
+    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
     *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
     * </ul>
     * <p>
@@ -52,7 +53,8 @@ final class GradleExecUtils {
 
       Process proc = task.execute( )
       proc.consumeProcessOutput( sout, serr )
-      proc.waitFor( )
+      proc.waitForProcessOutput( )
+
 
       int exitValue = proc.exitValue( )
       result.put( 'exitValue', exitValue )
@@ -77,7 +79,7 @@ final class GradleExecUtils {
     * Returns a result as a Map<String,String> with key-value pairs:
     * <ul>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the output returned by the process, which could be an empty string</ol>
+    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
     *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
     * </ul>
     * <p>
@@ -96,7 +98,7 @@ final class GradleExecUtils {
 
       Process proc = task.execute( )
       proc.consumeProcessOutput( sout, serr )
-      proc.waitFor( )
+      proc.waitForProcessOutput( )
 
       int exitValue = proc.exitValue( )
       result.put( 'exitValue', exitValue )
