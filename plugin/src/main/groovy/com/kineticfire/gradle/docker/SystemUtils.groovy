@@ -62,7 +62,14 @@ final class SystemUtils {
       Map<String, String> response = GradleExecUtils.exec( commandArray )
 
       if ( response.get( 'exitValue' ) == 0 ) {
-         uid = Integer.parseInt( response.get( 'out' ) )
+
+         try {
+            uid = Integer.parseInt( response.get( 'out' ) )
+         } catch ( NumberFormatException e ) {
+            println 'err out ' + response.get( 'out' ) + 'end'
+            uid = -1
+         }
+
       }
 
       return( uid )

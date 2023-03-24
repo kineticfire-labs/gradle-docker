@@ -52,8 +52,7 @@ final class GradleExecUtils {
       StringBuffer serr = new StringBuffer( )
 
       Process proc = task.execute( )
-      proc.consumeProcessOutput( sout, serr )
-      proc.waitForProcessOutput( )
+      proc.waitForProcessOutput( sout, serr )
 
 
       int exitValue = proc.exitValue( )
@@ -96,9 +95,10 @@ final class GradleExecUtils {
       StringBuffer sout = new StringBuffer( )
       StringBuffer serr = new StringBuffer( )
 
+      // https://stackoverflow.com/questions/19988946/executing-many-sub-processes-in-groovy-fails
+
       Process proc = task.execute( )
-      proc.consumeProcessOutput( sout, serr )
-      proc.waitForProcessOutput( )
+      proc.waitForProcessOutput( sout, serr )
 
       int exitValue = proc.exitValue( )
       result.put( 'exitValue', exitValue )
