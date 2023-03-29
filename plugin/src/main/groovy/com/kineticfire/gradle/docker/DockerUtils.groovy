@@ -40,7 +40,7 @@ final class DockerUtils {
     *    <li>reason -- reason why the command failed; only present if 'state' is 'error'</li>
     * </ul>
     * <p>
-    * The state entry of the returned Map will have one of the following values.  The first four are Docker-defined container states.
+    * The 'state' entry of the returned Map will have one of the following values.  The first four are Docker-defined container states.
     * <ul>
     *    <li>created</li>
     *    <li>restarting</li>
@@ -72,6 +72,64 @@ final class DockerUtils {
          response.put( 'state', 'not-found' )
       } else {
          response.put( 'state', 'error' )
+         response.put( 'reason', query.get( 'err' ) )
+      }
+
+      return( response )
+
+   }
+
+
+   /**
+    * Returns a Map indicating the health of the container 'container'.
+    * <p>
+    * The 'container' argument can be the container ID or the container name.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>health -- the health of the container</li>
+    *    <li>reason -- reason why the command failed; only present if 'health' is 'error'</li>
+    * </ul>
+    * <p>
+    * The 'health' entry of the returned Map will have one of the following values.  The first three are Docker-defined health statuses.
+    * <ul>
+    *    <li>healthy</li>
+    *    <li>unhealthy -- container could be in the 'running' or 'exited' states; an exited (e.g., stopped container) is always 'unhealthy'</li>
+    *    <li>starting -- the health check hasn't returned yet</li>
+    *    <li>none -- could not determine the container's health; populates the 'reason' entry</li>
+    *    <li>error -- an error occurred when executing the command</li>
+    * </ul>
+    * <p>
+    * The 'reason' entry of the returned Map is populated only if 'health' is 'none' and consists of the following fields:
+    * <ol>
+    *    <li>unknown -- the container has no health check</li>
+    *    <li>not-found -- the container wasn't found</li>
+    * </ol>
+    *
+    * @param container
+    *    the container to query
+    * @return a Map containing the current health of the container
+    */
+   static Map<String,String> getContainerHealth( String container ) {
+
+      Map<String,String> response = new HashMap<String,String>( )
+
+
+      String command = 'docker inspect --format {{.State.Health.Status}} ' + container
+
+      Map<String, String> query = GradleExecUtils.exec( command )
+
+
+      if ( query.get( 'exitValue' ) == 0 ) {
+         response.put( 'health', query.get( 'out' ).toLowerCase( ) )
+      } else if ( query.get( 'err' ).contains( 'map has no entry for key "Health"' ) ) {
+         response.put( 'health', 'none' )
+         response.put( 'reason', 'unknown' )
+      } else if ( query.get( 'err' ).contains( 'No such object' ) ) {
+         response.put( 'health', 'none' )
+         response.put( 'reason', 'not-found' )
+      } else {
+         response.put( 'health', 'error' )
          response.put( 'reason', query.get( 'err' ) )
       }
 

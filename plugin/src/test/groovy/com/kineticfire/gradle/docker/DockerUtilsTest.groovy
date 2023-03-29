@@ -24,6 +24,92 @@ import spock.lang.Specification
  */
 class DockerUtilsTest extends Specification {
 
+    // using an image that can pulled from Docker Hub
+    static final String ALPINE_IMAGE_REF  = 'alpine:3.17.2'
+
+
+    def setupSpec( ) {
+
+        // pull alpine:latest from Docker Hub
+        GradleExecUtils.exec( 'docker pull alpine:latest' )
+
+
+        // docker build - < Dockerfile
+        // docker build -f <Dockerfile>
+    }
+
+
+    //todo -- need?
+    def cleanupSpec( ) {
+    }
+
+
+    def "getContainerHealth(String container) returns correctly when container not found"( ) {
+        given:
+        String containerName = 'container-shouldnt-exist'
+
+        when:
+        Map<String,String> result = DockerUtils.getContainerHealth( containerName )
+        String health = result.get( 'health' )
+        String reason = result.get( 'reason' )
+
+        then:
+        'none'.equals( health )
+        'not-found'.equals( reason )
+    }
+
+
+    def "getContainerHealth(String container) returns correctly when container has no health check"( ) {
+        given:
+        String containerImageRef = ALPINE_IMAGE_REF
+        String containerName = 'my-alpine-nohealth'
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        Map<String, String> result = GradleExecUtils.exec( dockerRunCommand )
+        //todo check exitValue == 0
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+
+        while ( !isRunning && count < 10 ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+            count++
+        }
+
+
+        Map<String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+        String health = healthResult.get( 'health' )
+        String reason = healthResult.get( 'reason' )
+
+
+        GradleExecUtils.exec( dockerStopCommand )
+
+        then:
+        'none'.equals( health )
+        'unknown'.equals( reason )
+    }
+
+
+    //todo
+    def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) {
+    }
+
+
+    //todo
+    def "getContainerHealth(String container) returns correctly when container health is 'unhealthy'"( ) {
+    }
+
+
+    //todo
+    def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
+    }
+
+
     def "getContainerState(String container) returns correctly when container not found"( ) {
         given:
         String containerName = 'container-shouldnt-exist'
@@ -37,12 +123,11 @@ class DockerUtilsTest extends Specification {
 
     def "getContainerState(String container) returns correctly when container in 'running' state"( ) {
         given:
-        // using an image that can pulled from Docker Hub
-        String containerImageRef = 'alpine:latest'
+        String containerImageRef = ALPINE_IMAGE_REF
         String containerName = 'my-alpine'
 
         when:
-        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', 'alpine:latest', 'tail', '-f' ]
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
         String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
 
