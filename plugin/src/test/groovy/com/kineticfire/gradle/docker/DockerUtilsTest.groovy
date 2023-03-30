@@ -15,7 +15,12 @@
  */
 package com.kineticfire.gradle.docker
 
+import java.io.File
+import java.nio.file.Path
+
+import org.gradle.api.Project
 import spock.lang.Specification
+import spock.lang.TempDir
 
 
 /**
@@ -24,23 +29,30 @@ import spock.lang.Specification
  */
 class DockerUtilsTest extends Specification {
 
-    // using an image that can pulled from Docker Hub
-    static final String ALPINE_IMAGE_REF  = 'alpine:3.17.2'
+    static file String COMPOSE_VERSION = '3.1'
+    static final String ALPINE_IMAGE_REF  = 'alpine:3.17.2' // using an image that can be pulled from Docker Hub
+    static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
+
+
+    @TempDir
+    Path tempDir
+
+    File composeFile
 
 
     def setupSpec( ) {
-
-        // pull alpine:latest from Docker Hub
-        GradleExecUtils.exec( 'docker pull alpine:latest' )
-
-
-        // docker build - < Dockerfile
-        // docker build -f <Dockerfile>
+        // pull image used by multiple tests
+        GradleExecUtils.exec( 'docker pull ' + ALPINE_IMAGE_REF )
     }
 
 
     //todo -- need?
     def cleanupSpec( ) {
+    }
+
+
+    def setup( ) {
+        composeFile = new File( tempDir.toString( ) + File.separatorChar + COMPOSE_FILE_NAME )
     }
 
 
@@ -97,16 +109,31 @@ class DockerUtilsTest extends Specification {
 
     //todo
     def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) {
-    }
+        given:
+        composeFile << """
+            version '${COMPOSE_VERSION}'
 
+            services:
+              myalpine-healthy:
+                image: ${ALPINE_IMAGE_REF}
+                healthcheck:
+                  test: exit 0
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
 
-    //todo
-    def "getContainerHealth(String container) returns correctly when container health is 'unhealthy'"( ) {
     }
 
 
     //todo
     def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
+    }
+
+
+    //todo
+    def "getContainerHealth(String container) returns correctly when container health is 'unhealthy'"( ) {
     }
 
 
