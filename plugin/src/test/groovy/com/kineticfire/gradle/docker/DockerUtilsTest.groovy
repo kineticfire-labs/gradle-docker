@@ -29,7 +29,7 @@ import spock.lang.TempDir
  */
 class DockerUtilsTest extends Specification {
 
-    static file String COMPOSE_VERSION = '3.1'
+    static final String COMPOSE_VERSION = '3.7'
     static final String ALPINE_IMAGE_REF  = 'alpine:3.17.2' // using an image that can be pulled from Docker Hub
     static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
 
@@ -81,15 +81,14 @@ class DockerUtilsTest extends Specification {
         String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
 
-        Map<String, String> result = GradleExecUtils.exec( dockerRunCommand )
-        //todo check exitValue == 0
+        GradleExecUtils.execWithException( dockerRunCommand )
 
         int count = 0
-        boolean isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
 
         while ( !isRunning && count < 10 ) {
             Thread.sleep( 2000 ) // wait 2 seconds
-            isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+            isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
             count++
         }
 
@@ -99,7 +98,7 @@ class DockerUtilsTest extends Specification {
         String reason = healthResult.get( 'reason' )
 
 
-        GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.execWithException( dockerStopCommand )
 
         then:
         'none'.equals( health )
@@ -109,12 +108,22 @@ class DockerUtilsTest extends Specification {
 
     //todo
     def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) {
+
+    }
+
+
+    //todo
+    def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
+
         given:
+
+        String containerName = 'myalpine-healthy'
+
         composeFile << """
-            version '${COMPOSE_VERSION}'
+            version: '${COMPOSE_VERSION}'
 
             services:
-              myalpine-healthy:
+              ${containerName}:
                 image: ${ALPINE_IMAGE_REF}
                 healthcheck:
                   test: exit 0
@@ -124,11 +133,19 @@ class DockerUtilsTest extends Specification {
                   timeout: 2s
         """.stripIndent( )
 
-    }
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+
+        String result = GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        then:
+        0 == 1
 
 
-    //todo
-    def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
+        // todo: may need to add a clean-up (remove exited containers) if the command fails or a container exits
+
     }
 
 
@@ -158,22 +175,21 @@ class DockerUtilsTest extends Specification {
         String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
 
-        Map<String, String> result = GradleExecUtils.exec( dockerRunCommand )
-        //todo check exitValue == 0
+        GradleExecUtils.execWithException( dockerRunCommand )
 
         int count = 0
-        boolean isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
 
         while ( !isRunning && count < 10 ) {
             Thread.sleep( 2000 ) // wait 2 seconds
-            isRunning = GradleExecUtils.exec( dockerInspectRunningCommand ).get( 'out' ).equals( 'true' )
+            isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
             count++
         }
 
 
         String state = DockerUtils.getContainerState( containerName ).get( 'state' )
 
-        GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.execWithException( dockerStopCommand )
 
         then:
         'running'.equals( state )
