@@ -18,8 +18,7 @@ package com.kineticfire.gradle.docker
 
 import java.util.Map
 import java.util.HashMap
-import java.util.Set
-import java.util.HashSet
+import java.util.Set //todo needed?
 
 
 /**
@@ -139,98 +138,117 @@ final class DockerUtils {
 
 
    /**
-    * Waits for the container 'container' to reach the 'running' state.
+    * Waits for the container 'container' to reach the desired 'target' state or health status.
+    * <p>
+    * Supports a defined target state of 'running' or a health status of 'healthy'.
     * <p>
     * Retries up to 10 times, waiting two seconds between attempts.
     * <p>
-    * This is a convience method for waitForContainerStateRunning( String[] containerSet, int retrySeconds, int retryNum ) where 'container' is added to a Set, 'retrySeconds' is '2', and 'retryNum' is '10'.  See that method for details.
+    * This is a convenience method for waitForContainer( Map&lt;String,String&gt;, int retrySeconds, int retryNum ) where 'container' and 'target' are added to a Map, 'retrySeconds' is '2', and 'retryNum' is '10'.  See that method for details.
     * 
     * @param container
     *    a container reference (ID or name) as a String to query
+    * @param target
+    *    the target state or health status for the container
     * @return a Map indicating if the container is in the 'running' state with additional information
     */
-   Map<String, String> waitForContainerStateRunning( String container ) {
-      Set<String> containerSet = new HashSet<String>( )
-      containerSet.add( container )
-      return( waitForContainerStateRunning( containerSet ) )
+   Map<String, String> waitForContainer( String container, String target ) {
+      Map<String,String> containerMap = new HashMap<String,String>( )
+      containerMap.put( container, target )
+      return( waitForContainer( containerMap ) )
    }
 
 
    /**
-    * Waits for the container 'container' to reach the 'running' state.
+    * Waits for the container 'container' to reach the desired 'target' state or health status.
     * <p>
-    * This is a convience method for waitForContainerStateRunning( String[] containerSet, int retrySeconds, int retryNum ), where 'container' is added to a Set.  See that method for details.
+    * Supports a defined target state of 'running' or a health status of 'healthy'.
+    * <p>
+    * This is a convenience method for waitForContainer( Map&lt;String,String&gt;, int retrySeconds, int retryNum ) where 'container' and 'target' are added to a Map.  See that method for details.
     * 
     * @param container
     *    a container reference (ID or name) as a String to query
+    * @param target
+    *    the target state or health status for the container
     * @param retrySeconds
     *    integer number of seconds to wait between retries
     * @param retryNum
-    *    number of times to retry, waiting for the container to reach the 'running' state until a failure is returned
-    * @return a Map indicating if the container is in the 'running' state with additional information
+    *    number of times to retry, waiting for the container to reach the desired state or health status until a failure is returned
+    * @return a Map indicating if the container reached the desired state or health status with additional information
     *
     */
-   Map<String, String> waitForContainerStateRunning( String container, int retrySeconds, int retryNum ) {
-      Set<String> containerSet = new HashSet<String>( )
-      containerSet.add( container )
-      return( waitForContainerStateRunning( containerSet, retrySeconds, retryNum ) )
+   Map<String, String> waitForContainer( String container, String target, int retrySeconds, int retryNum ) {
+      Map<String,String> containerMap = new HashMap<String,String>( )
+      containerMap.put( container, target )
+      return( waitForContainer( containerMap, retrySeconds, retryNum ) )
    }
 
 
    /**
-    * Waits for a set of containers 'containerSet' to reach 'running' states.
+    * Waits for a group of containers to reach desired target states or health status, as defined in the 'containerMap'.
+    * <p>
+    * Supports a defined target state of 'running' or a health status of 'healthy'.
     * <p>
     * Retries up to 10 times, waiting two seconds between attempts.
     * <p>
-    * This is a convience method for waitForContainerStateRunning( String[] containerSet, int retrySeconds, int retryNum ) where 'retrySeconds' is '2' and 'retryNum' is '10'.  See that method for details.
-    * @param containerSet
-    *    a Set containing one or more container references (IDs and/or names) as Strings to query
-    * @return a Map indicating if all containers are in 'running' states with additional information
+    * This is a convenience method for waitForContainer( Map&lt;String,String&gt;, int retrySeconds, int retryNum ) where 'retrySeconds' is '2' and 'retryNum' is '10'.  See that method for details.
+    * @param containerMap
+    *    a Map containing one or more container references (IDs and/or names) as Strings mapped to its target state or health status as a String
+    * @return a Map indicating if the container reached the desired state or health status with additional information
     */
-   Map<String, String> waitForContainerStateRunning( Set<String> containerSet ) {
-      return( waitForContainerStateRunning( containerSet, 2, 10 ) )
+   Map<String, String> waitForContainer( Map<String,String> containerMap ) {
+      return( waitForContainer( containerMap, 2, 10 ) )
    }
 
 
    /**
-    * Waits for a set of containers 'containerSet' to reach 'running' states.
+    * Waits for a group of containers to reach desired target states or health status, as defined in the 'containerMap'.
     * <p>
-    * Blocks while waiting for all containers in the 'containerSet' to reach 'running' states or until an error or non-recoverable state is reached by at least one container or 'numRetries' is exceeded.  Performs first query for containers' states when the method is called (no initial delay).  If all containers are not in 'running' states, then will block while waiting 'retrySeconds' and retry up to 'retryNum' times.  Returns, possibly immediately or otherwise will block, until one of the following conditions is met:
+    * Supports a defined target state of 'running' or a health status of 'healthy'.
+    * <p>
+    * Blocks while waiting for all containers in the 'containerMap' to reach their target states or health statuses, or until an error or non-recoverable state or health status is reached by at least one container or 'numRetries' is exceeded.  Performs first query for containers' states and health status when the method is called (no initial delay).  If all containers are not in their target states or health statuses, then will block while waiting 'retrySeconds' and retry up to 'retryNum' times.  Returns, possibly immediately or otherwise will block, until one of the following conditions is met:
     * <ul>
-    *    <li>all containers are in 'running' states</li>
-    *    <li>at least one container is in a non-running state, e.g. 'restarting', 'paused', or 'exited'</li>
-    *    <li>at least one container is not in a 'running' state and the number of retries 'retryNum' has been hit</li>
-    *    <li>a container couldn't be found</li>
+    *    <li>all containers are in their target states or health statuses</li>
+    *    <li>at least one container is in an unrecoverable running state (e.g. 'restarting', 'paused', or 'exited') or 'unhealthy' health status</li>
+    *    <li>at least one container is not in its target state or health status and the number of retries 'retryNum' has been hit</li>
+    *    <li>a container couldn't be found and the number of retries 'retryNum' has been hit</li>
     *    <li>an error occurred</li>
     * </ul>
     * <p>
     * A Map is returned with the result of the method that contains the following entries:
     * <ul>
-    *   <li>allRunning -- a boolean that is 'true' if all containers in the 'containerSet' are in 'running' states and 'false' otherwise</li>
-    *   <li>status -- a String status indicating why all containers are not in 'running' states; present only if 'allRunning' is false</li>
-    *   <li>reason -- a String reason for the 'status'; present only if 'allRunning' is false and 'status' is 'container-state-not-running' or 'container-not-found'</li>
-    *   <li>container -- a String identifying the first container queried that was not in a 'running' state when 'retryNum' was exceeded; present only if 'allRunning' is false</li>
+    *   <li>success -- a boolean that is 'true' if all containers in the 'containerMap' are in their target states or health statuses and 'false' otherwise</li>
+    *   <li>todo status -- a String status indicating why all containers are not in their target states or health statuses; present only if 'success' is false</li>
+    *   <li>todoreason -- a String reason for the 'status'; present only if 'success' is false and 'status' is 'container-state-not-running' or 'container-not-found'</li>
+    *   <li>container -- a String identifying the first container queried that was not in its target state or health status when 'retryNum' was exceeded; present only if 'success' is false</li>
     * </ul>
     * <p>
-    * Status indicators for the 'status' entry in the returned map are:
+    * Status indicators for the 'status' entry in the returned map are: 
     * <ul>
-    *   <li>container-not-running -- a container is in a non-running state and 'reason' has the state 'Container restarting', 'Container paused,' or 'Container exited'</li>
-    *   <li>num-retries-exceeded</li>
-    *   <li>container-not-found</li>
+    *   <li>todo container-not-running -- a container is in a non-running state and 'reason' has the state 'Container restarting', 'Container paused,' or 'Container exited'</li>
+    *   <li>todo num-retries-exceeded</li>
+    *   <li>todo container-not-found</li>
     * </ul>
-    * <p>
-    * If the method returns and indicates all containers are in 'running' states, consider that (1) the container state can change later e.g. it can exit and (2) a continer state of 'running' state may not be indicative of the health and availability of the service provided by the container, so other checks may be needed.
     *
-    * @param containerSet
-    *    a Set containing one or more container references (IDs and/or names) as Strings to query
+    * @param containerMap
+    *    a Map containing one or more container references (IDs and/or names) as Strings mapped to its target state or health status as a String
     * @param retrySeconds
     *    integer number of seconds to wait between retries
     * @param retryNum
-    *    number of times to retry, waiting for all containers to reach 'running' states until a failure is returned
-    * @return a Map indicating if all containers are in 'running' states with additional information
+    *    number of times to retry, waiting for all containers to reach their target states or health status or until a failure is returned
+    * @return a Map indicating if all containers achieved their targets states or health status with additional information
     */
-   Map<String, String> waitForContainerStateRunning( Set<String> containerSet, int retrySeconds, int retryNum ) {
+   Map<String, String> waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
+      /*todo Plans:
+           - Map<String,String> for container -> {running, healthy}
+           - And if 'running' then query state, or if 'healthy' then query health
+           - Returns when all one of those states or an error occurs.
+           - Add option to immediate fail if container not found.  May want to keep trying if container not found in compose examples where a container may start after another one.
+           - Add ignore interval, such that if first query at time 0 succeeds then method returns successful but failure will not trigger method failure until after that interval?
+         */
 
+
+      /*
       Map<String, String> result = new HashMap<String, String>( )
       result.put( 'allRunning', false )
 
@@ -297,8 +315,10 @@ final class DockerUtils {
 
       }
 
-
       return( result )
+      */
+
+      return( new HashMap<String, String>( ) ) //todo for testing
 
    }
 

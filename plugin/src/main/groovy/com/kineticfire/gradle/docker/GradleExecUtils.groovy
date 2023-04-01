@@ -65,7 +65,7 @@ final class GradleExecUtils {
          throw new IOException( sb.toString( ) )
       }
 
-      return( result )
+      return( result.get( 'out' ) )
    }
 
 
@@ -148,7 +148,7 @@ final class GradleExecUtils {
          throw new IOException( sb.toString( ) )
       }
 
-      return( result )
+      return( result.get( 'out' ) )
    }
 
 

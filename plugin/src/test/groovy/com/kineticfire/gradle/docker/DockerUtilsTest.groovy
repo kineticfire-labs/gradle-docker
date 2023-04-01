@@ -21,6 +21,7 @@ import java.nio.file.Path
 import org.gradle.api.Project
 import spock.lang.Specification
 import spock.lang.TempDir
+import org.gradle.api.GradleException
 
 
 /**
@@ -43,11 +44,6 @@ class DockerUtilsTest extends Specification {
     def setupSpec( ) {
         // pull image used by multiple tests
         GradleExecUtils.exec( 'docker pull ' + ALPINE_IMAGE_REF )
-    }
-
-
-    //todo -- need?
-    def cleanupSpec( ) {
     }
 
 
@@ -92,6 +88,10 @@ class DockerUtilsTest extends Specification {
             count++
         }
 
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
 
         Map<String,String> healthResult = DockerUtils.getContainerHealth( containerName )
         String health = healthResult.get( 'health' )
@@ -103,16 +103,19 @@ class DockerUtilsTest extends Specification {
         then:
         'none'.equals( health )
         'unknown'.equals( reason )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
     }
 
 
-    //todo
+    // not testing the health status 'starting' because it is difficult to hold that state for the test
+    /*
     def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) {
-
     }
+    */
 
 
-    //todo
     def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
 
         given:
@@ -124,7 +127,9 @@ class DockerUtilsTest extends Specification {
 
             services:
               ${containerName}:
+                container_name: ${containerName}
                 image: ${ALPINE_IMAGE_REF}
+                command: tail -f
                 healthcheck:
                   test: exit 0
                   interval: 1s
@@ -135,22 +140,85 @@ class DockerUtilsTest extends Specification {
 
         when:
         String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
 
         String result = GradleExecUtils.execWithException( dockerComposeUpCommand )
 
+        int count = 0
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+
+        while ( !isHealthy && count < 10 ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+            count++
+        }
+
+        if ( !isHealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
+        }
+
+
+        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+
         then:
-        0 == 1
+        healthResult.get( 'health' ).equals( 'healthy' )
 
-
-        // todo: may need to add a clean-up (remove exited containers) if the command fails or a container exits
-
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
 
-    //todo
     def "getContainerHealth(String container) returns correctly when container health is 'unhealthy'"( ) {
+
+        given:
+
+        String containerName = 'myalpine-unhealthy'
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${ALPINE_IMAGE_REF}
+                command: tail -f
+                healthcheck:
+                  test: exit 1
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+
+        String result = GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        int count = 0
+        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+
+        while ( !isUnhealthy && count < 10 ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+            count++
+        }
+
+        if ( !isUnhealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
+        }
+
+
+        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+
+        then:
+        healthResult.get( 'health' ).equals( 'unhealthy' )
+
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
 
@@ -186,6 +254,10 @@ class DockerUtilsTest extends Specification {
             count++
         }
 
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
 
         String state = DockerUtils.getContainerState( containerName ).get( 'state' )
 
@@ -193,6 +265,9 @@ class DockerUtilsTest extends Specification {
 
         then:
         'running'.equals( state )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
     }
 
 }
