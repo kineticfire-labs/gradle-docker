@@ -153,7 +153,7 @@ final class DockerUtils {
     *    the target state or health status for the container
     * @return a Map indicating if the container is in the 'running' state with additional information
     */
-   Map<String, String> waitForContainer( String container, String target ) {
+   static Map<String, String> waitForContainer( String container, String target ) {
       Map<String,String> containerMap = new HashMap<String,String>( )
       containerMap.put( container, target )
       return( waitForContainer( containerMap ) )
@@ -178,7 +178,7 @@ final class DockerUtils {
     * @return a Map indicating if the container reached the desired state or health status with additional information
     *
     */
-   Map<String, String> waitForContainer( String container, String target, int retrySeconds, int retryNum ) {
+   static Map<String, String> waitForContainer( String container, String target, int retrySeconds, int retryNum ) {
       Map<String,String> containerMap = new HashMap<String,String>( )
       containerMap.put( container, target )
       return( waitForContainer( containerMap, retrySeconds, retryNum ) )
@@ -197,7 +197,7 @@ final class DockerUtils {
     *    a Map containing one or more container references (IDs and/or names) as Strings mapped to its target state or health status as a String
     * @return a Map indicating if the container reached the desired state or health status with additional information
     */
-   Map<String, String> waitForContainer( Map<String,String> containerMap ) {
+   static Map<String, String> waitForContainer( Map<String,String> containerMap ) {
       return( waitForContainer( containerMap, 2, 22 ) )
    }
 
@@ -266,7 +266,7 @@ final class DockerUtils {
     *    number of times to retry, waiting for all containers to reach their target states or health status or until a failure is returned
     * @return a Map indicating if all containers achieved their targets states or health status with additional information
     */
-   Map<String, String> waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
+   static Map<String, String> waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
 
       Map<String, String> result = new HashMap<String, String>( )
       result.put( 'success', false )
