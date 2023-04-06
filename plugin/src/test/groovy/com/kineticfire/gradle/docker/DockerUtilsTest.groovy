@@ -17,6 +17,9 @@ package com.kineticfire.gradle.docker
 
 import java.io.File
 import java.nio.file.Path
+import java.util.Random
+import java.util.Map
+import java.util.HashMap
 
 import org.gradle.api.Project
 import spock.lang.Specification
@@ -31,9 +34,23 @@ import org.gradle.api.GradleException
 class DockerUtilsTest extends Specification {
 
     static final String COMPOSE_VERSION = '3.7'
-    static final String ALPINE_IMAGE_REF  = 'alpine:3.17.2' // using an image that can be pulled from Docker Hub
+
+    // using an image that can be pulled from Docker Hub
+    static final String TEST_IMAGE_NAME = 'alpine'
+    static final String TEST_IMAGE_VERSION = '3.17.2'
+    static final String TEST_IMAGE_REF = TEST_IMAGE_NAME + ':' + TEST_IMAGE_VERSION 
+
     static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
 
+    // number of retries waiting for a container to reach a state or health status
+    // with a 2-second sleep time, total time is 44 seconds
+    static final int NUM_RETRIES = 22 
+
+    // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions
+    static final String CONTAINER_NAME_POSTFIX = '-DockerUtilsTest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 9999 )
+
+
+    //todo put versions into external file?
 
     @TempDir
     Path tempDir
@@ -43,7 +60,7 @@ class DockerUtilsTest extends Specification {
 
     def setupSpec( ) {
         // pull image used by multiple tests
-        GradleExecUtils.exec( 'docker pull ' + ALPINE_IMAGE_REF )
+        GradleExecUtils.exec( 'docker pull ' + TEST_IMAGE_REF )
     }
 
 
@@ -52,6 +69,11 @@ class DockerUtilsTest extends Specification {
     }
 
 
+    //***********************************
+    //***********************************
+    //***********************************
+    // getContainerHealth
+
     def "getContainerHealth(String container) returns correctly when container not found"( ) {
         given:
         String containerName = 'container-shouldnt-exist'
@@ -59,18 +81,16 @@ class DockerUtilsTest extends Specification {
         when:
         Map<String,String> result = DockerUtils.getContainerHealth( containerName )
         String health = result.get( 'health' )
-        String reason = result.get( 'reason' )
 
         then:
-        'none'.equals( health )
-        'not-found'.equals( reason )
+        'not-found'.equals( health )
     }
 
 
     def "getContainerHealth(String container) returns correctly when container has no health check"( ) {
         given:
-        String containerImageRef = ALPINE_IMAGE_REF
-        String containerName = 'my-alpine-nohealth'
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'getcontainerhealth-nohealth' + CONTAINER_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -82,7 +102,7 @@ class DockerUtilsTest extends Specification {
         int count = 0
         boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
 
-        while ( !isRunning && count < 10 ) {
+        while ( !isRunning && count < NUM_RETRIES ) {
             Thread.sleep( 2000 ) // wait 2 seconds
             isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
             count++
@@ -95,14 +115,12 @@ class DockerUtilsTest extends Specification {
 
         Map<String,String> healthResult = DockerUtils.getContainerHealth( containerName )
         String health = healthResult.get( 'health' )
-        String reason = healthResult.get( 'reason' )
 
 
         GradleExecUtils.execWithException( dockerStopCommand )
 
         then:
-        'none'.equals( health )
-        'unknown'.equals( reason )
+        'no-healthcheck'.equals( health )
 
         cleanup:
         GradleExecUtils.exec( dockerStopCommand )
@@ -120,7 +138,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'myalpine-healthy'
+        String containerName = 'getcontainerhealth-healthy' + CONTAINER_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -128,7 +146,7 @@ class DockerUtilsTest extends Specification {
             services:
               ${containerName}:
                 container_name: ${containerName}
-                image: ${ALPINE_IMAGE_REF}
+                image: ${TEST_IMAGE_REF}
                 command: tail -f
                 healthcheck:
                   test: exit 0
@@ -148,7 +166,7 @@ class DockerUtilsTest extends Specification {
         int count = 0
         boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
 
-        while ( !isHealthy && count < 10 ) {
+        while ( !isHealthy && count < NUM_RETRIES ) {
             Thread.sleep( 2000 ) // wait 2 seconds
             isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
             count++
@@ -173,7 +191,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'myalpine-unhealthy'
+        String containerName = 'getcontainerhealth-unhealthy' + CONTAINER_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -181,7 +199,7 @@ class DockerUtilsTest extends Specification {
             services:
               ${containerName}:
                 container_name: ${containerName}
-                image: ${ALPINE_IMAGE_REF}
+                image: ${TEST_IMAGE_REF}
                 command: tail -f
                 healthcheck:
                   test: exit 1
@@ -201,7 +219,7 @@ class DockerUtilsTest extends Specification {
         int count = 0
         boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
 
-        while ( !isUnhealthy && count < 10 ) {
+        while ( !isUnhealthy && count < NUM_RETRIES ) {
             Thread.sleep( 2000 ) // wait 2 seconds
             isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
             count++
@@ -221,6 +239,28 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
+    def "getContainerHealth(String container) returns correctly when command is in error"( ) {
+        given:
+        // adding invalid '--blah' flag to produce command error
+        String additionalCommand = '--blah ' + TEST_IMAGE_REF
+
+        when:
+        Map<String,String> result = DockerUtils.getContainerHealth( additionalCommand )
+        String health = result.get( 'health' )
+        String reason = result.get( 'reason' )
+
+        then:
+        'error'.equals( health )
+        reason.contains( 'unknown flag' )
+    }
+
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // getContainerState
+
 
     def "getContainerState(String container) returns correctly when container not found"( ) {
         given:
@@ -235,8 +275,8 @@ class DockerUtilsTest extends Specification {
 
     def "getContainerState(String container) returns correctly when container in 'running' state"( ) {
         given:
-        String containerImageRef = ALPINE_IMAGE_REF
-        String containerName = 'my-alpine'
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'getcontainerstate-running' + CONTAINER_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -248,7 +288,7 @@ class DockerUtilsTest extends Specification {
         int count = 0
         boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
 
-        while ( !isRunning && count < 10 ) {
+        while ( !isRunning && count < NUM_RETRIES ) {
             Thread.sleep( 2000 ) // wait 2 seconds
             isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
             count++
@@ -269,5 +309,218 @@ class DockerUtilsTest extends Specification {
         cleanup:
         GradleExecUtils.exec( dockerStopCommand )
     }
+
+    def "getContainerState(String container) returns correctly when container in 'paused' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'getcontainerstate-paused' + CONTAINER_NAME_POSTFIX
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerPauseCommand = 'docker pause ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+
+        GradleExecUtils.execWithException( dockerPauseCommand )
+
+        count = 0
+        boolean isPaused = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'paused' )
+
+        while ( !isPaused && count < NUM_RETRIES ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isPaused = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'paused' )
+            count++
+        }
+
+        if ( !isPaused ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "paused" state.' )
+        }
+
+
+
+        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+
+        then:
+        'paused'.equals( state )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+    def "getContainerState(String container) returns correctly when container in 'exited' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'getcontainerstate-exited' + CONTAINER_NAME_POSTFIX
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ] // intentionally not using '--rm' so container won't be removed when it exits
+        String dockerInspectRunningCommand = 'docker inspect -f {{.State.Running}} ' + containerName
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+        String dockerRmCommand = 'docker rm ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isRunning = GradleExecUtils.execWithException( dockerInspectRunningCommand ).equals( 'true' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+
+        GradleExecUtils.execWithException( dockerStopCommand )
+
+        count = 0
+        boolean isExited = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'exited' )
+
+        while ( !isExited && count < NUM_RETRIES ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isExited = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'exited' )
+            count++
+        }
+
+        if ( !isExited ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "exited" state.' )
+        }
+
+
+
+        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+
+        then:
+        'exited'.equals( state )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.exec( dockerRmCommand )
+    }
+
+    def "getContainerState(String container) returns correctly when container in 'created' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'getcontainerstate-created' + CONTAINER_NAME_POSTFIX
+
+        when:
+        String[] dockerCreateCommand = [ 'docker', 'create', '--name', containerName, containerImageRef ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerRmCommand = 'docker rm ' + containerName
+
+        GradleExecUtils.execWithException( dockerCreateCommand )
+
+        int count = 0
+        boolean isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
+
+        while ( !isCreated && count < NUM_RETRIES ) {
+            Thread.sleep( 2000 ) // wait 2 seconds
+            isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
+            count++
+        }
+
+        if ( !isCreated ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "created" state.' )
+        }
+
+
+
+        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+
+        then:
+        'created'.equals( state )
+
+        cleanup:
+        GradleExecUtils.exec( dockerRmCommand )
+    }
+
+
+    // not testing because hard to maintain 'restarting' state
+    /*
+    def "getContainerState(String container) returns correctly when container in 'restarting' state"( ) {
+    }
+    */
+
+    // not testing because hard to re-create 'dead' state
+    /*
+    def "getContainerState(String container) returns correctly when container in 'dead' state"( ) {
+    }
+    */
+
+    def "getContainerState(String container) returns correctly when command is in error"( ) {
+        given:
+        // adding invalid '--blah' flag to produce command error
+        String additionalCommand = '--blah ' + TEST_IMAGE_REF
+
+        when:
+        Map<String,String> result = DockerUtils.getContainerState( additionalCommand )
+        String state = result.get( 'state' )
+        String reason = result.get( 'reason' )
+
+        then:
+        'error'.equals( state )
+        reason.contains( 'unknown flag' )
+    }
+
+
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // waitForContainer
+
+
+
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly when container not found for target state"( ) {
+        given:
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        String containerName = 'container-shouldnt-exist'
+        containerMap.put( containerName, 'running' )
+
+        when:
+        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 2, 4 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        'num-retries-exceeded'.equals( reason )
+        'not-found'.equals( message )
+        containerName.equals( container )
+    }
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // waitForContainer
+
+
 
 }
