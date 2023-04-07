@@ -16,10 +16,13 @@
 package com.kineticfire.gradle.docker
 
 import java.io.File
+import java.io.InputStream
+import java.io.IOException
 import java.nio.file.Path
 import java.util.Random
 import java.util.Map
 import java.util.HashMap
+import java.util.Properties
 
 import org.gradle.api.Project
 import spock.lang.Specification
@@ -33,11 +36,12 @@ import org.gradle.api.GradleException
  */
 class DockerUtilsTest extends Specification {
 
-    static final String COMPOSE_VERSION = '3.7'
+    private static final Properties properties = loadProperties( )
 
-    // using an image that can be pulled from Docker Hub
-    static final String TEST_IMAGE_NAME = 'alpine'
-    static final String TEST_IMAGE_VERSION = '3.17.2'
+    static final String COMPOSE_VERSION = properties.get( 'testCompose.version' )
+
+    static final String TEST_IMAGE_NAME = properties.get( 'testImage.name' )
+    static final String TEST_IMAGE_VERSION = properties.get( 'testImage.version' )
     static final String TEST_IMAGE_REF = TEST_IMAGE_NAME + ':' + TEST_IMAGE_VERSION 
 
     static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
@@ -47,15 +51,33 @@ class DockerUtilsTest extends Specification {
     static final int NUM_RETRIES = 22 
 
     // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions
-    static final String CONTAINER_NAME_POSTFIX = '-DockerUtilsTest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 9999 )
+    static final String CONTAINER_NAME_POSTFIX = '-DockerUtilsTest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
 
-
-    //todo put versions into external file?
 
     @TempDir
     Path tempDir
 
     File composeFile
+
+
+    private static final Properties loadProperties( ) throws IOException {
+
+        InputStream propertiesInputStream = DockerUtilsTest.class.getClassLoader( ).getResourceAsStream( 'config.properties' )
+        Properties properties = new Properties( )
+
+        if ( propertiesInputStream != null ) {
+
+            try {
+                properties.load( propertiesInputStream );
+            } finally {
+                propertiesInputStream.close( )
+            }
+        }
+
+
+        return properties;
+
+    }
 
 
     def setupSpec( ) {
