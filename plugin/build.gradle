@@ -22,6 +22,12 @@ plugins {
     id 'groovy'
 }
 
+/* todo can specify version
+plugins {
+    id 'com.jfrog.bintray' version '1.8.5'
+}
+*/
+
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral( )

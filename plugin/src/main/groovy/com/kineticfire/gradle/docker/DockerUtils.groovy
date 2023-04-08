@@ -253,7 +253,7 @@ final class DockerUtils {
     *       </ul>
     *    <li>If 'reason' is 'error':</li>
     *       <ul>
-    *          <li>illegal-target-disposition-{&lt;disposition&gt;, null} -- the target state or health status is not valid</li>
+    *          <li>illegal-target-disposition -- the target state or health status is not valid</li>
     *          <li>else, the error output from the command</li>
     *       </ul>
     * </ul>
@@ -387,12 +387,7 @@ final class DockerUtils {
 
                result.put( 'reason', 'error' )
                result.put( 'container', currentContainer )
-
-               if ( targetContainerDisposition != null ) {
-                  result.put( 'message', 'illegal-target-disposition-' + targetContainerDisposition )
-               } else {
-                  result.put( 'message', 'illegal-target-disposition-null'  )
-               }
+               result.put( 'message', 'illegal-target-disposition' )
 
             }
 
