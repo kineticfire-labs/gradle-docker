@@ -46,10 +46,13 @@ class DockerUtilsTest extends Specification {
 
     static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
 
-    // number of retries waiting for a container to reach a state or health status, with SLEEP_TIME in milliseconds
+    // settings for this test, for number of retries waiting for a container to reach a state or health status, with SLEEP_TIME in milliseconds
     // so total time is 44 seconds
     static final int NUM_RETRIES = 22 
     static final int SLEEP_TIME_MILLIS = 2000 
+
+    // expected wait time in milliseconds for a query to timeout, based on settings in DockerUtils.groovy
+    static final long TIME_WAIT_EXPECTED_MILLIS = 44000
 
     // tolerance in milliseconds for delta time when testing 'waitForContainer' with 'retrySeconds' and 'retryNum'
     static final long TIME_TOLERANCE_MILLIS = 3000
@@ -700,11 +703,14 @@ class DockerUtilsTest extends Specification {
         String containerName = 'nosuchcontainer'
 
         when:
+        long start = System.currentTimeMillis( )
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
+        long diff = System.currentTimeMillis( ) - start
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+        ( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
 
 
         then:
@@ -866,7 +872,9 @@ class DockerUtilsTest extends Specification {
 
 
 
+        long start = System.currentTimeMillis( )
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
+        long diff = System.currentTimeMillis( ) - start
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
@@ -877,6 +885,7 @@ class DockerUtilsTest extends Specification {
         reason.equals( 'num-retries-exceeded' )
         message.equals( 'created' )
         container.equals( containerName )
+        ( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
 
         cleanup:
         GradleExecUtils.exec( dockerRmCommand )
@@ -1063,11 +1072,14 @@ class DockerUtilsTest extends Specification {
         String containerName = 'nosuchcontainer'
 
         when:
+        long start = System.currentTimeMillis( )
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy' )
+        long diff = System.currentTimeMillis( ) - start
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+        ( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
 
 
         then:
@@ -1542,7 +1554,346 @@ class DockerUtilsTest extends Specification {
             //***********************************
             // health
 
-            //todo
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for 'healthy' container with target of 'healthy'"( ) {
+        given:
+
+        String containerName = 'waitforcontainer-str-int-healthy-healthy' + CONTAINER_NAME_POSTFIX
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+                healthcheck:
+                  test: exit 0
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+
+        GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        int count = 0
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+
+        while ( !isHealthy && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+            count++
+        }
+
+        if ( !isHealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 2, 22 )
+        boolean success = result.get( 'success' )
+
+        then:
+        success == true
+
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for 'unhealthy' container with target of 'healthy'"( ) {
+        given:
+
+        String containerName = 'waitforcontainer-str-int-unhealthy-healthy' + CONTAINER_NAME_POSTFIX
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+                healthcheck:
+                  test: exit 1
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+
+        GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        int count = 0
+        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+
+        while ( !isUnhealthy && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+            count++
+        }
+
+        if ( !isUnhealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 2, 22 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'unhealthy' )
+        container.equals( containerName )
+
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container without health check with target of 'healthy'"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'waitforcontainer-str-int-nohealth-healthy' + CONTAINER_NAME_POSTFIX
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 2, 22 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+
+        then:
+        success == false
+        reason.equals( 'no-health-check' )
+        container.equals( containerName )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container not found with target of 'healthy'"( ) {
+        given:
+        String containerName = 'nosuchcontainer'
+
+        when:
+        long start = System.currentTimeMillis( )
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 3, 3 )
+        long diff = System.currentTimeMillis( ) - start
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+        ( diff >= ( 9000L - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( 9000L + TIME_TOLERANCE_MILLIS ) )
+
+
+        then:
+        success == false
+        reason.equals( 'num-retries-exceeded' )
+        message.equals( 'not-found' )
+        container.equals( containerName )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for preveiously healthy container in 'exited' state with target of 'healthy'"( ) {
+
+        given:
+
+        String containerName = 'waitforcontainer-str-int-exited-healthy' + CONTAINER_NAME_POSTFIX
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+                healthcheck:
+                  test: exit 0
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        int count = 0
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+
+        while ( !isHealthy && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+            count++
+        }
+
+        if ( !isHealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
+        }
+
+
+        GradleExecUtils.execWithException( dockerStopCommand )
+
+        count = 0
+        boolean isExited = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'exited' )
+
+        while ( !isExited && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isExited = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'exited' )
+            count++
+        }
+
+        if ( !isExited ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "exited" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 3, 3 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'unhealthy' )
+        container.equals( containerName )
+
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for previously healthy container in 'paused' state with target of 'healthy'"( ) {
+
+        given:
+
+        String containerName = 'waitforcontainer-str-int-paused-healthy' + CONTAINER_NAME_POSTFIX
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+                healthcheck:
+                  test: exit 0
+                  interval: 1s
+                  retries: 2
+                  start_period: 1s
+                  timeout: 2s
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String dockerPauseCommand = 'docker pause ' + containerName
+
+        GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        int count = 0
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+
+        while ( !isHealthy && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+            count++
+        }
+
+        if ( !isHealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
+        }
+
+        GradleExecUtils.execWithException( dockerPauseCommand )
+
+        count = 0
+        boolean isPaused = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'paused' )
+
+        while ( !isPaused && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isPaused = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'paused' )
+            count++
+        }
+
+        if ( !isPaused ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "paused" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', 3, 3 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'unhealthy' )
+        container.equals( containerName )
+
+        cleanup:
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+    def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly given an error with target of 'healthy'"( ) {
+        given:
+        // adding invalid '--blah' flag to produce command error
+        String additionalCommand = '--blah ' + TEST_IMAGE_REF
+
+        when:
+        Map<String, String> result = DockerUtils.waitForContainer( additionalCommand, 'healthy' )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'error' )
+        message.contains( 'unknown flag' )
+    }
 
 
             //***********************************
@@ -1691,14 +2042,76 @@ class DockerUtilsTest extends Specification {
             //***********************************
             // state
 
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'running' state with target of 'running' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerGood1Name = 'waitforcontainer-map-int-running-running-good1' + CONTAINER_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-running-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-running-running-good3' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerGood1Name, 'running' )
+        containerMap.put( containerGood2Name, 'running' )
+        containerMap.put( containerGood3Name, 'running' )
+
+        when:
+        String[] dockerRunCommandGood1 = [ 'docker', 'run', '--rm', '--name', containerGood1Name, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood2 = [ 'docker', 'run', '--rm', '--name', containerGood2Name, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood3 = [ 'docker', 'run', '--rm', '--name', containerGood3Name, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
+        String dockerInspectCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
+        String dockerInspectCommandGood3 = 'docker inspect -f {{.State.Status}} ' + containerGood3Name
+        String dockerStopCommandGood1 = 'docker stop ' + containerGood1Name
+        String dockerStopCommandGood2 = 'docker stop ' + containerGood2Name
+        String dockerStopCommandGood3 = 'docker stop ' + containerGood3Name
+
+        GradleExecUtils.execWithException( dockerRunCommandGood1 )
+        GradleExecUtils.execWithException( dockerRunCommandGood2 )
+        GradleExecUtils.execWithException( dockerRunCommandGood3 )
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerMap, 2, 22 )
+        boolean success = result.get( 'success' )
+
+
+        boolean isRunningGood1 = GradleExecUtils.execWithException( dockerInspectCommandGood1 ).equals( 'running' )
+        boolean isRunningGood2 = GradleExecUtils.execWithException( dockerInspectCommandGood2 ).equals( 'running' )
+        boolean isRunningGood3 = GradleExecUtils.execWithException( dockerInspectCommandGood3 ).equals( 'running' )
+
+        if ( !isRunningGood1 ) {
+            throw new GradleException( 'Docker container ' + containerGood1Name + ' not in "running" state.' )
+        }
+
+        if ( !isRunningGood2 ) {
+            throw new GradleException( 'Docker container ' + containerGood2Name + ' not in "running" state.' )
+        }
+
+        if ( !isRunningGood3 ) {
+            throw new GradleException( 'Docker container ' + containerGood3Name + ' not in "running" state.' )
+        }
+
+
+        then:
+        success == true
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommandGood1 )
+        GradleExecUtils.exec( dockerStopCommandGood2 )
+        GradleExecUtils.exec( dockerStopCommandGood3 )
+    }
+
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly when container not found for target state"( ) {
         given:
-        Map<String,String> containerMap = new HashMap<String, String>( )
+        String containerImageRef = TEST_IMAGE_REF
         String containerName = 'container-shouldnt-exist'
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerName, 'running' )
 
         when:
-        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 2, 4 )
+        long start = System.currentTimeMillis( )
+        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 3, 3 )
+        long diff = System.currentTimeMillis( ) - start
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
@@ -1709,14 +2122,269 @@ class DockerUtilsTest extends Specification {
         'num-retries-exceeded'.equals( reason )
         'not-found'.equals( message )
         containerName.equals( container )
+        ( diff >= ( 9000L - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( 9000L + TIME_TOLERANCE_MILLIS ) )
     }
 
-    //todo
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'exited' state with target of 'running' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerBadName = 'waitforcontainer-map-int-exited-running-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-exited-running-good1' + CONTAINER_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-exited-running-good2' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerBadName, 'running' )
+        containerMap.put( containerGood1Name, 'running' )
+        containerMap.put( containerGood2Name, 'running' )
+
+        when:
+        String[] dockerRunCommandBad = [ 'docker', 'run', '--name', containerBadName, '-d', containerImageRef, 'tail', '-f' ] // intentionally not using '--rm' so container won't be removed when it exits
+        String[] dockerRunCommandGood1 = [ 'docker', 'run', '--rm', '--name', containerGood1Name, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood2 = [ 'docker', 'run', '--rm', '--name', containerGood2Name, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
+        String dockerInspectCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
+        String dockerInspectCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
+        String dockerStopCommandBad = 'docker stop ' + containerBadName
+        String dockerStopCommandGood1 = 'docker stop ' + containerGood1Name
+        String dockerStopCommandGood2 = 'docker stop ' + containerGood2Name
+        String dockerRmCommandBad = 'docker rm ' + containerBadName
+
+
+        GradleExecUtils.execWithException( dockerRunCommandGood1 )
+        GradleExecUtils.execWithException( dockerRunCommandGood2 )
+        GradleExecUtils.execWithException( dockerRunCommandBad )
+
+
+        int count = 0
+        boolean isRunningBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'running' )
+
+        while ( !isRunningBad && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunningBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunningBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "running" state.' )
+        }
+
+
+
+        GradleExecUtils.execWithException( dockerStopCommandBad )
+
+        count = 0
+        boolean isExitedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'exited' )
+
+        while ( !isExitedBad && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isExitedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'exited' )
+            count++
+        }
+
+        if ( !isExitedBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "exited" state.' )
+        }
+
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerMap, 2, 22 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+
+        then:
+        success == false
+        reason.equals( 'failed' )
+        message.equals( 'exited' )
+        container.equals( containerBadName )
+
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommandBad )
+        GradleExecUtils.exec( dockerRmCommandBad )
+        GradleExecUtils.exec( dockerStopCommandGood1 )
+        GradleExecUtils.exec( dockerStopCommandGood2 )
+    }
+
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'paused' state with target of 'running' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerBadName = 'waitforcontainer-map-int-paused-running-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-paused-running-good1' + CONTAINER_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-paused-running-good2' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerBadName, 'running' )
+        containerMap.put( containerGood1Name, 'running' )
+        containerMap.put( containerGood2Name, 'running' )
+
+        when:
+        String[] dockerRunCommandBad = [ 'docker', 'run', '--rm', '--name', containerBadName, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood1 = [ 'docker', 'run', '--rm', '--name', containerGood1Name, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood2 = [ 'docker', 'run', '--rm', '--name', containerGood2Name, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
+        String dockerInspectCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
+        String dockerInspectCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
+        String dockerStopCommandBad = 'docker stop ' + containerBadName
+        String dockerStopCommandGood1 = 'docker stop ' + containerGood1Name
+        String dockerStopCommandGood2 = 'docker stop ' + containerGood2Name
+        String dockerPauseCommandBad = 'docker pause ' + containerBadName
+
+
+        GradleExecUtils.execWithException( dockerRunCommandGood1 )
+        GradleExecUtils.execWithException( dockerRunCommandGood2 )
+        GradleExecUtils.execWithException( dockerRunCommandBad )
+
+
+        int count = 0
+        boolean isRunningBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'running' )
+
+        while ( !isRunningBad && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunningBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunningBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "running" state.' )
+        }
+
+
+        GradleExecUtils.execWithException( dockerPauseCommandBad )
+
+
+        count = 0
+        boolean isPausedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'paused' )
+
+        while ( !isPausedBad && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isPausedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'paused' )
+            count++
+        }
+
+        if ( !isPausedBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "paused" state.' )
+        }
+
+
+
+        Map<String, String> result = DockerUtils.waitForContainer( containerMap, 2, 22 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'failed' )
+        message.equals( 'paused' )
+        container.equals( containerBadName )
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommandBad )
+        GradleExecUtils.exec( dockerStopCommandGood1 )
+        GradleExecUtils.exec( dockerStopCommandGood2 )
+    }
+
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'created' state with target of 'running' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerBadName = 'waitforcontainer-map-int-created-running-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + CONTAINER_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerBadName, 'running' )
+        containerMap.put( containerGood1Name, 'running' )
+        containerMap.put( containerGood2Name, 'running' )
+
+        when:
+        String dockerCreateCommandBad = [ 'docker', 'create', '--name', containerBadName, containerImageRef ]
+        String[] dockerRunCommandGood1 = [ 'docker', 'run', '--rm', '--name', containerGood1Name, '-d', containerImageRef, 'tail', '-f' ]
+        String[] dockerRunCommandGood2 = [ 'docker', 'run', '--rm', '--name', containerGood2Name, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
+        String dockerInspectCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
+        String dockerInspectCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
+        String dockerRmCommandBad = 'docker rm ' + containerBadName
+        String dockerStopCommandGood1 = 'docker stop ' + containerGood1Name
+        String dockerStopCommandGood2 = 'docker stop ' + containerGood2Name
+
+
+        GradleExecUtils.execWithException( dockerRunCommandGood1 )
+        GradleExecUtils.execWithException( dockerRunCommandGood2 )
+        GradleExecUtils.execWithException( dockerCreateCommandBad )
+
+
+        int count = 0
+        boolean isCreatedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'created' )
+
+        while ( !isCreatedBad && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isCreatedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'created' )
+            count++
+        }
+
+        if ( !isCreatedBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "created" state.' )
+        }
+
+
+        long start = System.currentTimeMillis( )
+        Map<String, String> result = DockerUtils.waitForContainer( containerMap, 2, 22 )
+        long diff = System.currentTimeMillis( ) - start
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'num-retries-exceeded' )
+        message.equals( 'created' )
+        container.equals( containerBadName )
+        ( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
+
+        cleanup:
+        GradleExecUtils.exec( dockerRmCommandBad )
+        GradleExecUtils.exec( dockerStopCommandGood1 )
+        GradleExecUtils.exec( dockerStopCommandGood2 )
+    }
+
+
+    //todo must actually start good containers and allow time for them to run, else bad command may not be executed
+    def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly given an error with target of 'running' state"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        // adding invalid '--blah' flag to produce command error
+        String containerBadName = '--blah' + TEST_IMAGE_REF
+        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + CONTAINER_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerBadName, 'running' )
+        containerMap.put( containerGood1Name, 'running' )
+        containerMap.put( containerGood2Name, 'running' )
+
+        when:
+        Map<String, String> result = DockerUtils.waitForContainer( containerMap, 2, 22 )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+        String message = result.get( 'message' )
+        String container = result.get( 'container' )
+
+        then:
+        success == false
+        reason.equals( 'error' )
+        message.contains( 'unknown flag' )
+    }
+
 
             //***********************************
             // health
 
-    //todo
+    //todo here
 
             //***********************************
             // both
@@ -1731,7 +2399,7 @@ class DockerUtilsTest extends Specification {
         Map<String,String> containerMap = new HashMap<String, String>( )
 
         when:
-        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 2, 4 )
+        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 3, 3 )
         boolean success = result.get( 'success' )
 
         then:
@@ -1745,7 +2413,7 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerName, 'invalid-disposition' )
 
         when:
-        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 2, 4 )
+        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 3, 3 )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
@@ -1765,7 +2433,7 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerName, null )
 
         when:
-        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 2, 4 )
+        Map<String,String> result = DockerUtils.waitForContainer( containerMap, 3, 3 )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
