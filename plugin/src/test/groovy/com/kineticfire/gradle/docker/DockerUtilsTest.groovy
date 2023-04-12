@@ -863,21 +863,8 @@ class DockerUtilsTest extends Specification {
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
         String dockerRmCommand = 'docker rm ' + containerName
 
+
         GradleExecUtils.execWithException( dockerCreateCommand )
-
-        int count = 0
-        boolean isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
-
-        while ( !isCreated && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
-            count++
-        }
-
-        if ( !isCreated ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "created" state.' )
-        }
-
 
 
         long start = System.currentTimeMillis( )
@@ -887,6 +874,15 @@ class DockerUtilsTest extends Specification {
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+
+
+        boolean isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
+
+        if ( !isCreated ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "created" state.' )
+        }
+
 
         then:
         success == false
@@ -952,22 +948,16 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
 
-        while ( !isHealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
-            count++
-        }
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy' )
+        boolean success = result.get( 'success' )
+
+
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
 
         if ( !isHealthy ) {
             throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
         }
-
-
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy' )
-        boolean success = result.get( 'success' )
 
         then:
         success == true
@@ -1004,25 +994,18 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-
-        while ( !isUnhealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-            count++
-        }
-
-        if ( !isUnhealthy ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
-        }
-
 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy' )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+
+        if ( !isUnhealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
+        }
 
         then:
         success == false
@@ -1045,25 +1028,19 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerRunCommand )
 
-        int count = 0
-        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-
-        while ( !isRunning && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-            count++
-        }
-
-        if ( !isRunning ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
-        }
-
 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy' )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
 
 
         then:
@@ -1097,7 +1074,7 @@ class DockerUtilsTest extends Specification {
         ( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
     }
 
-    def "waitForContainer(String container, String target) returns correctly for preveiously healthy container in 'exited' state with target of 'healthy'"( ) {
+    def "waitForContainer(String container, String target) returns correctly for previously healthy container in 'exited' state with target of 'healthy'"( ) {
 
         given:
 
@@ -1266,7 +1243,7 @@ class DockerUtilsTest extends Specification {
 
 
             //***********************************
-            // error
+            // error (not related to target disposition)
 
     def "waitForContainer(String container, String target) returns correctly given invalid target disposition as string"( ) {
         given:
@@ -1503,20 +1480,6 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerCreateCommand )
 
-        int count = 0
-        boolean isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
-
-        while ( !isCreated && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
-            count++
-        }
-
-        if ( !isCreated ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "created" state.' )
-        }
-
-
 
         long start = System.currentTimeMillis( ) 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running', FAST_FAIL_SLEEP_TIME_SECONDS, FAST_FAIL_NUM_RETRIES )
@@ -1525,6 +1488,13 @@ class DockerUtilsTest extends Specification {
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isCreated = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'created' )
+
+        if ( !isCreated ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "created" state.' )
+        }
+
 
         then:
         success == false
@@ -1591,22 +1561,15 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
+        boolean success = result.get( 'success' )
 
-        while ( !isHealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
-            count++
-        }
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
 
         if ( !isHealthy ) {
             throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
         }
 
-
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
-        boolean success = result.get( 'success' )
 
         then:
         success == true
@@ -1643,25 +1606,17 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-
-        while ( !isUnhealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-            count++
-        }
-
-        if ( !isUnhealthy ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
-        }
-
-
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+
+        if ( !isUnhealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
+        }
 
         then:
         success == false
@@ -1684,25 +1639,18 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerRunCommand )
 
-        int count = 0
-        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-
-        while ( !isRunning && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-            count++
-        }
-
-        if ( !isRunning ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
-        }
-
 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
 
 
         then:
@@ -1905,7 +1853,7 @@ class DockerUtilsTest extends Specification {
 
 
             //***********************************
-            // error
+            // error (not related to target disposition)
 
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly given invalid target disposition as string"( ) {
         given:
@@ -1986,7 +1934,7 @@ class DockerUtilsTest extends Specification {
 
 
             //***********************************
-            // error
+            // error (not related to target disposition)
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly given no containers to monitor"( ) {
         given:
@@ -2325,20 +2273,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.execWithException( dockerCreateCommandBad )
 
 
-        int count = 0
-        boolean isCreatedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'created' )
-
-        while ( !isCreatedBad && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isCreatedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'created' )
-            count++
-        }
-
-        if ( !isCreatedBad ) {
-            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "created" state.' )
-        }
-
-
         long start = System.currentTimeMillis( )
         Map<String, String> result = DockerUtils.waitForContainer( containerMap, FAST_FAIL_SLEEP_TIME_SECONDS, FAST_FAIL_NUM_RETRIES )
         long diff = System.currentTimeMillis( ) - start
@@ -2346,6 +2280,13 @@ class DockerUtilsTest extends Specification {
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+
+        boolean isCreatedBad = GradleExecUtils.execWithException( dockerInspectCommandBad ).equals( 'created' )
+
+        if ( !isCreatedBad ) {
+            throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "created" state.' )
+        }
 
         then:
         success == false
@@ -2488,24 +2429,15 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
+        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
+        boolean success = result.get( 'success' )
 
-        while ( !isHealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
-            count++
-        }
+        boolean isHealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'healthy' )
 
         if ( !isHealthy ) {
             throw new GradleException( 'Docker container ' + containerName + ' did not reach "healthy" status.' )
         }
 
-        //todo put the successful health/running checks AFTER the waitForContainer command being tested
-
-
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
-        boolean success = result.get( 'success' )
 
         then:
         success == true
@@ -2542,25 +2474,18 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
-        int count = 0
-        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-
-        while ( !isUnhealthy && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
-            count++
-        }
-
-        if ( !isUnhealthy ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
-        }
-
 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isUnhealthy = GradleExecUtils.execWithException( dockerInspectHealthCommand ).equals( 'unhealthy' )
+
+        if ( !isUnhealthy ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "unhealthy" status.' )
+        }
 
         then:
         success == false
@@ -2583,25 +2508,18 @@ class DockerUtilsTest extends Specification {
 
         GradleExecUtils.execWithException( dockerRunCommand )
 
-        int count = 0
-        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-
-        while ( !isRunning && count < NUM_RETRIES ) {
-            Thread.sleep( SLEEP_TIME_MILLIS )
-            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
-            count++
-        }
-
-        if ( !isRunning ) {
-            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
-        }
-
 
         Map<String, String> result = DockerUtils.waitForContainer( containerName, 'healthy', SLEEP_TIME_SECONDS, NUM_RETRIES )
         boolean success = result.get( 'success' )
         String reason = result.get( 'reason' )
         String message = result.get( 'message' )
         String container = result.get( 'container' )
+
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
 
 
         then:
@@ -2811,7 +2729,7 @@ class DockerUtilsTest extends Specification {
     //todo
 
             //***********************************
-            // error
+            // error (not related to target disposition)
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly given no containers to monitor"( ) {
         given:
