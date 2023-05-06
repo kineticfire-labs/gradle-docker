@@ -19,8 +19,9 @@ package com.kineticfire.gradle.docker
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
 
+import java.util.Map
 
-// bash -c docker save ${registry.image.ref} | gzip > registry.gz
+
 
 /**
  * 
@@ -30,27 +31,26 @@ abstract class DockerSaveTask extends DefaultTask {
     @TaskAction
     def dockerSave( ) {
 
-        String imagePointer // can be an 'image reference' or 'image ID'
+        String saveImageName = project.docker.saveImageName
+        String saveImageFilename = project.docker.saveImageFilename
 
-        if ( project.docker.imageReference != null ) {
-            imagePointer = project.docker.imageReference
-        } else if ( project.docker.imageID != null ) {
-            imagePointer = project.docker.imageID
-        } else {
-            throw StopExecutionException( "No target image defined for 'dockerSave' task." )
+        if ( project.docker.saveImageName != null ) {
+            throw StopExecutionException( "No target image 'saveImageName' defined for 'dockerSave' task." )
         }
 
-        /*
-        String imageRef = project.docker.imageReference
-        println "Hi from DockerSaveTask " + imageRef
-        */
-        println "Hi from DockerSaveTask hiya"
+        if ( project.docker.saveImageFilename != null ) {
+            throw StopExecutionException( "No output filename 'saveImageFilename' defined for 'dockerSave' task." )
+        }
 
-        //println GradleExecUtils.exec( 'ls' ).get( 'out' )
-        //println GradleExecUtils.exec( 'pwd' ).get( 'out' )
-        //println SystemUtils.getUserName( )
-        //println SystemUtils.getUid( )
-        //println SystemUtils.getUid( SystemUtils.getUserName( ) )
+
+        // bash -c docker save ${registry.image.ref} | gzip > registry.gz
+        String task[] = [ 'bash', '-c', 'docker', 'save', saveImageName, '|', 'gzip', '>', saveImageFilename ]
+
+        Map<String, String> result = GradleExecUtils.exec( task )
+
+        if ( result.get( 'exitValue' ) != '0' ) {
+            throw StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
+        }
 
     }
 

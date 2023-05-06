@@ -23,18 +23,20 @@ import org.gradle.testkit.runner.GradleRunner
  * functional test
  */
 class DockerRunPluginFunctionalTest extends Specification {
+
     @TempDir
     private File projectDir
 
     private getBuildFile() {
-        new File( projectDir, "build.gradle" )
+        new File( projectDir, 'build.gradle' )
     }
 
     private getSettingsFile() {
-        new File( projectDir, "settings.gradle" )
+        new File( projectDir, 'settings.gradle' )
     }
 
-    def "can run task"( ) {
+
+    def "can run saveTask"( ) {
         given:
         settingsFile << ""
         buildFile << """
@@ -47,11 +49,12 @@ plugins {
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( "dockerRun" )
+        runner.withArguments( 'dockerSave' )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( "Hi from DockerRunTask hiya run" )
+        result.output.contains( 'Hi from DockerRunTask hiya run' )
     }
+
 }

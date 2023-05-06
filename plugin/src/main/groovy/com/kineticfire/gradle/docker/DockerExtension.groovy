@@ -22,9 +22,22 @@ package com.kineticfire.gradle.docker
  */
 class DockerExtension {
 
-    // format is:  registry[:port]/repository[:tag]
-    String imageReference = null
+    String saveImageName      // registry[:port]/repository[:tag]
+    String saveImageFilename  // filename.tar.gz
 
-    String imageID = null
+
+    /*
+    // image format is:  registry[:port]/repository[:tag]
+
+    String buildImage = null
+
+    String tagSourceImage = null
+    String tagTargetImage = null
+
+    String pushImage = null
+
+    String saveImage = null
+    */
+
 
 }

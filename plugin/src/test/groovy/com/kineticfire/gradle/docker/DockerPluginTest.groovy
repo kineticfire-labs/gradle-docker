@@ -23,14 +23,15 @@ import spock.lang.Specification
  * unit test
  */
 class DockerPluginTest extends Specification {
+
     def "plugin registers task"( ) {
         given:
         def project = ProjectBuilder.builder( ).build( )
 
         when:
-        project.plugins.apply( "com.kineticfire.docker" )
+        project.plugins.apply( 'com.kineticfire.docker' )
 
         then:
-        project.tasks.findByName( "docker-save-task" ) != null
+        project.tasks.findByName( 'docker-save-task' ) != null
     }
 }

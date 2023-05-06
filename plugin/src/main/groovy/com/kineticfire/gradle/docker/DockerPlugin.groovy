@@ -24,14 +24,22 @@ import org.gradle.api.Plugin
 import org.gradle.api.Task
 
 
+// todo notes
+    // https://gradlehero.com/introduction-to-gradle-plugins/
+    // https://docs.gradle.org/current/userguide/lazy_configuration.html
+
 /**
  *
  */
 class DockerPlugin implements Plugin<Project> {
 
     void apply( Project project ) {
-        project.extensions.create( 'docker', DockerExtension )
+
+        DockerExtension ext = project.extensions.create( 'docker', DockerExtension )
+
         Task imageSaveTask = project.task( 'docker-save-task', type: DockerSaveTask )
+
+
     }
 
 }
