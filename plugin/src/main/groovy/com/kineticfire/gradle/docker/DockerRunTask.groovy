@@ -29,7 +29,7 @@ abstract class DockerRunTask extends DefaultTask {
     @TaskAction
     def dockerRun( ) {
         //String imageRef = project.dockerRun.imageReference
-        println "Hi from DockerRunTask "
+        println "Hi from DockerRunTask"
     }
 
 }

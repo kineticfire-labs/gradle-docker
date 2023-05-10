@@ -36,7 +36,7 @@ class DockerRunPluginFunctionalTest extends Specification {
     }
 
 
-    def "can run saveTask"( ) {
+    def "can run runTask"( ) {
         given:
         settingsFile << ""
         buildFile << """
@@ -49,12 +49,12 @@ plugins {
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( 'dockerSave' )
+        runner.withArguments( 'dockerRun' )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( 'Hi from DockerRunTask hiya run' )
+        result.output.contains( 'Hi from DockerRunTask' )
     }
 
 }

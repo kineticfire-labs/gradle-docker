@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker
 
 import org.gradle.api.DefaultTask
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.StopExecutionException
 
 import java.util.Map
 
@@ -34,22 +35,22 @@ abstract class DockerSaveTask extends DefaultTask {
         String saveImageName = project.docker.saveImageName
         String saveImageFilename = project.docker.saveImageFilename
 
-        if ( project.docker.saveImageName != null ) {
-            throw StopExecutionException( "No target image 'saveImageName' defined for 'dockerSave' task." )
+        if ( project.docker.saveImageName == null || project.docker.saveImageName.equals( '' ) ) {
+            throw new StopExecutionException( "No target image 'saveImageName' defined for 'dockerSave' task." )
         }
 
-        if ( project.docker.saveImageFilename != null ) {
-            throw StopExecutionException( "No output filename 'saveImageFilename' defined for 'dockerSave' task." )
+        if ( project.docker.saveImageFilename == null || project.docker.saveImageFilename.equals( '' ) ) {
+            throw new StopExecutionException( "No output filename 'saveImageFilename' defined for 'dockerSave' task." )
         }
 
-
+        //todo needed?
         // bash -c docker save ${registry.image.ref} | gzip > registry.gz
-        String task[] = [ 'bash', '-c', 'docker', 'save', saveImageName, '|', 'gzip', '>', saveImageFilename ]
+        String task[] = [ 'docker', 'save', saveImageName, '|', 'gzip', '>', saveImageFilename ]
 
         Map<String, String> result = GradleExecUtils.exec( task )
 
-        if ( result.get( 'exitValue' ) != '0' ) {
-            throw StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
+        if ( result.get( 'exitValue' ) != 0 ) {
+            throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
         }
 
     }

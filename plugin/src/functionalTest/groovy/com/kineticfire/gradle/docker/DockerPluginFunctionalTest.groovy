@@ -28,11 +28,11 @@ class DockerPluginFunctionalTest extends Specification {
     private File projectDir
 
     private getBuildFile() {
-        new File( projectDir, "build.gradle" )
+        new File( projectDir, 'build.gradle' )
     }
 
     private getSettingsFile() {
-        new File( projectDir, "settings.gradle" )
+        new File( projectDir, 'settings.gradle' )
     }
 
     def "can run task"( ) {
@@ -45,7 +45,8 @@ plugins {
 }
 
 docker {
-    imageReference = 'test:1.0'
+    saveImageName = 'test:1.0'
+    saveImageFilename = 'test-1.0.tar.gz'
 }
 
 """
@@ -54,11 +55,11 @@ docker {
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( "dockerSave" )
+        runner.withArguments( 'dockerSave' )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( "Hi from DockerSaveTask hiya" )
+        result.output.contains( 'Hi from DockerSaveTask' )
     }
 }
