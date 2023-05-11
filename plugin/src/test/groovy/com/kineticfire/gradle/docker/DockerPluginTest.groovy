@@ -34,4 +34,5 @@ class DockerPluginTest extends Specification {
         then:
         project.tasks.findByName( 'docker-save-task' ) != null
     }
+
 }

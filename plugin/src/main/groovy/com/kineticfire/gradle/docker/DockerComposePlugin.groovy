@@ -30,8 +30,13 @@ import org.gradle.api.Task
 class DockerComposePlugin implements Plugin<Project> {
 
     void apply( Project project ) {
+
+        //todo
+        //DockerComposeExtension ext = project.extensions.create( 'dockerCompose', DockerComposeExtension )
+
         project.extensions.create( 'dockerCompose', DockerComposeExtension )
-        Task composeUpTask = project.task( 'docker-compose-up-task', type: DockerComposeUpTask )
+
+        project.tasks.register( 'docker-compose-up-task', DockerComposeUpTask )
     }
 
 }

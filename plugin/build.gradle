@@ -35,7 +35,7 @@ repositories {
 
 dependencies {
     // Use the awesome Spock testing and specification framework
-    testImplementation 'org.spockframework:spock-core:2.1-groovy-3.0'
+    testImplementation 'org.spockframework:spock-core:2.2-groovy-3.0'
 }
 
 group = 'com.kineticfire.gradle.docker'
@@ -53,18 +53,19 @@ gradlePlugin {
         }
         dockerRunPlugin {
             id = 'com.kineticfire.docker-run'
-            implementationClass = 'com.kineticfire.gradle.docker.DockerRunPlugin'
-            description = 'Docker run interaction'
             displayName = 'KineticFire Labs Gradle Docker-Run'
+            description = 'Docker run interaction'
+            implementationClass = 'com.kineticfire.gradle.docker.DockerRunPlugin'
         }
         dockerComposePlugin {
             id = 'com.kineticfire.docker-compose'
-            implementationClass = 'com.kineticfire.gradle.docker.DockerComposePlugin'
-            description = 'Docker Compose interaction'
             displayName = 'KineticFire Labs Gradle Docker-Compose'
+            description = 'Docker Compose interaction'
+            implementationClass = 'com.kineticfire.gradle.docker.DockerComposePlugin'
         }
     }
 }
+
 
 jar {
     archiveBaseName = 'gradle-docker-plugin'

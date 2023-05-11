@@ -35,11 +35,9 @@ class DockerPlugin implements Plugin<Project> {
 
     void apply( Project project ) {
 
-        DockerExtension ext = project.extensions.create( 'docker', DockerExtension )
+        project.extensions.create( 'docker', DockerExtension )
 
-        //todo original
-        //Task imageSaveTask = project.task( 'docker-save-task', type: DockerSaveTask )
-        Task imageSaveTask = project.task( 'dockerSave', type: DockerSaveTask )
+        project.tasks.register( 'docker-save-task', DockerSaveTask )
 
 
     }

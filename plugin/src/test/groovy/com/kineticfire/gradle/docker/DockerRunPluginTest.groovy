@@ -23,6 +23,7 @@ import spock.lang.Specification
  * unit test
  */
 class DockerRunPluginTest extends Specification {
+
     def "plugin registers task"( ) {
         given:
         def project = ProjectBuilder.builder( ).build( )
@@ -33,4 +34,5 @@ class DockerRunPluginTest extends Specification {
         then:
         project.tasks.findByName( "docker-run-task" ) != null
     }
+
 }

@@ -43,6 +43,8 @@ abstract class DockerSaveTask extends DefaultTask {
             throw new StopExecutionException( "No output filename 'saveImageFilename' defined for 'dockerSave' task." )
         }
 
+        /* todo
+
         //todo needed?
         // bash -c docker save ${registry.image.ref} | gzip > registry.gz
         String task[] = [ 'docker', 'save', saveImageName, '|', 'gzip', '>', saveImageFilename ]
@@ -52,6 +54,9 @@ abstract class DockerSaveTask extends DefaultTask {
         if ( result.get( 'exitValue' ) != 0 ) {
             throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
         }
+        */
+
+        println "Hi from DockerSaveTask"
 
     }
 

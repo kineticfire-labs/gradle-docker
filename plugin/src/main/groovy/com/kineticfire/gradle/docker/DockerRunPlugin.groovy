@@ -30,8 +30,10 @@ import org.gradle.api.Task
 class DockerRunPlugin implements Plugin<Project> {
 
     void apply( Project project ) {
+
         project.extensions.create( 'dockerRun', DockerRunExtension )
-        Task runTask = project.task( 'docker-run-task', type: DockerRunTask )
+
+        project.tasks.register( 'docker-run-task', DockerRunTask )
     }
 
 }

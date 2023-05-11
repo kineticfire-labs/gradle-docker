@@ -45,8 +45,8 @@ plugins {
 }
 
 docker {
-    saveImageName = 'test:1.0'
-    saveImageFilename = 'test-1.0.tar.gz'
+    saveImageName 'test:1.0'
+    saveImageFilename 'test-1.0.tar.gz'
 }
 
 """
