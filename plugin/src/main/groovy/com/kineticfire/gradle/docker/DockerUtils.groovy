@@ -422,5 +422,142 @@ final class DockerUtils {
    }
 
 
+   /**
+    * Returns a String array, suitable for executing, describing a docker-compose "up" command with one or more compose files 'composeFilePaths'.
+    * <p>
+    * The command will include the '-d' option for running the docker compose "up" command in daemon mode.
+    * <p>
+    * Multiple compose files may be used when separating common directives into one file and then environment-specific directives into one or more additional files.
+    * <p>
+    * Examples for calling this method include:
+    * <ul>
+    *    <li>getComposeUpCommand( myComposeFilePath )</li>
+    *    <li>getComposeUpCommand( myComposeFilePath1, myComposeFilePath2 )</li>
+    *    <li>getComposeUpCommand( [myComposeFilePath1, myComposeFilePath2] as String[] )</li>
+    * </ul>
+    * <p>
+    * @param composeFilePaths
+    *    one or more paths to Docker compose files
+    * @return a String array, suitable for executing, describing a docker-compose "up" command using the compose file path or paths
+    */
+   static String[] getComposeUpCommand( java.lang.String... composeFilePaths ) {
+
+      int totalSize = 3 + ( composeFilePaths.length * 2 )
+
+      String[] composeUpCommand = new String[totalSize]
+
+      composeUpCommand[0] = 'docker-compose'
+
+      int index
+      int i
+      for ( i = 0; i < composeFilePaths.length; i++ ) {
+         index = ( i * 2 ) + 1
+         composeUpCommand[index] = '-f'
+         composeUpCommand[index+1] = composeFilePaths[i]
+      }
+
+      index = ( i * 2 ) + 1
+      composeUpCommand[index] = 'up'
+      composeUpCommand[index+1] = '-d'
+
+
+      return( composeUpCommand )
+   }
+
+
+   /**
+    * Returns a String array, suitable for executing, describing a docker-compose "down" command with the compose file 'composeFilePath'.
+    * <p>
+    * If using multiple compose files combined in the "up" command, the common compose file describing all services must be used for this method.
+    * <p>
+    * @param composeFilePath
+    *    the path to the Docker compose file
+    * @return a String array, suitable for executing, describing a docker-compose "down" command using a compose file
+    */
+   static String[] getComposeDownCommand( String composeFilePath ) {
+      String[] composeDownCommand = [ 'docker-compose', '-f', composeFilePath, 'down' ]
+      return( composeDownCommand )
+   }
+
+
+   /**
+    * Performs a "docker-compose up" command using one or more compose file pathss 'composeFilePaths' and returns a Map indicating the result of the action.
+    * <p>
+    * The command will include the '-d' option for running the docker compose "up" command in daemon mode.
+    * <p>
+    * Multiple compose files may be used when separating common directives into one file and then environment-specific directives into one or more additional files.
+    * <p>
+    * Examples for calling this method include:
+    * <ul>
+    *    <li>getComposeUpCommand( myComposeFilePath )</li>
+    *    <li>getComposeUpCommand( myComposeFilePath1, myComposeFilePath2 )</li>
+    *    <li>getComposeUpCommand( [myComposeFilePath1, myComposeFilePath2] as String[] )</li>
+    * </ul>
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param composeFilePaths
+    *    one or more paths to Docker compose files to use
+    * @return a Map containing the result of the command
+    */
+   static Map<String,String> composeUp( java.lang.String... composeFilePaths ) {
+
+      String[] composeUpCommand = getComposeUpCommand( composeFilePaths as String[] )
+
+      Map<String, String> query = GradleExecUtils.exec( composeUpCommand )
+
+
+      Map<String, String> response = new HashMap( )
+
+      if ( query.get( 'exitValue' ) == 0 ) {
+         response.put( 'success', true )
+      } else {
+         response.put( 'success', false )
+         response.put( 'reason', query.get( 'err' ) )
+      }
+
+      return( response )
+
+   }
+
+
+   /**
+    * Performs a "docker-compose down" command using the compose file path 'composeFilePath' and returns a Map indicating the result of the action.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param composeFilePath
+    *    the path to the Docker compose file to use
+    * @return a Map containing the result of the command
+    */
+   static Map<String,String> composeDown( String composeFilePath ) {
+
+      String[] composeDownCommand = getComposeDownCommand( composeFilePath )
+
+      Map<String, String> query = GradleExecUtils.exec( composeDownCommand )
+
+
+      Map<String, String> response = new HashMap( )
+
+      if ( query.get( 'exitValue' ) == 0 ) {
+         response.put( 'success', true )
+      } else {
+         response.put( 'success', false )
+         response.put( 'reason', query.get( 'err' ) )
+      }
+
+      return( response )
+
+   }
+
+
    private DockerUtils( ) { }
 }

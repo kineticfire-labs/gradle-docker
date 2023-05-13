@@ -25,9 +25,10 @@ import java.util.HashMap
 import java.util.Properties
 
 import org.gradle.api.Project
+import org.gradle.api.GradleException
+
 import spock.lang.Specification
 import spock.lang.TempDir
-import org.gradle.api.GradleException
 
 
 /**
@@ -74,6 +75,7 @@ class DockerUtilsTest extends Specification {
     Path tempDir
 
     File composeFile
+    File composeFile2
 
 
     private static final Properties loadProperties( ) throws IOException {
@@ -104,6 +106,7 @@ class DockerUtilsTest extends Specification {
 
     def setup( ) {
         composeFile = new File( tempDir.toString( ) + File.separatorChar + COMPOSE_FILE_NAME )
+        composeFile2 = new File( tempDir.toString( ) + File.separatorChar + COMPOSE_FILE_NAME + '2' )
     }
 
 
@@ -4657,6 +4660,216 @@ class DockerUtilsTest extends Specification {
         'error'.equals( reason )
         'illegal-target-disposition'.equals( message )
         containerName.equals( container )
+    }
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // docker compose
+
+
+    def "getComposeUpCommand(java.lang.String... composeFilePaths) returns correctly given a single argument"( ) {
+        given:
+        String composeFilePath = '/path/to/composefile.yml'
+
+        when:
+        String[] composeUpCommand = DockerUtils.getComposeUpCommand( composeFilePath )
+
+        then:
+        String[] expected = [ 'docker-compose', '-f', composeFilePath, 'up', '-d' ]
+        expected == composeUpCommand
+    }
+
+
+    def "getComposeUpCommand(java.lang.String... composeFilePaths) returns correctly given multiple arguments"( ) {
+        given:
+        String composeFilePath1 = '/path/to/composefile1.yml'
+        String composeFilePath2 = '/path/to/composefile2.yml'
+
+        when:
+        String[] composeUpCommand = DockerUtils.getComposeUpCommand( composeFilePath1, composeFilePath2 )
+
+        then:
+        String[] expected = [ 'docker-compose', '-f', composeFilePath1, '-f', composeFilePath2, 'up', '-d' ]
+        expected == composeUpCommand
+    }
+
+
+    def "getComposeDownCommand(String composeFilePath) returns correctly"( ) {
+        given:
+        String composeFilePath = '/path/to/composefile.yml'
+
+        when:
+        String[] composeDownCommand = DockerUtils.getComposeDownCommand( composeFilePath )
+
+        then:
+        String[] expected = [ 'docker-compose', '-f', composeFilePath, 'down' ]
+        expected == composeDownCommand
+    }
+
+
+    def "composeUp(java.lang.String... composeFilePaths) returns correctly given one compose file"( ) {
+        given:
+        String containerName = 'composeup-one-composefile' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerName, 'running' )
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+        """.stripIndent( )
+
+        when:
+        Map<String, String> result = DockerUtils.composeUp( composeFile.getAbsolutePath( ) )
+        boolean success = result.get( 'success' )
+
+        Map<String, String> resultWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWait.get( 'success' ) ) {
+            if ( resultWait.get( 'reason' ).equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker-compose up": ' + resultWait.get( 'message' ) )
+            } else {
+                throw new GradleException( 'A container failed when running "docker-compose up".' )
+            }
+        }
+
+        then:
+        success == true
+
+        cleanup:
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+
+    def "composeUp(java.lang.String... composeFilePaths) returns correctly given two compose files"( ) {
+        given:
+        String containerName = 'composeup-two-composefiles-container' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerName, 'running' )
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+        """.stripIndent( )
+
+        composeFile2 << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+        """.stripIndent( )
+
+        when:
+        Map<String, String> result = DockerUtils.composeUp( composeFile.getAbsolutePath( ), composeFile2.getAbsolutePath( ) )
+        boolean success = result.get( 'success' )
+
+        Map<String, String> resultWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWait.get( 'success' ) ) {
+            if ( resultWait.get( 'reason' ).equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker-compose up": ' + resultWait.get( 'message' ) )
+            } else {
+                throw new GradleException( 'A container failed when running "docker-compose up".' )
+            }
+        }
+
+
+        then:
+        success == true
+
+
+        cleanup:
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+
+    def "composeUp(java.lang.String... composeFilePaths) returns correctly when in error"( ) {
+        given:
+        String badComposeFile = 'bad-filename'
+
+        when:
+        Map<String, String> result = DockerUtils.composeUp( badComposeFile )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+
+        then:
+        success == false
+        reason.contains( 'FileNotFoundError' )
+    }
+
+
+    def "composeDown(String composeFilePath) returns correctly"( ) {
+        given:
+        String containerName = 'composedown-container' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( containerName, 'running' )
+
+        composeFile << """
+            version: '${COMPOSE_VERSION}'
+
+            services:
+              ${containerName}:
+                container_name: ${containerName}
+                image: ${TEST_IMAGE_REF}
+                command: tail -f
+        """.stripIndent( )
+
+        when:
+        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        GradleExecUtils.execWithException( dockerComposeUpCommand )
+
+        Map<String, String> resultWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWait.get( 'success' ) ) {
+            if ( resultWait.get( 'reason' ).equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker-compose up": ' + resultWait.get( 'message' ) )
+            } else {
+                throw new GradleException( 'A container failed when running "docker-compose up".' )
+            }
+        }
+
+        Map<String, String> result = DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
+        boolean success = result.get( 'success' )
+
+
+        then:
+        success == true
+
+
+        cleanup:
+        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        GradleExecUtils.exec( dockerComposeDownCommand )
+    }
+
+
+    def "composeDown(String composeFilePath) returns correctly when in error"( ) {
+        given:
+        String badComposeFile = 'bad-filename'
+
+        when:
+        Map<String, String> result = DockerUtils.composeDown( badComposeFile )
+        boolean success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+
+        then:
+        success == false
+        reason.contains( 'FileNotFoundError' )
     }
 
 
