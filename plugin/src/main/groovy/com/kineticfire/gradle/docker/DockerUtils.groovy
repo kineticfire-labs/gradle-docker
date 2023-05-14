@@ -435,6 +435,8 @@ final class DockerUtils {
     *    <li>getComposeUpCommand( [myComposeFilePath1, myComposeFilePath2] as String[] )</li>
     * </ul>
     * <p>
+    * This method is purposely separate from 'composeUp(...)' because the build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    * <p>
     * @param composeFilePaths
     *    one or more paths to Docker compose files
     * @return a String array, suitable for executing, describing a docker-compose "up" command using the compose file path or paths
@@ -469,6 +471,8 @@ final class DockerUtils {
     * <p>
     * If using multiple compose files combined in the "up" command, the common compose file describing all services must be used for this method.
     * <p>
+    * This method is purposely separate from 'composeDown(...)' because the build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
     * @param composeFilePath
     *    the path to the Docker compose file
     * @return a String array, suitable for executing, describing a docker-compose "down" command using a compose file
@@ -496,30 +500,30 @@ final class DockerUtils {
     * This method returns a Map with the following entries:
     * <ul>
     *    <li>success -- boolean true if the command was successful and false otherwise</li>
-    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
     * </ul>
     *
     * @param composeFilePaths
     *    one or more paths to Docker compose files to use
     * @return a Map containing the result of the command
     */
-   static Map<String,String> composeUp( java.lang.String... composeFilePaths ) {
+   static def composeUp( java.lang.String... composeFilePaths ) {
 
       String[] composeUpCommand = getComposeUpCommand( composeFilePaths as String[] )
 
-      Map<String, String> query = GradleExecUtils.exec( composeUpCommand )
+      def queryMap = GradleExecUtils.exec( composeUpCommand )
 
 
-      Map<String, String> response = new HashMap( )
+      def responseMap = [:]
 
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', 'true' )
+      if ( queryMap.get( 'exitValue' ) == 0 ) {
+         responseMap.put( 'success', true )
       } else {
-         response.put( 'success', 'false' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.put( 'success', false )
+         responseMap.put( 'reason', queryMap.get( 'err' ) )
       }
 
-      return( response )
+      return( responseMap )
 
    }
 
@@ -537,23 +541,23 @@ final class DockerUtils {
     *    the path to the Docker compose file to use
     * @return a Map containing the result of the command
     */
-   static Map<String, String> composeDown( String composeFilePath ) {
+   static def composeDown( String composeFilePath ) {
 
       String[] composeDownCommand = getComposeDownCommand( composeFilePath )
 
-      Map<String, String> query = GradleExecUtils.exec( composeDownCommand )
+      def queryMap = GradleExecUtils.exec( composeDownCommand )
 
 
-      Map<String, String> response = new HashMap( )
+      def responseMap = [:]
 
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', 'true' )
+      if ( queryMap.get( 'exitValue' ) == 0 ) {
+         responseMap.put( 'success', true )
       } else {
-         response.put( 'success', 'false' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.put( 'success', false )
+         responseMap.put( 'reason', queryMap.get( 'err' ) )
       }
 
-      return( response )
+      return( responseMap )
 
    }
 
@@ -594,28 +598,28 @@ final class DockerUtils {
     * This method returns a Map with the following entries:
     * <ul>
     *    <li>success -- boolean true if the command was successful and false otherwise</li>
-    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
     * </ul>
     *
     * @param container
     *    the container to stop
     * @return a Map containing the result of the command
     */
-   static Map<String, String> dockerStop( String container ) {
+   static def dockerStop( String container ) {
 
-      Map<String, String> query = GradleExecUtils.exec( 'docker stop ' + container )
+      def queryMap = GradleExecUtils.exec( 'docker stop ' + container )
 
 
-      Map<String, String> response = new HashMap( )
+      def responseMap = [:]
 
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', 'true' )
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.success = true
       } else {
-         response.put( 'success', 'false' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.success = false
+         responseMap.reason = queryMap.err
       }
 
-      return( response )
+      return( responseMap )
    }
 
 
@@ -629,8 +633,8 @@ final class DockerUtils {
     * This method returns a Map with the following entries:
     * <ul>
     *    <li>success -- boolean true if the command was successful and false otherwise</li>
-    *    <li>out -- output from the command, if any; only present if 'success' is true</li>
-    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
     * </ul>
     *
     * @param container
@@ -641,7 +645,7 @@ final class DockerUtils {
     *    options to add to the exec command; optional
     * @return a Map containing the result of the command
     */
-   static Map<String, String> dockerExec( String container, String command, Map<String, String> options = null ) {
+   static def dockerExec( String container, String command, Map<String, String> options = null ) {
 
       String[] commandArray = [command]
 
@@ -665,8 +669,8 @@ final class DockerUtils {
     * This method returns a Map with the following entries:
     * <ul>
     *    <li>success -- boolean true if the command was successful and false otherwise</li>
-    *    <li>out -- output from the command, if any; only present if 'success' is true</li>
-    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
     * </ul>
     *
     * @param container
@@ -677,12 +681,7 @@ final class DockerUtils {
     *    options to add to the exec command; optional
     * @return a Map containing the result of the command
     */
-   static Map<String, String> dockerExec( String container, String[] command, Map<String, String> options = null ) {
-
-      //todo examples
-   // cmdArray = [ "docker", "exec", "--user", "git", "git-client-john", "/bin/ash", "-c", "echo 'hi' > /repos/testRepoA/blah.txt" ]
-   // cmdArray = [ "docker", "exec", "--user", "git", "git-client-john", "/bin/ash", "-c", "cd testRepoB && git add . && git commit -m 'Initial commit'" ]
-
+   static def dockerExec( String container, String[] command, Map<String, String> options = null ) {
 
       int sizeFromMap = 0
 
@@ -736,25 +735,22 @@ final class DockerUtils {
       }
 
 
+      def queryMap = GradleExecUtils.exec( execCommand )
 
-      Map<String, String> query = GradleExecUtils.exec( execCommand )
+      def responseMap = [:]
 
-      Map<String, String> response = new HashMap<String, String>( )
-
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', 'true' )
-         response.put( 'out', query.get( 'out' ) )
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.success = true
+         responseMap.out = queryMap.out
       } else {
-         response.put( 'success', 'false' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.success = false
+         responseMap.reason = queryMap.err
       }
 
-      return( response )
+      return( responseMap )
    }
 
 
-
-
-
    private DockerUtils( ) { }
+
 }
