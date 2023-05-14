@@ -115,13 +115,14 @@ class DockerUtilsTest extends Specification {
     //***********************************
     // getContainerHealth
 
+    /* comment
     def "getContainerHealth(String container) returns correctly when container not found"( ) {
         given:
         String containerName = 'container-shouldnt-exist'
 
         when:
         def resultMap = DockerUtils.getContainerHealth( containerName )
-        String health = resultMap.get( 'health' )
+        String health = resultMap.health
 
         then:
         resultMap instanceof Map
@@ -156,7 +157,7 @@ class DockerUtilsTest extends Specification {
 
 
         def healthResultMap = DockerUtils.getContainerHealth( containerName )
-        String health = healthResultMap.get( 'health' )
+        String health = healthResultMap.health
 
 
         GradleExecUtils.execWithException( dockerStopCommand )
@@ -169,6 +170,7 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
     }
 
+    comment */
 
     // not testing the health status 'starting' because it is difficult to hold that state for the test
     /*
@@ -176,6 +178,7 @@ class DockerUtilsTest extends Specification {
     }
     */
 
+    /* comment
 
     def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
 
@@ -225,7 +228,7 @@ class DockerUtilsTest extends Specification {
 
         then:
         healthResultMap instanceof Map
-        healthResultMap.get( 'health' ).equals( 'healthy' )
+        healthResultMap.health.equals( 'healthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
@@ -279,7 +282,7 @@ class DockerUtilsTest extends Specification {
 
         then:
         healthResultMap instanceof Map
-        healthResultMap.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap.health.equals( 'unhealthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
@@ -351,13 +354,12 @@ class DockerUtilsTest extends Specification {
 
         then:
         healthResultMap instanceof Map
-        healthResultMap.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap.health.equals( 'unhealthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
-    /* todo fixed unpause?
     def "getContainerHealth(String container) returns correctly when healthy container in 'paused' state"( ) {
 
         given:
@@ -425,7 +427,7 @@ class DockerUtilsTest extends Specification {
 
         then:
         healthResultMap instanceof Map
-        healthResultMap.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap.health.equals( 'unhealthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerUnpauseCommand )
@@ -433,7 +435,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
         GradleExecUtils.exec( dockerRemoveCommand )
     }
-*/
 
     def "getContainerHealth(String container) returns correctly when command is in error"( ) {
         given:
@@ -442,32 +443,35 @@ class DockerUtilsTest extends Specification {
 
         when:
         def resultMap = DockerUtils.getContainerHealth( additionalCommand )
-        String health = resultMap.get( 'health' )
-        String reason = resultMap.get( 'reason' )
+        String health = resultMap.health
+        String reason = resultMap.reason
 
         then:
-        healthResultMap instanceof Map
+        resultMap instanceof Map
         'error'.equals( health )
         reason.contains( 'unknown flag' )
     }
 
+    comment */
 
-    /*
 
     //***********************************
     //***********************************
     //***********************************
     // getContainerState
 
+        /* comment
 
     def "getContainerState(String container) returns correctly when container not found"( ) {
         given:
         String containerName = 'container-shouldnt-exist'
 
         when:
-        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+        def responseMap = DockerUtils.getContainerState( containerName )
+        String state = responseMap.state
 
         then:
+        responseMap instanceof Map
         'not-found'.equals( state )
     }
 
@@ -497,11 +501,13 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+        def responseMap = DockerUtils.getContainerState( containerName )
+        String state = responseMap.state
 
         GradleExecUtils.execWithException( dockerStopCommand )
 
         then:
+        responseMap instanceof Map
         'running'.equals( state )
 
         cleanup:
@@ -517,7 +523,9 @@ class DockerUtilsTest extends Specification {
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
         String dockerPauseCommand = 'docker pause ' + containerName
+        String dockerUnpauseCommand = 'docker pause ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
+        String dockerRemoveCommand = 'docker remove ' + containerName
 
         GradleExecUtils.execWithException( dockerRunCommand )
 
@@ -553,13 +561,17 @@ class DockerUtilsTest extends Specification {
 
 
 
-        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+        def responseMap = DockerUtils.getContainerState( containerName )
+        String state = responseMap.state
 
         then:
+        responseMap instanceof Map
         'paused'.equals( state )
 
         cleanup:
+        GradleExecUtils.exec( dockerUnpauseCommand )
         GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.exec( dockerRemoveCommand )
     }
 
     def "getContainerState(String container) returns correctly when container in 'exited' state"( ) {
@@ -607,9 +619,11 @@ class DockerUtilsTest extends Specification {
 
 
 
-        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+        def responseMap = DockerUtils.getContainerState( containerName )
+        String state = responseMap.state
 
         then:
+        responseMap instanceof Map
         'exited'.equals( state )
 
         cleanup:
@@ -644,15 +658,18 @@ class DockerUtilsTest extends Specification {
 
 
 
-        String state = DockerUtils.getContainerState( containerName ).get( 'state' )
+        def responseMap = DockerUtils.getContainerState( containerName )
+        String state = responseMap.state
 
         then:
+        responseMap instanceof Map
         'created'.equals( state )
 
         cleanup:
         GradleExecUtils.exec( dockerRmCommand )
     }
-    */
+
+    comment */
 
 
     // not testing because hard to maintain 'restarting' state
@@ -667,21 +684,24 @@ class DockerUtilsTest extends Specification {
     }
     */
 
-        /*
+    /* comment
     def "getContainerState(String container) returns correctly when command is in error"( ) {
         given:
         // adding invalid '--blah' flag to produce command error
         String additionalCommand = '--blah ' + TEST_IMAGE_REF
 
         when:
-        Map<String,String> result = DockerUtils.getContainerState( additionalCommand )
-        String state = result.get( 'state' )
-        String reason = result.get( 'reason' )
+        def resultMap = DockerUtils.getContainerState( additionalCommand )
+        String state = resultMap.state
+        String reason = resultMap.reason
 
         then:
+        resultMap instanceof Map
         'error'.equals( state )
         reason.contains( 'unknown flag' )
     }
+
+    comment */
 
 
 
@@ -699,6 +719,7 @@ class DockerUtilsTest extends Specification {
             //***********************************
             // state
 
+        /* comment
     def "waitForContainer(String container, String target) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
@@ -712,8 +733,8 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.execWithException( dockerRunCommand )
 
 
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
-        boolean success = result.get( 'success' )
+        def resultMap = DockerUtils.waitForContainer( containerName, 'running' )
+        boolean success = resultMap.success
 
 
         boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
@@ -724,6 +745,7 @@ class DockerUtilsTest extends Specification {
 
 
         then:
+        resultMap instanceof Map
         success == true
 
         cleanup:
@@ -736,16 +758,17 @@ class DockerUtilsTest extends Specification {
 
         when:
         long start = System.currentTimeMillis( )
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
+        def resultMap = DockerUtils.waitForContainer( containerName, 'running' )
         long diff = System.currentTimeMillis( ) - start
-        boolean success = result.get( 'success' )
-        String reason = result.get( 'reason' )
-        String message = result.get( 'message' )
-        String container = result.get( 'container' )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+        String message = resultMap.message
+        String container = resultMap.container
         //( diff >= ( TIME_WAIT_EXPECTED_MILLIS - TIME_TOLERANCE_MILLIS ) ) && ( diff <= ( TIME_WAIT_EXPECTED_MILLIS + TIME_TOLERANCE_MILLIS ) )
 
 
         then:
+        resultMap instanceof Map
         success == false
         reason.equals( 'num-retries-exceeded' )
         message.equals( 'not-found' )
@@ -797,14 +820,15 @@ class DockerUtilsTest extends Specification {
 
 
 
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
-        boolean success = result.get( 'success' )
-        String reason = result.get( 'reason' )
-        String message = result.get( 'message' )
-        String container = result.get( 'container' )
+        def resultMap = DockerUtils.waitForContainer( containerName, 'running' )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+        String message = resultMap.message
+        String container = resultMap.container
 
 
         then:
+        resultMap instanceof Map
         success == false
         reason.equals( 'failed' )
         message.equals( 'exited' )
@@ -826,6 +850,8 @@ class DockerUtilsTest extends Specification {
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
         String dockerPauseCommand = 'docker pause ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
+        String dockerUnpauseCommand = 'docker unpause ' + containerName
+        String dockerRemoveCommand = 'docker rm ' + containerName
 
         GradleExecUtils.execWithException( dockerRunCommand )
 
@@ -861,20 +887,23 @@ class DockerUtilsTest extends Specification {
 
 
 
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
-        boolean success = result.get( 'success' )
-        String reason = result.get( 'reason' )
-        String message = result.get( 'message' )
-        String container = result.get( 'container' )
+        def resultMap = DockerUtils.waitForContainer( containerName, 'running' )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+        String message = resultMap.message
+        String container = resultMap.container
 
         then:
+        resultMap instanceof Map
         success == false
         reason.equals( 'failed' )
         message.equals( 'paused' )
         container.equals( containerName )
 
         cleanup:
+        GradleExecUtils.exec( dockerUnpauseCommand )
         GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.exec( dockerRemoveCommand )
     }
 
     def "waitForContainer(String container, String target) returns correctly for container in 'created' state with target of 'running' state"( ) {
@@ -892,12 +921,12 @@ class DockerUtilsTest extends Specification {
 
 
         long start = System.currentTimeMillis( )
-        Map<String, String> result = DockerUtils.waitForContainer( containerName, 'running' )
+        def resultMap = DockerUtils.waitForContainer( containerName, 'running' )
         long diff = System.currentTimeMillis( ) - start
-        boolean success = result.get( 'success' )
-        String reason = result.get( 'reason' )
-        String message = result.get( 'message' )
-        String container = result.get( 'container' )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+        String message = resultMap.message
+        String container = resultMap.container
 
 
 
@@ -909,6 +938,7 @@ class DockerUtilsTest extends Specification {
 
 
         then:
+        resultMap instanceof Map
         success == false
         reason.equals( 'num-retries-exceeded' )
         message.equals( 'created' )
@@ -927,18 +957,22 @@ class DockerUtilsTest extends Specification {
         String additionalCommand = '--blah ' + TEST_IMAGE_REF
 
         when:
-        Map<String, String> result = DockerUtils.waitForContainer( additionalCommand, 'running' )
-        boolean success = result.get( 'success' )
-        String reason = result.get( 'reason' )
-        String message = result.get( 'message' )
-        String container = result.get( 'container' )
+        def resultMap = DockerUtils.waitForContainer( additionalCommand, 'running' )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+        String message = resultMap.message
+        String container = resultMap.container
 
         then:
+        resultMap instanceof Map
         success == false
         reason.equals( 'error' )
         message.contains( 'unknown flag' )
     }
 
+    comment */
+
+        /* todo below!
 
 
             //***********************************

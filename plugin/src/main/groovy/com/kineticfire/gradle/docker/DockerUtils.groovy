@@ -35,11 +35,11 @@ final class DockerUtils {
     * <p>
     * This method returns a Map with the following entries:
     * <ul>
-    *    <li>state -- the state of the container</li>
-    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'state' is 'error'</li>
+    *    <li>state -- the state of the container as a String</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'state' is 'error'</li>
     * </ul>
     * <p>
-    * The 'state' entry of the returned Map will have one of the following values.  The first four are Docker-defined container states.
+    * The 'state' entry of the returned Map will have one of the following String values.  The first four are Docker-defined container states.
     * <ul>
     *    <li>created</li>
     *    <li>restarting</li>
@@ -55,26 +55,26 @@ final class DockerUtils {
     *    the container to query
     * @return a Map containing the current state of the container
     */
-   static Map<String,String> getContainerState( String container ) {
+   static def getContainerState( String container ) {
 
-      Map<String,String> response = new HashMap<String,String>( )
+      def responseMap = [:]
 
 
       String command = 'docker inspect --format {{.State.Status}} ' + container
 
-      Map<String, String> query = GradleExecUtils.exec( command )
+      def queryMap = GradleExecUtils.exec( command )
 
 
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'state', query.get( 'out' ).toLowerCase( ) )
-      } else if ( query.get( 'err' ).contains( 'No such object' ) ) {
-         response.put( 'state', 'not-found' )
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.state = queryMap.out.toLowerCase( )
+      } else if ( queryMap.err.contains( 'No such object' ) ) {
+         responseMap.state = 'not-found'
       } else {
-         response.put( 'state', 'error' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.state = 'error'
+         responseMap.reason = queryMap.err
       }
 
-      return( response )
+      return( responseMap )
 
    }
 
@@ -122,14 +122,14 @@ final class DockerUtils {
 
 
       if ( queryMap.get( 'exitValue' ) == 0 ) {
-         responseMap.put( 'health', queryMap.get( 'out' ).toLowerCase( ) )
-      } else if ( queryMap.get( 'err' ).contains( 'map has no entry for key "Health"' ) ) {
-         responseMap.put( 'health', 'no-healthcheck' )
-      } else if ( queryMap.get( 'err' ).contains( 'No such object' ) ) {
-         responseMap.put( 'health', 'not-found' )
+         responseMap.health = queryMap.out.toLowerCase( )
+      } else if ( queryMap.err.contains( 'map has no entry for key "Health"' ) ) {
+         responseMap.health = 'no-healthcheck'
+      } else if ( queryMap.err.contains( 'No such object' ) ) {
+         responseMap.health = 'not-found'
       } else {
-         responseMap.put( 'health', 'error' )
-         responseMap.put( 'reason', queryMap.get( 'err' ) )
+         responseMap.health = 'error'
+         responseMap.reason = queryMap.err
       }
 
       return( responseMap )
@@ -152,7 +152,7 @@ final class DockerUtils {
     *    the target state or health status for the container
     * @return a Map indicating if the container is in the 'running' state with additional information
     */
-   static Map<String, String> waitForContainer( String container, String target ) {
+   static def waitForContainer( String container, String target ) {
       Map<String,String> containerMap = new HashMap<String,String>( )
       containerMap.put( container, target )
       return( waitForContainer( containerMap ) )
@@ -177,7 +177,7 @@ final class DockerUtils {
     * @return a Map indicating if the container reached the desired state or health status with additional information
     *
     */
-   static Map<String, String> waitForContainer( String container, String target, int retrySeconds, int retryNum ) {
+   static def waitForContainer( String container, String target, int retrySeconds, int retryNum ) {
       Map<String,String> containerMap = new HashMap<String,String>( )
       containerMap.put( container, target )
       return( waitForContainer( containerMap, retrySeconds, retryNum ) )
@@ -196,7 +196,7 @@ final class DockerUtils {
     *    a Map containing one or more container references (IDs and/or names) as Strings mapped to its target state or health status as a String
     * @return a Map indicating if the container reached the desired state or health status with additional information
     */
-   static Map<String, String> waitForContainer( Map<String,String> containerMap ) {
+   static def waitForContainer( Map<String,String> containerMap ) {
       return( waitForContainer( containerMap, 2, 22 ) )
    }
 
@@ -223,7 +223,7 @@ final class DockerUtils {
     *    <li>container -- a String identifying the container described by the 'reason' and 'message' fields, which is the first container queried that was not in its target state or health status; present only if 'success' is false</li>
     * </ul>
     * <p>
-    * Valid values for the 'reason' entry in the returned map are: 
+    * Valid values for the 'reason' entry in the returned map are as Strings: 
     * <ul>
     *    <li>unhealthy -- if target is 'healthy' health status, then returns this value for the first container that is 'unhealthy'</li>
     *    <li>no-health-check -- if target is 'healthy' health status, then returns this value for the first container that does not have a health check</li>
@@ -232,7 +232,7 @@ final class DockerUtils {
     *    <li>error -- an unexpected error occurred</li>
     * </ul>
     * <p>
-    * Valid values for the 'message' entry in the returned map are:
+    * Valid values for the 'message' entry in the returned map as Strings are:
     * <ul>
     *    <li>If 'reason' is 'failed':</li>
     *       <ul>
@@ -265,10 +265,10 @@ final class DockerUtils {
     *    number of times to retry, waiting for all containers to reach their target states or health status or until a failure is returned
     * @return a Map indicating if all containers achieved their targets states or health status with additional information
     */
-   static Map<String, String> waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
+   static def waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
 
-      Map<String, String> result = new HashMap<String, String>( )
-      result.put( 'success', 'false' )
+      def resultMap = [:]
+      resultMap.success = false
 
       boolean done= false
       int count = 0 // counting up to 'retryNum' times
@@ -279,8 +279,8 @@ final class DockerUtils {
       String targetContainerDisposition  // state or health status
       String currentContainerDisposition // state or health status
       Set<String> keySet
-      Map<String, String> queryResult
-      Map<String, String> tempResult = new HashMap<String, String>( )  // populates data for a failure case to retry later, in the event 'retryNum' exceeded
+      def queryResultMap
+      def tempResultMap = [:]  // populates data for a failure case to retry later, in the event 'retryNum' exceeded
 
       while ( !done ) {
 
@@ -301,9 +301,9 @@ final class DockerUtils {
             if ( targetContainerDisposition.equals( 'healthy' ) ) {
 
                // returns 'health' entry with one of {healthy, unhealthy, starting, none, error}
-               queryResult = getContainerHealth( currentContainer )
+               queryResultMap = getContainerHealth( currentContainer )
 
-               currentContainerDisposition = queryResult.get( 'health' )
+               currentContainerDisposition = queryResultMap.get( 'health' )
 
                if ( currentContainerDisposition.equalsIgnoreCase( 'healthy' ) ) {
                   proceed = true
@@ -312,40 +312,40 @@ final class DockerUtils {
                   done = true
                   // implicit proceed = false
 
-                  result.put( 'reason', 'unhealthy' )
-                  result.put( 'container', currentContainer )
+                  resultMap.reason = 'unhealthy'
+                  resultMap.container = currentContainer
 
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'no-healthcheck' ) ) {
 
                   done = true
                   // implicit proceed = false
 
-                  result.put( 'reason', 'no-health-check' )
-                  result.put( 'container', currentContainer )
+                  resultMap.reason = 'no-health-check'
+                  resultMap.container = currentContainer
 
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'error' ) ) {
 
                   done = true
                   // implicit proceed = false
 
-                  result.put( 'reason', 'error' )
-                  result.put( 'message', queryResult.get( 'reason' ) )
-                  result.put( 'container', currentContainer )
+                  resultMap.reason = 'error'
+                  resultMap.message = queryResultMap.reason
+                  resultMap.container = currentContainer
 
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'starting' ) ) {
-                  tempResult.put( 'message', 'starting' )
-                  tempResult.put( 'container', currentContainer )
+                  tempResultMap.message = 'starting'
+                  tempResultMap.container = currentContainer
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'not-found' ) ) {
-                  tempResult.put( 'message', 'not-found' )
-                  tempResult.put( 'container', currentContainer )
+                  tempResultMap.message = 'not-found'
+                  tempResultMap.container = currentContainer
                }
 
             } else if ( targetContainerDisposition.equals( 'running' ) ) {
 
                // returns 'state' entry with one of {created, restarting, running, paused, exited, dead, not-found, error}
-               queryResult = getContainerState( currentContainer )
+               queryResultMap = getContainerState( currentContainer )
 
-               currentContainerDisposition = queryResult.get( 'state' )
+               currentContainerDisposition = queryResultMap.get( 'state' )
 
                if ( currentContainerDisposition.equalsIgnoreCase( 'running' ) ) {
                   proceed = true
@@ -358,25 +358,25 @@ final class DockerUtils {
                   done = true
                   // implicit proceed = false
 
-                  result.put( 'reason', 'failed' )
-                  result.put( 'message', currentContainerDisposition )
-                  result.put( 'container', currentContainer )
+                  resultMap.reason = 'failed'
+                  resultMap.message = currentContainerDisposition
+                  resultMap.container = currentContainer
 
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'error' ) ) {
 
                   done = true
                   // implicit proceed = false
 
-                  result.put( 'reason', 'error' )
-                  result.put( 'message', queryResult.get( 'reason' ) )
-                  result.put( 'container', currentContainer )
+                  resultMap.reason = 'error'
+                  resultMap.message = queryResultMap.reason
+                  resultMap.container = currentContainer
 
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'created' ) ) {
-                  tempResult.put( 'message', 'created' )
-                  tempResult.put( 'container', currentContainer )
+                  tempResultMap.message = 'created'
+                  tempResultMap.container = currentContainer
                } else if ( currentContainerDisposition.equalsIgnoreCase( 'not-found' ) ) {
-                  tempResult.put( 'message', 'not-found' )
-                  tempResult.put( 'container', currentContainer )
+                  tempResultMap.message = 'not-found'
+                  tempResultMap.container = currentContainer
                }
 
             } else {
@@ -384,9 +384,9 @@ final class DockerUtils {
                done = true;
                // implicit proceed = false
 
-               result.put( 'reason', 'error' )
-               result.put( 'container', currentContainer )
-               result.put( 'message', 'illegal-target-disposition' )
+               resultMap.reason = 'error'
+               resultMap.container = currentContainer
+               resultMap.message = 'illegal-target-disposition'
 
             }
 
@@ -396,7 +396,7 @@ final class DockerUtils {
 
          if ( !done && !it.hasNext( ) && proceed ) {
             done = true
-            result.put( 'success', 'true' )
+            resultMap.success = true
          } else if ( done ) {
             // catches failure cases and data provided above, preventing the next 'else' with 'num retries' from over-writing
          } else {
@@ -405,9 +405,9 @@ final class DockerUtils {
 
             if ( count == retryNum + 1 ) {
                done = true
-               result.put( 'reason', 'num-retries-exceeded' )
-               result.put( 'message', tempResult.get( 'message' ) )
-               result.put( 'container', tempResult.get( 'container' ) )
+               resultMap.reason = 'num-retries-exceeded'
+               resultMap.message = tempResultMap.message
+               resultMap.container = tempResultMap.container
             } else {
                Thread.sleep( retrySeconds * 1000 )
             }
@@ -417,7 +417,7 @@ final class DockerUtils {
 
       } // end while loop
 
-      return( result )
+      return( resultMap )
    }
 
 
