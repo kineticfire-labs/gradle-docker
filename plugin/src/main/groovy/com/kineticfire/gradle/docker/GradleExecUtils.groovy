@@ -33,12 +33,7 @@ final class GradleExecUtils {
    /**
     * Executes the command as a command line process under the current working directory using Groovy's String.execute() method, and returns a String result on success or throws an exception on failure.
     * <p>
-    * Returns a result as a Map<String,String> with key-value pairs:
-    * <ul>
-    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
-    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
-    * </ul>
+    * Returns the trimmed output returned by the process as a String, which could be an empty String.
     * <p>
     * This method is generally simpler to use than than the 'execWithException( String[] task )', however that method may be required over this one when using arguments that have spaces or wildcards; and also similar to 'exec( String task ), except that method will return a Map with results while this method returns a String on success and throws an exception on failure.
     *
@@ -50,33 +45,33 @@ final class GradleExecUtils {
     */
    static String execWithException( String task ) { 
 
-      Map<String, String> result = exec( task )
+      def resultMap = exec( task )
 
-      if ( result.get( 'exitValue' ) != 0 ) {
+      if ( resultMap.get( 'exitValue' ) != 0 ) {
 
          StringBuffer sb = new StringBuffer( )
 
-         sb.append( 'Executing command "' + task + '" failed with exit value ' + result.get( 'exitValue' ) + '.' )
+         sb.append( 'Executing command "' + task + '" failed with exit value ' + resultMap.get( 'exitValue' ) + '.' )
 
-         if ( !result.get( 'err' ).equals( '' ) ) {
-            sb.append( '  ' + result.get( 'err' ) )
+         if ( !resultMap.get( 'err' ).equals( '' ) ) {
+            sb.append( '  ' + resultMap.get( 'err' ) )
          }
 
          throw new IOException( sb.toString( ) )
       }
 
-      return( result.get( 'out' ) )
+      return( resultMap.get( 'out' ) )
    }
 
 
    /**
     * Executes the command as a command line process under the current working directory using Groovy's String.execute() method, and returns a Map result.
     * <p>
-    * Returns a result as a Map<String,String> with key-value pairs:
+    * Returns a result as a Map with key-value pairs:
     * <ul>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
-    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
+    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String
+    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
     * This method is generally simpler to use than than the 'exec( String[] task )', however that method may be required over this one when using arguments that have spaces or wildcards; and also similar to 'execWithException( String task )', except that method returns a String result on success and throws an exception on failure while this method returns a Map with results.
@@ -85,9 +80,9 @@ final class GradleExecUtils {
     *    the task (or command) to execute as a String
     * @return a Map of the result of the command execution
     */
-   static Map<String, String> exec( String task ) { 
+   static def exec( String task ) { 
 
-      Map<String, String> result = new HashMap<String, String>( )
+      def resultMap = [:]
 
       StringBuffer sout = new StringBuffer( )
       StringBuffer serr = new StringBuffer( )
@@ -97,16 +92,16 @@ final class GradleExecUtils {
 
 
       int exitValue = proc.exitValue( )
-      result.put( 'exitValue', exitValue )
+      resultMap.put( 'exitValue', exitValue )
 
-      result.put( 'out', sout.toString( ).trim( ) ) 
+      resultMap.put( 'out', sout.toString( ).trim( ) ) 
 
-      if ( exitValue < 0 || exitValue > 0 ) { 
-         result.put( 'err', serr.toString( ).trim( ) ) 
+      if ( exitValue != 0 ) { 
+         resultMap.put( 'err', serr.toString( ).trim( ) ) 
       }   
 
 
-      return( result )
+      return( resultMap )
 
    }
 
@@ -116,12 +111,7 @@ final class GradleExecUtils {
     * <p>
     * Calls Groovy's toString() method on each item in the array.  The first item in the array is treated as the command and executed with Groovy's String.execute() method and any additional array items are treated as parameters.
     * <p>
-    * Returns a result as a Map<String,String> with key-value pairs:
-    * <ul>
-    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
-    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
-    * </ul>
+    * Returns the trimmed output returned by the process as a String, which could be an empty String.
     * <p>
     * This method is needed to use over the simpler 'exec( String task )' when using arguments that have spaces or wildcards; and is similar to 'exec( String[] task )', except that method returns a Map with results while this method returns a String result on succcess and throws an exception on failure.
     *
@@ -133,22 +123,22 @@ final class GradleExecUtils {
     */
    static String execWithException( String[] task ) { 
 
-      Map<String, String> result = exec( task )
+      def resultMap = exec( task )
 
-      if ( result.get( 'exitValue' ) != 0 ) {
+      if ( resultMap.get( 'exitValue' ) != 0 ) {
 
          StringBuffer sb = new StringBuffer( )
 
-         sb.append( 'Executing command "' + task + '" failed with exit value ' + result.get( 'exitValue' ) + '.' )
+         sb.append( 'Executing command "' + task + '" failed with exit value ' + resultMap.get( 'exitValue' ) + '.' )
 
-         if ( !result.get( 'err' ).equals( '' ) ) {
-            sb.append( '  ' + result.get( 'err' ) )
+         if ( !resultMap.get( 'err' ).equals( '' ) ) {
+            sb.append( '  ' + resultMap.get( 'err' ) )
          }
 
          throw new IOException( sb.toString( ) )
       }
 
-      return( result.get( 'out' ) )
+      return( resultMap.get( 'out' ) )
    }
 
 
@@ -160,8 +150,8 @@ final class GradleExecUtils {
     * Returns a result as a Map<String,String> with key-value pairs:
     * <ul>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process, which could be an empty string</ol>
-    *    <ol>err - not present if an error didn't occur; if an error occurred, then contains the error output returned by the process</ol>
+    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String
+    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred, e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
     * This method is needed to use over the simpler 'exec( String task )' when using arguments that have spaces or wildcards; and is similar to 'execWithException( String[] task )', except that method returns a String result on success and a Map on failure while this method returns a Map with results.
@@ -170,29 +160,27 @@ final class GradleExecUtils {
     *    the task (or command) to execute as a String array, where the first item is the command and any subsequent items are arguments
     * @return a Map of the result of the command execution
     */
-   static Map<String, String> exec( String[] task ) { 
+   static def exec( String[] task ) { 
 
-      Map<String, String> result = new HashMap<String, String>( )
+      def resultMap = [:]
 
       StringBuffer sout = new StringBuffer( )
       StringBuffer serr = new StringBuffer( )
-
-      // https://stackoverflow.com/questions/19988946/executing-many-sub-processes-in-groovy-fails
 
       Process proc = task.execute( )
       proc.waitForProcessOutput( sout, serr )
 
       int exitValue = proc.exitValue( )
-      result.put( 'exitValue', exitValue )
+      resultMap.put( 'exitValue', exitValue )
 
-      result.put( 'out', sout.toString( ).trim( ) ) 
+      resultMap.put( 'out', sout.toString( ).trim( ) ) 
 
-      if ( exitValue < 0 || exitValue > 0 ) { 
-         result.put( 'err', serr.toString( ).trim( ) ) 
+      if ( exitValue != 0 ) { 
+         resultMap.put( 'err', serr.toString( ).trim( ) ) 
       }   
 
 
-      return( result )
+      return( resultMap )
 
    }
 

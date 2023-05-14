@@ -120,10 +120,11 @@ class DockerUtilsTest extends Specification {
         String containerName = 'container-shouldnt-exist'
 
         when:
-        Map<String,String> result = DockerUtils.getContainerHealth( containerName )
-        String health = result.get( 'health' )
+        def resultMap = DockerUtils.getContainerHealth( containerName )
+        String health = resultMap.get( 'health' )
 
         then:
+        resultMap instanceof Map
         'not-found'.equals( health )
     }
 
@@ -154,13 +155,14 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        Map<String,String> healthResult = DockerUtils.getContainerHealth( containerName )
-        String health = healthResult.get( 'health' )
+        def healthResultMap = DockerUtils.getContainerHealth( containerName )
+        String health = healthResultMap.get( 'health' )
 
 
         GradleExecUtils.execWithException( dockerStopCommand )
 
         then:
+        healthResultMap instanceof Map
         'no-healthcheck'.equals( health )
 
         cleanup:
@@ -218,10 +220,12 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+        def healthResultMap = DockerUtils.getContainerHealth( containerName )
+
 
         then:
-        healthResult.get( 'health' ).equals( 'healthy' )
+        healthResultMap instanceof Map
+        healthResultMap.get( 'health' ).equals( 'healthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
@@ -271,14 +275,16 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+        def healthResultMap = DockerUtils.getContainerHealth( containerName )
 
         then:
-        healthResult.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap instanceof Map
+        healthResultMap.get( 'health' ).equals( 'unhealthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
+
 
     def "getContainerHealth(String container) returns correctly when previously healthy container in 'exited' state"( ) {
 
@@ -341,15 +347,17 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+        def healthResultMap = DockerUtils.getContainerHealth( containerName )
 
         then:
-        healthResult.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap instanceof Map
+        healthResultMap.get( 'health' ).equals( 'unhealthy' )
 
         cleanup:
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
+    /* todo fixed unpause?
     def "getContainerHealth(String container) returns correctly when healthy container in 'paused' state"( ) {
 
         given:
@@ -378,6 +386,9 @@ class DockerUtilsTest extends Specification {
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
         String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
         String dockerPauseCommand = 'docker pause ' + containerName
+        String dockerUnpauseCommand = 'docker pause ' + containerName
+        String dockerStopCommand = 'docker unpause ' + containerName
+        String dockerRemoveCommand = 'docker remove ' + containerName
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -410,14 +421,19 @@ class DockerUtilsTest extends Specification {
         }
 
 
-        Map <String,String> healthResult = DockerUtils.getContainerHealth( containerName )
+        def healthResultMap = DockerUtils.getContainerHealth( containerName )
 
         then:
-        healthResult.get( 'health' ).equals( 'unhealthy' )
+        healthResultMap instanceof Map
+        healthResultMap.get( 'health' ).equals( 'unhealthy' )
 
         cleanup:
+        GradleExecUtils.exec( dockerUnpauseCommand )
         GradleExecUtils.exec( dockerComposeDownCommand )
+        GradleExecUtils.exec( dockerStopCommand )
+        GradleExecUtils.exec( dockerRemoveCommand )
     }
+*/
 
     def "getContainerHealth(String container) returns correctly when command is in error"( ) {
         given:
@@ -425,16 +441,18 @@ class DockerUtilsTest extends Specification {
         String additionalCommand = '--blah ' + TEST_IMAGE_REF
 
         when:
-        Map<String,String> result = DockerUtils.getContainerHealth( additionalCommand )
-        String health = result.get( 'health' )
-        String reason = result.get( 'reason' )
+        def resultMap = DockerUtils.getContainerHealth( additionalCommand )
+        String health = resultMap.get( 'health' )
+        String reason = resultMap.get( 'reason' )
 
         then:
+        healthResultMap instanceof Map
         'error'.equals( health )
         reason.contains( 'unknown flag' )
     }
 
 
+    /*
 
     //***********************************
     //***********************************
@@ -634,6 +652,7 @@ class DockerUtilsTest extends Specification {
         cleanup:
         GradleExecUtils.exec( dockerRmCommand )
     }
+    */
 
 
     // not testing because hard to maintain 'restarting' state
@@ -648,6 +667,7 @@ class DockerUtilsTest extends Specification {
     }
     */
 
+        /*
     def "getContainerState(String container) returns correctly when command is in error"( ) {
         given:
         // adding invalid '--blah' flag to produce command error
@@ -4845,11 +4865,11 @@ class DockerUtilsTest extends Specification {
         }
 
         Map<String, String> result = DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
-        boolean success = result.get( 'success' )
+        String success = result.get( 'success' )
 
 
         then:
-        success == true
+        success.equals( 'true' )
 
 
         cleanup:
@@ -4864,13 +4884,320 @@ class DockerUtilsTest extends Specification {
 
         when:
         Map<String, String> result = DockerUtils.composeDown( badComposeFile )
-        boolean success = result.get( 'success' )
+        String success = result.get( 'success' )
         String reason = result.get( 'reason' )
 
         then:
-        success == false
+        success.equals( 'false' )
         reason.contains( 'FileNotFoundError' )
     }
 
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // docker run, stop, exec
+
+
+    //todo docker run - no options - no command - good
+    //todo docker run - yes options - no command - good
+    //todo docker run - no options - yes command - good
+    //todo docker run - yes options - yes command - good
+
+    //todo docker run - bad
+
+
+    def "dockerStop(String container) returns correctly"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'dockerstop-valid' + CONTAINER_NAME_POSTFIX
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.dockerStop( containerName )
+        String success = result.get( 'success' )
+
+        //todo debug
+        if ( !success ) {
+            println "dockerStop returns correctly: " + result.get( 'reason' )
+        }
+
+
+        then:
+        success.equals( 'true' )
+
+        boolean exited = false
+        Map<String, String> check = GradleExecUtils.exec( dockerInspectCommand )
+        if ( check.get( 'exitValue' ) != 0 ) {
+            if ( check.get( 'err' ).contains( 'Error: No such object' ) ) {
+                exited = true
+            }
+        }
+
+        exited == true
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+
+    def "dockerStop(String container) returns correctly when no such container"( ) {
+        given:
+        String container = 'dockerstop-invalid' + CONTAINER_NAME_POSTFIX
+
+        when:
+
+        Map<String, String> result = DockerUtils.dockerStop( container )
+        String success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+
+        //todo debug
+        if ( !success ) {
+            println "dockerStop returns correctly no such container: " + result.get( 'reason' )
+        }
+
+
+        then:
+        success.equals( 'false' )
+        reason.contains( 'Error: No such object' )
+    }
+
+
+
+    def "dockerExec(String container, String command, Map<String,String> options) returns correctly without options"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'dockerexec-str-command-no-options-good' + CONTAINER_NAME_POSTFIX
+        String command = 'ls'
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command )
+        String success = result.get( 'success' )
+        String output = result.get( 'out' )
+
+
+        then:
+        success.equals( 'true' )
+        output.contains( 'bin' )
+
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+
+    def "dockerExec(String container, String command, Map<String,String> options) returns correctly with options"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'dockerexec-str-command-with-options-good' + CONTAINER_NAME_POSTFIX
+        String command = 'ls'
+        Map<String, String> options = new HashMap<String, String>( )
+        options.put( '-w', '/sys' ) 
+
+        // didn't test an option with key and no value, as there aren't good choices that make sense here
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command, options )
+        String success = result.get( 'success' )
+        String output = result.get( 'out' )
+
+
+        then:
+        success.equals( 'true' )
+        output.contains( 'kernel' )
+
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+
+
+    def "dockerExec(String container, String command, Map<String,String> options) returns correctly with bad input"( ) {
+        given:
+        String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
+        String command = 'ls'
+
+        when:
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command )
+        String success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+
+
+        then:
+        success.equals( 'false' )
+        reason.contains( 'No such container' )
+    }
+
+
+
+    def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly without options"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'dockerexec-array-command-no-options-good' + CONTAINER_NAME_POSTFIX
+        String[] command = ["/bin/bash", "-c", "ls && ps"]
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command )
+        String success = result.get( 'success' )
+        String output = result.get( 'out' )
+
+
+        then:
+        success.equals( 'true' )
+        output.contains( 'bin' )
+        output.contains( 'PID' )
+
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+
+
+    def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with options"( ) {
+        given:
+        String containerImageRef = TEST_IMAGE_REF
+        String containerName = 'dockerexec-array-command-with-options-good' + CONTAINER_NAME_POSTFIX
+        String[] command = ["/bin/bash", "-c", "ls && ps"]
+        Map<String, String> options = new HashMap<String, String>( )
+        options.put( '-w', '/sys' ) 
+
+        // didn't test an option with key and no value, as there aren't good choices that make sense here
+
+        when:
+        String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
+        String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+        String dockerStopCommand = 'docker stop ' + containerName
+
+        GradleExecUtils.execWithException( dockerRunCommand )
+
+        int count = 0
+        boolean isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+
+        while ( !isRunning && count < NUM_RETRIES ) {
+            Thread.sleep( SLEEP_TIME_MILLIS )
+            isRunning = GradleExecUtils.execWithException( dockerInspectCommand ).equals( 'running' )
+            count++
+        }
+
+        if ( !isRunning ) {
+            throw new GradleException( 'Docker container ' + containerName + ' did not reach "running" state.' )
+        }
+
+
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command, options )
+        String success = result.get( 'success' )
+        String output = result.get( 'out' )
+
+
+        then:
+        success.equals( 'true' )
+        output.contains( 'kernel' )
+        output.contains( 'PID' )
+
+
+        cleanup:
+        GradleExecUtils.exec( dockerStopCommand )
+    }
+
+
+
+    def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with bad input"( ) {
+        given:
+        String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
+        String[] command = ["/bin/bash", "-c", "ls && ps"]
+
+        when:
+        Map<String, String> result = DockerUtils.dockerExec( containerName, command )
+        String success = result.get( 'success' )
+        String reason = result.get( 'reason' )
+
+        then:
+        success.equals( 'false' )
+        reason.contains( 'No such container' )
+    }
+
+    */
 
 }

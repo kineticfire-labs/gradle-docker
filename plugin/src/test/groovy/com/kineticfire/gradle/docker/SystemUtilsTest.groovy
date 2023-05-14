@@ -48,7 +48,7 @@ class SystemExecUtilsTest extends Specification {
         uidExpected == uidResult
     }
 
-    def "getUid(String username) returns correct UID"( ) {
+    def "getUid(String username) returns correct UID for valid user"( ) {
         given:
         String username = System.properties[ 'user.name' ]
         String uidString = [ 'id', '-u', username ].execute( ).text.trim( )
@@ -59,6 +59,17 @@ class SystemExecUtilsTest extends Specification {
 
         then:
         uidExpected == uidResult
+    }
+
+    def "getUid(String username) returns correct UID for invalid username"( ) {
+        given:
+        String username = 'xxxxxxxx'
+
+        when:
+        int uidResult = SystemUtils.getUid( username )
+
+        then:
+        uidResult == -1
     }
 
 }

@@ -59,14 +59,13 @@ final class SystemUtils {
 
       String[] commandArray = [ 'id', '-u', username ]
 
-      Map<String, String> response = GradleExecUtils.exec( commandArray )
+      def responseMap = GradleExecUtils.exec( commandArray )
 
-      if ( response.get( 'exitValue' ) == 0 ) {
+      if ( responseMap.get( 'exitValue' ) == 0 ) {
 
          try {
-            uid = Integer.parseInt( response.get( 'out' ) )
+            uid = Integer.parseInt( responseMap.get( 'out' ) )
          } catch ( NumberFormatException e ) {
-            println 'err out ' + response.get( 'out' ) + 'end'
             uid = -1
          }
 

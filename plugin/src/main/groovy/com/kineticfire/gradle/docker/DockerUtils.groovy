@@ -112,28 +112,27 @@ final class DockerUtils {
     *    the container to query
     * @return a Map containing the current health of the container
     */
-   static Map<String,String> getContainerHealth( String container ) {
+   static def getContainerHealth( String container ) {
 
-      Map<String,String> response = new HashMap<String,String>( )
-
+      def responseMap = [:]
 
       String command = 'docker inspect --format {{.State.Health.Status}} ' + container
 
-      Map<String, String> query = GradleExecUtils.exec( command )
+      def queryMap = GradleExecUtils.exec( command )
 
 
-      if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'health', query.get( 'out' ).toLowerCase( ) )
-      } else if ( query.get( 'err' ).contains( 'map has no entry for key "Health"' ) ) {
-         response.put( 'health', 'no-healthcheck' )
-      } else if ( query.get( 'err' ).contains( 'No such object' ) ) {
-         response.put( 'health', 'not-found' )
+      if ( queryMap.get( 'exitValue' ) == 0 ) {
+         responseMap.put( 'health', queryMap.get( 'out' ).toLowerCase( ) )
+      } else if ( queryMap.get( 'err' ).contains( 'map has no entry for key "Health"' ) ) {
+         responseMap.put( 'health', 'no-healthcheck' )
+      } else if ( queryMap.get( 'err' ).contains( 'No such object' ) ) {
+         responseMap.put( 'health', 'not-found' )
       } else {
-         response.put( 'health', 'error' )
-         response.put( 'reason', query.get( 'err' ) )
+         responseMap.put( 'health', 'error' )
+         responseMap.put( 'reason', queryMap.get( 'err' ) )
       }
 
-      return( response )
+      return( responseMap )
 
    }
 
@@ -269,7 +268,7 @@ final class DockerUtils {
    static Map<String, String> waitForContainer( Map<String,String> containerMap, int retrySeconds, int retryNum ) {
 
       Map<String, String> result = new HashMap<String, String>( )
-      result.put( 'success', false )
+      result.put( 'success', 'false' )
 
       boolean done= false
       int count = 0 // counting up to 'retryNum' times
@@ -397,7 +396,7 @@ final class DockerUtils {
 
          if ( !done && !it.hasNext( ) && proceed ) {
             done = true
-            result.put( 'success', true )
+            result.put( 'success', 'true' )
          } else if ( done ) {
             // catches failure cases and data provided above, preventing the next 'else' with 'num retries' from over-writing
          } else {
@@ -514,9 +513,9 @@ final class DockerUtils {
       Map<String, String> response = new HashMap( )
 
       if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', true )
+         response.put( 'success', 'true' )
       } else {
-         response.put( 'success', false )
+         response.put( 'success', 'false' )
          response.put( 'reason', query.get( 'err' ) )
       }
 
@@ -538,7 +537,7 @@ final class DockerUtils {
     *    the path to the Docker compose file to use
     * @return a Map containing the result of the command
     */
-   static Map<String,String> composeDown( String composeFilePath ) {
+   static Map<String, String> composeDown( String composeFilePath ) {
 
       String[] composeDownCommand = getComposeDownCommand( composeFilePath )
 
@@ -548,15 +547,213 @@ final class DockerUtils {
       Map<String, String> response = new HashMap( )
 
       if ( query.get( 'exitValue' ) == 0 ) {
-         response.put( 'success', true )
+         response.put( 'success', 'true' )
       } else {
-         response.put( 'success', false )
+         response.put( 'success', 'false' )
          response.put( 'reason', query.get( 'err' ) )
       }
 
       return( response )
 
    }
+
+
+   /*
+      docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+
+      docker run 
+         [options:
+            --rm 
+            --name <friendly name> 
+            --user format: <name|uid>[:<group|gid>] 
+            --volume , -v 
+            -p or --expose 80 or 80:80
+         ]
+         image
+         [command]
+         [arg]
+
+
+       docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+       docker run IMAGE [OPTIONS] [COMMAND]
+
+   */
+
+
+   /* todo
+   static Map<String, String> dockerRun( String image ) {
+   }
+   */
+
+
+
+
+   /**
+    * Stops the container 'container' and returns a Map with the result of the action.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param container
+    *    the container to stop
+    * @return a Map containing the result of the command
+    */
+   static Map<String, String> dockerStop( String container ) {
+
+      Map<String, String> query = GradleExecUtils.exec( 'docker stop ' + container )
+
+
+      Map<String, String> response = new HashMap( )
+
+      if ( query.get( 'exitValue' ) == 0 ) {
+         response.put( 'success', 'true' )
+      } else {
+         response.put( 'success', 'false' )
+         response.put( 'reason', query.get( 'err' ) )
+      }
+
+      return( response )
+   }
+
+
+   /**
+    * Execs into the container 'container' with the command 'command' and optional options 'options', and returns a Map with the result of the action.
+    * <p>
+    * This method is a convenience method for dockerExec(String,String[],Map&lt;String,String&gt;) when the command to execute can be expressed as a single String and need not be written as an array of Strings.
+    * <p>
+    * For further details and complete documentation, see dockerExec(String,String[],Map&lt;String,String&gt;).
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- output from the command, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param container
+    *    the container to exec
+    * @param command
+    *    the command to exec
+    * @param options
+    *    options to add to the exec command; optional
+    * @return a Map containing the result of the command
+    */
+   static Map<String, String> dockerExec( String container, String command, Map<String, String> options = null ) {
+
+      String[] commandArray = [command]
+
+      return( dockerExec( container, commandArray, options ) )
+   }
+
+
+   /**
+    * Execs into the container 'container' with the command 'command' and optional options 'options', and returns a Map with the result of the action.
+    * <p>
+    * The 'container' can be the name or ID of the container.
+    * <p>
+    * The 'command' is an array of one or more Strings to define the command (or commands) to be exec'd on the container.  Due to the way command line arguments are interpreted, it may be neccessary to break a command up into its components into a String array in order for it to be processed correctly.  Note that one approach is to exec the shell in one array element and then the desired command can be given in another array element (see example 1); multiple commands can be combined with ampersand (see example 2):
+    * <ol>
+    *    <li>["/bin/bash", "-c", "pwd"]</li>
+    *    <li>["/bin/bash", "-c", "pwd &amp;&amp; ls"]</li>
+    * </ol>
+    * <p>
+    * The 'options' is a Map of options, and is not required.  Options may have both key and value such as "--user" mapped to "&lt;user&gt;", or some options are one item, in which case leave the Map value as empty String or null such as "-d" mapped to "" or null.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- output from the command, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param container
+    *    the container to exec
+    * @param command
+    *    the command to exec
+    * @param options
+    *    options to add to the exec command; optional
+    * @return a Map containing the result of the command
+    */
+   static Map<String, String> dockerExec( String container, String[] command, Map<String, String> options = null ) {
+
+      //todo examples
+   // cmdArray = [ "docker", "exec", "--user", "git", "git-client-john", "/bin/ash", "-c", "echo 'hi' > /repos/testRepoA/blah.txt" ]
+   // cmdArray = [ "docker", "exec", "--user", "git", "git-client-john", "/bin/ash", "-c", "cd testRepoB && git add . && git commit -m 'Initial commit'" ]
+
+
+      int sizeFromMap = 0
+
+      if ( options != null ) {
+
+         sizeFromMap += options.size( ) // counts the keys
+
+         for ( String value : options.values( ) ) {
+            if ( value != null || !value.equals( '' ) ) {
+               sizeFromMap++ // counts values that are not null or empty String
+            }
+         }
+
+      }
+
+
+      // docker exec [OPTIONS] CONTAINER COMMAND [ARG...]
+      // 'docker', 'exec', '<options>', 'container', '<command>'
+      // = 1 + 1 + sizeFromMap + 1 + command.length
+      int totalSize = 3 + sizeFromMap + command.length
+
+      String[] execCommand = new String[totalSize]
+      execCommand[0] = 'docker'
+      execCommand[1] = 'exec'
+
+      int index = 2
+
+      if ( options != null ) {
+
+         for ( Map.Entry<String, String> entry : options.entrySet( ) ) {
+
+            execCommand[index] = entry.getKey( )
+            index++
+
+            if ( entry.getValue( ) != null || !entry.getValue( ).equals( '' ) ) {
+               execCommand[index] = entry.getValue( )
+               index++
+            }
+
+         }
+
+      }
+
+      execCommand[index] = container
+
+      index++
+
+      for ( String part : command ) {
+         execCommand[index] = part
+         index++
+      }
+
+
+
+      Map<String, String> query = GradleExecUtils.exec( execCommand )
+
+      Map<String, String> response = new HashMap<String, String>( )
+
+      if ( query.get( 'exitValue' ) == 0 ) {
+         response.put( 'success', 'true' )
+         response.put( 'out', query.get( 'out' ) )
+      } else {
+         response.put( 'success', 'false' )
+         response.put( 'reason', query.get( 'err' ) )
+      }
+
+      return( response )
+   }
+
+
+
 
 
    private DockerUtils( ) { }

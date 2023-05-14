@@ -55,12 +55,13 @@ class GradleExecUtilsTest extends Specification {
         String usernameExpected = System.properties[ 'user.name' ]
 
         when:
-        Map<String, String> result = GradleExecUtils.exec( task )
+        def resultMap = GradleExecUtils.exec( task )
 
         then:
-        0 == result.get( 'exitValue' )
-        usernameExpected.equals( result.get( 'out' ) )
-        null == result.get( 'err' )
+        resultMap instanceof Map
+        0 == resultMap.get( 'exitValue' )
+        usernameExpected.equals( resultMap.get( 'out' ) )
+        null == resultMap.get( 'err' )
     }
 
     def "exec(String task) for failed command returns correct exit value and error output"( ) {
@@ -69,12 +70,13 @@ class GradleExecUtilsTest extends Specification {
         String errResponseExpected = 'extra operand'
 
         when:
-        Map<String, String> result = GradleExecUtils.exec( task )
+        def resultMap = GradleExecUtils.exec( task )
 
         then:
-        1 == result.get( 'exitValue' )
-        "".equals( result.get( 'out' ) )
-        result.get( 'err' ).contains( errResponseExpected )
+        resultMap instanceof Map
+        1 == resultMap.get( 'exitValue' )
+        ''.equals( resultMap.get( 'out' ) )
+        resultMap.get( 'err' ).contains( errResponseExpected )
     }
 
     def "execWithException(String[] task) for successful command returns correct output"( ) {
@@ -106,12 +108,13 @@ class GradleExecUtilsTest extends Specification {
         String responseExpected = 'Usage: whoami'
 
         when:
-        Map<String, String> result = GradleExecUtils.exec( task )
+        def resultMap = GradleExecUtils.exec( task )
 
         then:
-        0 == result.get( 'exitValue' )
-        result.get( 'out' ).contains( responseExpected )
-        null == result.get( 'err' )
+        resultMap instanceof Map
+        0 == resultMap.get( 'exitValue' )
+        resultMap.get( 'out' ).contains( responseExpected )
+        null == resultMap.get( 'err' )
     }
 
     def "exec(String[] task) for failed command returns correct exit value and error output"( ) {
@@ -120,12 +123,13 @@ class GradleExecUtilsTest extends Specification {
         String errResponseExpected = 'whoami: unrecognized option'
 
         when:
-        Map<String, String> result = GradleExecUtils.exec( task )
+        def resultMap = GradleExecUtils.exec( task )
 
         then:
-        1 == result.get( 'exitValue' )
-        "".equals( result.get( 'out' ) )
-        result.get( 'err' ).contains( errResponseExpected )
+        resultMap instanceof Map
+        1 == resultMap.get( 'exitValue' )
+        "".equals( resultMap.get( 'out' ) )
+        resultMap.get( 'err' ).contains( errResponseExpected )
     }
 
 }
