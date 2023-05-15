@@ -5070,12 +5070,194 @@ class DockerUtilsTest extends Specification {
     // docker run, stop, exec
 
 
-    //todo docker run - no options - no command - good
-    //todo docker run - yes options - no command - good
-    //todo docker run - no options - yes command - good
-    //todo docker run - yes options - yes command - good
+    def "getDockerRunCommand(String image,command) returns correctly without a command"( ) {
+        given:
+        String image = 'myimage'
 
-    //todo docker run - bad
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image )
+
+        then:
+        String[] expected = [ 'docker', 'run', image ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,command) returns correctly without a command, as null"( ) {
+        given:
+        String image = 'myimage'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, null )
+
+        then:
+        String[] expected = [ 'docker', 'run', image ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,command) returns correctly with a String command"( ) {
+        given:
+        String image = 'myimage'
+        String command = 'mycommand'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image, command ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,command) returns correctly without a command in an empty String[] command"( ) {
+        given:
+        String image = 'myimage'
+        String[] command = [ ]
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,command) returns correctly with one command in the String[] command"( ) {
+        given:
+        String image = 'myimage'
+        String[] command = [ 'mycommand1' ]
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image, 'mycommand1' ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,command) returns correctly with more than one command in the String[] command"( ) {
+        given:
+        String image = 'myimage'
+        String[] command = [ 'mycommand1', 'mycommand2', 'mycommand3' ]
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image, 'mycommand1', 'mycommand2', 'mycommand3' ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with null options"( ) {
+        given:
+        String image = 'myimage'
+        String command = 'mycommand1'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, null, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image, 'mycommand1' ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with empty options"( ) {
+        given:
+        String image = 'myimage'
+        Map<String,String> options = new HashMap<String, String>( )
+        String command = 'mycommand1'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, options, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image, 'mycommand1' ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with one option"( ) {
+        given:
+        String image = 'myimage'
+        Map<String,String> options = new HashMap<String, String>( )
+        options.put( 'a', 'b' )
+        String command = 'mycommand1'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, options, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', 'a', 'b', image, 'mycommand1' ]
+        expected == dockerRunCommand
+    }
+
+    def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with more than one option"( ) {
+        given:
+        String image = 'myimage'
+        Map<String,String> options = new HashMap<String, String>( )
+        options.put( 'a', 'b' )
+        options.put( 'c', 'd' )
+        options.put( 'e', null )
+        options.put( 'f', '' )
+        options.put( 'g', 'h' )
+        String command = 'mycommand1'
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, options, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', image, 'mycommand1' ]
+        expected == dockerRunCommand
+    }
+
+    comment */
+
+
+
+    def "dockerRun(String container) returns correctly when no such image"( ) {
+        given:
+        String image = 'blahnosuchimage'
+
+        when:
+        def resultMap = DockerUtils.dockerRun( image )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        then:
+        resultMap instanceof Map
+        success == false
+        reason.contains( 'Unable to find image' )
+    }
+
+
+    //todo dockerRun
+
+    /* comment
+
+
+    def "getDockerStopCommand(String container) returns correctly"( ) {
+        given:
+        String container = 'mycontainer'
+
+        when:
+        String[] dockerStopCommand = DockerUtils.getDockerStopCommand( container )
+
+        then:
+        String[] expected = [ 'docker', 'stop', container ]
+        expected == dockerStopCommand
+    }
+
+    def "dockerStop(String container) returns correctly when no such container"( ) {
+        given:
+        String container = 'dockerstop-invalid' + CONTAINER_NAME_POSTFIX
+
+        when:
+        def resultMap = DockerUtils.dockerStop( container )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        then:
+        resultMap instanceof Map
+        success == false
+        reason.contains( 'No such container' )
+    }
 
 
     def "dockerStop(String container) returns correctly"( ) {
@@ -5134,8 +5316,6 @@ class DockerUtilsTest extends Specification {
             count++
         }
 
-
-
         then:
         resultMap instanceof Map
         success == true
@@ -5145,26 +5325,101 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
     }
 
-
-    def "dockerStop(String container) returns correctly when no such container"( ) {
+    def "getDockerExecCommand(String container, String command, Map<String,String> options) returns correctly without options"( ) {
         given:
-        String container = 'dockerstop-invalid' + CONTAINER_NAME_POSTFIX
+        String container = 'mycontainer'
+        String command = 'mycommand'
 
         when:
-
-        def resultMap = DockerUtils.dockerStop( container )
-        boolean success = resultMap.success
-        String reason = resultMap.reason
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command )
 
         then:
-        resultMap instanceof Map
-        success == false
-        reason.contains( 'No such container' )
+        String[] expected = [ 'docker', 'exec', container, command ]
+        expected == dockerExecCommand
     }
 
-    comment */
+    def "getDockerExecCommand(String container, String command, Map<String,String> options) returns correctly with one option"( ) {
+        given:
+        String container = 'mycontainer'
+        String command = 'mycommand'
 
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( 'a', 'b' )
 
+        when:
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command, options )
+
+        then:
+        String[] expected = [ 'docker', 'exec', 'a', 'b', container, command ]
+        expected == dockerExecCommand
+    }
+
+    def "getDockerExecCommand(String container, String command, Map<String,String> options) returns correctly with more than one option"( ) {
+        given:
+        String container = 'mycontainer'
+        String command = 'mycommand'
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( 'a', 'b' )
+        options.put( 'c', '2' )
+        options.put( 'd', '' )
+        options.put( 'e', null )
+
+        when:
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command, options )
+
+        then:
+        String[] expected = [ 'docker', 'exec', 'a', 'b', 'c', '2', 'd', 'e', container, command ]
+        expected == dockerExecCommand
+    }
+
+    def "getDockerExecCommand(String container, String[] command, Map<String,String> options) returns correctly without options"( ) {
+        given:
+        String container = 'mycontainer'
+        String[] command = [ 'mycommand', 'arg1', 'arg2' ]
+
+        when:
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command )
+
+        then:
+        String[] expected = [ 'docker', 'exec', container, 'mycommand', 'arg1', 'arg2' ]
+        expected == dockerExecCommand
+    }
+
+    def "getDockerExecCommand(String container, String[] command, Map<String,String> options) returns correctly with one option"( ) {
+        given:
+        String container = 'mycontainer'
+        String[] command = [ 'mycommand', 'arg1', 'arg2' ]
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( 'a', 'b' )
+
+        when:
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command, options )
+
+        then:
+        String[] expected = [ 'docker', 'exec', 'a', 'b', container, 'mycommand', 'arg1', 'arg2' ]
+        expected == dockerExecCommand
+    }
+
+    def "getDockerExecCommand(String container, String[] command, Map<String,String> options) returns correctly with more than one option"( ) {
+        given:
+        String container = 'mycontainer'
+        String[] command = [ 'mycommand', 'arg1', 'arg2' ]
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( 'a', 'b' )
+        options.put( 'c', '2' )
+        options.put( 'd', '' )
+        options.put( 'e', null )
+
+        when:
+        String[] dockerExecCommand = DockerUtils.getDockerExecCommand( container, command, options )
+
+        then:
+        String[] expected = [ 'docker', 'exec', 'a', 'b', 'c', '2', 'd', 'e', container, 'mycommand', 'arg1', 'arg2' ]
+        expected == dockerExecCommand
+    }
 
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly without options"( ) {
         given:
@@ -5207,7 +5462,6 @@ class DockerUtilsTest extends Specification {
         cleanup:
         GradleExecUtils.exec( dockerStopCommand )
     }
-
 
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly with options"( ) {
         given:
@@ -5255,8 +5509,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
     }
 
-
-
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly with bad input"( ) {
         given:
         String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
@@ -5273,8 +5525,6 @@ class DockerUtilsTest extends Specification {
         success == false
         reason.contains( 'No such container' )
     }
-
-
 
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly without options"( ) {
         given:
@@ -5318,8 +5568,6 @@ class DockerUtilsTest extends Specification {
         cleanup:
         GradleExecUtils.exec( dockerStopCommand )
     }
-
-
 
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with options"( ) {
         given:
@@ -5368,8 +5616,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
     }
 
-
-
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with bad input"( ) {
         given:
         String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
@@ -5386,5 +5632,6 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'No such container' )
     }
 
+    comment */
 
 }

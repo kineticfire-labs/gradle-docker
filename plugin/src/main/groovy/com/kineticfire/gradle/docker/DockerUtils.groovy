@@ -435,7 +435,7 @@ final class DockerUtils {
     *    <li>getComposeUpCommand( [myComposeFilePath1, myComposeFilePath2] as String[] )</li>
     * </ul>
     * <p>
-    * This method is purposely separate from 'composeUp(...)' because the build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    * This method is purposely separate from 'composeUp(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
     * <p>
     * @param composeFilePaths
     *    one or more paths to Docker compose files
@@ -471,7 +471,7 @@ final class DockerUtils {
     * <p>
     * If using multiple compose files combined in the "up" command, the common compose file describing all services must be used for this method.
     * <p>
-    * This method is purposely separate from 'composeDown(...)' because the build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    * This method is purposely separate from 'composeDown(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
     *
     * @param composeFilePath
     *    the path to the Docker compose file
@@ -584,12 +584,182 @@ final class DockerUtils {
    */
 
 
-   /* todo
-   static Map<String, String> dockerRun( String image ) {
+   /**
+    * Returns a String array, suitable for executing, describing a 'docker run' command for the image 'image' with command 'command'.
+    * <p>
+    * <p>
+    * This method is a convenience method for getDockerRunCommand(String,Map&lt;String,String&gt;,command) when no options are needed.  The 'command' parameter can be a String or an array of Strings that describe the command.
+    * <p>
+    * For further details and complete documentation, see getDockerRunCommand(String,Map&lt;String,String&gt;,String[]).
+    * <p>
+    * This method is purposely separate from 'dockerRun(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
+    * @param image
+    *    the image to run
+    * @param command
+    *    command to include; optional
+    * @return a String array, suitable for executing, describing a 'docker run' command
+    */
+   static String[] getDockerRunCommand( String image, command = null ) {
+
+      String[] commandArray
+
+      if ( command == null ) {
+         commandArray = null
+      } else {
+         if ( command instanceof String ) {
+            commandArray = [command]
+         } else if ( command instanceof String[] ) {
+            commandArray = command
+         } else {
+            commandArray = null
+         }
+      }
+
+      return( getDockerRunCommand( image, null, commandArray ) )
    }
-   */
 
 
+   /**
+    * Returns a String array, suitable for executing, describing a 'docker run' command for the image 'image' with options 'options' and command 'command'.
+    * <p>
+    * The 'image' is the image name or ID of the image to run.
+    * <p>
+    * The 'options' is a Map of options, and is not required so can be null or an empty Map.  Options may have both key and value such as "--user" mapped to "&lt;user&gt;", or some options are one item, in which case leave the Map value as empty String or null such as "-t" mapped to "" or null.
+    * <p>
+    * The optional 'command' is a String or an array of one or more Strings to define the command (or commands) to be exec'd on the container.  Due to the way command line arguments are interpreted, it may be neccessary to break a command up into its components into a String array in order for it to be processed correctly.  Note that one approach is to exec the shell in one array element and then the desired command can be given in another array element (see example 1); multiple commands can be combined with ampersand (see example 2):
+    * <ol>
+    *    <li>["/bin/bash", "-c", "pwd"]</li>
+    *    <li>["/bin/bash", "-c", "pwd &amp;&amp; ls"]</li>
+    * </ol>
+    * <p>
+    * This method is purposely separate from 'dockerRun(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
+    * @param image
+    *    the image to run
+    * @param options
+    *    options to include; optional, can be null or empty Map
+    * @param command
+    *    command to includ; optional
+    * @return a String array, suitable for executing, describing a 'docker run' command
+    */
+   static String[] getDockerRunCommand( String image, Map<String,String> options, command = null ) {
+
+      String[] commandArray
+
+      if ( command == null ) {
+         commandArray = []
+      } else {
+         if ( command instanceof String ) {
+            commandArray = [command]
+         } else if ( command instanceof String[] ) {
+            commandArray = command
+         } else {
+            commandArray = []
+         }
+      }
+
+
+
+      int sizeFromOptions = 0
+
+      if ( options != null ) {
+
+         sizeFromOptions += options.size( ) // counts the keys
+
+         for ( String value : options.values( ) ) {
+            if ( value != null && !value.equals( '' ) ) {
+               sizeFromOptions++ // counts values that are not null or empty String
+            }
+         }
+
+      }
+
+
+      // docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
+      // 'docker', 'run', '<options>', 'image', '<command>'
+      // = 1 + 1 + sizeFromOptions + 1 + commandArray.length
+      int totalSize = 3 + sizeFromOptions + commandArray.length
+
+      String[] runCommand = new String[totalSize]
+      runCommand[0] = 'docker'
+      runCommand[1] = 'run'
+
+      int index = 2
+
+      if ( options != null ) {
+
+         for ( Map.Entry<String, String> entry : options.entrySet( ) ) {
+
+            runCommand[index] = entry.getKey( )
+            index++
+
+            if ( entry.getValue( ) != null && !entry.getValue( ).equals( '' ) ) {
+               runCommand[index] = entry.getValue( )
+               index++
+            }
+
+         }
+
+      }
+
+      runCommand[index] = image
+
+      index++
+
+      for ( String part : commandArray ) {
+         runCommand[index] = part
+         index++
+      }
+
+
+      return( runCommand )
+   }
+
+
+   //todo
+   /**
+    * Runs the image 'image' with options 'options' and optional command 'command', and returns a Map with the result of the action.
+    * <p>
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to run
+    * @param options
+    *    options to add to the run command
+    * @param command
+    *    the command to run on the container; optional
+    * @return a Map containing the result of the command
+    */
+   static def dockerRun( String image, Map<String,String> options, command = null ) {
+
+      String[] commandArray = [command]
+
+      return( dockerExec( container, commandArray, options ) )
+   }
+
+
+
+
+   /**
+    * Returns a String array, suitable for executing, describing a 'docker stop' command for the container 'container'.
+    * <p>
+    * This method is purposely separate from 'dockerStop(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
+    * @param container
+    *    the container to stop
+    * @return a String array, suitable for executing, describing a 'docker stop' command
+    */
+   static String[] getDockerStopCommand( String container ) {
+      String[] dockerStopCommand = [ 'docker', 'stop', container ]
+      return( dockerStopCommand )
+   }
 
 
    /**
@@ -607,7 +777,9 @@ final class DockerUtils {
     */
    static def dockerStop( String container ) {
 
-      def queryMap = GradleExecUtils.exec( 'docker stop ' + container )
+      String[] dockerStopCommand = getDockerStopCommand( container )
+
+      def queryMap = GradleExecUtils.exec( dockerStopCommand )
 
 
       def responseMap = [:]
@@ -620,6 +792,109 @@ final class DockerUtils {
       }
 
       return( responseMap )
+   }
+
+
+   /**
+    * Returns a String array, suitable for executing, describing a 'docker exec' command with optional options.
+    * <p>
+    * This method is a convenience method for getDockerExecCommand(String,String[],Map&lt;String,String&gt;) when the command to execute can be expressed as a single String and need not be written as an array of Strings.
+    * <p>
+    * For further details and complete documentation, see getDockerExecCommand(String,String[],Map&lt;String,String&gt;).
+    * <p>
+    * This method is purposely separate from 'dockerExec(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
+    * @param container
+    *    the container to exec
+    * @param command
+    *    the command to exec
+    * @param options
+    *    options to add to the exec command; optional
+    * @return a String array describing the command
+    */
+   static String[] getDockerExecCommand( String container, String command, Map<String, String> options = null ) {
+      String[] commandArray = [command]
+      return( getDockerExecCommand( container, commandArray, options ) )
+   }
+
+
+   /**
+    * Returns a String array, suitable for executing, describing a 'docker exec' command with optional options.
+    * <p>
+    * The 'container' can be the name or ID of the container.
+    * <p>
+    * The 'command' is an array of one or more Strings to define the command (or commands) to be exec'd on the container.  Due to the way command line arguments are interpreted, it may be neccessary to break a command up into its components into a String array in order for it to be processed correctly.  Note that one approach is to exec the shell in one array element and then the desired command can be given in another array element (see example 1); multiple commands can be combined with ampersand (see example 2):
+    * <ol>
+    *    <li>["/bin/bash", "-c", "pwd"]</li>
+    *    <li>["/bin/bash", "-c", "pwd &amp;&amp; ls"]</li>
+    * </ol>
+    * <p>
+    * The 'options' is a Map of options, and is not required.  Options may have both key and value such as "--user" mapped to "&lt;user&gt;", or some options are one item, in which case leave the Map value as empty String or null such as "-t" mapped to "" or null.
+    * <p>
+    * This method is purposely separate from 'dockerExec(...)' because a build process may need to dynamically create such a command to generate an appropriate bash script etc.
+    *
+    * @param container
+    *    the container to exec
+    * @param command
+    *    the command to exec
+    * @param options
+    *    options to add to the exec command; optional
+    * @return a String array describing the command
+    */
+   static String[] getDockerExecCommand( String container, String[] command, Map<String, String> options = null ) {
+
+      int sizeFromOptions = 0
+
+      if ( options != null ) {
+
+         sizeFromOptions += options.size( ) // counts the keys
+
+         for ( String value : options.values( ) ) {
+            if ( value != null && !value.equals( '' ) ) {
+               sizeFromOptions++ // counts values that are not null or empty String
+            }
+         }
+
+      }
+
+
+      // docker exec [OPTIONS] CONTAINER COMMAND [ARG...]
+      // 'docker', 'exec', '<options>', 'container', '<command>'
+      // = 1 + 1 + sizeFromOptions + 1 + command.length
+      int totalSize = 3 + sizeFromOptions + command.length
+
+      String[] execCommand = new String[totalSize]
+      execCommand[0] = 'docker'
+      execCommand[1] = 'exec'
+
+      int index = 2
+
+      if ( options != null ) {
+
+         for ( Map.Entry<String, String> entry : options.entrySet( ) ) {
+
+            execCommand[index] = entry.getKey( )
+            index++
+
+            if ( entry.getValue( ) != null && !entry.getValue( ).equals( '' ) ) {
+               execCommand[index] = entry.getValue( )
+               index++
+            }
+
+         }
+
+      }
+
+      execCommand[index] = container
+
+      index++
+
+      for ( String part : command ) {
+         execCommand[index] = part
+         index++
+      }
+
+      return( execCommand )
    }
 
 
@@ -683,56 +958,7 @@ final class DockerUtils {
     */
    static def dockerExec( String container, String[] command, Map<String, String> options = null ) {
 
-      int sizeFromMap = 0
-
-      if ( options != null ) {
-
-         sizeFromMap += options.size( ) // counts the keys
-
-         for ( String value : options.values( ) ) {
-            if ( value != null || !value.equals( '' ) ) {
-               sizeFromMap++ // counts values that are not null or empty String
-            }
-         }
-
-      }
-
-
-      // docker exec [OPTIONS] CONTAINER COMMAND [ARG...]
-      // 'docker', 'exec', '<options>', 'container', '<command>'
-      // = 1 + 1 + sizeFromMap + 1 + command.length
-      int totalSize = 3 + sizeFromMap + command.length
-
-      String[] execCommand = new String[totalSize]
-      execCommand[0] = 'docker'
-      execCommand[1] = 'exec'
-
-      int index = 2
-
-      if ( options != null ) {
-
-         for ( Map.Entry<String, String> entry : options.entrySet( ) ) {
-
-            execCommand[index] = entry.getKey( )
-            index++
-
-            if ( entry.getValue( ) != null || !entry.getValue( ).equals( '' ) ) {
-               execCommand[index] = entry.getValue( )
-               index++
-            }
-
-         }
-
-      }
-
-      execCommand[index] = container
-
-      index++
-
-      for ( String part : command ) {
-         execCommand[index] = part
-         index++
-      }
+      String[] execCommand = getDockerExecCommand( container, command, options )
 
 
       def queryMap = GradleExecUtils.exec( execCommand )
