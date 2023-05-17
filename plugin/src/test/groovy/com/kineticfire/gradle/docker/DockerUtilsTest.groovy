@@ -5146,6 +5146,19 @@ class DockerUtilsTest extends Specification {
         expected == dockerRunCommand
     }
 
+    def "getDockerRunCommand(String image,command) returns correctly when command has the wrong type of argument"( ) {
+        given:
+        String image = 'myimage'
+        int command = 3
+
+        when:
+        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+
+        then:
+        String[] expected = [ 'docker', 'run', image ]
+        expected == dockerRunCommand
+    }
+
     def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with null options"( ) {
         given:
         String image = 'myimage'
@@ -5207,11 +5220,7 @@ class DockerUtilsTest extends Specification {
         expected == dockerRunCommand
     }
 
-    comment */
-
-
-
-    def "dockerRun(String container) returns correctly when no such image"( ) {
+    def "dockerRun(String container,command) returns correctly when no such image"( ) {
         given:
         String image = 'blahnosuchimage'
 
@@ -5226,11 +5235,96 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'Unable to find image' )
     }
 
+    // not testing because difficult to get reference to exited container to remove
+    //def "dockerRun(String image,command) returns correctly without command"( ) {
+    //}
 
-    //todo dockerRun
+    // not testing because difficult to get reference to exited container to remove
+    //def "dockerRun(String image,command) returns correctly with command"( ) {
+    //}
 
-    /* comment
+    // not testing because difficult to get reference to exited container to remove
+    //def "dockerRun(String image,Map<String,String> options, command) returns correctly without options or command"( ) {
+    //}
 
+    def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and without command"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( '--rm', null )
+
+        when:
+        def resultMap = DockerUtils.dockerRun( image, options )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+    }
+
+    def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and without command"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String container = 'dockerrun-string-map-options-multi-no-command' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( '--rm', null )
+        options.put( '--name', container )
+
+        when:
+        def resultMap = DockerUtils.dockerRun( image, options )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+    }
+
+    def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and with command string"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String container = 'dockerrun-string-map-options-multi-command-string' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( '--rm', null )
+        options.put( '--name', container )
+
+        String command = 'ls'
+
+        when:
+        def resultMap = DockerUtils.dockerRun( image, options, command )
+        boolean success = resultMap.success
+        String output = resultMap.out
+
+        then:
+        resultMap instanceof Map
+        success == true
+        output.contains( 'bin' )
+    }
+
+    def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and with command string array"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String container = 'dockerrun-string-map-options-multi-command-string-array' + CONTAINER_NAME_POSTFIX
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( '--rm', null )
+        options.put( '--name', container )
+
+        String[] command = ["/bin/ash", "-c", "ls && ps"]
+
+        when:
+        def resultMap = DockerUtils.dockerRun( image, options, command )
+        boolean success = resultMap.success
+        String output = resultMap.out
+
+        then:
+        resultMap instanceof Map
+        success == true
+        output.contains( 'bin' )
+        output.contains( 'PID' )
+    }
 
     def "getDockerStopCommand(String container) returns correctly"( ) {
         given:
@@ -5632,6 +5726,91 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'No such container' )
     }
 
+
+
+
+    //***********************************
+    //***********************************
+    //***********************************
+    // docker save, tag, push
+
+
+    def "dockerSave(String image,String filename,boolean gzip) returns correctly without gzip option"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String filename = 'dockersave-gzip-none' + CONTAINER_NAME_POSTFIX + '.tar.gz'
+        String filenamepath = tempDir.toString( ) + File.separatorChar + filename
+        File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
+
+        when:
+        def resultMap = DockerUtils.dockerSave( image, filenamepath )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+        outputFile.exists( )
+    }
+
+
+    def "dockerSave(String image,String filename,boolean gzip) returns correctly with gzip true"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String filename = 'dockersave-gzip-true' + CONTAINER_NAME_POSTFIX + '.tar.gz'
+        String filenamepath = tempDir.toString( ) + File.separatorChar + filename
+        File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
+
+        when:
+        def resultMap = DockerUtils.dockerSave( image, filenamepath, true )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+        outputFile.exists( )
+    }
+
+
+    def "dockerSave(String image,String filename,boolean gzip) returns correctly with gzip false"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String filename = 'dockersave-gzip-false' + CONTAINER_NAME_POSTFIX + '.tar'
+        String filenamepath = tempDir.toString( ) + File.separatorChar + filename
+        File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
+
+        when:
+        def resultMap = DockerUtils.dockerSave( image, filenamepath, false )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+        outputFile.exists( )
+    }
+
+    def "dockerSave(String image,String filename,boolean gzip) returns correctly when no such image"( ) {
+        given:
+        String image = 'asdlkfsdf'
+        String filename = 'dockersave-nosuchimage' + CONTAINER_NAME_POSTFIX + '.tar'
+        String filenamepath = tempDir.toString( ) + File.separatorChar + filename
+
+        when:
+        def resultMap = DockerUtils.dockerSave( image, filenamepath, false )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        then:
+        resultMap instanceof Map
+        success == false
+        reason.contains( 'No such image' )
+    }
     comment */
+
+
+    //todo tag
+
+
+
+    //todo push
 
 }

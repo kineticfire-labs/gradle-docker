@@ -717,9 +717,48 @@ final class DockerUtils {
    }
 
 
-   //todo
+   /**
+    * Runs the image 'image' with optional command 'command', and returns a Map with the result of the action.
+    * <p>
+    * The 'image' is the image to run as a container, with 'image' as a String image name or ID.
+    * <p>
+    * The 'command' is the command to run in the container as a String or an array of Strings.  The command is optional (need not be supplied or can be null).
+    * <p>
+    * This method is a convenience method for dockerRun(String,Map&lt;String,String&gt;,command) when no command is needed or the command to execute can be expressed as a single String and need not be written as an array of Strings.
+    * <p>
+    * For further details and complete documentation, see dockerRun(String,Map&lt;String,String&gt;,command).
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to run
+    * @param command
+    *    the command to run on the container; optional
+    * @return a Map containing the result of the command
+    */
+   static def dockerRun( String image, command = null ) {
+      return( dockerRun( image, null, command ) )
+   }
+
+
    /**
     * Runs the image 'image' with options 'options' and optional command 'command', and returns a Map with the result of the action.
+    * <p>
+    * The 'image' is the image to run as a container, with 'image' as a String image name or ID.
+    * <p>
+    * The 'options' is a Map of options, and is not required.  Options may have both key and value such as "--user" mapped to "&lt;user&gt;", or some options are one item, in which case leave the Map value as empty String or null such as "-d" mapped to "" or null.
+    * <p>
+    * Command is the command to run in the container as a String or an array of Strings.  The command is optional (need not be supplied or can be null).
+    * The 'command' is an array of one or more Strings to define the command (or commands) to be exec'd on the container.  Due to the way command line arguments are interpreted, it may be neccessary to break a command up into its components into a String array in order for it to be processed correctly.  Note that one approach is to exec the shell in one array element and then the desired command can be given in another array element (see example 1); multiple commands can be combined with ampersand (see example 2):
+    * <ol>
+    *    <li>["/bin/bash", "-c", "pwd"]</li>
+    *    <li>["/bin/bash", "-c", "pwd &amp;&amp; ls"]</li>
+    * </ol>
     * <p>
     * <p>
     * This method returns a Map with the following entries:
@@ -739,12 +778,22 @@ final class DockerUtils {
     */
    static def dockerRun( String image, Map<String,String> options, command = null ) {
 
-      String[] commandArray = [command]
+      String[] runCommand = getDockerRunCommand( image, options, command )
 
-      return( dockerExec( container, commandArray, options ) )
+      def queryMap = GradleExecUtils.exec( runCommand )
+
+      def responseMap = [:]
+
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.success = true
+         responseMap.out = queryMap.out
+      } else {
+         responseMap.success = false
+         responseMap.reason = queryMap.err
+      }
+
+      return( responseMap )
    }
-
-
 
 
    /**
@@ -962,6 +1011,65 @@ final class DockerUtils {
 
 
       def queryMap = GradleExecUtils.exec( execCommand )
+
+      def responseMap = [:]
+
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.success = true
+         responseMap.out = queryMap.out
+      } else {
+         responseMap.success = false
+         responseMap.reason = queryMap.err
+      }
+
+      return( responseMap )
+   }
+
+
+   /**
+    * Saves the image 'image' as a tar file using the file and path in 'filename' with optional gzip compression per 'gzip.
+    * <p>
+    * The 'image' can be the name or ID of the image.
+    * <p>
+    * The 'filename' is the name of the output file, which can include a path.  If gzip compression is not used (e.g. gzip is 'false'), then the recommended filename is &lt;filename&gt;.tar.  If gzip compression is used (e.g. gzip is 'true' or not set), then the recommended filename is &lt;filename&gt;.tar.gz.
+    * <p>
+    * The 'gzip' option determines if gzip compression is used:  'false' for no gzip, and 'true' or not set for gzip.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to save
+    * @param filename
+    *    the resultant output filename with optional path
+    * @param gzip
+    *    'true' to enable gzip compression of output file and 'false' otherwise; optional, defaults to 'true'
+    * @return a Map containing the result of the command
+    */
+   static def dockerSave( String image, String filename, boolean gzip = true ) {
+
+      String[] saveCommand
+
+      if ( gzip ) {
+         String ds = 'docker save ' + image + ' | gzip > ' + filename
+         saveCommand = [ '/bin/bash',
+                         '-c',
+                         ds,
+                       ]
+      } else {
+         saveCommand = [ 'docker',
+                         'save',
+                         image,
+                         '-o',
+                         filename
+                       ]
+      }
+
+      def queryMap = GradleExecUtils.exec( saveCommand )
 
       def responseMap = [:]
 
