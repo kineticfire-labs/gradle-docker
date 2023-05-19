@@ -67,8 +67,9 @@ class DockerUtilsTest extends Specification {
     static final long TIME_TOLERANCE_MILLIS = 3000L
     // commented out those lines measuring time diff, because there seemed to be too much variation in time diff based on tests and system usage
 
-    // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions
-    static final String CONTAINER_NAME_POSTFIX = '-DockerUtilsTest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
+    // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions.  lowercase so can use as Docker image tag.
+    static final String CONTAINER_NAME_POSTFIX = '-dockerutilstest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
+    //todo change name to UNIQUE_NAME_POSTFIX
 
 
     // Tests involving the pausing of Docker containers include commands to 'unpause', 'stop', and 'remove'.  Although these shouldn't be necessary, there were instances were paused containers wouldn't exit; then couldn't be exited and removed from the command line.  This could have been due to using ctrl-c when forcibly stopping tests in progress.
@@ -5806,9 +5807,152 @@ class DockerUtilsTest extends Specification {
     }
     comment */
 
+    def "dockerTag(Map<String,String[]>) returns correctly given one image to one tag"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-1img-1tag' + CONTAINER_NAME_POSTFIX + ':1.0'
 
+        String[] tags = [ tag1 ]
+        Map<String,String[]> tagMap = new HashMap<String,String[]>( )
+        tagMap.put( image, tags )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+    }
+
+    def "dockerTag(Map<String,String[]>) returns correctly given one image to two tags"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-1img-2tag1' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-1img-2tag2' + CONTAINER_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [ tag1, tag2 ]
+        Map<String,String[]> tagMap = new HashMap<String,String[]>( )
+        tagMap.put( image, tags )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
+        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+        GradleExecUtils.exec( 'docker rmi ' + tag2 )
+    }
+
+    def "dockerTag(Map<String,String[]>) returns correctly given two images to one tag"( ) {
+        given:
+        String tagTest = 'dockertag-2img-1tagt' + CONTAINER_NAME_POSTFIX + ':1.0'
+        GradleExecUtils.exec( 'docker tag ' + TEST_IMAGE_REF + ' ' + tagTest )
+
+        String image1 = TEST_IMAGE_REF
+        String image2 = tagTest
+        String tag1 = 'dockertag-2img-1tag1' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-2img-1tag2' + CONTAINER_NAME_POSTFIX + ':1.0'
+
+        String[] tags1 = [ tag1 ]
+        String[] tags2 = [ tag2 ]
+        Map<String,String[]> tagMap = new HashMap<String,String[]>( )
+        tagMap.put( image1, tags1 )
+        tagMap.put( image2, tags2 )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
+        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tagTest )
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+        GradleExecUtils.exec( 'docker rmi ' + tag2 )
+    }
+
+    def "dockerTag(Map<String,String[]>) returns correctly given two images to two tags"( ) {
+        given:
+        String tagTest = 'dockertag-2img-2tagt' + CONTAINER_NAME_POSTFIX + ':1.0'
+        GradleExecUtils.exec( 'docker tag ' + TEST_IMAGE_REF + ' ' + tagTest )
+
+        String image1 = TEST_IMAGE_REF
+        String image2 = tagTest
+        String tag11 = 'dockertag-2img-2tag11' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag12 = 'dockertag-2img-2tag12' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag21 = 'dockertag-2img-2tag21' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag22 = 'dockertag-2img-2tag22' + CONTAINER_NAME_POSTFIX + ':1.0'
+
+        String[] tags1 = [ tag11, tag12 ]
+        String[] tags2 = [ tag21, tag22 ]
+        Map<String,String[]> tagMap = new HashMap<String,String[]>( )
+        tagMap.put( image1, tags1 )
+        tagMap.put( image2, tags2 )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep11 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag11 ]
+        String[] imgGrep12 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag12 ]
+        String[] imgGrep21 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag21 ]
+        String[] imgGrep22 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag22 ]
+        if ( ( GradleExecUtils.exec( imgGrep11 ).exitValue + GradleExecUtils.exec( imgGrep12 ).exitValue + GradleExecUtils.exec( imgGrep21 ).exitValue + GradleExecUtils.exec( imgGrep22 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tagTest )
+        GradleExecUtils.exec( 'docker rmi ' + tag11 )
+        GradleExecUtils.exec( 'docker rmi ' + tag12 )
+        GradleExecUtils.exec( 'docker rmi ' + tag21 )
+        GradleExecUtils.exec( 'docker rmi ' + tag22 )
+    }
+
+    /*
+    def "dockerTag(Map<String,String[]>) returns correctly when no such image"( ) {
+    }
+    */
     //todo tag
-
 
 
     //todo push

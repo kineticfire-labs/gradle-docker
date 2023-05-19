@@ -27,6 +27,15 @@ import java.util.Set
  */
 final class DockerUtils {
 
+   /* todo: here and tests:
+
+      - filename preferred is compose.yaml
+      - remove 'version'
+      - can use -p for project name
+      - use hyphen not underscore for word separator
+
+      */
+
 
    /**
     * Returns a Map indicating the state of the container 'container'.
@@ -1083,6 +1092,113 @@ final class DockerUtils {
 
       return( responseMap )
    }
+
+
+   //todo docs
+   static def dockerTag( String image, String tag ) {
+      Map<String,String> imageTag = new HashMap<String,String[]>( )
+      String[] tagArray = [tag]
+      imageTag.put( image, tagArray )
+      return( dockerTag( imageTag ) )
+   }
+
+
+   //todo docs
+   static def dockerTag( String image, String[] tag ) {
+      Map<String,String> imageTag = new HashMap<String,String[]>( )
+      imageTag.put( image, tag )
+      return( dockerTag( imageTag ) )
+   }
+
+
+   /*
+   //todo docs
+   static def dockerTag( Map<String,String> imageTag ) {
+
+      Map<String,String> imageTagArray = new HashMap<String,String[]>( )
+      String[] tag
+
+
+      return( 'todo' )
+   }
+   */
+
+
+   //todo docs
+   static def dockerTag( Map<String,String[]> imageTag ) {
+
+      String[] tagCommand = new String[4]
+      tagCommand[0] = 'docker'
+      tagCommand[1] = 'tag'
+
+
+      def queryMap
+
+      def responseMap = [:]
+      responseMap.success = true
+
+
+
+      String currentImage
+
+      for ( var entry : imageTag.entrySet( ) ) {
+
+         println "image " + entry.getKey( )
+
+         currentImage = entry.getKey( ) // String image name
+         tagCommand[2] = currentImage
+
+
+         for ( String currentTag : entry.getValue( ) ) { // String[] of tags
+
+            println "tag " + currentTag
+            tagCommand[3] = currentTag
+
+            println "command " + tagCommand
+
+            queryMap = GradleExecUtils.exec( tagCommand )
+
+            if ( queryMap.exitValue != 0 ) {
+
+               println 'err = ' + queryMap.err
+
+               responseMap.success = false
+
+
+               // responseMap.reason = { image -> { tag -> err } }
+
+               def imageTagMap
+               def tagErrorMap
+
+               if ( responseMap.containsKey( 'reason' ) ) {
+                  imageTagMap = responseMap.reason
+               } else {
+                  imageTagMap = [:]
+                  responseMap.reason = imageTagMap
+               }
+
+
+               if ( imageTagMap.containsKey( currentImage ) ) {
+                  tagErrorMap = imageTagMap.currentImage
+               } else {
+                  tagErrorMap = [:]
+                  tagErrorMap.currentImage = imageTagMap
+               }
+
+
+               tagErrorMap.currentTag = queryMap.err
+
+            }
+
+         }
+
+      }
+
+
+      return( responseMap )
+
+   }
+   //todo
 
 
    private DockerUtils( ) { }
