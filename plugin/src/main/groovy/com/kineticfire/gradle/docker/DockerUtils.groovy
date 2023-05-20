@@ -21,6 +21,7 @@ import java.util.HashMap
 import java.util.Set
 
 
+
 /**
  * Provides Docker utilities.
  *
@@ -490,6 +491,72 @@ final class DockerUtils {
       String[] composeDownCommand = [ 'docker-compose', '-f', composeFilePath, 'down' ]
       return( composeDownCommand )
    }
+
+
+   // Method disabled due to issue in 'docker compose' where it can't handle environment variables for ports.  See https://github.com/docker/compose/issues/7964
+   /*
+    * Validates one or more files specified in 'composeFilePaths'.
+    * <p>
+    * Multiple compose files may be used when separating common directives into one file and then environment-specific directives into one or more additional files.
+    * <p>
+    * Examples for calling this method include:
+    * <ul>
+    *    <li>validateComposeFile( myComposeFilePath )</li>
+    *    <li>validateComposeFile( myComposeFilePath1, myComposeFilePath2 )</li>
+    *    <li>validateComposeFile( [myComposeFilePath1, myComposeFilePath2] as String[] )</li>
+    * </ul>
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param composeFilePaths
+    *    one or more compose files with paths to validate
+    * @return a Map containing the result of the command
+    */
+   /*
+   static def validateComposeFile( java.lang.String... composeFilePaths ) {
+
+      int totalSize = 5 + ( composeFilePaths.length * 2 )
+
+      String[] configCommand = new String[totalSize]
+
+      configCommand[0] = 'docker'
+      configCommand[1] = 'compose'
+
+      int index
+      int i
+      for ( i = 0; i < composeFilePaths.length; i++ ) {
+         index = ( i * 2 ) + 2
+         configCommand[index] = '-f'
+         configCommand[index+1] = composeFilePaths[i]
+      }
+
+      index = ( i * 2 ) + 2
+      configCommand[index] = 'config'
+      configCommand[index+1] = '--no-interpolate'
+      configCommand[index+2] = '-q'
+
+      println "configCommand = " + configCommand
+
+
+      def queryMap = GradleExecUtils.exec( configCommand )
+
+
+      def responseMap = [:]
+
+      if ( queryMap.get( 'exitValue' ) == 0 ) {
+         responseMap.put( 'success', true )
+      } else {
+         responseMap.put( 'success', false )
+         responseMap.put( 'reason', queryMap.get( 'err' ) )
+      }
+
+      return( responseMap )
+   }
+   */
 
 
    /**
@@ -1271,6 +1338,12 @@ final class DockerUtils {
       return( responseMap )
 
    }
+
+
+   // todo docker push
+
+
+   // todo docker build
 
 
    private DockerUtils( ) { }

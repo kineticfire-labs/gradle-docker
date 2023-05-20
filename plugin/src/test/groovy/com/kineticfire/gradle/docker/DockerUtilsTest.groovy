@@ -31,6 +31,7 @@ import spock.lang.Specification
 import spock.lang.TempDir
 
 
+
 /**
  * Unit tests.
  *
@@ -4863,6 +4864,84 @@ class DockerUtilsTest extends Specification {
         expected == composeDownCommand
     }
 
+    comment */
+
+
+    /* Tests are disabled since method is disabled.  See DockerUtils.groovy for details
+    def "validateComposeFile(java.lang.String... composeFilePaths) returns correctly for one compose file in error"( ) {
+        given:
+        composeFile << """
+            services:
+              my-service:
+                container_name: my-container
+                image: "test:\${VERSION}"
+                ports:
+                  - "8080:\${PORT}"
+                invaliddirective: tail -f
+        """.stripIndent( )
+
+        when:
+        def resultMap = DockerUtils.validateComposeFile( composeFile.getAbsolutePath( ) )
+        boolean success = resultMap.success
+        String error = resultMap.reason
+
+        then:
+        resultMap instanceof Map
+        success == false
+        error.contains( 'Additional property invaliddirective is not allowed' )
+    }
+
+    def "validateComposeFile(java.lang.String... composeFilePaths) returns correctly for one compose file"( ) {
+        given:
+        composeFile << """
+            services:
+              my-service:
+                container_name: my-container
+                image: "test:\${VERSION}"
+                ports:
+                  - "8080:\${PORT}"
+                command: tail -f
+        """.stripIndent( )
+
+        when:
+        def resultMap = DockerUtils.validateComposeFile( composeFile.getAbsolutePath( ) )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+    }
+
+    def "validateComposeFile(java.lang.String... composeFilePaths) returns correctly for two compose files"( ) {
+        given:
+        composeFile << """
+            services:
+              my-service:
+                container_name: my-container
+                image: "test:\${VERSION}"
+                ports:
+                  - "8080:\${PORT}"
+        """.stripIndent( )
+
+        composeFile2 << """
+            services:
+              my-service:
+                command: tail -f
+        """.stripIndent( )
+
+        when:
+        def resultMap = DockerUtils.validateComposeFile( composeFile.getAbsolutePath( ), composeFile2.getAbsolutePath( ) )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == true
+    }
+    */
+
+
+    /* comment
+
 
     def "composeUp(java.lang.String... composeFilePaths) returns correctly given one compose file"( ) {
         given:
@@ -6244,7 +6323,5 @@ class DockerUtilsTest extends Specification {
 
     comment */
 
-
-    //todo push
 
 }
