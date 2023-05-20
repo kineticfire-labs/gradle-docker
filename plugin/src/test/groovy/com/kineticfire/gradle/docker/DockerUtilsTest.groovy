@@ -45,7 +45,7 @@ class DockerUtilsTest extends Specification {
     static final String TEST_IMAGE_VERSION = properties.get( 'testImage.version' )
     static final String TEST_IMAGE_REF = TEST_IMAGE_NAME + ':' + TEST_IMAGE_VERSION 
 
-    static final String COMPOSE_FILE_NAME  = 'docker-compose.yml'
+    static final String COMPOSE_FILE_NAME  = 'compose.yaml'
 
     // Settings to allow sufficient time for containers to reach 'running' state and optionally 'healthy/unhealthy' status.  Maximum wait time is 44000 milliseconds = 44 seconds.  Using same numbers from defaults originally set in DockerUtils.groovy, which could change and be different than these settings. 
         // Used in two cases:
@@ -68,8 +68,7 @@ class DockerUtilsTest extends Specification {
     // commented out those lines measuring time diff, because there seemed to be too much variation in time diff based on tests and system usage
 
     // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions.  lowercase so can use as Docker image tag.
-    static final String CONTAINER_NAME_POSTFIX = '-dockerutilstest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
-    //todo change name to UNIQUE_NAME_POSTFIX
+    static final String UNIQUE_NAME_POSTFIX = '-dockerutilstest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
 
 
     // Tests involving the pausing of Docker containers include commands to 'unpause', 'stop', and 'remove'.  Although these shouldn't be necessary, there were instances were paused containers wouldn't exit; then couldn't be exited and removed from the command line.  This could have been due to using ctrl-c when forcibly stopping tests in progress.
@@ -137,7 +136,7 @@ class DockerUtilsTest extends Specification {
     def "getContainerHealth(String container) returns correctly when container has no health check"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'getcontainerhealth-nohealth' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerhealth-nohealth' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -188,7 +187,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'getcontainerhealth-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerhealth-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -243,7 +242,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'getcontainerhealth-unhealthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerhealth-unhealthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -297,7 +296,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'getcontainerhealth-exited' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerhealth-exited' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -368,7 +367,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'getcontainerhealth-paused' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerhealth-paused' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -482,7 +481,7 @@ class DockerUtilsTest extends Specification {
     def "getContainerState(String container) returns correctly when container in 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'getcontainerstate-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerstate-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -521,7 +520,7 @@ class DockerUtilsTest extends Specification {
     def "getContainerState(String container) returns correctly when container in 'paused' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'getcontainerstate-paused' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerstate-paused' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -581,7 +580,7 @@ class DockerUtilsTest extends Specification {
     def "getContainerState(String container) returns correctly when container in 'exited' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'getcontainerstate-exited' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerstate-exited' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ] // intentionally not using '--rm' so container won't be removed when it exits
@@ -638,7 +637,7 @@ class DockerUtilsTest extends Specification {
     def "getContainerState(String container) returns correctly when container in 'created' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'getcontainerstate-created' + CONTAINER_NAME_POSTFIX
+        String containerName = 'getcontainerstate-created' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerCreateCommand = [ 'docker', 'create', '--name', containerName, containerImageRef ]
@@ -727,7 +726,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-running-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-running-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -782,7 +781,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for container in 'exited' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-exited-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-exited-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ] // intentionally not using '--rm' so container won't be removed when it exits
@@ -847,7 +846,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for container in 'paused' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-paused-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-paused-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -913,7 +912,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for container in 'created' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-created-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-created-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerCreateCommand = [ 'docker', 'create', '--name', containerName, containerImageRef ]
@@ -985,7 +984,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for 'healthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerName = 'waitforcontainer-str-healthy-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-healthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1032,7 +1031,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for 'unhealthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerName = 'waitforcontainer-str-unhealthy-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-unhealthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1083,7 +1082,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target) returns correctly for container without health check with target of 'healthy'"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-nohealth-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-nohealth-healthy' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -1144,7 +1143,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'waitforcontainer-str-exited-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-exited-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1220,7 +1219,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'waitforcontainer-str-paused-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-paused-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1366,7 +1365,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-int-running-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-running-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -1421,7 +1420,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container in 'exited' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-int-exited-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-exited-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ] // intentionally not using '--rm' so container won't be removed when it exits
@@ -1486,7 +1485,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container in 'paused' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-int-paused-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-paused-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -1552,7 +1551,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container in 'created' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-int-created-running' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-created-running' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerCreateCommand = [ 'docker', 'create', '--name', containerName, containerImageRef ]
@@ -1619,7 +1618,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for 'healthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerName = 'waitforcontainer-str-int-healthy-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-healthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1665,7 +1664,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for 'unhealthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerName = 'waitforcontainer-str-int-unhealthy-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-unhealthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1715,7 +1714,7 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container without health check with target of 'healthy'"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'waitforcontainer-str-int-nohealth-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-nohealth-healthy' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -1775,7 +1774,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'waitforcontainer-str-int-exited-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-exited-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -1851,7 +1850,7 @@ class DockerUtilsTest extends Specification {
 
         given:
 
-        String containerName = 'waitforcontainer-str-int-paused-healthy' + CONTAINER_NAME_POSTFIX
+        String containerName = 'waitforcontainer-str-int-paused-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -2002,9 +2001,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerGood1Name = 'waitforcontainer-map-running-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-running-running-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-running-running-good3' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-running-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-running-running-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-running-running-good3' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -2087,9 +2086,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container in 'exited' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-exited-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-exited-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-exited-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-exited-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-exited-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-exited-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -2171,9 +2170,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container in 'paused' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-paused-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-paused-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-paused-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-paused-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-paused-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-paused-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -2256,9 +2255,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container in 'created' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-created-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-created-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-created-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-created-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-created-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-created-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -2316,8 +2315,8 @@ class DockerUtilsTest extends Specification {
         String containerImageRef = TEST_IMAGE_REF
         // adding invalid '--blah' flag to produce command error
         String containerBadName = '--blah' + TEST_IMAGE_REF
-        String containerGood1Name = 'waitforcontainer-map-created-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-created-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-created-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-created-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -2390,9 +2389,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for 'healthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-healthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-healthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -2479,9 +2478,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for 'unhealthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-unhealthy-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-unhealthy-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -2563,9 +2562,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container without health check with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-nohealth-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-nohealth-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -2640,8 +2639,8 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap) returns correctly for container not found with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-notfound-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-notfound-healthy-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-notfound-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-notfound-healthy-good2' + UNIQUE_NAME_POSTFIX
         String containerBadName = 'nosuchcontainer'
 
         Map<String,String> containerMap = new HashMap<String, String>( )
@@ -2737,9 +2736,9 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly for previously healthy container in 'exited' state with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-exited-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-exited-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-exited-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-exited-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-exited-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-exited-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -2841,9 +2840,9 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly for previously healthy container in 'paused' state with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-paused-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-paused-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-paused-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-paused-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-paused-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-paused-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -2952,8 +2951,8 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly given an error with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-error-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-error-healthy-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-error-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-error-healthy-good2' + UNIQUE_NAME_POSTFIX
         // adding invalid '--blah' flag to produce command error
         String additionalCommand = '--blah ' + TEST_IMAGE_REF
 
@@ -3047,10 +3046,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly with containers in 'running' state with target of 'running' and with containers in 'healthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-running-running-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-running-running-healthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-running-running-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerGood4Name = 'waitforcontainer-map-running-running-healthy-healthy-good4' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-running-running-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-running-running-healthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-running-running-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerGood4Name = 'waitforcontainer-map-running-running-healthy-healthy-good4' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -3147,10 +3146,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly with container in 'exited' state with target of 'running' and with containers in 'healthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-exited-running-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-exited-running-healthy-healthy-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-exited-running-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerGood4Name = 'waitforcontainer-map-exited-running-healthy-healthy-good4' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-exited-running-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-exited-running-healthy-healthy-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-exited-running-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerGood4Name = 'waitforcontainer-map-exited-running-healthy-healthy-good4' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -3263,10 +3262,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap) returns correctly with containers in 'running' state with target of 'running' and with container in 'unhealthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-running-running-unhealthy-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-running-running-unhealthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-running-running-unhealthy-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -3416,9 +3415,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerGood1Name = 'waitforcontainer-map-int-running-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-running-running-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-int-running-running-good3' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-running-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-running-running-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-running-running-good3' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -3501,9 +3500,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'exited' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-int-exited-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-int-exited-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-exited-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-exited-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-exited-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-exited-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -3585,9 +3584,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'paused' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-int-paused-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-int-paused-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-paused-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-paused-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-paused-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-paused-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -3670,9 +3669,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container in 'created' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerBadName = 'waitforcontainer-map-int-created-running-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-created-running-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -3730,8 +3729,8 @@ class DockerUtilsTest extends Specification {
         String containerImageRef = TEST_IMAGE_REF
         // adding invalid '--blah' flag to produce command error
         String containerBadName = '--blah' + TEST_IMAGE_REF
-        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-created-running-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-created-running-good2' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerBadName, 'running' )
@@ -3803,9 +3802,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for 'healthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-int-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-healthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-int-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-healthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -3892,9 +3891,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for 'unhealthy' container with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-int-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-unhealthy-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-unhealthy-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -3976,9 +3975,9 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container without health check with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-int-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-nohealth-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-nohealth-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -4053,8 +4052,8 @@ class DockerUtilsTest extends Specification {
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for container not found with target of 'healthy'"( ) {
         given:
 
-        String containerGood1Name = 'waitforcontainer-map-int-notfound-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-notfound-healthy-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-notfound-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-notfound-healthy-good2' + UNIQUE_NAME_POSTFIX
         String containerBadName = 'nosuchcontainer'
 
         Map<String,String> containerMap = new HashMap<String, String>( )
@@ -4150,9 +4149,9 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for previously healthy container in 'exited' state with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-exited-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-exited-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-exited-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-exited-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-exited-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-exited-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -4254,9 +4253,9 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly for previously healthy container in 'paused' state with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-paused-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-paused-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-paused-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-paused-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-paused-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-paused-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'healthy' )
@@ -4364,8 +4363,8 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly given an error with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-error-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-error-healthy-good2' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-error-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-error-healthy-good2' + UNIQUE_NAME_POSTFIX
         // adding invalid '--blah' flag to produce command error
         String additionalCommand = '--blah ' + TEST_IMAGE_REF
 
@@ -4461,10 +4460,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly with containers in 'running' state with target of 'running' and with containers in 'healthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerGood4Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good4' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerGood4Name = 'waitforcontainer-map-int-running-running-healthy-healthy-good4' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -4561,10 +4560,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly with container in 'exited' state with target of 'running' and with containers in 'healthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-exited-running-healthy-healthy-bad' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerGood4Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good4' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-exited-running-healthy-healthy-bad' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerGood4Name = 'waitforcontainer-map-int-exited-running-healthy-healthy-good4' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -4677,10 +4676,10 @@ class DockerUtilsTest extends Specification {
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly with containers in 'running' state with target of 'running' and with container in 'unhealthy' disposition' with target of 'healthy'"( ) {
         given:
-        String containerGood1Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good1' + CONTAINER_NAME_POSTFIX
-        String containerGood2Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good2' + CONTAINER_NAME_POSTFIX
-        String containerGood3Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good3' + CONTAINER_NAME_POSTFIX
-        String containerBadName = 'waitforcontainer-map-int-running-running-unhealthy-healthy-bad' + CONTAINER_NAME_POSTFIX
+        String containerGood1Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good1' + UNIQUE_NAME_POSTFIX
+        String containerGood2Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good2' + UNIQUE_NAME_POSTFIX
+        String containerGood3Name = 'waitforcontainer-map-int-running-running-unhealthy-healthy-good3' + UNIQUE_NAME_POSTFIX
+        String containerBadName = 'waitforcontainer-map-int-running-running-unhealthy-healthy-bad' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerGood1Name, 'running' )
@@ -4867,7 +4866,7 @@ class DockerUtilsTest extends Specification {
 
     def "composeUp(java.lang.String... composeFilePaths) returns correctly given one compose file"( ) {
         given:
-        String containerName = 'composeup-one-composefile' + CONTAINER_NAME_POSTFIX
+        String containerName = 'composeup-one-composefile' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerName, 'running' )
@@ -4908,7 +4907,7 @@ class DockerUtilsTest extends Specification {
 
     def "composeUp(java.lang.String... composeFilePaths) returns correctly given two compose files"( ) {
         given:
-        String containerName = 'composeup-two-composefiles-container' + CONTAINER_NAME_POSTFIX
+        String containerName = 'composeup-two-composefiles-container' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> containerMap = new HashMap<String, String>( )
         containerMap.put( containerName, 'running' )
@@ -4974,7 +4973,7 @@ class DockerUtilsTest extends Specification {
 
     def "composeDown(String composeFilePath) returns correctly"( ) {
         given:
-        String containerName = 'composedown-container' + CONTAINER_NAME_POSTFIX
+        String containerName = 'composedown-container' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
             version: '${COMPOSE_VERSION}'
@@ -5153,11 +5152,10 @@ class DockerUtilsTest extends Specification {
         int command = 3
 
         when:
-        String[] dockerRunCommand = DockerUtils.getDockerRunCommand( image, command )
+        DockerUtils.getDockerRunCommand( image, command )
 
         then:
-        String[] expected = [ 'docker', 'run', image ]
-        expected == dockerRunCommand
+        final ClassCastException exception = thrown()
     }
 
     def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly with null options"( ) {
@@ -5221,6 +5219,20 @@ class DockerUtilsTest extends Specification {
         expected == dockerRunCommand
     }
 
+    def "getDockerRunCommand(String image,Map<String,String> options,command) returns correctly when command has wrong type of argument "( ) {
+        given:
+        String image = 'myimage'
+        Map<String,String> options = new HashMap<String, String>( )
+        options.put( 'a', 'b' )
+        int command = 3
+
+        when:
+        DockerUtils.getDockerRunCommand( image, options, command )
+
+        then:
+        final ClassCastException exception = thrown()
+    }
+
     def "dockerRun(String container,command) returns correctly when no such image"( ) {
         given:
         String image = 'blahnosuchimage'
@@ -5236,6 +5248,18 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'Unable to find image' )
     }
 
+    def "dockerRun(String container,command) returns correctly when command isn't a String or String[]"( ) {
+        given:
+        String image = 'blahnosuchimage'
+        int command = 5
+
+        when:
+        DockerUtils.dockerRun( image, command )
+
+        then:
+        final ClassCastException exception = thrown()
+    }
+
     // not testing because difficult to get reference to exited container to remove
     //def "dockerRun(String image,command) returns correctly without command"( ) {
     //}
@@ -5247,6 +5271,21 @@ class DockerUtilsTest extends Specification {
     // not testing because difficult to get reference to exited container to remove
     //def "dockerRun(String image,Map<String,String> options, command) returns correctly without options or command"( ) {
     //}
+
+    def "dockerRun(String image,Map<String,String> options, command) returns correctly when command isn't a String or String[]"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        int command = 5
+
+        Map<String,String> options = new HashMap<String,String>( )
+        options.put( '--rm', null )
+
+        when:
+        DockerUtils.dockerRun( image, options, command )
+
+        then:
+        final ClassCastException exception = thrown()
+    }
 
     def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and without command"( ) {
         given:
@@ -5267,7 +5306,7 @@ class DockerUtilsTest extends Specification {
     def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and without command"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String container = 'dockerrun-string-map-options-multi-no-command' + CONTAINER_NAME_POSTFIX
+        String container = 'dockerrun-string-map-options-multi-no-command' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> options = new HashMap<String,String>( )
         options.put( '--rm', null )
@@ -5285,7 +5324,7 @@ class DockerUtilsTest extends Specification {
     def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and with command string"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String container = 'dockerrun-string-map-options-multi-command-string' + CONTAINER_NAME_POSTFIX
+        String container = 'dockerrun-string-map-options-multi-command-string' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> options = new HashMap<String,String>( )
         options.put( '--rm', null )
@@ -5307,7 +5346,7 @@ class DockerUtilsTest extends Specification {
     def "dockerRun(String image,Map<String,String> options, command) returns correctly with options and with command string array"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String container = 'dockerrun-string-map-options-multi-command-string-array' + CONTAINER_NAME_POSTFIX
+        String container = 'dockerrun-string-map-options-multi-command-string-array' + UNIQUE_NAME_POSTFIX
 
         Map<String,String> options = new HashMap<String,String>( )
         options.put( '--rm', null )
@@ -5341,7 +5380,7 @@ class DockerUtilsTest extends Specification {
 
     def "dockerStop(String container) returns correctly when no such container"( ) {
         given:
-        String container = 'dockerstop-invalid' + CONTAINER_NAME_POSTFIX
+        String container = 'dockerstop-invalid' + UNIQUE_NAME_POSTFIX
 
         when:
         def resultMap = DockerUtils.dockerStop( container )
@@ -5358,7 +5397,7 @@ class DockerUtilsTest extends Specification {
     def "dockerStop(String container) returns correctly"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'dockerstop-valid' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerstop-valid' + UNIQUE_NAME_POSTFIX
 
         when:
         String[] dockerRunCommand = [ 'docker', 'run', '--rm', '--name', containerName, '-d', containerImageRef, 'tail', '-f' ]
@@ -5519,7 +5558,7 @@ class DockerUtilsTest extends Specification {
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly without options"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'dockerexec-str-command-no-options-good' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-str-command-no-options-good' + UNIQUE_NAME_POSTFIX
         String command = 'ls'
 
         when:
@@ -5561,7 +5600,7 @@ class DockerUtilsTest extends Specification {
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly with options"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'dockerexec-str-command-with-options-good' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-str-command-with-options-good' + UNIQUE_NAME_POSTFIX
         String command = 'ls'
         Map<String, String> options = new HashMap<String, String>( )
         options.put( '-w', '/sys' ) 
@@ -5606,7 +5645,7 @@ class DockerUtilsTest extends Specification {
 
     def "dockerExec(String container, String command, Map<String,String> options) returns correctly with bad input"( ) {
         given:
-        String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-no-such-container' + UNIQUE_NAME_POSTFIX
         String command = 'ls'
 
         when:
@@ -5624,7 +5663,7 @@ class DockerUtilsTest extends Specification {
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly without options"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'dockerexec-array-command-no-options-good' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-array-command-no-options-good' + UNIQUE_NAME_POSTFIX
         String[] command = ["/bin/ash", "-c", "ls && ps"]
 
         when:
@@ -5667,7 +5706,7 @@ class DockerUtilsTest extends Specification {
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with options"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
-        String containerName = 'dockerexec-array-command-with-options-good' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-array-command-with-options-good' + UNIQUE_NAME_POSTFIX
         String[] command = ["/bin/ash", "-c", "ls && ps"]
         Map<String, String> options = new HashMap<String, String>( )
         options.put( '-w', '/sys' ) 
@@ -5713,7 +5752,7 @@ class DockerUtilsTest extends Specification {
 
     def "dockerExec(String container, String[] command, Map<String,String> options) returns correctly with bad input"( ) {
         given:
-        String containerName = 'dockerexec-no-such-container' + CONTAINER_NAME_POSTFIX
+        String containerName = 'dockerexec-no-such-container' + UNIQUE_NAME_POSTFIX
         String[] command = ["/bin/bash", "-c", "ls && ps"]
 
         when:
@@ -5739,7 +5778,7 @@ class DockerUtilsTest extends Specification {
     def "dockerSave(String image,String filename,boolean gzip) returns correctly without gzip option"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String filename = 'dockersave-gzip-none' + CONTAINER_NAME_POSTFIX + '.tar.gz'
+        String filename = 'dockersave-gzip-none' + UNIQUE_NAME_POSTFIX + '.tar.gz'
         String filenamepath = tempDir.toString( ) + File.separatorChar + filename
         File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
 
@@ -5757,7 +5796,7 @@ class DockerUtilsTest extends Specification {
     def "dockerSave(String image,String filename,boolean gzip) returns correctly with gzip true"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String filename = 'dockersave-gzip-true' + CONTAINER_NAME_POSTFIX + '.tar.gz'
+        String filename = 'dockersave-gzip-true' + UNIQUE_NAME_POSTFIX + '.tar.gz'
         String filenamepath = tempDir.toString( ) + File.separatorChar + filename
         File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
 
@@ -5775,7 +5814,7 @@ class DockerUtilsTest extends Specification {
     def "dockerSave(String image,String filename,boolean gzip) returns correctly with gzip false"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String filename = 'dockersave-gzip-false' + CONTAINER_NAME_POSTFIX + '.tar'
+        String filename = 'dockersave-gzip-false' + UNIQUE_NAME_POSTFIX + '.tar'
         String filenamepath = tempDir.toString( ) + File.separatorChar + filename
         File outputFile = new File( tempDir.toString( ) + File.separatorChar + filename )
 
@@ -5792,7 +5831,7 @@ class DockerUtilsTest extends Specification {
     def "dockerSave(String image,String filename,boolean gzip) returns correctly when no such image"( ) {
         given:
         String image = 'asdlkfsdf'
-        String filename = 'dockersave-nosuchimage' + CONTAINER_NAME_POSTFIX + '.tar'
+        String filename = 'dockersave-nosuchimage' + UNIQUE_NAME_POSTFIX + '.tar'
         String filenamepath = tempDir.toString( ) + File.separatorChar + filename
 
         when:
@@ -5807,10 +5846,224 @@ class DockerUtilsTest extends Specification {
     }
     comment */
 
-    def "dockerTag(Map<String,String[]>) returns correctly given one image to one tag"( ) {
+    /* comment 
+
+    def "dockerTag(String image,String tag) returns correctly"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String tag1 = 'dockertag-1img-1tag' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag = 'dockertag-img-tag' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerTag( image, tag )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag ]
+        if ( GradleExecUtils.exec( imgGrep ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag )
+    }
+
+    def "dockerTag(String image,String tag) returns correctly when no such image"( ) {
+        given:
+        String image = 'nosuchimage'
+        String tag = 'dockertag-nosuchimage' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerTag( image, tag )
+        println resultMap
+        boolean success = resultMap.success
+        String error = resultMap.reason
+
+        then:
+        resultMap instanceof Map
+        success == false
+        error.contains( 'No such image' )
+    }
+
+    def "dockerTag(String image,String[] tag) returns correctly given one tag"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-img-1tag' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [ tag1 ]
+
+        when:
+        def resultMap = DockerUtils.dockerTag( image, tag1 )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+    }
+
+    def "dockerTag(String image,String[] tag) returns correctly given two tags"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-img-2tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-img-2tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [ tag1, tag2 ]
+
+        when:
+        def resultMap = DockerUtils.dockerTag( image, tags )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
+        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep1 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+        GradleExecUtils.exec( 'docker rmi ' + tag2 )
+    }
+
+    def "dockerTag(String image,String[] tag) returns correctly when no such image"( ) {
+        given:
+        String image = 'nosuchimage'
+        String tag1 = 'dockertag-nosuchimage' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [ tag1 ]
+
+        when:
+        def resultMap = DockerUtils.dockerTag( image, tags )
+        boolean success = resultMap.success
+        def tagErrorMap = resultMap.reason
+        String error = tagErrorMap.get( tag1 )
+
+        then:
+        resultMap instanceof Map
+        success == false
+        tagErrorMap instanceof Map
+        error.contains( 'No such image' )
+    }
+
+    def "dockerTag(Map<String,String> imageTag) returns correctly given one image-tag pair"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-1img-tag' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        Map<String,String> tagMap = new HashMap<String,String>( )
+        tagMap.put( image, tag1 )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+    }
+
+    def "dockerTag(Map<String,String> imageTag) returns correctly given two image-tag pairs"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-2img-tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-2img-tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        Map<String,String> tagMap = new HashMap<String,String>( )
+        tagMap.put( image, tag1 )
+        tagMap.put( image, tag2 )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
+        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
+        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tag1 )
+        GradleExecUtils.exec( 'docker rmi ' + tag2 )
+    }
+
+    def "dockerTag(Map<String,String> imageTag) returns correctly when tag is not of String type"( ) {
+        given:
+        String image = 'nosuchimage'
+        Object tag1 = new Object( )
+
+        Map<String,Object> tagMap = new HashMap<String,Object>( )
+        tagMap.put( image, tag1 )
+
+        when:
+        DockerUtils.dockerTag( tagMap )
+
+        then:
+        final ClassCastException exception = thrown()
+    }
+
+    def "dockerTag(Map<String,String> imageTag) returns correctly when no such image"( ) {
+        given:
+        String image = 'nosuchimage'
+        String tag1 = 'dockertag-nosuchimage' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        Map<String,String> tagMap = new HashMap<String,String>( )
+        tagMap.put( image, tag1 )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+        def imageTagMap = resultMap.reason
+        def tagErrorMap = imageTagMap.get( image )
+        String error = tagErrorMap.get( tag1 )
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagMap instanceof Map
+        tagErrorMap instanceof Map
+        error.contains( 'No such image' )
+    }
+
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly given one image to one tag"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+        String tag1 = 'dockertag-1img-1tag' + UNIQUE_NAME_POSTFIX + ':1.0'
 
         String[] tags = [ tag1 ]
         Map<String,String[]> tagMap = new HashMap<String,String[]>( )
@@ -5835,11 +6088,11 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag1 )
     }
 
-    def "dockerTag(Map<String,String[]>) returns correctly given one image to two tags"( ) {
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly given one image to two tags"( ) {
         given:
         String image = TEST_IMAGE_REF
-        String tag1 = 'dockertag-1img-2tag1' + CONTAINER_NAME_POSTFIX + ':1.0'
-        String tag2 = 'dockertag-1img-2tag2' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag1 = 'dockertag-1img-2tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-1img-2tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
 
         String[] tags = [ tag1, tag2 ]
         Map<String,String[]> tagMap = new HashMap<String,String[]>( )
@@ -5866,15 +6119,15 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag2 )
     }
 
-    def "dockerTag(Map<String,String[]>) returns correctly given two images to one tag"( ) {
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly given two images to one tag"( ) {
         given:
-        String tagTest = 'dockertag-2img-1tagt' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tagTest = 'dockertag-2img-1tagt' + UNIQUE_NAME_POSTFIX + ':1.0'
         GradleExecUtils.exec( 'docker tag ' + TEST_IMAGE_REF + ' ' + tagTest )
 
         String image1 = TEST_IMAGE_REF
         String image2 = tagTest
-        String tag1 = 'dockertag-2img-1tag1' + CONTAINER_NAME_POSTFIX + ':1.0'
-        String tag2 = 'dockertag-2img-1tag2' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag1 = 'dockertag-2img-1tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-2img-1tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
 
         String[] tags1 = [ tag1 ]
         String[] tags2 = [ tag2 ]
@@ -5904,17 +6157,17 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag2 )
     }
 
-    def "dockerTag(Map<String,String[]>) returns correctly given two images to two tags"( ) {
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly given two images to two tags"( ) {
         given:
-        String tagTest = 'dockertag-2img-2tagt' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tagTest = 'dockertag-2img-2tagt' + UNIQUE_NAME_POSTFIX + ':1.0'
         GradleExecUtils.exec( 'docker tag ' + TEST_IMAGE_REF + ' ' + tagTest )
 
         String image1 = TEST_IMAGE_REF
         String image2 = tagTest
-        String tag11 = 'dockertag-2img-2tag11' + CONTAINER_NAME_POSTFIX + ':1.0'
-        String tag12 = 'dockertag-2img-2tag12' + CONTAINER_NAME_POSTFIX + ':1.0'
-        String tag21 = 'dockertag-2img-2tag21' + CONTAINER_NAME_POSTFIX + ':1.0'
-        String tag22 = 'dockertag-2img-2tag22' + CONTAINER_NAME_POSTFIX + ':1.0'
+        String tag11 = 'dockertag-2img-2tag11' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag12 = 'dockertag-2img-2tag12' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag21 = 'dockertag-2img-2tag21' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag22 = 'dockertag-2img-2tag22' + UNIQUE_NAME_POSTFIX + ':1.0'
 
         String[] tags1 = [ tag11, tag12 ]
         String[] tags2 = [ tag21, tag22 ]
@@ -5948,11 +6201,48 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag22 )
     }
 
-    /*
-    def "dockerTag(Map<String,String[]>) returns correctly when no such image"( ) {
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly when no such image"( ) {
+        given:
+        String image = 'nosuchimage'
+        String tag1 = 'dockertag-nosuchimage' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [ tag1 ]
+        Map<String,String[]> tagMap = new HashMap<String,String[]>( )
+        tagMap.put( image, tags )
+
+        when:
+        def resultMap = DockerUtils.dockerTag( tagMap )
+        boolean success = resultMap.success
+        def imageTagMap = resultMap.reason
+        def tagErrorMap = imageTagMap.get( image )
+        String error = tagErrorMap.get( tag1 )
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagMap instanceof Map
+        tagErrorMap instanceof Map
+        error.contains( 'No such image' )
     }
-    */
-    //todo tag
+
+    def "dockerTag(Map<String,String[]> imageTag) returns correctly when tag is not of String[] type"( ) {
+        given:
+        String image = 'nosuchimage'
+        Object tag1 = new Object( )
+
+        Object[] tags = [ tag1 ]
+
+        Map<String,Object[]> tagMap = new HashMap<String,Object[]>( )
+        tagMap.put( image, tags )
+
+        when:
+        DockerUtils.dockerTag( tagMap )
+
+        then:
+        final ClassCastException exception = thrown()
+    }
+
+    comment */
 
 
     //todo push

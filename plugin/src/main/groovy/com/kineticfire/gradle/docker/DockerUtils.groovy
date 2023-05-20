@@ -27,7 +27,7 @@ import java.util.Set
  */
 final class DockerUtils {
 
-   /* todo: here and tests:
+   /* todo: for compose: here and tests:
 
       - filename preferred is compose.yaml
       - remove 'version'
@@ -431,7 +431,7 @@ final class DockerUtils {
 
 
    /**
-    * Returns a String array, suitable for executing, describing a docker-compose "up" command with one or more compose files 'composeFilePaths'.
+    * Returns a String array, suitable for executing, describing a "docker compose up" command with one or more compose files 'composeFilePaths'.
     * <p>
     * The command will include the '-d' option for running the docker compose "up" command in daemon mode.
     * <p>
@@ -448,7 +448,7 @@ final class DockerUtils {
     * <p>
     * @param composeFilePaths
     *    one or more paths to Docker compose files
-    * @return a String array, suitable for executing, describing a docker-compose "up" command using the compose file path or paths
+    * @return a String array, suitable for executing, describing a "docker compose up" command using the compose file path or paths
     */
    static String[] getComposeUpCommand( java.lang.String... composeFilePaths ) {
 
@@ -476,7 +476,7 @@ final class DockerUtils {
 
 
    /**
-    * Returns a String array, suitable for executing, describing a docker-compose "down" command with the compose file 'composeFilePath'.
+    * Returns a String array, suitable for executing, describing a "docker compose down" command with the compose file 'composeFilePath'.
     * <p>
     * If using multiple compose files combined in the "up" command, the common compose file describing all services must be used for this method.
     * <p>
@@ -484,7 +484,7 @@ final class DockerUtils {
     *
     * @param composeFilePath
     *    the path to the Docker compose file
-    * @return a String array, suitable for executing, describing a docker-compose "down" command using a compose file
+    * @return a String array, suitable for executing, describing a "docker compose down" command using a compose file
     */
    static String[] getComposeDownCommand( String composeFilePath ) {
       String[] composeDownCommand = [ 'docker-compose', '-f', composeFilePath, 'down' ]
@@ -493,7 +493,7 @@ final class DockerUtils {
 
 
    /**
-    * Performs a "docker-compose up" command using one or more compose file pathss 'composeFilePaths' and returns a Map indicating the result of the action.
+    * Performs a "docker compose up" command using one or more compose file pathss 'composeFilePaths' and returns a Map indicating the result of the action.
     * <p>
     * The command will include the '-d' option for running the docker compose "up" command in daemon mode.
     * <p>
@@ -538,7 +538,7 @@ final class DockerUtils {
 
 
    /**
-    * Performs a "docker-compose down" command using the compose file path 'composeFilePath' and returns a Map indicating the result of the action.
+    * Performs a "docker compose down" command using the compose file path 'composeFilePath' and returns a Map indicating the result of the action.
     * <p>
     * This method returns a Map with the following entries:
     * <ul>
@@ -571,28 +571,6 @@ final class DockerUtils {
    }
 
 
-   /*
-      docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
-
-      docker run 
-         [options:
-            --rm 
-            --name <friendly name> 
-            --user format: <name|uid>[:<group|gid>] 
-            --volume , -v 
-            -p or --expose 80 or 80:80
-         ]
-         image
-         [command]
-         [arg]
-
-
-       docker run [OPTIONS] IMAGE [COMMAND] [ARG...]
-       docker run IMAGE [OPTIONS] [COMMAND]
-
-   */
-
-
    /**
     * Returns a String array, suitable for executing, describing a 'docker run' command for the image 'image' with command 'command'.
     * <p>
@@ -608,6 +586,7 @@ final class DockerUtils {
     * @param command
     *    command to include; optional
     * @return a String array, suitable for executing, describing a 'docker run' command
+    * @throws ClassCastException if the command isn't of type String or String[]
     */
    static String[] getDockerRunCommand( String image, command = null ) {
 
@@ -621,7 +600,8 @@ final class DockerUtils {
          } else if ( command instanceof String[] ) {
             commandArray = command
          } else {
-            commandArray = null
+            //todo add to tests
+            throw new ClassCastException( )
          }
       }
 
@@ -651,6 +631,7 @@ final class DockerUtils {
     * @param command
     *    command to includ; optional
     * @return a String array, suitable for executing, describing a 'docker run' command
+    * @throws ClassCastException if the command isn't of type String or String[]
     */
    static String[] getDockerRunCommand( String image, Map<String,String> options, command = null ) {
 
@@ -664,7 +645,8 @@ final class DockerUtils {
          } else if ( command instanceof String[] ) {
             commandArray = command
          } else {
-            commandArray = []
+            //todo add to tests
+            throw new ClassCastException( )
          }
       }
 
@@ -749,6 +731,7 @@ final class DockerUtils {
     * @param command
     *    the command to run on the container; optional
     * @return a Map containing the result of the command
+    * @throws ClassCastException if the command isn't of type String or String[]
     */
    static def dockerRun( String image, command = null ) {
       return( dockerRun( image, null, command ) )
@@ -784,6 +767,7 @@ final class DockerUtils {
     * @param command
     *    the command to run on the container; optional
     * @return a Map containing the result of the command
+    * @throws ClassCastException if the command isn't of type String or String[]
     */
    static def dockerRun( String image, Map<String,String> options, command = null ) {
 
@@ -1094,38 +1078,135 @@ final class DockerUtils {
    }
 
 
-   //todo docs
+   /**
+    * Tags the image 'image' with the tag 'tag'.
+    * <p>
+    * This is a convenience method for dockerTag(Map&lt;String,String[]&gt;) where only one image with one tag is needed.
+    * <p>
+    * The 'image' can be the name or ID of the image.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- a String describing the error; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to tag
+    * @param tag
+    *    the tag for the image
+    * @return a Map containing the result of the command
+    */
    static def dockerTag( String image, String tag ) {
-      Map<String,String> imageTag = new HashMap<String,String[]>( )
+
+      Map<String,String[]> imageTag = new HashMap<String,String[]>( )
       String[] tagArray = [tag]
       imageTag.put( image, tagArray )
-      return( dockerTag( imageTag ) )
+
+
+      def resultMap
+
+      def tempMap = dockerTag( imageTag )
+
+      if ( tempMap.success ) {
+         resultMap = tempMap
+      } else {
+         resultMap = [:]
+         resultMap.success = false
+         resultMap.reason = tempMap.reason.get( image ).get( tag )
+      }
+
+      return( resultMap )
    }
 
 
-   //todo docs
+   /**
+    * Tags the image 'image' with one or more tags defined in the 'tag' argument.
+    * <p>
+    * This is a convenience method for dockerTag(Map&lt;String,String[]&gt;) where only one image needs to be tagged.
+    * <p>
+    * The 'image' can be the name or ID of the image.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- a Map associating the tag to value error, so { tag -&gt; error } }; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to tag
+    * @param tag
+    *    the tags to tag the image
+    * @return a Map containing the result of the command
+    */
    static def dockerTag( String image, String[] tag ) {
-      Map<String,String> imageTag = new HashMap<String,String[]>( )
+
+      Map<String,String[]> imageTag = new HashMap<String,String[]>( )
       imageTag.put( image, tag )
-      return( dockerTag( imageTag ) )
+
+      def resultMap
+
+      def tempMap = dockerTag( imageTag )
+
+      if ( tempMap.success ) {
+         resultMap = tempMap
+      } else {
+         resultMap = [:]
+         resultMap.success = false
+         resultMap.reason = tempMap.reason.get( image )
+      }
+
+      return( resultMap )
    }
 
 
-   /*
-   //todo docs
-   static def dockerTag( Map<String,String> imageTag ) {
+   /**
+    * Tags the images with the associations found in the 'imageTag' argument.
+    * <p>
+    * The 'imageTag' is a Map of String image names to either one tag as a String or multiple tags as a String array.  An image can be the name or ID of the image.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- a Map associating image to value of a Map associating tag to value error, so { image -&gt; { tag -&gt; error } }; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param imageTag
+    *    a Map of images to tags
+    * @return a Map containing the result of the command
+    * @throws ClassCastException if the value in the Map isn't of type String or String[]
+    */
+   static def dockerTag( imageTag ) {
 
-      Map<String,String> imageTagArray = new HashMap<String,String[]>( )
-      String[] tag
+      if ( !imageTag.isEmpty( ) ) {
+         def entry = imageTag.entrySet( ).iterator( ).next( );
+         def key = entry.getKey( );
+         def value = entry.getValue( );
+
+         if ( key instanceof String ) {
+            if ( value instanceof String ) {
+
+               Map<String,String[]> imageTagArray = new HashMap<String,String[]>( )
+               String[] tagArray
+
+               for ( var entrySub : imageTag.entrySet( ) ) {
+                  tagArray = [ entrySub.getValue( ) ]
+                  imageTagArray.put( entrySub.getKey( ), tagArray )
+               }
+
+               imageTag = imageTagArray
+
+            } else if ( value instanceof String[] ) {
+               // do nothing
+            } else {
+               throw new ClassCastException( )
+            }
+         } else {
+            throw new ClassCastException( )
+         }
+      }
 
 
-      return( 'todo' )
-   }
-   */
-
-
-   //todo docs
-   static def dockerTag( Map<String,String[]> imageTag ) {
 
       String[] tagCommand = new String[4]
       tagCommand[0] = 'docker'
@@ -1138,12 +1219,9 @@ final class DockerUtils {
       responseMap.success = true
 
 
-
       String currentImage
 
       for ( var entry : imageTag.entrySet( ) ) {
-
-         println "image " + entry.getKey( )
 
          currentImage = entry.getKey( ) // String image name
          tagCommand[2] = currentImage
@@ -1151,16 +1229,11 @@ final class DockerUtils {
 
          for ( String currentTag : entry.getValue( ) ) { // String[] of tags
 
-            println "tag " + currentTag
             tagCommand[3] = currentTag
-
-            println "command " + tagCommand
 
             queryMap = GradleExecUtils.exec( tagCommand )
 
             if ( queryMap.exitValue != 0 ) {
-
-               println 'err = ' + queryMap.err
 
                responseMap.success = false
 
@@ -1179,14 +1252,14 @@ final class DockerUtils {
 
 
                if ( imageTagMap.containsKey( currentImage ) ) {
-                  tagErrorMap = imageTagMap.currentImage
+                  tagErrorMap = imageTagMap.get( currentImage )
                } else {
                   tagErrorMap = [:]
-                  tagErrorMap.currentImage = imageTagMap
+                  imageTagMap.put( currentImage, tagErrorMap )
                }
 
 
-               tagErrorMap.currentTag = queryMap.err
+               tagErrorMap.put( currentTag, queryMap.err )
 
             }
 
@@ -1198,7 +1271,6 @@ final class DockerUtils {
       return( responseMap )
 
    }
-   //todo
 
 
    private DockerUtils( ) { }
