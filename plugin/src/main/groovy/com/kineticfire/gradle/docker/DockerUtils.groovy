@@ -19,6 +19,9 @@ package com.kineticfire.gradle.docker
 import java.util.Map
 import java.util.HashMap
 import java.util.Set
+import java.nio.channels.FileChannel
+import java.io.FileInputStream
+import java.io.FileOutputStream
 
 
 
@@ -493,9 +496,12 @@ final class DockerUtils {
    }
 
 
-   // Method disabled due to issue in 'docker compose' where it can't handle environment variables for ports.  See https://github.com/docker/compose/issues/7964
-   /*
+   /**
     * Validates one or more files specified in 'composeFilePaths'.
+    * <p>
+    * Validation based on on "docker compose config" command.
+    * <p>
+    * Note that this method copies the source compose file(s) to be evaluated to temporary compose file(s) and performs a replacement of environment variables in the temporary file(s) that that any environment variable is set to the String "2" which can evaluate to integer two.  This process resolves an issue with the "docker compose config" command that environment variables for ports must resolve to integers.  See https://github.com/docker/compose/issues/7964 for more details.  Environment variable replacement recognizes environment variables in the format of ${NAME} where "NAME" can consist of uppercase and lowercase characters, digits zero through nine, hyphen, and underscore.
     * <p>
     * Multiple compose files may be used when separating common directives into one file and then environment-specific directives into one or more additional files.
     * <p>
@@ -516,10 +522,59 @@ final class DockerUtils {
     *    one or more compose files with paths to validate
     * @return a Map containing the result of the command
     */
-   /*
    static def validateComposeFile( java.lang.String... composeFilePaths ) {
 
-      int totalSize = 5 + ( composeFilePaths.length * 2 )
+      // Should separate into two functions:  one to create the temp compose files and regex them, and one to perform the "docker compose config" command.  Also should clean-up the variables names to be less confusing.  Will defer addressing these until the "docker compose config" command issue with environment variables for ports needing to resolve to an integer is fixed, which will obviate the need for function to to genereate temp compose files and regex.
+
+
+      def responseMap = [:]
+
+
+
+      int numComposeFilePaths = composeFilePaths.length
+
+      String[] tempComposeFiles = new String[numComposeFilePaths]
+
+
+      String currentComposeFilePath
+      File tempComposeFile
+      String composeText
+      String newComposeText
+
+      for ( int i = 0; i < numComposeFilePaths; i++ ) {
+
+         currentComposeFilePath = composeFilePaths[i]
+
+         try {
+
+            // read text of temp compose file into memory, regex, and write back to file.  Not most efficient if file size is large, but presume file size to be relatively small to memory.
+
+            // create empty temp compose file
+            tempComposeFile = java.io.File.createTempFile( 'compose' + i + '-', '.yml', null )
+
+            // read contents of source compose file into memory
+            composeText = new File( currentComposeFilePath ).text
+
+            // perform regex.  replace with String "2" that be converted into int to overcome "docker compose config" issue with ports need to resolve to int; see documentation for details of issue.
+            newComposeText = composeText.replaceAll( /\$\{[a-zA-Z0-9_-]+\}/, "2" )
+
+            // write contents to temp compose file
+            tempComposeFile.write( newComposeText )
+
+            // put the String path of the temp compose file into an array to use later
+            tempComposeFiles[i] = tempComposeFile.getAbsolutePath( )
+
+         } catch ( Exception e ) {
+            responseMap.success = false
+            responseMap.reason = 'An exception occurred.  ' + e.getMessage( )
+         }
+
+
+      }
+
+
+
+      int totalSize = 5 + (numComposeFilePaths * 2 )
 
       String[] configCommand = new String[totalSize]
 
@@ -527,25 +582,21 @@ final class DockerUtils {
       configCommand[1] = 'compose'
 
       int index
-      int i
-      for ( i = 0; i < composeFilePaths.length; i++ ) {
-         index = ( i * 2 ) + 2
+      int j
+      for ( j = 0; j < tempComposeFiles.length; j++ ) {
+         index = ( j * 2 ) + 2
          configCommand[index] = '-f'
-         configCommand[index+1] = composeFilePaths[i]
+         configCommand[index+1] = tempComposeFiles[j]
       }
 
-      index = ( i * 2 ) + 2
+      index = ( j * 2 ) + 2
       configCommand[index] = 'config'
       configCommand[index+1] = '--no-interpolate'
       configCommand[index+2] = '-q'
 
-      println "configCommand = " + configCommand
-
 
       def queryMap = GradleExecUtils.exec( configCommand )
 
-
-      def responseMap = [:]
 
       if ( queryMap.get( 'exitValue' ) == 0 ) {
          responseMap.put( 'success', true )
@@ -554,9 +605,10 @@ final class DockerUtils {
          responseMap.put( 'reason', queryMap.get( 'err' ) )
       }
 
+
       return( responseMap )
+
    }
-   */
 
 
    /**
@@ -1340,10 +1392,76 @@ final class DockerUtils {
    }
 
 
+   /**
+    * Builds a Docker image defined by the Dockerfile in the directory of 'buildDirectory', and tags the image the tag 'tag'.
+    * <p>
+    * The Dockerfile defining the build of the image must be named 'Dockerfile' and located in the directory 'buildDirectory'.
+    * <p>
+    * This method is a convenience method for 'dockerBuild(String buildDirectory, String[] tags)' when only one tag is needed.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param buildDirectory
+    *    directory containing the Dockerfile
+    * @param tag
+    *    tag to tag the built image
+    * @return a Map containing the result of the command
+    */
+   static def dockerBuild( String buildDirectory, String tag ) {
+      String[] tagArray = [tag]
+      return( dockerBuild( buildDirectory, tagArray ) )
+   }
+
+
+   /**
+    * Builds a Docker image defined by the Dockerfile in the directory of 'buildDirectory', and tags the image with one or more tags as defined in 'tags'.
+    * <p>
+    * The Dockerfile defining the build of the image must be named 'Dockerfile' and located in the directory 'buildDirectory'.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param buildDirectory
+    *    directory containing the Dockerfile
+    * @param tags
+    *    one or more tags with which to tag the built image
+    * @return a Map containing the result of the command
+    */
+   static def dockerBuild( String buildDirectory, String[] tags ) {
+
+      String[] buildCommand = [ 'docker', 'build', '-t', tags[0], buildDirectory ]
+
+      def queryMap = GradleExecUtils.exec( buildCommand )
+
+      //todo if successful, then apply other tags
+
+      def responseMap = [:]
+
+      if ( queryMap.exitValue == 0 ) {
+         responseMap.success = true
+         responseMap.out = queryMap.out
+      } else {
+         responseMap.success = false
+         responseMap.reason = queryMap.err
+      }
+
+      return( responseMap )
+   }
+
+   // todo docker build
+
+
+
    // todo docker push
 
 
-   // todo docker build
 
 
    private DockerUtils( ) { }

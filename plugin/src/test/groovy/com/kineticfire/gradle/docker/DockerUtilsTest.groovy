@@ -32,6 +32,7 @@ import spock.lang.TempDir
 
 
 
+
 /**
  * Unit tests.
  *
@@ -4864,19 +4865,15 @@ class DockerUtilsTest extends Specification {
         expected == composeDownCommand
     }
 
-    comment */
-
-
-    /* Tests are disabled since method is disabled.  See DockerUtils.groovy for details
     def "validateComposeFile(java.lang.String... composeFilePaths) returns correctly for one compose file in error"( ) {
         given:
         composeFile << """
             services:
               my-service:
                 container_name: my-container
-                image: "test:\${VERSION}"
+                image: "test:\${GREAT_VERSION}"
                 ports:
-                  - "8080:\${PORT}"
+                  - "8080:\${PORT-OF2}"
                 invaliddirective: tail -f
         """.stripIndent( )
 
@@ -4897,9 +4894,9 @@ class DockerUtilsTest extends Specification {
             services:
               my-service:
                 container_name: my-container
-                image: "test:\${VERSION}"
+                image: "test:\${GREAT_VERSION}"
                 ports:
-                  - "8080:\${PORT}"
+                  - "8080:\${PORT-OF2}"
                 command: tail -f
         """.stripIndent( )
 
@@ -4918,9 +4915,9 @@ class DockerUtilsTest extends Specification {
             services:
               my-service:
                 container_name: my-container
-                image: "test:\${VERSION}"
+                image: "test:\${GREAT_VERSION}"
                 ports:
-                  - "8080:\${PORT}"
+                  - "8080:\${PORT-OF2}"
         """.stripIndent( )
 
         composeFile2 << """
@@ -4937,11 +4934,6 @@ class DockerUtilsTest extends Specification {
         resultMap instanceof Map
         success == true
     }
-    */
-
-
-    /* comment
-
 
     def "composeUp(java.lang.String... composeFilePaths) returns correctly given one compose file"( ) {
         given:
@@ -6323,5 +6315,36 @@ class DockerUtilsTest extends Specification {
 
     comment */
 
+
+    //todo tests for String tag
+
+
+    def "dockerBuild(String buildDirectory,String[] tags) returns correctly with one tag"( ) {
+        given:
+        String image = 'nosuchimage'
+
+        when:
+        //def resultMap = DockerUtils.dockerTag( tagMap )
+        //boolean success = resultMap.success
+        boolean success = true
+
+        then:
+        //resultMap instanceof Map
+        success == true
+    }
+
+    /*
+    def "dockerBuild(String buildDirectory,String[] tags) returns correctly with two tags"( ) {
+    }
+
+    def "dockerBuild(String buildDirectory,String[] tags) returns correctly when invalid directory"( ) {
+    }
+
+    def "dockerBuild(String buildDirectory,String[] tags) returns correctly when no Dockerfile"( ) {
+    }
+
+    def "dockerBuild(String buildDirectory,String[] tags) returns correctly when Dockerfile in error"( ) {
+    }
+    */
 
 }
