@@ -31,7 +31,7 @@ import java.io.FileOutputStream
  */
 final class DockerUtils {
 
-   /* todo: for compose: here and tests:
+   /* todo: change to Compose v2... here and tests:
 
       - filename preferred is compose.yaml
       - remove 'version'
@@ -1303,6 +1303,7 @@ final class DockerUtils {
          def value = entry.getValue( );
 
          if ( key instanceof String ) {
+
             if ( value instanceof String ) {
 
                Map<String,String[]> imageTagArray = new HashMap<String,String[]>( )
@@ -1320,6 +1321,7 @@ final class DockerUtils {
             } else {
                throw new ClassCastException( )
             }
+
          } else {
             throw new ClassCastException( )
          }
@@ -1436,30 +1438,107 @@ final class DockerUtils {
     */
    static def dockerBuild( String buildDirectory, String[] tags ) {
 
+      def responseMap = [:]
+
       String[] buildCommand = [ 'docker', 'build', '-t', tags[0], buildDirectory ]
 
       def queryMap = GradleExecUtils.exec( buildCommand )
 
-      //todo if successful, then apply other tags
+      if ( queryMap.exitValue == 0 && tags.length > 1 ) {
+
+         String[] remainderTags = tags[1..-1].collect { it as String } as String[]
+
+         responseMap = dockerTag( tags[0], remainderTags )
+
+      } else {
+
+         if ( queryMap.exitValue == 0 ) {
+            responseMap.success = true
+            responseMap.out = queryMap.out
+         } else {
+            responseMap.success = false
+            responseMap.reason = queryMap.err
+         }
+
+      }
+
+      return( responseMap )
+   }
+
+
+
+/*
+   //todo docs
+      // note that including stdout regardless of success or failure
+   static def dockerPush( String tag, boolean allTags = false ) {
+
+      // docker image push --all-tags registry-host:5000/myname/myimage
+
+      int totalSize = 4
+
+      if ( allTags ) {
+         totalSize++
+      }
+
+      String[] pushCommand = new String[totalSize]
+
+      pushCommand[0] = 'docker'
+      pushCommand[1] = 'image'
+      pushCommand[2] = 'push'
+
+      int index = 3
+
+      if ( allTags ) {
+         pushCommand[3] = '--all-tags'
+         index++
+      }
+
+      pushCommand[index] = tag
+
+
+      def queryMap = GradleExecUtils.exec( pushCommand )
 
       def responseMap = [:]
 
+      // note that including stdout regardless of success or failure
+      responseMap.out = queryMap.out
+
       if ( queryMap.exitValue == 0 ) {
          responseMap.success = true
-         responseMap.out = queryMap.out
       } else {
          responseMap.success = false
          responseMap.reason = queryMap.err
       }
 
       return( responseMap )
+
+
    }
 
-   // todo docker build
 
+   //todo docs
+   static def dockerPush( String tags[], boolean allTags = false ) {
 
+      def responseMap = [:]
+      responseMap.success = true
+      responseMap.tags = [:]
+
+      for ( String tag : tags ) {
+
+         def resultMap = dockerPush( tag, allTags )
+
+         responseMap.tags.put( tag, resultMap )
+
+         if ( !resultMap.success ) {
+            responseMap.success = false
+         }
+      }
+
+      return( responseMap )
+   }
 
    // todo docker push
+*/
 
 
 

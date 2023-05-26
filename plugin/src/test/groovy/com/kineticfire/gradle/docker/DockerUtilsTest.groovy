@@ -47,6 +47,10 @@ class DockerUtilsTest extends Specification {
     static final String TEST_IMAGE_VERSION = properties.get( 'testImage.version' )
     static final String TEST_IMAGE_REF = TEST_IMAGE_NAME + ':' + TEST_IMAGE_VERSION 
 
+    static final String REGISTRY_IMAGE_NAME = properties.get( 'registryImage.name' )
+    static final String REGISTRY_IMAGE_VERSION = properties.get( 'registryImage.version' )
+    static final String REGISTRY_IMAGE_REF = REGISTRY_IMAGE_NAME + ':' + REGISTRY_IMAGE_VERSION 
+
     static final String COMPOSE_FILE_NAME  = 'compose.yaml'
 
     // Settings to allow sufficient time for containers to reach 'running' state and optionally 'healthy/unhealthy' status.  Maximum wait time is 44000 milliseconds = 44 seconds.  Using same numbers from defaults originally set in DockerUtils.groovy, which could change and be different than these settings. 
@@ -115,10 +119,14 @@ class DockerUtilsTest extends Specification {
     }
 
 
+    //todo see notes in DockerUtils.groovy about changing to Compose v2
+
+
     //***********************************
     //***********************************
     //***********************************
     // getContainerHealth
+
 
     /* comment
     def "getContainerHealth(String container) returns correctly when container not found"( ) {
@@ -5917,7 +5925,7 @@ class DockerUtilsTest extends Specification {
     }
     comment */
 
-    /* comment 
+    /* comment
 
     def "dockerTag(String image,String tag) returns correctly"( ) {
         given:
@@ -5929,8 +5937,8 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag ]
-        if ( GradleExecUtils.exec( imgGrep ).exitValue == 0 ) {
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
             imageTagged = true
         }
 
@@ -5950,7 +5958,6 @@ class DockerUtilsTest extends Specification {
 
         when:
         def resultMap = DockerUtils.dockerTag( image, tag )
-        println resultMap
         boolean success = resultMap.success
         String error = resultMap.reason
 
@@ -5972,8 +5979,8 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
             imageTagged = true
         }
 
@@ -5999,9 +6006,9 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
-        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep1 ).exitValue ) == 0 ) {
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        String[] tagCheck2 = [ 'docker', 'image', 'inspect', tag2 ]
+        if ( ( GradleExecUtils.exec( tagCheck1 ).exitValue + GradleExecUtils.exec( tagCheck2 ).exitValue ) == 0 ) {
             imageTagged = true
         }
 
@@ -6048,8 +6055,8 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
             imageTagged = true
         }
 
@@ -6064,22 +6071,26 @@ class DockerUtilsTest extends Specification {
 
     def "dockerTag(Map<String,String> imageTag) returns correctly given two image-tag pairs"( ) {
         given:
-        String image = TEST_IMAGE_REF
-        String tag1 = 'dockertag-2img-tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
-        String tag2 = 'dockertag-2img-tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tagTest = 'dockertag-str-str-2img-tagt' + UNIQUE_NAME_POSTFIX + ':1.0'
+        GradleExecUtils.exec( 'docker tag ' + TEST_IMAGE_REF + ' ' + tagTest )
+
+        String image1 = TEST_IMAGE_REF
+        String image2 = tagTest
+        String tag1 = 'dockertag-str-str-2img-tag1' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockertag-str-str-2img-tag2' + UNIQUE_NAME_POSTFIX + ':1.0'
 
         Map<String,String> tagMap = new HashMap<String,String>( )
-        tagMap.put( image, tag1 )
-        tagMap.put( image, tag2 )
+        tagMap.put( image1, tag1 )
+        tagMap.put( image2, tag2 )
 
         when:
         def resultMap = DockerUtils.dockerTag( tagMap )
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
-        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        String[] tagCheck2 = [ 'docker', 'image', 'inspect', tag2 ]
+        if ( ( GradleExecUtils.exec( tagCheck1 ).exitValue + GradleExecUtils.exec( tagCheck2 ).exitValue ) == 0 ) {
             imageTagged = true
         }
 
@@ -6089,6 +6100,7 @@ class DockerUtilsTest extends Specification {
         imageTagged == true
 
         cleanup:
+        GradleExecUtils.exec( 'docker rmi ' + tagTest )
         GradleExecUtils.exec( 'docker rmi ' + tag1 )
         GradleExecUtils.exec( 'docker rmi ' + tag2 )
     }
@@ -6145,8 +6157,8 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        if ( GradleExecUtils.exec( imgGrep1 ).exitValue == 0 ) {
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
             imageTagged = true
         }
 
@@ -6174,9 +6186,9 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
-        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        String[] tagCheck2 = [ 'docker', 'image', 'inspect', tag2 ]
+        if ( ( GradleExecUtils.exec( tagCheck1 ).exitValue + GradleExecUtils.exec( tagCheck2 ).exitValue ) == 0 ) {
             imageTagged = true
         }
 
@@ -6211,9 +6223,9 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep1 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag1 ]
-        String[] imgGrep2 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag2 ]
-        if ( ( GradleExecUtils.exec( imgGrep1 ).exitValue + GradleExecUtils.exec( imgGrep2 ).exitValue ) == 0 ) {
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        String[] tagCheck2 = [ 'docker', 'image', 'inspect', tag2 ]
+        if ( ( GradleExecUtils.exec( tagCheck1 ).exitValue + GradleExecUtils.exec( tagCheck2 ).exitValue ) == 0 ) {
             imageTagged = true
         }
 
@@ -6251,11 +6263,11 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
         boolean imageTagged = false
-        String[] imgGrep11 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag11 ]
-        String[] imgGrep12 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag12 ]
-        String[] imgGrep21 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag21 ]
-        String[] imgGrep22 = [ 'bash', '-c', 'docker', 'images', '|', 'grep', '-q', tag22 ]
-        if ( ( GradleExecUtils.exec( imgGrep11 ).exitValue + GradleExecUtils.exec( imgGrep12 ).exitValue + GradleExecUtils.exec( imgGrep21 ).exitValue + GradleExecUtils.exec( imgGrep22 ).exitValue ) == 0 ) {
+        String[] tagCheck11 = [ 'docker', 'image', 'inspect', tag11 ]
+        String[] tagCheck12 = [ 'docker', 'image', 'inspect', tag12 ]
+        String[] tagCheck21 = [ 'docker', 'image', 'inspect', tag21 ]
+        String[] tagCheck22 = [ 'docker', 'image', 'inspect', tag22 ]
+        if ( ( GradleExecUtils.exec( tagCheck11 ).exitValue + GradleExecUtils.exec( tagCheck12 ).exitValue + GradleExecUtils.exec( tagCheck21 ).exitValue + GradleExecUtils.exec( tagCheck22 ).exitValue ) == 0 ) {
             imageTagged = true
         }
 
@@ -6271,6 +6283,10 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag21 )
         GradleExecUtils.exec( 'docker rmi ' + tag22 )
     }
+    comment */
+
+    /* comment
+
 
     def "dockerTag(Map<String,String[]> imageTag) returns correctly when no such image"( ) {
         given:
@@ -6313,38 +6329,420 @@ class DockerUtilsTest extends Specification {
         final ClassCastException exception = thrown()
     }
 
-    comment */
+    def "dockerBuild(String buildDirectory,String tag) returns correctly"( ) {
+        given:
 
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-string-valid'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
 
-    //todo tests for String tag
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
 
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag = 'dockerbuild-string-valid' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tag )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        String[] removeImage = [ 'docker', 'rmi', tag ]
+        GradleExecUtils.exec( removeImage )
+    }
+
+    def "dockerBuild(String buildDirectory,String tags) returns correctly when invalid directory"( ) {
+        given:
+        String invalidDirectory = tempDir.toString( ) + File.separatorChar + 'blah'
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-string-invalid-dir'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag = 'dockerbuild-string-invalid-dir' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( invalidDirectory, tag )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'unable to prepare context: path' )
+    }
+
+    def "dockerBuild(String buildDirectory,String tags) returns correctly when no Dockerfile"( ) {
+        given:
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-string-no-dockerfile'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag = 'dockerbuild-string-no-dockerfile' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tag )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'failed to read dockerfile' )
+    }
+
+    def "dockerBuild(String buildDirectory,String tags) returns correctly when Dockerfile in error"( ) {
+        given:
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'string-dockerfile-error'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            badcommand
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag = 'dockerbuild-string-dockerfile-error' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tag )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck = [ 'docker', 'image', 'inspect', tag ]
+        if ( GradleExecUtils.exec( tagCheck ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'dockerfile parse error' )
+    }
 
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with one tag"( ) {
         given:
-        String image = 'nosuchimage'
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-array-one-tag'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag1 = 'dockerbuild-array-one-tag' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [tag1]
 
         when:
-        //def resultMap = DockerUtils.dockerTag( tagMap )
-        //boolean success = resultMap.success
-        boolean success = true
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tags )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
 
         then:
-        //resultMap instanceof Map
+        resultMap instanceof Map
         success == true
+        imageTagged == true
+
+        cleanup:
+        String[] removeImage = [ 'docker', 'rmi', tag1 ]
+        GradleExecUtils.exec( removeImage )
     }
 
-    /*
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with two tags"( ) {
+        given:
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-array-two-tag'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag1 = 'dockerbuild-array-two-tag' + UNIQUE_NAME_POSTFIX + ':1.0'
+        String tag2 = 'dockerbuild-array-two-tag' + UNIQUE_NAME_POSTFIX + ':1.1'
+
+        String[] tags = [ tag1, tag2 ]
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tags )
+        boolean success = resultMap.success
+
+        boolean imageTagged = false
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        String[] tagCheck2 = [ 'docker', 'image', 'inspect', tag2 ]
+        if ( ( GradleExecUtils.exec( tagCheck1 ).exitValue + GradleExecUtils.exec( tagCheck2 ).exitValue ) == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == true
+        imageTagged == true
+
+        cleanup:
+        String[] removeImage = [ 'docker', 'rmi', tag1, tag2 ]
+        GradleExecUtils.exec( removeImage )
     }
 
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly when invalid directory"( ) {
+        given:
+        String invalidDirectory = tempDir.toString( ) + File.separatorChar + 'blah'
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-array-invalid-dir'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag1 = 'dockerbuild-array-invalid-dir' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [tag1]
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( invalidDirectory, tags )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'unable to prepare context: path' )
     }
 
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly when no Dockerfile"( ) {
+        given:
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-array-no-dockerfile'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag1 = 'dockerbuild-array-no-dockerfile' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [tag1]
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tags )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'failed to read dockerfile' )
     }
 
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly when Dockerfile in error"( ) {
+        given:
+
+        String buildDirString = tempDir.toString( ) + File.separatorChar + 'dockerbuild-array-dockerfile-error'
+        File buildDir = new File( buildDirString )
+        buildDir.mkdirs( )
+
+        String dockerfileString = buildDirString + File.separatorChar + 'Dockerfile'
+        File dockerfile = new File( dockerfileString )
+        dockerfile.createNewFile( )
+
+        dockerfile << """
+            FROM ${TEST_IMAGE_REF}
+            badcommand
+            ENV X 1
+            COPY myfile.txt /
+            WORKDIR /
+        """.stripIndent( )
+
+        String myfileString = buildDirString + File.separatorChar + 'myfile.txt'
+        File myfile = new File( myfileString )
+        myfile.createNewFile( )
+
+        myfile << """
+            Some important data or functionality
+        """.stripIndent( )
+
+        String tag1 = 'dockerbuild-array-dockerfile-error' + UNIQUE_NAME_POSTFIX + ':1.0'
+
+        String[] tags = [tag1]
+
+        when:
+        def resultMap = DockerUtils.dockerBuild( buildDirString, tags )
+        boolean success = resultMap.success
+        String reason = resultMap.reason
+
+        boolean imageTagged = false
+        String[] tagCheck1 = [ 'docker', 'image', 'inspect', tag1 ]
+        if ( GradleExecUtils.exec( tagCheck1 ).exitValue == 0 ) {
+            imageTagged = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+        imageTagged == false
+        reason.contains( 'dockerfile parse error' )
     }
-    */
+
+    comment */
 
 }
