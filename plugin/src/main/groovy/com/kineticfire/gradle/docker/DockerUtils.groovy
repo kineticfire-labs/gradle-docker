@@ -1467,7 +1467,6 @@ final class DockerUtils {
 
 
 
-/*
    //todo docs
       // note that including stdout regardless of success or failure
    static def dockerPush( String tag, boolean allTags = false ) {
@@ -1516,6 +1515,7 @@ final class DockerUtils {
    }
 
 
+/*
    //todo docs
    static def dockerPush( String tags[], boolean allTags = false ) {
 

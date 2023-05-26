@@ -110,6 +110,7 @@ class DockerUtilsTest extends Specification {
     def setupSpec( ) {
         // pull image used by multiple tests
         GradleExecUtils.exec( 'docker pull ' + TEST_IMAGE_REF )
+        GradleExecUtils.exec( 'docker pull ' + REGISTRY_IMAGE_REF )
     }
 
 
@@ -120,6 +121,8 @@ class DockerUtilsTest extends Specification {
 
 
     //todo see notes in DockerUtils.groovy about changing to Compose v2
+
+    //todo verify that containers and networks are removed
 
 
     //***********************************
@@ -6744,5 +6747,72 @@ class DockerUtilsTest extends Specification {
     }
 
     comment */
+
+
+    //todo keep for reference for querying if image pushed
+        // curl -X GET http://localhost:5000/v2/_catalog | grep support
+        // curl -X GET http://localhost:5000/v2/kf/devops/support/git/tags/list | grep support
+
+
+    def "dockerPush(String tag,boolean allTags=false) returns correctly without 'allTags'"( ) {
+        given:
+        String registryImageRef = REGISTRY_IMAGE_REF
+        String registryName = 'dockerrun-string-none-good' + UNIQUE_NAME_POSTFIX
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( registryName, 'running' )
+
+        composeFile << """
+            services:
+              ${registryName}:
+                container_name: ${registryName}
+                image: ${registryImageRef}
+                ports:
+                  - 5000:5000
+        """.stripIndent( )
+
+        //todo how to deal with port contention?
+
+        when:
+
+        //String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
+
+
+
+
+        def resultMap = DockerUtils.composeUp( composeFile.getAbsolutePath( ) )
+        
+        if ( !resultMap.success ) {
+            throw new GradleException( 'An error occurred when running "docker compose up": ' + resultMap.message )
+        }
+
+        def resultWaitMap = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWaitMap.success ) {
+            if ( resultWaitMap.reason.equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMap.message )
+            } else {
+                throw new GradleException( 'A container failed when running "docker compose up".' )
+            }
+        }
+
+
+        // instead of adding and using a healthcheck on the container, which requires making a new image (need to install curl), wait for 'running' then do an HTTP query to be sure the registry service is responding
+            // returns 0 if good and non-0 if otherwise
+                // curl --fail http://localhost
+            // returns the HTTP status code (e.g. "200" or "404" etc) or nothing
+                // curl -s -I -X GET http://localhost:5000/v2/_catalog | head -n 1 | cut -d$' ' -f2
+
+
+        boolean success = false
+
+
+        then:
+        resultMap instanceof Map
+        success == true
+
+        cleanup:
+        DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
+    }
 
 }
