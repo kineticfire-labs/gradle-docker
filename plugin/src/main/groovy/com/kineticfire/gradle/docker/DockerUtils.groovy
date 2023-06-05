@@ -1468,10 +1468,11 @@ final class DockerUtils {
 
 
    //todo docs
-      // note that including stdout regardless of success or failure
+      // two options:
+         // docker image push registry-host:5000/myname/myimage:1.0
+         // docker image push --all-tags registry-host:5000/myname/myimage
+      // note that returned Map including stdout regardless of success or failure
    static def dockerPush( String tag, boolean allTags = false ) {
-
-      // docker image push --all-tags registry-host:5000/myname/myimage
 
       int totalSize = 4
 
@@ -1510,7 +1511,6 @@ final class DockerUtils {
       }
 
       return( responseMap )
-
 
    }
 

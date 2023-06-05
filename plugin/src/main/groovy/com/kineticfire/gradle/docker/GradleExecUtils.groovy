@@ -39,7 +39,7 @@ final class GradleExecUtils {
     *
     * @param task
     *    the task (or command) to execute as a String
-    * @return a Map of the result of the command execution
+    * @return a String result of the command execution's output
     * @throws IOException
     *    if the task execution returned a non-zero exit value
     */
@@ -117,7 +117,7 @@ final class GradleExecUtils {
     *
     * @param task
     *    the task (or command) to execute as a String array, where the first item is the command and any subsequent items are arguments
-    * @return a Map of the result of the command execution
+    * @return a String result of the command execution's output
     * @throws IOException
     *    if the task execution returned a non-zero exit value
     */
