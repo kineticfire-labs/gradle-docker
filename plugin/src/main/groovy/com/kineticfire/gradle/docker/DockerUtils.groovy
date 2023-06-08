@@ -1466,12 +1466,28 @@ final class DockerUtils {
    }
 
 
-
-   //todo docs
-      // two options:
-         // docker image push registry-host:5000/myname/myimage:1.0
-         // docker image push --all-tags registry-host:5000/myname/myimage
-      // note that returned Map including stdout regardless of success or failure
+   /**
+    * Pushes one or more Docker images identified by 'tag' to a registry.
+    * <p>
+    * This method can be used in two ways: to push a single tag or to push all tags of an image.
+    * <p>
+    * To push a single tag for an image, then the argument 'tag' should contain the tag (version) such as &lt;registry&gt;&lt;:optional port&gt;/&lt;repository&gt;/&lt;image name&gt;&lt;:optional version&gt; with 'allTags' not provided or set to 'false'.  Note that if no version is given, then 'latest' is used.
+    * <p>
+    * To push multiple tags for an image, set 'tag' as above less the optional 'version' with 'allTags' set to 'true'.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>out -- String output from the command; always provided, even if the command fails</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param tag
+    *    tag to push
+    * @param allTags
+    *    'true' to push all tags for the image or 'false' or not provided for otherwise
+    * @return a Map containing the result of the command
+    */
    static def dockerPush( String tag, boolean allTags = false ) {
 
       int totalSize = 4
@@ -1515,9 +1531,36 @@ final class DockerUtils {
    }
 
 
-/*
-   //todo docs
-   static def dockerPush( String tags[], boolean allTags = false ) {
+   /**
+    * Pushes one or more Docker images identified by 'tags' to a registry.
+    * <p>
+    * This method can be used in two ways: to push a single tag per array entry or to push all tags of an image for an array entry.
+    * <p>
+    * To push a single tag per array entry for an image, then the entry's argument should contain the tag (version) such as &lt;registry&gt;&lt;:optional port&gt;/&lt;repository&gt;/&lt;image name&gt;&lt;:optional version&gt; with 'allTags' not provided or set to 'false'.  Note that if no version is given, then 'latest' is used.
+    * <p>
+    * To push multiple tags for an array entry's image, set the entries in the 'tags' array as above less the optional 'version' with 'allTags' set to 'true'.
+    * <p>
+    * Note that 'allTags' applies to all images/tags across the entire 'tags' array.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if all tag pushes were successful and false if one or more tag pushes failed</li>
+    *    <li>tags -- a Map of &lt;tag;&gt; to result of the push command for that tag</li>
+    *       <li>&lt;tag&gt;</li>
+    *       <ul>
+    *          <li>success -- boolean true if this tag push was successful and false otherwise</li>
+    *          <li>out -- String output from the command; always provided, even if the command fails</li>
+    *          <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    *       </ul>
+    * </ul>
+    *
+    * @param tags
+    *    array of tags to push
+    * @param allTags
+    *    'true' to push all tags for the image or 'false' or not provided for otherwise
+    * @return a Map containing the result of the command
+    */
+   static def dockerPush( String[] tags, boolean allTags = false ) {
 
       def responseMap = [:]
       responseMap.success = true
@@ -1536,10 +1579,6 @@ final class DockerUtils {
 
       return( responseMap )
    }
-
-   // todo docker push
-*/
-
 
 
 
