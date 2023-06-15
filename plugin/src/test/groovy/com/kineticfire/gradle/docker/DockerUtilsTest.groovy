@@ -133,6 +133,8 @@ class DockerUtilsTest extends Specification {
 
     //todo how to deal with port contention for dockerPush() methods?
 
+    //todo replace local port variable with static final
+
 
     //***********************************
     //***********************************
@@ -7092,22 +7094,20 @@ class DockerUtilsTest extends Specification {
         String tagVersionA1 = '1.0'
         String tagA1 = tagNameWithRegistryA + ':' + tagVersionA1
 
-        String tagCommandA1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA1
-
-
-        GradleExecUtils.execWithException( tagCommandA1 )
+        // not tagging image, so that it won't be found
 
         when:
         def resultMap = DockerUtils.dockerPush( tagA1 )
         boolean success = resultMap.success
+        String out = resultMap.out
+        String reason = resultMap.reason
 
         then:
         resultMap instanceof Map
         success == false
+        out.contains( 'The push refers to repository' )
+        reason.contains( 'An image does not exist locally with the tag' )
 
-        cleanup:
-        String rmTagCommandA1 = 'docker rmi ' + tagA1
-        GradleExecUtils.exec( rmTagCommandA1 )
     }
 
     def "dockerPush(String tag,boolean allTags=false) returns correctly when registry not found"( ) {
@@ -7129,23 +7129,19 @@ class DockerUtilsTest extends Specification {
         when:
         def resultMap = DockerUtils.dockerPush( tagA1 )
         boolean success = resultMap.success
+        String out = resultMap.out
+        String reason = resultMap.reason
 
         then:
         resultMap instanceof Map
+        out.contains( 'The push refers to repository' )
+        reason.contains( 'connect:' )
         success == false
 
         cleanup:
         String rmTagCommandA1 = 'docker rmi ' + tagA1
         GradleExecUtils.exec( rmTagCommandA1 )
     }
-
-
-    //////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////
-    //////////////////////////////////////////////////////
-
-    //todo tests for the array version of dockerPush()
 
     def "dockerPush(String[] tags,boolean allTags=false) returns correctly without 'allTags'"( ) {
         given:
@@ -7259,8 +7255,143 @@ class DockerUtilsTest extends Specification {
         success == true
 
         resultMap.tags instanceof Map
+        resultMap.tags[tagA1].success == true
         resultMap.tags[tagA1].out.contains( 'The push refers to repository' )
         resultMap.tags[tagA1].out.contains( 'digest' )
+        resultMap.tags[tagB1].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagB1].out.contains( 'digest' )
+        resultMap.tags[tagB1].success == true
+
+        registryHasImageA1 == true
+        registryHasImageB1 == true
+
+
+        cleanup:
+        DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
+
+        String rmTagCommandA1 = 'docker rmi ' + tagA1
+        GradleExecUtils.exec( rmTagCommandA1 )
+
+        String rmTagCommandB1 = 'docker rmi ' + tagB1
+        GradleExecUtils.exec( rmTagCommandB1 )
+    }
+
+    def "dockerPush(String[] tag,boolean allTags=false) returns correctly with 'allTags' false"( ) {
+        given:
+        String testName = 'dockerpush-array-tagfalse-good'
+
+        String registryImageRef = REGISTRY_IMAGE_REF
+        String registryName = testName + UNIQUE_NAME_POSTFIX
+
+        String port = 5000
+
+
+        String tagNameBaseA = testName
+        String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
+        String tagVersionA1 = '1.0'
+        String tagA1 = tagNameWithRegistryA + ':' + tagVersionA1
+
+        String tagCommandA1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA1
+
+
+        String tagNameBaseB = testName
+        String tagNameWithRegistryB = 'localhost:' + port + '/' + tagNameBaseB
+        String tagVersionB1 = '1.0'
+        String tagB1 = tagNameWithRegistryB + ':' + tagVersionB1
+
+        String tagCommandB1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB1
+
+
+        String[] tags = [ tagA1, tagB1 ]
+
+        GradleExecUtils.execWithException( tagCommandA1 )
+        GradleExecUtils.execWithException( tagCommandB1 )
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( registryName, 'running' )
+
+        composeFile << """
+            services:
+              ${registryName}:
+                container_name: ${registryName}
+                image: ${registryImageRef}
+                ports:
+                  - ${port}:5000
+        """.stripIndent( )
+
+        when:
+
+        def resultMapUp = DockerUtils.composeUp( composeFile.getAbsolutePath( ) )
+        
+        if ( !resultMapUp.success ) {
+            throw new GradleException( 'An error occurred when running "docker compose up": ' + resultMapUp.message )
+        }
+
+        def resultWaitMapWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWaitMapWait.success ) {
+            if ( resultWaitMapWait.reason.equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMapWait.message )
+            } else {
+                throw new GradleException( 'A container failed when running "docker compose up".' )
+            }
+        }
+
+
+        String registryCheckCommand = 'curl --fail http://localhost:' + port
+
+        int count = 0
+        boolean registryOk = false
+
+        if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+            registryOk = true
+        }
+
+        while ( !registryOk && count < NUM_RETRIES ) {
+
+            Thread.sleep( SLEEP_TIME_MILLIS )
+
+            if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+                registryOk = true
+            }
+
+            count++
+
+        }
+
+        if ( !registryOk ) {
+            throw new GradleException( 'Docker private registery container ' + registryName + ' is not responding.' )
+        }
+
+
+        def resultMap = DockerUtils.dockerPush( tags, false )
+        boolean success = resultMap.success
+
+
+        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        boolean registryHasImageA1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+            registryHasImageA1 = true
+        }
+
+        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        boolean registryHasImageB1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+            registryHasImageB1 = true
+        }
+
+
+        then:
+        resultMap instanceof Map
+        success == true
+
+        resultMap.tags instanceof Map
+        resultMap.tags[tagA1].success == true
+        resultMap.tags[tagA1].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagA1].out.contains( 'digest' )
+        resultMap.tags[tagB1].success == true
         resultMap.tags[tagB1].out.contains( 'The push refers to repository' )
         resultMap.tags[tagB1].out.contains( 'digest' )
 
@@ -7278,19 +7409,427 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( rmTagCommandB1 )
     }
 
-    /*
-    def "dockerPush(String[] tag,boolean allTags=false) returns correctly with 'allTags' false"( ) {
-    }
-
     def "dockerPush(String[] tag,boolean allTags=false) returns correctly with 'allTags' true"( ) {
+        given:
+        String testName = 'dockerpush-array-tagtrue-good'
+
+        String registryImageRef = REGISTRY_IMAGE_REF
+        String registryName = testName + UNIQUE_NAME_POSTFIX
+
+        String port = 5000
+
+
+        String tagNameBaseA = testName + '-a'
+        String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
+
+        String tagVersionA1 = '1.0'
+        String tagA1 = tagNameWithRegistryA + ':' + tagVersionA1
+        String tagCommandA1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA1
+
+        String tagVersionA2 = '2.0'
+        String tagA2 = tagNameWithRegistryA + ':' + tagVersionA2
+        String tagCommandA2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA2
+
+
+
+        String tagNameBaseB = testName + '-b'
+        String tagNameWithRegistryB = 'localhost:' + port + '/' + tagNameBaseB
+
+        String tagVersionB1 = '1.0'
+        String tagB1 = tagNameWithRegistryB + ':' + tagVersionB1
+        String tagCommandB1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB1
+
+        String tagVersionB2 = '2.0'
+        String tagB2 = tagNameWithRegistryB + ':' + tagVersionB2
+        String tagCommandB2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB2
+
+
+        String[] tags = [ tagNameWithRegistryA, tagNameWithRegistryB ]
+
+
+        GradleExecUtils.execWithException( tagCommandA1 )
+        GradleExecUtils.execWithException( tagCommandA2 )
+        GradleExecUtils.execWithException( tagCommandB1 )
+        GradleExecUtils.execWithException( tagCommandB2 )
+
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( registryName, 'running' )
+
+        composeFile << """
+            services:
+              ${registryName}:
+                container_name: ${registryName}
+                image: ${registryImageRef}
+                ports:
+                  - ${port}:5000
+        """.stripIndent( )
+
+        when:
+
+        def resultMapUp = DockerUtils.composeUp( composeFile.getAbsolutePath( ) )
+        
+        if ( !resultMapUp.success ) {
+            throw new GradleException( 'An error occurred when running "docker compose up": ' + resultMapUp.message )
+        }
+
+        def resultWaitMapWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWaitMapWait.success ) {
+            if ( resultWaitMapWait.reason.equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMapWait.message )
+            } else {
+                throw new GradleException( 'A container failed when running "docker compose up".' )
+            }
+        }
+
+
+        String registryCheckCommand = 'curl --fail http://localhost:' + port
+
+        int count = 0
+        boolean registryOk = false
+
+        if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+            registryOk = true
+        }
+
+        while ( !registryOk && count < NUM_RETRIES ) {
+
+            Thread.sleep( SLEEP_TIME_MILLIS )
+
+            if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+                registryOk = true
+            }
+
+            count++
+
+        }
+
+        if ( !registryOk ) {
+            throw new GradleException( 'Docker private registery container ' + registryName + ' is not responding.' )
+        }
+
+
+        def resultMap = DockerUtils.dockerPush( tags, true )
+        boolean success = resultMap.success
+
+
+        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        boolean registryHasImageA1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+            registryHasImageA1 = true
+        }
+
+        String registryImageCheckA2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA2
+        boolean registryHasImageA2 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckA2 ).exitValue == 0 ) {
+            registryHasImageA2 = true
+        }
+
+
+        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        boolean registryHasImageB1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+            registryHasImageB1 = true
+        }
+
+        String registryImageCheckB2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB2
+        boolean registryHasImageB2 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckB2 ).exitValue == 0 ) {
+            registryHasImageB2 = true
+        }
+
+
+        then:
+        resultMap instanceof Map
+        success == true
+
+        resultMap.tags instanceof Map
+
+        resultMap.tags[tagNameWithRegistryA].success == true
+        // The pair of checks are redundant, but would need to parse the output of the 'push' command to differentiate between the tags for version 1.0 and 2.0.  Will depend on the checks performed querying the registry for individual versions.  Will keep these here for reference.
+        resultMap.tags[tagNameWithRegistryA].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagNameWithRegistryA].out.contains( '1.0: digest' )
+        resultMap.tags[tagNameWithRegistryA].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagNameWithRegistryA].out.contains( '2.0: digest' )
+
+        resultMap.tags[tagNameWithRegistryB].success == true
+        // The pair of checks are redundant, but would need to parse the output of the 'push' command to differentiate between the tags for version 1.0 and 2.0.  Will depend on the checks performed querying the registry for individual versions.  Will keep these here for reference.
+        resultMap.tags[tagNameWithRegistryB].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagNameWithRegistryB].out.contains( '1.0: digest' )
+        resultMap.tags[tagNameWithRegistryB].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagNameWithRegistryB].out.contains( '2.0: digest' )
+
+        registryHasImageA1 == true
+        registryHasImageA2 == true
+        registryHasImageB1 == true
+        registryHasImageB2 == true
+
+
+        cleanup:
+        DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
+
+        String rmTagCommandA1 = 'docker rmi ' + tagA1
+        GradleExecUtils.exec( rmTagCommandA1 )
+
+        String rmTagCommandA2 = 'docker rmi ' + tagA2
+        GradleExecUtils.exec( rmTagCommandA2 )
+
+        String rmTagCommandB1 = 'docker rmi ' + tagB1
+        GradleExecUtils.exec( rmTagCommandB1 )
+
+        String rmTagCommandB2 = 'docker rmi ' + tagB2
+        GradleExecUtils.exec( rmTagCommandB2 )
     }
 
-    def "dockerPush(String[] tag,boolean allTags=false) returns correctly when image can't be found"( ) {
+    def "dockerPush(String[] tag,boolean allTags=false) returns correctly when one image can't be found"( ) {
+        given:
+        String testName = 'dockerpush-array-tagnone-nosuchimage'
+
+        String registryImageRef = REGISTRY_IMAGE_REF
+        String registryName = testName + UNIQUE_NAME_POSTFIX
+
+        String port = 5000
+
+        String tagNameBaseA = testName + '-a'
+        String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
+
+        String tagVersionA1 = '1.0'
+        String tagA1 = tagNameWithRegistryA + ':' + tagVersionA1
+        String tagCommandA1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA1
+
+        String tagVersionA2 = '2.0'
+        String tagA2 = tagNameWithRegistryA + ':' + tagVersionA2
+        String tagCommandA2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA2
+
+
+        String tagNameBaseB = testName + '-b'
+        String tagNameWithRegistryB = 'localhost:' + port + '/' + tagNameBaseB
+
+        String tagVersionB1 = '1.0'
+        String tagB1 = tagNameWithRegistryB + ':' + tagVersionB1
+        String tagCommandB1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB1
+
+        String tagVersionB2 = '2.0'
+        String tagB2 = tagNameWithRegistryB + ':' + tagVersionB2
+        String tagCommandB2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB2
+
+
+        String[] tags = [ tagA1, tagA2, tagB1, tagB2 ]
+
+
+        GradleExecUtils.execWithException( tagCommandA1 )
+        GradleExecUtils.execWithException( tagCommandA2 )
+        GradleExecUtils.execWithException( tagCommandB1 )
+
+        // not tagging B2, so that it won't be found
+
+
+        Map<String,String> containerMap = new HashMap<String, String>( )
+        containerMap.put( registryName, 'running' )
+
+        composeFile << """
+            services:
+              ${registryName}:
+                container_name: ${registryName}
+                image: ${registryImageRef}
+                ports:
+                  - ${port}:5000
+        """.stripIndent( )
+
+        when:
+
+        def resultMapUp = DockerUtils.composeUp( composeFile.getAbsolutePath( ) )
+        
+        if ( !resultMapUp.success ) {
+            throw new GradleException( 'An error occurred when running "docker compose up": ' + resultMapUp.message )
+        }
+
+        def resultWaitMapWait = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
+
+        if ( !resultWaitMapWait.success ) {
+            if ( resultWaitMapWait.reason.equals( 'error' ) ) {
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMapWait.message )
+            } else {
+                throw new GradleException( 'A container failed when running "docker compose up".' )
+            }
+        }
+
+
+        String registryCheckCommand = 'curl --fail http://localhost:' + port
+
+        int count = 0
+        boolean registryOk = false
+
+        if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+            registryOk = true
+        }
+
+        while ( !registryOk && count < NUM_RETRIES ) {
+
+            Thread.sleep( SLEEP_TIME_MILLIS )
+
+            if ( GradleExecUtils.exec( registryCheckCommand ).exitValue == 0 ) {
+                registryOk = true
+            }
+
+            count++
+
+        }
+
+        if ( !registryOk ) {
+            throw new GradleException( 'Docker private registery container ' + registryName + ' is not responding.' )
+        }
+
+
+        def resultMap = DockerUtils.dockerPush( tags )
+        boolean success = resultMap.success
+
+
+        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        boolean registryHasImageA1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+            registryHasImageA1 = true
+        }
+
+        String registryImageCheckA2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA2
+        boolean registryHasImageA2 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckA2 ).exitValue == 0 ) {
+            registryHasImageA2 = true
+        }
+
+
+        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        boolean registryHasImageB1 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+            registryHasImageB1 = true
+        }
+
+        // curl -s -I http://www.example.org | head -n 1 | cut -d$' ' -f2
+           // -s = silent
+           // -I = use HEAD request; server must be able to respond to that; that way, don't download the item being requested
+         // returns empty string if fails
+
+        //todo when image exists but tag doesn't, exit value still 0??
+        String registryImageCheckB2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB2
+        boolean registryHasImageB2 = false
+
+        if ( GradleExecUtils.exec( registryImageCheckB2 ).exitValue == 0 ) {
+            registryHasImageB2 = true
+        }
+
+        then:
+        resultMap instanceof Map
+        success == false
+
+        resultMap.tags[tagA1].success == true
+        resultMap.tags[tagA2].success == true
+
+        resultMap.tags[tagB1].success == true
+        resultMap.tags[tagB2].success == false
+        resultMap.tags[tagB2].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagB2].reason.contains( 'tag does not exist' )
+
+        registryHasImageA1 == true
+        registryHasImageA2 == true
+        registryHasImageB1 == true
+        registryHasImageB2 == false
+
+        cleanup:
+        DockerUtils.composeDown( composeFile.getAbsolutePath( ) )
+
+        String rmTagCommandA1 = 'docker rmi ' + tagA1
+        GradleExecUtils.exec( rmTagCommandA1 )
+
+        String rmTagCommandA2 = 'docker rmi ' + tagA2
+        GradleExecUtils.exec( rmTagCommandA2 )
+
+        String rmTagCommandB1 = 'docker rmi ' + tagB1
+        GradleExecUtils.exec( rmTagCommandB1 )
     }
 
     def "dockerPush(String[] tag,boolean allTags=false) returns correctly when registry not found"( ) {
-    }
-    */
+        given:
+        String testName = 'dockerpush-array-tagnone-badregistry'
 
-    //todo tests for the array version of dockerPush()
+        String port = 5001
+
+
+        String tagNameBaseA = testName + '-a'
+        String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
+
+        String tagVersionA1 = '1.0'
+        String tagA1 = tagNameWithRegistryA + ':' + tagVersionA1
+        String tagCommandA1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA1
+
+        String tagVersionA2 = '2.0'
+        String tagA2 = tagNameWithRegistryA + ':' + tagVersionA2
+        String tagCommandA2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagA2
+
+
+
+        String tagNameBaseB = testName + '-b'
+        String tagNameWithRegistryB = 'localhost:' + port + '/' + tagNameBaseB
+
+        String tagVersionB1 = '1.0'
+        String tagB1 = tagNameWithRegistryB + ':' + tagVersionB1
+        String tagCommandB1 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB1
+
+        String tagVersionB2 = '2.0'
+        String tagB2 = tagNameWithRegistryB + ':' + tagVersionB2
+        String tagCommandB2 = 'docker tag ' + REGISTRY_IMAGE_REF + ' ' + tagB2
+
+
+        String[] tags = [ tagA1, tagA2, tagB1, tagB2 ]
+
+
+        GradleExecUtils.execWithException( tagCommandA1 )
+        GradleExecUtils.execWithException( tagCommandA2 )
+        GradleExecUtils.execWithException( tagCommandB1 )
+        GradleExecUtils.execWithException( tagCommandB2 )
+
+
+        when:
+        def resultMap = DockerUtils.dockerPush( tags )
+        boolean success = resultMap.success
+
+        then:
+        resultMap instanceof Map
+        success == false
+
+        resultMap.tags[tagA1].success == false
+        resultMap.tags[tagA1].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagA1].reason.contains( 'connect:' )
+        resultMap.tags[tagA2].success == false
+        resultMap.tags[tagA2].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagA2].reason.contains( 'connect:' )
+
+        resultMap.tags[tagB1].success == false
+        resultMap.tags[tagB1].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagB1].reason.contains( 'connect:' )
+        resultMap.tags[tagB2].success == false
+        resultMap.tags[tagB2].out.contains( 'The push refers to repository' )
+        resultMap.tags[tagB2].reason.contains( 'connect:' )
+
+        cleanup:
+        String rmTagCommandA1 = 'docker rmi ' + tagA1
+        GradleExecUtils.exec( rmTagCommandA1 )
+
+        String rmTagCommandA2 = 'docker rmi ' + tagA2
+        GradleExecUtils.exec( rmTagCommandA2 )
+
+        String rmTagCommandB1 = 'docker rmi ' + tagB1
+        GradleExecUtils.exec( rmTagCommandB1 )
+
+        String rmTagCommandB2 = 'docker rmi ' + tagB2
+        GradleExecUtils.exec( rmTagCommandB2 )
+    }
+
 }
