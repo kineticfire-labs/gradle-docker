@@ -42,6 +42,8 @@ import spock.lang.TempDir
  *    <li>test image and registry image (as defined in properties file) local or access to providing registry, such as Docker Hub</li>
  *    <li>bash</li>
  *    <li>curl</li>
+ *    <li>head</li>
+ *    <li>cut</li>
  * </ol>
  */
 class DockerUtilsTest extends Specification {
@@ -59,6 +61,9 @@ class DockerUtilsTest extends Specification {
     static final String REGISTRY_IMAGE_REF = REGISTRY_IMAGE_NAME + ':' + REGISTRY_IMAGE_VERSION 
 
     static final String COMPOSE_FILE_NAME  = 'compose.yaml'
+
+    static final int REGISTRY_PORT = 5000
+    static final int REGISTRY_PORT_BAD = 5001 // a port where a registry should not exist, to trigger an error
 
     // Settings to allow sufficient time for containers to reach 'running' state and optionally 'healthy/unhealthy' status.  Maximum wait time is 44000 milliseconds = 44 seconds.  Using same numbers from defaults originally set in DockerUtils.groovy, which could change and be different than these settings. 
         // Used in two cases:
@@ -133,7 +138,13 @@ class DockerUtilsTest extends Specification {
 
     //todo how to deal with port contention for dockerPush() methods?
 
-    //todo replace local port variable with static final
+    // for checks on if an image/version is contained in a private registry:
+        // curl -s -I http://www.example.org | head -n 1 | cut -d$' ' -f2
+           // -s = silent
+           // -I = use HEAD request; server must be able to respond to that; that way, don't download the item being requested
+         // returns
+            // string status code if registry working, e.g. '200' image found and '400' image not found
+            // empty string if registry not working
 
 
     //***********************************
@@ -6768,7 +6779,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
         String tagNameBaseA = testName
         String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
@@ -6841,10 +6852,10 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
@@ -6869,7 +6880,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
         String tagNameBaseA = testName
         String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
@@ -6942,10 +6953,10 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
@@ -6970,7 +6981,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
 
         // A
@@ -7050,18 +7061,18 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
 
-        String registryImageCheckA2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA2
+        String[] registryImageCheckA2 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA2 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA2 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA2 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA2 ).out == '200' ) {
             registryHasImageA2 = true
         }
 
@@ -7087,7 +7098,7 @@ class DockerUtilsTest extends Specification {
         given:
         String testName = 'dockerpush-string-tagnone-nosuchimage'
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
         String tagNameBaseA = testName
         String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
@@ -7114,7 +7125,7 @@ class DockerUtilsTest extends Specification {
         given:
         String testName = 'dockerpush-string-tagnone-badregistry'
 
-        String port = 5001
+        String port = Integer.toString( REGISTRY_PORT_BAD )
 
         String tagNameBaseA = testName
         String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
@@ -7150,7 +7161,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
 
         String tagNameBaseA = testName
@@ -7235,17 +7246,17 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
-        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        String[] registryImageCheckB1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).out == '200' ) {
             registryHasImageB1 = true
         }
 
@@ -7283,7 +7294,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
 
         String tagNameBaseA = testName
@@ -7368,17 +7379,17 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
-        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        String[] registryImageCheckB1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).out == '200' ) {
             registryHasImageB1 = true
         }
 
@@ -7416,7 +7427,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
 
         String tagNameBaseA = testName + '-a'
@@ -7514,32 +7525,32 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
-        String registryImageCheckA2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA2
+        String[] registryImageCheckA2 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA2 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA2 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA2 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA2 ).out == '200' ) {
             registryHasImageA2 = true
         }
 
 
-        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        String[] registryImageCheckB1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).out == '200' ) {
             registryHasImageB1 = true
         }
 
-        String registryImageCheckB2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB2
+        String[] registryImageCheckB2 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB2 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB2 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB2 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB2 ).out == '200' ) {
             registryHasImageB2 = true
         }
 
@@ -7593,7 +7604,7 @@ class DockerUtilsTest extends Specification {
         String registryImageRef = REGISTRY_IMAGE_REF
         String registryName = testName + UNIQUE_NAME_POSTFIX
 
-        String port = 5000
+        String port = Integer.toString( REGISTRY_PORT )
 
         String tagNameBaseA = testName + '-a'
         String tagNameWithRegistryA = 'localhost:' + port + '/' + tagNameBaseA
@@ -7690,38 +7701,33 @@ class DockerUtilsTest extends Specification {
         boolean success = resultMap.success
 
 
-        String registryImageCheckA1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA1
+        String[] registryImageCheckA1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA1 ).out == '200' ) {
             registryHasImageA1 = true
         }
 
-        String registryImageCheckA2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseA + '/manifests/' + tagVersionA2
+        String[] registryImageCheckA2 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseA + "/manifests/" + tagVersionA2 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageA2 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckA2 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckA2 ).out == '200' ) {
             registryHasImageA2 = true
         }
 
 
-        String registryImageCheckB1 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB1
+        String[] registryImageCheckB1 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB1 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB1 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB1 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB1 ).out == '200' ) {
             registryHasImageB1 = true
         }
 
-        // curl -s -I http://www.example.org | head -n 1 | cut -d$' ' -f2
-           // -s = silent
-           // -I = use HEAD request; server must be able to respond to that; that way, don't download the item being requested
-         // returns empty string if fails
-
-        //todo when image exists but tag doesn't, exit value still 0??
-        String registryImageCheckB2 = 'curl -X GET localhost:' + port + '/v2/' + tagNameBaseB + '/manifests/' + tagVersionB2
+        // for reference:  this is a test for an image that should NOT be in the registry
+        String[] registryImageCheckB2 = ["/bin/bash", "-c", "curl -s -I localhost:" + port + "/v2/" + tagNameBaseB + "/manifests/" + tagVersionB2 + " | head -n 1 | cut -d\$' ' -f2" ]
         boolean registryHasImageB2 = false
 
-        if ( GradleExecUtils.exec( registryImageCheckB2 ).exitValue == 0 ) {
+        if ( GradleExecUtils.exec( registryImageCheckB2 ).out == '200' ) {
             registryHasImageB2 = true
         }
 
@@ -7759,7 +7765,7 @@ class DockerUtilsTest extends Specification {
         given:
         String testName = 'dockerpush-array-tagnone-badregistry'
 
-        String port = 5001
+        String port = Integer.toString( REGISTRY_PORT_BAD )
 
 
         String tagNameBaseA = testName + '-a'
