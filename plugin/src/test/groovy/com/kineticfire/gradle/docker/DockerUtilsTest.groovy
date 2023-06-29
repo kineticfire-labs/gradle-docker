@@ -50,7 +50,8 @@ class DockerUtilsTest extends Specification {
 
     private static final Properties properties = loadProperties( )
 
-    static final String COMPOSE_VERSION = properties.get( 'testCompose.version' )
+    //todo don't need need this with compose v2, so remove when done testing
+    //static final String COMPOSE_VERSION = properties.get( 'testCompose.version' )
 
     static final String TEST_IMAGE_NAME = properties.get( 'testImage.name' )
     static final String TEST_IMAGE_VERSION = properties.get( 'testImage.version' )
@@ -153,7 +154,6 @@ class DockerUtilsTest extends Specification {
     // getContainerHealth
 
 
-    /* comment
     def "getContainerHealth(String container) returns correctly when container not found"( ) {
         given:
         String containerName = 'container-shouldnt-exist'
@@ -207,6 +207,8 @@ class DockerUtilsTest extends Specification {
         cleanup:
         GradleExecUtils.exec( dockerStopCommand )
     }
+
+    /* comment
 
     comment */
 
@@ -707,22 +709,15 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerRmCommand )
     }
 
-    comment */
 
 
     // not testing because hard to maintain 'restarting' state
-    /*
-    def "getContainerState(String container) returns correctly when container in 'restarting' state"( ) {
-    }
-    */
+    // def "getContainerState(String container) returns correctly when container in 'restarting' state"( ) { }
+    //}
 
     // not testing because hard to re-create 'dead' state
-    /*
-    def "getContainerState(String container) returns correctly when container in 'dead' state"( ) {
-    }
-    */
+    // def "getContainerState(String container) returns correctly when container in 'dead' state"( ) { }
 
-    /* comment
     def "getContainerState(String container) returns correctly when command is in error"( ) {
         given:
         // adding invalid '--blah' flag to produce command error
@@ -4859,6 +4854,13 @@ class DockerUtilsTest extends Specification {
     // docker compose
 
 
+    //todo testing here and below
+    comment */
+
+    //todo TESTED BELOW
+    /* comment
+
+
     def "getComposeUpCommand(java.lang.String... composeFilePaths) returns correctly given a single argument"( ) {
         given:
         String composeFilePath = '/path/to/composefile.yml'
@@ -4867,7 +4869,7 @@ class DockerUtilsTest extends Specification {
         String[] composeUpCommand = DockerUtils.getComposeUpCommand( composeFilePath )
 
         then:
-        String[] expected = [ 'docker-compose', '-f', composeFilePath, 'up', '-d' ]
+        String[] expected = [ 'docker', 'compose', '-f', composeFilePath, 'up', '-d' ]
         expected == composeUpCommand
     }
 
@@ -4881,9 +4883,10 @@ class DockerUtilsTest extends Specification {
         String[] composeUpCommand = DockerUtils.getComposeUpCommand( composeFilePath1, composeFilePath2 )
 
         then:
-        String[] expected = [ 'docker-compose', '-f', composeFilePath1, '-f', composeFilePath2, 'up', '-d' ]
+        String[] expected = [ 'docker', 'compose', '-f', composeFilePath1, '-f', composeFilePath2, 'up', '-d' ]
         expected == composeUpCommand
     }
+
 
 
     def "getComposeDownCommand(String composeFilePath) returns correctly"( ) {
@@ -4894,7 +4897,7 @@ class DockerUtilsTest extends Specification {
         String[] composeDownCommand = DockerUtils.getComposeDownCommand( composeFilePath )
 
         then:
-        String[] expected = [ 'docker-compose', '-f', composeFilePath, 'down' ]
+        String[] expected = [ 'docker', 'compose', '-f', composeFilePath, 'down' ]
         expected == composeDownCommand
     }
 
@@ -4976,8 +4979,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerName, 'running' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -4993,9 +4994,9 @@ class DockerUtilsTest extends Specification {
 
         if ( !resultWaitMap.success ) {
             if ( resultWaitMap.reason.equals( 'error' ) ) {
-                throw new GradleException( 'An error occurred when running "docker-compose up": ' + resultWaitMap.message )
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMap.message )
             } else {
-                throw new GradleException( 'A container failed when running "docker-compose up".' )
+                throw new GradleException( 'A container failed when running "docker compose up".' )
             }
         }
 
@@ -5004,7 +5005,7 @@ class DockerUtilsTest extends Specification {
         success == true
 
         cleanup:
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
@@ -5017,19 +5018,15 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerName, 'running' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
+                image: ${TEST_IMAGE_REF}
                 container_name: ${containerName}
         """.stripIndent( )
 
         composeFile2 << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
-                image: ${TEST_IMAGE_REF}
                 command: tail -f
         """.stripIndent( )
 
@@ -5041,9 +5038,9 @@ class DockerUtilsTest extends Specification {
 
         if ( !resultWaitMap.success ) {
             if ( resultWaitMap.reason.equals( 'error' ) ) {
-                throw new GradleException( 'An error occurred when running "docker-compose up": ' + resultWaitMap.message )
+                throw new GradleException( 'An error occurred when running "docker compose up": ' + resultWaitMap.message )
             } else {
-                throw new GradleException( 'A container failed when running "docker-compose up".' )
+                throw new GradleException( 'A container failed when running "docker compose up".' )
             }
         }
 
@@ -5054,7 +5051,7 @@ class DockerUtilsTest extends Specification {
 
 
         cleanup:
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
@@ -5071,7 +5068,7 @@ class DockerUtilsTest extends Specification {
         then:
         resultMap instanceof Map
         success == false
-        reason.contains( 'FileNotFoundError' )
+        reason.contains( 'no such file or directory' )
     }
 
 
@@ -5080,8 +5077,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'composedown-container' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -5091,7 +5086,7 @@ class DockerUtilsTest extends Specification {
 
         when:
         String dockerInspectStateCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile.getAbsolutePath( ), 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile.getAbsolutePath( ), 'up', '-d' ]
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
 
@@ -5146,7 +5141,7 @@ class DockerUtilsTest extends Specification {
         isExited == true
 
         cleanup:
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile.getAbsolutePath( ), 'down' ]
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
@@ -5163,7 +5158,7 @@ class DockerUtilsTest extends Specification {
         then:
         resultMap instanceof Map
         success == false
-        reason.contains( 'FileNotFoundError' )
+        reason.contains( 'no such file or directory' )
     }
 
 
@@ -5948,9 +5943,6 @@ class DockerUtilsTest extends Specification {
         success == false
         reason.contains( 'No such image' )
     }
-    comment */
-
-    /* comment
 
     def "dockerTag(String image,String tag) returns correctly"( ) {
         given:
@@ -6308,10 +6300,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( 'docker rmi ' + tag21 )
         GradleExecUtils.exec( 'docker rmi ' + tag22 )
     }
-    comment */
-
-    /* comment
-
 
     def "dockerTag(Map<String,String[]> imageTag) returns correctly when no such image"( ) {
         given:
@@ -6767,10 +6755,6 @@ class DockerUtilsTest extends Specification {
         imageTagged == false
         reason.contains( 'dockerfile parse error' )
     }
-
-    comment */
-
-
 
     def "dockerPush(String tag,boolean allTags=false) returns correctly without 'allTags'"( ) {
         given:
@@ -7837,5 +7821,7 @@ class DockerUtilsTest extends Specification {
         String rmTagCommandB2 = 'docker rmi ' + tagB2
         GradleExecUtils.exec( rmTagCommandB2 )
     }
+
+    comment */
 
 }

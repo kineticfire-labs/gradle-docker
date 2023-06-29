@@ -456,21 +456,22 @@ final class DockerUtils {
     */
    static String[] getComposeUpCommand( java.lang.String... composeFilePaths ) {
 
-      int totalSize = 3 + ( composeFilePaths.length * 2 )
+      int totalSize = 4 + ( composeFilePaths.length * 2 )
 
       String[] composeUpCommand = new String[totalSize]
 
-      composeUpCommand[0] = 'docker-compose'
+      composeUpCommand[0] = 'docker'
+      composeUpCommand[1] = 'compose'
 
       int index
       int i
       for ( i = 0; i < composeFilePaths.length; i++ ) {
-         index = ( i * 2 ) + 1
+         index = ( i * 2 ) + 2
          composeUpCommand[index] = '-f'
          composeUpCommand[index+1] = composeFilePaths[i]
       }
 
-      index = ( i * 2 ) + 1
+      index = ( i * 2 ) + 2
       composeUpCommand[index] = 'up'
       composeUpCommand[index+1] = '-d'
 
@@ -491,7 +492,7 @@ final class DockerUtils {
     * @return a String array, suitable for executing, describing a "docker compose down" command using a compose file
     */
    static String[] getComposeDownCommand( String composeFilePath ) {
-      String[] composeDownCommand = [ 'docker-compose', '-f', composeFilePath, 'down' ]
+      String[] composeDownCommand = [ 'docker', 'compose', '-f', composeFilePath, 'down' ]
       return( composeDownCommand )
    }
 
