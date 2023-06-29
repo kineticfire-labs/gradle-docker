@@ -15,9 +15,15 @@
  */
 package com.kineticfire.gradle.docker
 
+
+import static java.util.concurrent.TimeUnit.MINUTES
+
 import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.api.Project
+
 import spock.lang.Specification
+import spock.lang.Timeout
+
 
 /**
  * unit test

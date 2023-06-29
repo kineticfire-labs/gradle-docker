@@ -15,13 +15,21 @@
  */
 package com.kineticfire.gradle.docker
 
+
+import static java.util.concurrent.TimeUnit.MINUTES
+
 import org.gradle.testfixtures.ProjectBuilder
 import org.gradle.api.Project
+
 import spock.lang.Specification
+import spock.lang.Timeout
+
 
 /**
  * unit test
  */
+// Set timeout for all feature methods.  Probably longer than is needed for a test.
+@Timeout( value = 5, unit = MINUTES )
 class DockerPluginTest extends Specification {
 
     def "plugin registers task"( ) {

@@ -15,13 +15,19 @@
  */
 package com.kineticfire.gradle.docker
 
+
+import static java.util.concurrent.TimeUnit.MINUTES
+
 import spock.lang.Specification
+import spock.lang.Timeout
 
 
 /**
  * Unit tests.
  *
  */
+// Set timeout for all feature methods.  Probably longer than is needed for a test.
+@Timeout( value = 5, unit = MINUTES )
 class SystemExecUtilsTest extends Specification {
 
     def "getUserName() returns correct user"( ) {

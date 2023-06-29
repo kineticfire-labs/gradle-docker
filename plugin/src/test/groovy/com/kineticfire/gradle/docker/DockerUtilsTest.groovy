@@ -15,6 +15,7 @@
  */
 package com.kineticfire.gradle.docker
 
+
 import java.io.File
 import java.io.InputStream
 import java.io.IOException
@@ -23,13 +24,14 @@ import java.util.Random
 import java.util.Map
 import java.util.HashMap
 import java.util.Properties
+import static java.util.concurrent.TimeUnit.MINUTES
 
 import org.gradle.api.Project
 import org.gradle.api.GradleException
 
 import spock.lang.Specification
 import spock.lang.TempDir
-
+import spock.lang.Timeout
 
 
 
@@ -46,6 +48,8 @@ import spock.lang.TempDir
  *    <li>cut</li>
  * </ol>
  */
+// Set timeout for all feature methods.  Probably longer than is needed for a test, but some wait for a container to reach a state, then wait for the container to reach a new state, and may manipulate other containers and have other wait criteria.
+@Timeout( value = 5, unit = MINUTES )
 class DockerUtilsTest extends Specification {
 
     private static final Properties properties = loadProperties( )
@@ -133,11 +137,6 @@ class DockerUtilsTest extends Specification {
     }
 
 
-    //todo see notes in DockerUtils.groovy about changing to Compose v2
-
-    //todo verify that containers and networks are removed
-
-    //todo how to deal with port contention for dockerPush() methods?
 
     // for checks on if an image/version is contained in a private registry:
         // curl -s -I http://www.example.org | head -n 1 | cut -d$' ' -f2
@@ -152,7 +151,6 @@ class DockerUtilsTest extends Specification {
     //***********************************
     //***********************************
     // getContainerHealth
-
 
     def "getContainerHealth(String container) returns correctly when container not found"( ) {
         given:
@@ -208,17 +206,9 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommand )
     }
 
-    /* comment
-
-    comment */
-
     // not testing the health status 'starting' because it is difficult to hold that state for the test
-    /*
-    def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) {
-    }
-    */
+    // def "getContainerHealth(String container) returns correctly when container has a health check and is starting"( ) { }
 
-    /* comment
 
     def "getContainerHealth(String container) returns correctly when container health is 'healthy'"( ) {
 
@@ -227,8 +217,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'getcontainerhealth-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -243,9 +231,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -274,7 +262,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerComposeDownCommand )
     }
 
-
     def "getContainerHealth(String container) returns correctly when container health is 'unhealthy'"( ) {
 
         given:
@@ -282,8 +269,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'getcontainerhealth-unhealthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -298,9 +283,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -336,8 +321,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'getcontainerhealth-exited' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -352,10 +335,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerStopCommand = 'docker stop ' + containerName
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
@@ -407,8 +390,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'getcontainerhealth-paused' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -423,10 +404,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerPauseCommand = 'docker pause ' + containerName
         String dockerUnpauseCommand = 'docker pause ' + containerName
         String dockerStopCommand = 'docker unpause ' + containerName
@@ -492,15 +473,11 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'unknown flag' )
     }
 
-    comment */
-
 
     //***********************************
     //***********************************
     //***********************************
     // getContainerState
-
-        /* comment
 
     def "getContainerState(String container) returns correctly when container not found"( ) {
         given:
@@ -709,8 +686,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerRmCommand )
     }
 
-
-
     // not testing because hard to maintain 'restarting' state
     // def "getContainerState(String container) returns correctly when container in 'restarting' state"( ) { }
     //}
@@ -734,10 +709,6 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'unknown flag' )
     }
 
-    comment */
-
-
-
 
     //***********************************
     //***********************************
@@ -752,7 +723,6 @@ class DockerUtilsTest extends Specification {
             //***********************************
             // state
 
-        /* comment
     def "waitForContainer(String container, String target) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
@@ -1003,22 +973,16 @@ class DockerUtilsTest extends Specification {
         message.contains( 'unknown flag' )
     }
 
-    comment */
-
-
 
             //***********************************
             // health
 
-        /* comment
     def "waitForContainer(String container, String target) returns correctly for 'healthy' container with target of 'healthy'"( ) {
         given:
 
         String containerName = 'waitforcontainer-str-healthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1033,9 +997,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -1064,8 +1028,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-unhealthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1080,9 +1042,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -1176,8 +1138,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-exited-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1192,10 +1152,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerStopCommand = 'docker stop ' + containerName
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
@@ -1252,8 +1212,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-paused-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1268,10 +1226,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerPauseCommand = 'docker pause ' + containerName
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
@@ -1380,8 +1338,6 @@ class DockerUtilsTest extends Specification {
         containerName.equals( container )
     }
 
-    comment */
-
 
 
         //***********************************
@@ -1391,7 +1347,7 @@ class DockerUtilsTest extends Specification {
             //***********************************
             // state
 
-        /* comment
+
     def "waitForContainer(String container, String target, int retrySeconds, int retryNum) returns correctly for container in 'running' state with target of 'running' state"( ) {
         given:
         String containerImageRef = TEST_IMAGE_REF
@@ -1651,8 +1607,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-int-healthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1667,9 +1621,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -1697,8 +1651,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-int-unhealthy-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1713,9 +1665,9 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
 
@@ -1807,8 +1759,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-int-exited-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1823,10 +1773,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerStopCommand = 'docker stop ' + containerName
 
         GradleExecUtils.execWithException( dockerComposeUpCommand )
@@ -1883,8 +1833,6 @@ class DockerUtilsTest extends Specification {
         String containerName = 'waitforcontainer-str-int-paused-healthy' + UNIQUE_NAME_POSTFIX
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerName}:
                 container_name: ${containerName}
@@ -1899,10 +1847,10 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
         String dockerInspectHealthCommand = 'docker inspect -f {{.State.Health.Status}} ' + containerName
         String dockerInspectCommand = 'docker inspect -f {{.State.Status}} ' + containerName
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerPauseCommand = 'docker pause ' + containerName
         String dockerUnpauseCommand = 'docker unpause ' + containerName
         String dockerStopCommand = 'docker stop ' + containerName
@@ -2429,8 +2377,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood3Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2467,8 +2413,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -2518,8 +2464,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2557,8 +2501,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
@@ -2602,8 +2546,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2635,8 +2577,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
 
 
@@ -2679,8 +2621,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2707,8 +2647,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
@@ -2776,8 +2716,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2814,8 +2752,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerStopCommandBad = 'docker stop ' + containerBadName
@@ -2880,8 +2818,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -2918,8 +2854,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerPauseCommandBad = 'docker pause ' + containerBadName
@@ -2992,8 +2928,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( additionalCommand, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3019,8 +2953,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
 
@@ -3088,8 +3022,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood4Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3125,8 +3057,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectStateCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
         String dockerInspectStateCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -3188,8 +3120,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood4Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3225,8 +3155,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectStateCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -3304,8 +3234,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3342,8 +3270,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
 
 
@@ -3842,8 +3770,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood3Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3880,8 +3806,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -3931,8 +3857,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -3970,8 +3894,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
@@ -4015,8 +3939,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4048,8 +3970,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
 
 
@@ -4092,8 +4014,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4120,8 +4040,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
@@ -4189,8 +4109,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4227,8 +4145,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerStopCommandBad = 'docker stop ' + containerBadName
@@ -4293,8 +4211,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4331,8 +4247,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerPauseCommandBad = 'docker pause ' + containerBadName
@@ -4372,7 +4288,6 @@ class DockerUtilsTest extends Specification {
             throw new GradleException( 'Docker container ' + containerBadName + ' did not reach "paused" state.' )
         }
 
-
         def resultMap = DockerUtils.waitForContainer( containerMap, SLEEP_TIME_SECONDS, NUM_RETRIES )
         boolean success = resultMap.success
         String reason = resultMap.reason
@@ -4391,6 +4306,7 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerRemoveCommandBad )
     }
 
+
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly given an error with target of 'healthy'"( ) {
         given:
         String containerGood1Name = 'waitforcontainer-map-int-error-healthy-good1' + UNIQUE_NAME_POSTFIX
@@ -4404,8 +4320,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( additionalCommand, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4431,8 +4345,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandGood1 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood1Name
         String dockerInspectHealthCommandGood2 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood2Name
 
@@ -4502,8 +4416,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood4Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4539,8 +4451,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectStateCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
         String dockerInspectStateCommandGood2 = 'docker inspect -f {{.State.Status}} ' + containerGood2Name
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -4602,8 +4514,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerGood4Name, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4639,8 +4549,8 @@ class DockerUtilsTest extends Specification {
         """.stripIndent( )
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectStateCommandGood1 = 'docker inspect -f {{.State.Status}} ' + containerGood1Name
         String dockerInspectStateCommandBad = 'docker inspect -f {{.State.Status}} ' + containerBadName
         String dockerInspectHealthCommandGood3 = 'docker inspect -f {{.State.Health.Status}} ' + containerGood3Name
@@ -4718,8 +4628,6 @@ class DockerUtilsTest extends Specification {
         containerMap.put( containerBadName, 'healthy' )
 
         composeFile << """
-            version: '${COMPOSE_VERSION}'
-
             services:
               ${containerGood1Name}:
                 container_name: ${containerGood1Name}
@@ -4756,8 +4664,8 @@ class DockerUtilsTest extends Specification {
 
 
         when:
-        String[] dockerComposeUpCommand = [ 'docker-compose', '-f', composeFile, 'up', '-d' ]
-        String[] dockerComposeDownCommand = [ 'docker-compose', '-f', composeFile, 'down' ]
+        String[] dockerComposeUpCommand = [ 'docker', 'compose', '-f', composeFile, 'up', '-d' ]
+        String[] dockerComposeDownCommand = [ 'docker', 'compose', '-f', composeFile, 'down' ]
         String dockerInspectHealthCommandBad = 'docker inspect -f {{.State.Health.Status}} ' + containerBadName
 
 
@@ -4847,19 +4755,10 @@ class DockerUtilsTest extends Specification {
     }
 
 
-
     //***********************************
     //***********************************
     //***********************************
     // docker compose
-
-
-    //todo testing here and below
-    comment */
-
-    //todo TESTED BELOW
-    /* comment
-
 
     def "getComposeUpCommand(java.lang.String... composeFilePaths) returns correctly given a single argument"( ) {
         given:
@@ -6342,6 +6241,7 @@ class DockerUtilsTest extends Specification {
         final ClassCastException exception = thrown()
     }
 
+    // todo failed
     def "dockerBuild(String buildDirectory,String tag) returns correctly"( ) {
         given:
 
@@ -6519,6 +6419,7 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'dockerfile parse error' )
     }
 
+    // todo failed
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with one tag"( ) {
         given:
 
@@ -6569,6 +6470,7 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( removeImage )
     }
 
+    // todo failed
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with two tags"( ) {
         given:
 
@@ -7821,7 +7723,5 @@ class DockerUtilsTest extends Specification {
         String rmTagCommandB2 = 'docker rmi ' + tagB2
         GradleExecUtils.exec( rmTagCommandB2 )
     }
-
-    comment */
 
 }

@@ -15,15 +15,20 @@
  */
 package com.kineticfire.gradle.docker
 
-import spock.lang.Specification
 
 import java.util.Map
+import static java.util.concurrent.TimeUnit.MINUTES
 import java.io.IOException
+
+import spock.lang.Specification
+import spock.lang.Timeout
 
 
 /**
  * Unit tests.
  */
+// Set timeout for all feature methods.  Probably longer than is needed for a test.
+@Timeout( value = 5, unit = MINUTES )
 class GradleExecUtilsTest extends Specification {
 
     def "execWithException(String task) for successful command returns output"( ) {
