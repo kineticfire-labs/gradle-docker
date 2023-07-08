@@ -31,15 +31,6 @@ import java.io.FileOutputStream
  */
 final class DockerUtils {
 
-   /* todo: change to Compose v2... here and tests:
-
-      - filename preferred is compose.yaml
-      - remove 'version'
-      - can use -p for project name
-      - use hyphen not underscore for word separator
-
-      */
-
 
    /**
     * Returns a Map indicating the state of the container 'container'.

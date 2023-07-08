@@ -54,9 +54,6 @@ class DockerUtilsTest extends Specification {
 
     private static final Properties properties = loadProperties( )
 
-    //todo don't need need this with compose v2, so remove when done testing
-    //static final String COMPOSE_VERSION = properties.get( 'testCompose.version' )
-
     static final String TEST_IMAGE_NAME = properties.get( 'testImage.name' )
     static final String TEST_IMAGE_VERSION = properties.get( 'testImage.version' )
     static final String TEST_IMAGE_REF = TEST_IMAGE_NAME + ':' + TEST_IMAGE_VERSION 
@@ -92,9 +89,6 @@ class DockerUtilsTest extends Specification {
 
     // create a postfix to append to container/service names to make them unique to this test run such that multiple concurrent tests can be run on the same system without name collisions.  lowercase so can use as Docker image tag.
     static final String UNIQUE_NAME_POSTFIX = '-dockerutilstest-' + System.currentTimeMillis( ) + '-' + new Random( ).nextInt( 999999 )
-
-
-    // Tests involving the pausing of Docker containers include commands to 'unpause', 'stop', and 'remove'.  Although these shouldn't be necessary, there were instances were paused containers wouldn't exit; then couldn't be exited and removed from the command line.  This could have been due to using ctrl-c when forcibly stopping tests in progress.
 
 
     @TempDir
@@ -2914,7 +2908,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerRemoveCommandBad )
     }
 
-
     def "waitForContainer(Map<String,String> containerMap) returns correctly given an error with target of 'healthy'"( ) {
         given:
         String containerGood1Name = 'waitforcontainer-map-error-healthy-good1' + UNIQUE_NAME_POSTFIX
@@ -4305,7 +4298,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( dockerStopCommandBad )
         GradleExecUtils.exec( dockerRemoveCommandBad )
     }
-
 
     def "waitForContainer(Map<String,String> containerMap, int retrySeconds, int retryNum) returns correctly given an error with target of 'healthy'"( ) {
         given:
@@ -6241,7 +6233,6 @@ class DockerUtilsTest extends Specification {
         final ClassCastException exception = thrown()
     }
 
-    // todo failed
     def "dockerBuild(String buildDirectory,String tag) returns correctly"( ) {
         given:
 
@@ -6419,7 +6410,6 @@ class DockerUtilsTest extends Specification {
         reason.contains( 'dockerfile parse error' )
     }
 
-    // todo failed
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with one tag"( ) {
         given:
 
@@ -6470,7 +6460,6 @@ class DockerUtilsTest extends Specification {
         GradleExecUtils.exec( removeImage )
     }
 
-    // todo failed
     def "dockerBuild(String buildDirectory,String[] tags) returns correctly with two tags"( ) {
         given:
 
