@@ -128,6 +128,7 @@ class DockerUtilsTest extends Specification {
     def setup( ) {
         composeFile = new File( tempDir.toString( ) + File.separatorChar + COMPOSE_FILE_NAME )
         composeFile2 = new File( tempDir.toString( ) + File.separatorChar + COMPOSE_FILE_NAME + '2' )
+        scriptFile = new File( tempDir.toString( ) + File.separatorChar + SCRIPT_FILE_NAME )
     }
 
 

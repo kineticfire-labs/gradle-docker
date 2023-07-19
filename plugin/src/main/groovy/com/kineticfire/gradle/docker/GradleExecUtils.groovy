@@ -69,8 +69,9 @@ final class GradleExecUtils {
     * <p>
     * Returns a result as a Map with key-value pairs:
     * <ul>
+    *    <ol>success - boolean true (exitValue is 0) if the exec process was successful and false otherwise (exitValue is non-zero)</ol>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String
+    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
     *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
@@ -96,7 +97,10 @@ final class GradleExecUtils {
 
       resultMap.put( 'out', sout.toString( ).trim( ) ) 
 
-      if ( exitValue != 0 ) { 
+      if ( exitValue == 0 ) { 
+         resultMap.success = true
+      } else {
+         resultMap.success = false
          resultMap.put( 'err', serr.toString( ).trim( ) ) 
       }   
 
@@ -149,8 +153,9 @@ final class GradleExecUtils {
     * <p>
     * Returns a result as a Map<String,String> with key-value pairs:
     * <ul>
+    *    <ol>success - boolean true (exitValue is 0) if the exec process was successful and false otherwise (exitValue is non-zero)</ol>
     *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String
+    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
     *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred, e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
@@ -175,7 +180,10 @@ final class GradleExecUtils {
 
       resultMap.put( 'out', sout.toString( ).trim( ) ) 
 
-      if ( exitValue != 0 ) { 
+      if ( exitValue == 0 ) { 
+         resultMap.success = true
+      } else {
+         resultMap.success = false
          resultMap.put( 'err', serr.toString( ).trim( ) ) 
       }   
 

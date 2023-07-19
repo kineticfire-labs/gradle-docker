@@ -64,6 +64,7 @@ class GradleExecUtilsTest extends Specification {
 
         then:
         resultMap instanceof Map
+        true == resultMap.success
         0 == resultMap.get( 'exitValue' )
         usernameExpected.equals( resultMap.get( 'out' ) )
         null == resultMap.get( 'err' )
@@ -79,6 +80,7 @@ class GradleExecUtilsTest extends Specification {
 
         then:
         resultMap instanceof Map
+        false == resultMap.success
         1 == resultMap.get( 'exitValue' )
         ''.equals( resultMap.get( 'out' ) )
         resultMap.get( 'err' ).contains( errResponseExpected )
@@ -117,6 +119,7 @@ class GradleExecUtilsTest extends Specification {
 
         then:
         resultMap instanceof Map
+        true == resultMap.success
         0 == resultMap.get( 'exitValue' )
         resultMap.get( 'out' ).contains( responseExpected )
         null == resultMap.get( 'err' )
@@ -132,6 +135,7 @@ class GradleExecUtilsTest extends Specification {
 
         then:
         resultMap instanceof Map
+        false == resultMap.success
         1 == resultMap.get( 'exitValue' )
         "".equals( resultMap.get( 'out' ) )
         resultMap.get( 'err' ).contains( errResponseExpected )

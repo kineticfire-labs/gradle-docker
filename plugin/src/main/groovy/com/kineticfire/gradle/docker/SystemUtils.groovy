@@ -75,5 +75,38 @@ final class SystemUtils {
    }
 
 
+   /**
+    * Validates the script at 'scriptPath' and returns a Map of the result.
+    * <p>
+    * Uses 'shellcheck' for static analysis and linting tool for sh/bash scripts.  The 'shellcheck' program must be installed ('apt install shellcheck' or 'yum install shellcheck').
+    * <p>
+    * Returns a result as a Map with key-value pairs:
+    * <ul>
+    *    <ol>ok - boolean true if the script passed validation (exitValue will be 0) and false otherwise (exitValue will be non-zero)</ol>
+    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for successful script validation and other value indicates error</ol>
+    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
+    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred e.g. 'ok' is false and 'exitValue' is non-zero</ol>
+    * </ul>
+    *
+    * @param script
+    *    the path as a String to the sh/bash script to validate
+    * @return a Map of the result of the script validation
+    */
+   static def validateScript( String scriptPath ) {
+
+      String command = 'shellcheck ' + scriptPath
+
+      def responseMap = GradleExecUtils.exec( command )
+
+      if ( responseMap.get( 'exitValue' ) == 0 ) {
+         responseMap.ok = true
+      } else {
+         responseMap.ok = false
+      }
+
+      return( responseMap )
+   }
+
+
    private SystemUtils( ) { }
 }
