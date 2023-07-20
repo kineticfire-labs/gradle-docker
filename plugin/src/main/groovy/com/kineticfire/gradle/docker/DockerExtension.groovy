@@ -23,7 +23,7 @@ package com.kineticfire.gradle.docker
 class DockerExtension {
 
     String saveImageName      // registry[:port]/repository[:tag]
-    String saveImageFilename  // filename.tar.gz
+    String saveImageFilename  // path/filename.tar.gz
 
 
     /*

@@ -25,7 +25,8 @@ import java.util.Map
 
 
 /**
- * 
+ * Saves the Docker image as a .tar.gz file.
+ *
  */
 abstract class DockerSaveTask extends DefaultTask {
 
@@ -35,6 +36,7 @@ abstract class DockerSaveTask extends DefaultTask {
         String saveImageName = project.docker.saveImageName
         String saveImageFilename = project.docker.saveImageFilename
 
+
         if ( project.docker.saveImageName == null || project.docker.saveImageName.equals( '' ) ) {
             throw new StopExecutionException( "No target image 'saveImageName' defined for 'dockerSave' task." )
         }
@@ -43,20 +45,13 @@ abstract class DockerSaveTask extends DefaultTask {
             throw new StopExecutionException( "No output filename 'saveImageFilename' defined for 'dockerSave' task." )
         }
 
-        /* todo
 
-        //todo needed?
-        // bash -c docker save ${registry.image.ref} | gzip > registry.gz
-        String task[] = [ 'docker', 'save', saveImageName, '|', 'gzip', '>', saveImageFilename ]
 
-        Map<String, String> result = GradleExecUtils.exec( task )
+        Map<String, String> resultMap = GradleExecUtils.exec( saveImageName, saveImageFilename )
 
-        if ( result.get( 'exitValue' ) != 0 ) {
+        if ( resultMap.success ) {
             throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
         }
-        */
-
-        println "Hi from DockerSaveTask"
 
     }
 
