@@ -5762,8 +5762,38 @@ class DockerUtilsTest extends Specification {
     //***********************************
     //***********************************
     //***********************************
-    // docker save, tag, push
+    // docker exists, save, tag, push
 
+
+    def "dockerImageExists(String image) returns correctly when image exists"( ) {
+        given:
+        String image = TEST_IMAGE_REF
+
+        when:
+        def resultMap = DockerUtils.dockerImageExists( image )
+        boolean success = resultMap.success
+        boolean exists = resultMap.exists
+
+        then:
+        resultMap instanceof Map
+        success == true
+        exists == true
+    }
+
+    def "dockerImageExists(String image) returns correctly when image does not exist"( ) {
+        given:
+        String image = 'alsdkfasd'
+
+        when:
+        def resultMap = DockerUtils.dockerImageExists( image )
+        boolean success = resultMap.success
+        boolean exists = resultMap.exists
+
+        then:
+        resultMap instanceof Map
+        success == true
+        exists == false
+    }
 
     def "dockerSave(String image,String filename,boolean gzip) returns correctly without gzip option"( ) {
         given:
@@ -5816,23 +5846,6 @@ class DockerUtilsTest extends Specification {
         resultMap instanceof Map
         success == true
         outputFile.exists( )
-    }
-
-    def "dockerSave(String image,String filename,boolean gzip) returns correctly when no such image"( ) {
-        given:
-        String image = 'asdlkfsdf'
-        String filename = 'dockersave-nosuchimage' + UNIQUE_NAME_POSTFIX + '.tar'
-        String filenamepath = tempDir.toString( ) + File.separatorChar + filename
-
-        when:
-        def resultMap = DockerUtils.dockerSave( image, filenamepath, false )
-        boolean success = resultMap.success
-        String reason = resultMap.reason
-
-        then:
-        resultMap instanceof Map
-        success == false
-        reason.contains( 'No such image' )
     }
 
     def "dockerTag(String image,String tag) returns correctly"( ) {

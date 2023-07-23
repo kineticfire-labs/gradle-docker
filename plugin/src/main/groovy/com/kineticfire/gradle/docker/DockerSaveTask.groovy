@@ -47,10 +47,10 @@ abstract class DockerSaveTask extends DefaultTask {
 
 
 
-        Map<String, String> resultMap = GradleExecUtils.exec( saveImageName, saveImageFilename )
+        Map<String, String> resultMap = DockerUtils.dockerSave( saveImageName, saveImageFilename )
 
         if ( resultMap.success ) {
-            throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + result.get( 'err' ) )
+            throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + resultMap.get( 'err' ) )
         }
 
     }

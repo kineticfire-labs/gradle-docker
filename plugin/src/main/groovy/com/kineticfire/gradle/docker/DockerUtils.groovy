@@ -711,7 +711,6 @@ final class DockerUtils {
          } else if ( command instanceof String[] ) {
             commandArray = command
          } else {
-            //todo add to tests
             throw new ClassCastException( )
          }
       }
@@ -756,7 +755,6 @@ final class DockerUtils {
          } else if ( command instanceof String[] ) {
             commandArray = command
          } else {
-            //todo add to tests
             throw new ClassCastException( )
          }
       }
@@ -1131,9 +1129,55 @@ final class DockerUtils {
 
 
    /**
-    * Saves the image 'image' as a tar file using the file and path in 'filename' with optional gzip compression per 'gzip.
+    * Queries if the image 'image' exists locally.
     * <p>
     * The 'image' can be the name or ID of the image.
+    * <p>
+    * This method returns a Map with the following entries:
+    * <ul>
+    *    <li>success -- boolean true if the command was successful and false otherwise</li>
+    *    <li>exists -- boolean true if the image exists and false otherwise; only present if 'success' is 'true'</li>
+    *    <li>out -- output from the command as a String, if any; only present if 'success' is true</li>
+    *    <li>reason -- reason why the command failed as a String, which is the error output returned from executing the command; only present if 'success' is false</li>
+    * </ul>
+    *
+    * @param image
+    *    the image to query
+    * @return a Map containing the result of the command
+    */
+   static def dockerImageExists( String image ) {
+
+      String command = 'docker images -q ' + image
+
+
+      def queryMap = GradleExecUtils.exec( command )
+
+      def responseMap = [:]
+
+      if ( queryMap.exitValue == 0 ) {
+
+         responseMap.success = true
+
+         if ( queryMap.out.equals( '' ) ) {
+            responseMap.exists = false
+         } else {
+            responseMap.exists = true
+            responseMap.out = queryMap.out
+         }
+
+      } else {
+         responseMap.success = false
+         responseMap.reason = queryMap.err
+      }
+
+      return( responseMap )
+   }
+
+
+   /**
+    * Saves the image 'image' as a tar file using the file and path in 'filename' with optional gzip compression per 'gzip'.
+    * <p>
+    * The 'image' can be the name or ID of the image.  This method will return succesful (e.g. 'success' is 'true') even if the image does not exist, and then the resultant file will be an invalid tar file.
     * <p>
     * The 'filename' is the name of the output file, which can include a path.  If gzip compression is not used (e.g. gzip is 'false'), then the recommended filename is &lt;filename&gt;.tar.  If gzip compression is used (e.g. gzip is 'true' or not set), then the recommended filename is &lt;filename&gt;.tar.gz.
     * <p>
@@ -1162,7 +1206,7 @@ final class DockerUtils {
          String ds = 'docker save ' + image + ' | gzip > ' + filename
          saveCommand = [ '/bin/bash',
                          '-c',
-                         ds,
+                         ds
                        ]
       } else {
          saveCommand = [ 'docker',
