@@ -36,6 +36,7 @@ abstract class DockerSaveTask extends DefaultTask {
         String saveImageName = project.docker.saveImageName
         String saveImageFilename = project.docker.saveImageFilename
 
+        /* todo: commented out to check functional test
 
         if ( project.docker.saveImageName == null || project.docker.saveImageName.equals( '' ) ) {
             throw new StopExecutionException( "No target image 'saveImageName' defined for 'dockerSave' task." )
@@ -46,12 +47,20 @@ abstract class DockerSaveTask extends DefaultTask {
         }
 
 
+        //todo query if image exists first?
+
 
         Map<String, String> resultMap = DockerUtils.dockerSave( saveImageName, saveImageFilename )
 
         if ( resultMap.success ) {
             throw new StopExecutionException( "Failed to save image '" + saveImageName + "' to file '" + saveImageFilename + "' for 'dockerSave' task.  " + resultMap.get( 'err' ) )
         }
+
+        */
+
+
+        //todo
+        println "Hi from DockerSaveTask"
 
     }
 

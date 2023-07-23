@@ -51,17 +51,11 @@ gradlePlugin {
             description = 'Docker interaction'
             implementationClass = 'com.kineticfire.gradle.docker.DockerPlugin'
         }
-        dockerRunPlugin {
-            id = 'com.kineticfire.docker-run'
-            displayName = 'KineticFire Labs Gradle Docker-Run'
-            description = 'Docker run interaction'
-            implementationClass = 'com.kineticfire.gradle.docker.DockerRunPlugin'
-        }
-        dockerComposePlugin {
-            id = 'com.kineticfire.docker-compose'
-            displayName = 'KineticFire Labs Gradle Docker-Compose'
-            description = 'Docker Compose interaction'
-            implementationClass = 'com.kineticfire.gradle.docker.DockerComposePlugin'
+        dockerSystemPlugin {
+            id = 'com.kineticfire.docker-system'
+            displayName = 'KineticFire Labs Gradle Docker-System'
+            description = 'Docker compose, swarm, and script support'
+            implementationClass = 'com.kineticfire.gradle.docker.DockerSystemPlugin'
         }
     }
 }

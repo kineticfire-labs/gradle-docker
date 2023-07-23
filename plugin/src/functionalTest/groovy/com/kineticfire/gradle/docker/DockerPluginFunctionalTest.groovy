@@ -37,8 +37,8 @@ class DockerPluginFunctionalTest extends Specification {
 
     def "can run task"( ) {
         given:
-        String imageName = 'test:1.0'
-        String imageFileName = '/home/user/test-1.0.tar.gz'
+        String imageName = 'alpine:3.17.2' //todo
+        String imageFileName = '/home/user/test-1.0.tar.gz' //todo
 
         settingsFile << ""
 
@@ -49,7 +49,7 @@ plugins {
 }
 
 docker {
-    saveImageName 'test:1.0'
+    saveImageName 'alpine:3.17.2'
     saveImageFilename '/home/user/test-1.0.tar.gz'
 }
 

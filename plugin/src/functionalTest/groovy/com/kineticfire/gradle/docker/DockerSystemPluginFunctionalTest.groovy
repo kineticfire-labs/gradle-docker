@@ -22,7 +22,7 @@ import org.gradle.testkit.runner.GradleRunner
 /**
  * functional test
  */
-class DockerRunPluginFunctionalTest extends Specification {
+class DockerSystemPluginFunctionalTest extends Specification {
 
     @TempDir
     private File projectDir
@@ -36,12 +36,12 @@ class DockerRunPluginFunctionalTest extends Specification {
     }
 
 
-    def "can run runTask"( ) {
+    def "can run validateScriptTask"( ) {
         given:
         settingsFile << ""
         buildFile << """
 plugins {
-    id( 'com.kineticfire.docker-run' )
+    id( 'com.kineticfire.docker-system' )
 }
 """
 
@@ -49,12 +49,12 @@ plugins {
         def runner = GradleRunner.create( )
         runner.forwardOutput( )
         runner.withPluginClasspath( )
-        runner.withArguments( 'dockerRun' )
+        runner.withArguments( 'dockerValidateScript' )
         runner.withProjectDir( projectDir )
         def result = runner.build( )
 
         then:
-        result.output.contains( 'Hi from DockerRunTask' )
+        result.output.contains( 'Hi from DockerValidateScriptTask' )
     }
 
 }

@@ -28,17 +28,17 @@ import spock.lang.Timeout
 /**
  * unit test
  */
-class DockerRunPluginTest extends Specification {
+class DockerSystemPluginTest extends Specification {
 
     def "plugin registers task"( ) {
         given:
         def project = ProjectBuilder.builder( ).build( )
 
         when:
-        project.plugins.apply( "com.kineticfire.docker-run" )
+        project.plugins.apply( "com.kineticfire.docker-system" )
 
         then:
-        project.tasks.findByName( "docker-run-task" ) != null
+        project.tasks.findByName( "docker-validate-script-task" ) != null
     }
 
 }
