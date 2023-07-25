@@ -16,31 +16,23 @@
 package com.kineticfire.gradle.docker
 
 
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.StopExecutionException
+
+
 
 /**
  *
  */
-class DockerExtension {
+abstract class DockerCleanTask extends Delete {
 
-    String buildDir
-    String dockerfile
+    @TaskAction
+    def dockerClean( ) {
 
-    String saveImageName      // registry[:port]/repository[:tag]
-    String saveImageFilename  // path/filename.tar.gz
+        //todo
+        println "Hi from DockerCleanTask"
 
-
-    /*
-    // image format is:  registry[:port]/repository[:tag]
-
-    String buildImage = null
-
-    String tagSourceImage = null
-    String tagTargetImage = null
-
-    String pushImage = null
-
-    String saveImage = null
-    */
-
+    }
 
 }

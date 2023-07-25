@@ -16,31 +16,39 @@
 package com.kineticfire.gradle.docker
 
 
+import org.gradle.api.tasks.Copy
+import org.gradle.api.DefaultTask
+import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.InputDirectory
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.StopExecutionException
+
+
 
 /**
  *
+ *
  */
-class DockerExtension {
+abstract class DockerPrepareBuildTask extends Copy {
 
-    String buildDir
-    String dockerfile
-
-    String saveImageName      // registry[:port]/repository[:tag]
-    String saveImageFilename  // path/filename.tar.gz
+    //@InputDirectory
+    //File buildDir
 
 
-    /*
-    // image format is:  registry[:port]/repository[:tag]
+    @TaskAction
+    def dockerPrepareBuild( ) {
 
-    String buildImage = null
 
-    String tagSourceImage = null
-    String tagTargetImage = null
+        /*
+        if ( project.docker.buildDir == null ) {
+            buildDir = new File( "dockerfile" ) 
+        } else {
+            buildDir = new File( project.docker.buildDir ) 
+        }
+        */
 
-    String pushImage = null
+        println "Hi from DockerPrepareBuildTask"
 
-    String saveImage = null
-    */
-
+    }
 
 }

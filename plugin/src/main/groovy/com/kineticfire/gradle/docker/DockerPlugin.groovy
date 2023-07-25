@@ -22,6 +22,8 @@ package com.kineticfire.gradle.docker
 import org.gradle.api.Project
 import org.gradle.api.Plugin
 import org.gradle.api.Task
+import org.gradle.api.tasks.Delete
+import org.gradle.api.tasks.Copy
 
 
 // todo notes
@@ -37,7 +39,23 @@ class DockerPlugin implements Plugin<Project> {
 
         project.extensions.create( 'docker', DockerExtension )
 
-        project.tasks.register( 'docker-save-task', DockerSaveTask )
+        Delete dockerClean = project.tasks.create( 'dockerClean', Delete, {
+            group = 'Docker'
+            description = 'Cleans the Docker build directory.'
+        })
+
+        // todo for reference: project.tasks.register( 'docker-prepare-build-task', DockerPrepareBuildTask )
+        Copy dockerPrepareBuild = project.tasks.create( 'dockerPrepareBuild', Copy, {
+            group = 'Docker'
+            description = 'Prepares the source and build directory for building a Docker image.'
+            dependsOn dockerClean
+        })
+
+
+        project.task( 'docker-save-task', type: DockerSaveTask ) {
+            group = 'Docker'
+            description = 'Saves local Docker image to tar.gz file.'
+        }
 
 
     }

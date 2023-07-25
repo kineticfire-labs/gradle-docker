@@ -35,7 +35,64 @@ class DockerPluginFunctionalTest extends Specification {
         new File( projectDir, 'settings.gradle' )
     }
 
-    def "can run task"( ) {
+    def "can run dockerClean task"( ) {
+        given:
+
+        settingsFile << ""
+
+        buildFile << """
+
+plugins {
+    id( 'com.kineticfire.docker' )
+}
+
+docker {
+}
+
+"""
+
+        when:
+        def runner = GradleRunner.create( )
+        runner.forwardOutput( )
+        runner.withPluginClasspath( )
+        runner.withArguments( 'dockerClean' )
+        runner.withProjectDir( projectDir )
+        def result = runner.build( )
+
+        then:
+        result.output.contains( 'Hi from DockerCleanTask' )
+    }
+
+    def "can run dockerPrepareBuild task"( ) {
+        given:
+
+        settingsFile << ""
+
+        buildFile << """
+
+plugins {
+    id( 'com.kineticfire.docker' )
+}
+
+docker {
+}
+
+"""
+
+        when:
+        def runner = GradleRunner.create( )
+        runner.forwardOutput( )
+        runner.withPluginClasspath( )
+        runner.withArguments( 'dockerPrepareBuild' )
+        runner.withProjectDir( projectDir )
+        def result = runner.build( )
+
+        then:
+        result.output.contains( 'Hi from DockerPrepareBuildTask' )
+    }
+
+
+    def "can run dockerSave task"( ) {
         given:
         String imageName = 'alpine:3.17.2' //todo
         String imageFileName = '/home/user/test-1.0.tar.gz' //todo
