@@ -29,7 +29,7 @@ import spock.lang.Timeout
  */
 // Set timeout for all feature methods.  Probably longer than is needed for a test.
 @Timeout( value = 5, unit = MINUTES )
-class GradleExecUtilsTest extends Specification {
+class ExecUtilsTest extends Specification {
 
     def "execWithException(String task) for successful command returns output"( ) {
         given:
@@ -37,7 +37,7 @@ class GradleExecUtilsTest extends Specification {
         String usernameExpected = System.properties[ 'user.name' ]
 
         when:
-        String result = GradleExecUtils.execWithException( task )
+        String result = ExecUtils.execWithException( task )
 
         then:
         usernameExpected.equals( result )
@@ -48,7 +48,7 @@ class GradleExecUtilsTest extends Specification {
         String task = 'whoami x'
 
         when:
-        String result = GradleExecUtils.execWithException( task )
+        String result = ExecUtils.execWithException( task )
 
         then:
         thrown( IOException )
@@ -60,7 +60,7 @@ class GradleExecUtilsTest extends Specification {
         String usernameExpected = System.properties[ 'user.name' ]
 
         when:
-        def resultMap = GradleExecUtils.exec( task )
+        def resultMap = ExecUtils.exec( task )
 
         then:
         resultMap instanceof Map
@@ -76,7 +76,7 @@ class GradleExecUtilsTest extends Specification {
         String errResponseExpected = 'extra operand'
 
         when:
-        def resultMap = GradleExecUtils.exec( task )
+        def resultMap = ExecUtils.exec( task )
 
         then:
         resultMap instanceof Map
@@ -92,7 +92,7 @@ class GradleExecUtilsTest extends Specification {
         String responseExpected = 'Usage: whoami'
 
         when:
-        String result = GradleExecUtils.execWithException( task )
+        String result = ExecUtils.execWithException( task )
 
         then:
         result.contains( responseExpected )
@@ -103,7 +103,7 @@ class GradleExecUtilsTest extends Specification {
         String[] task = [ 'whoami', '--help', 'x' ]
 
         when:
-        String result = GradleExecUtils.execWithException( task )
+        String result = ExecUtils.execWithException( task )
 
         then:
         thrown( IOException )
@@ -115,7 +115,7 @@ class GradleExecUtilsTest extends Specification {
         String responseExpected = 'Usage: whoami'
 
         when:
-        def resultMap = GradleExecUtils.exec( task )
+        def resultMap = ExecUtils.exec( task )
 
         then:
         resultMap instanceof Map
@@ -131,7 +131,7 @@ class GradleExecUtilsTest extends Specification {
         String errResponseExpected = 'whoami: unrecognized option'
 
         when:
-        def resultMap = GradleExecUtils.exec( task )
+        def resultMap = ExecUtils.exec( task )
 
         then:
         resultMap instanceof Map

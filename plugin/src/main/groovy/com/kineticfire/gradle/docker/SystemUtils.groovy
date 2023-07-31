@@ -59,7 +59,7 @@ final class SystemUtils {
 
       String[] commandArray = [ 'id', '-u', username ]
 
-      def responseMap = GradleExecUtils.exec( commandArray )
+      def responseMap = ExecUtils.exec( commandArray )
 
       if ( responseMap.get( 'exitValue' ) == 0 ) {
 
@@ -96,7 +96,7 @@ final class SystemUtils {
 
       String command = 'shellcheck ' + scriptPath
 
-      def responseMap = GradleExecUtils.exec( command )
+      def responseMap = ExecUtils.exec( command )
 
       if ( responseMap.get( 'exitValue' ) == 0 ) {
          responseMap.ok = true

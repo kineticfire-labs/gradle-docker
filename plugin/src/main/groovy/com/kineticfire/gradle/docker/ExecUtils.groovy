@@ -27,7 +27,7 @@ import java.util.HashMap
  * Provides command line execution utilities.
  *
  */
-final class GradleExecUtils {
+final class ExecUtils {
 
 
    /**
@@ -193,5 +193,5 @@ final class GradleExecUtils {
    }
 
 
-   private GradleExecUtils( ) { }
+   private ExecUtils( ) { }
 }

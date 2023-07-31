@@ -66,7 +66,7 @@ final class DockerUtils {
 
       String command = 'docker inspect --format {{.State.Status}} ' + container
 
-      def queryMap = GradleExecUtils.exec( command )
+      def queryMap = ExecUtils.exec( command )
 
 
       if ( queryMap.exitValue == 0 ) {
@@ -122,7 +122,7 @@ final class DockerUtils {
 
       String command = 'docker inspect --format {{.State.Health.Status}} ' + container
 
-      def queryMap = GradleExecUtils.exec( command )
+      def queryMap = ExecUtils.exec( command )
 
 
       if ( queryMap.get( 'exitValue' ) == 0 ) {
@@ -587,7 +587,7 @@ final class DockerUtils {
       configCommand[index+2] = '-q'
 
 
-      def queryMap = GradleExecUtils.exec( configCommand )
+      def queryMap = ExecUtils.exec( configCommand )
 
 
       if ( queryMap.get( 'exitValue' ) == 0 ) {
@@ -631,7 +631,7 @@ final class DockerUtils {
 
       String[] composeUpCommand = getComposeUpCommand( composeFilePaths as String[] )
 
-      def queryMap = GradleExecUtils.exec( composeUpCommand )
+      def queryMap = ExecUtils.exec( composeUpCommand )
 
 
       def responseMap = [:]
@@ -665,7 +665,7 @@ final class DockerUtils {
 
       String[] composeDownCommand = getComposeDownCommand( composeFilePath )
 
-      def queryMap = GradleExecUtils.exec( composeDownCommand )
+      def queryMap = ExecUtils.exec( composeDownCommand )
 
 
       def responseMap = [:]
@@ -882,7 +882,7 @@ final class DockerUtils {
 
       String[] runCommand = getDockerRunCommand( image, options, command )
 
-      def queryMap = GradleExecUtils.exec( runCommand )
+      def queryMap = ExecUtils.exec( runCommand )
 
       def responseMap = [:]
 
@@ -930,7 +930,7 @@ final class DockerUtils {
 
       String[] dockerStopCommand = getDockerStopCommand( container )
 
-      def queryMap = GradleExecUtils.exec( dockerStopCommand )
+      def queryMap = ExecUtils.exec( dockerStopCommand )
 
 
       def responseMap = [:]
@@ -1112,7 +1112,7 @@ final class DockerUtils {
       String[] execCommand = getDockerExecCommand( container, command, options )
 
 
-      def queryMap = GradleExecUtils.exec( execCommand )
+      def queryMap = ExecUtils.exec( execCommand )
 
       def responseMap = [:]
 
@@ -1150,7 +1150,7 @@ final class DockerUtils {
       String command = 'docker images -q ' + image
 
 
-      def queryMap = GradleExecUtils.exec( command )
+      def queryMap = ExecUtils.exec( command )
 
       def responseMap = [:]
 
@@ -1217,7 +1217,7 @@ final class DockerUtils {
                        ]
       }
 
-      def queryMap = GradleExecUtils.exec( saveCommand )
+      def queryMap = ExecUtils.exec( saveCommand )
 
       def responseMap = [:]
 
@@ -1388,7 +1388,7 @@ final class DockerUtils {
 
             tagCommand[3] = currentTag
 
-            queryMap = GradleExecUtils.exec( tagCommand )
+            queryMap = ExecUtils.exec( tagCommand )
 
             if ( queryMap.exitValue != 0 ) {
 
@@ -1478,7 +1478,7 @@ final class DockerUtils {
 
       String[] buildCommand = [ 'docker', 'build', '-t', tags[0], buildDirectory ]
 
-      def queryMap = GradleExecUtils.exec( buildCommand )
+      def queryMap = ExecUtils.exec( buildCommand )
 
       if ( queryMap.exitValue == 0 && tags.length > 1 ) {
 
@@ -1548,7 +1548,7 @@ final class DockerUtils {
       pushCommand[index] = tag
 
 
-      def queryMap = GradleExecUtils.exec( pushCommand )
+      def queryMap = ExecUtils.exec( pushCommand )
 
       def responseMap = [:]
 
