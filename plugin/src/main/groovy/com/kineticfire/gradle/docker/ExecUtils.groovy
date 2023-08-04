@@ -25,6 +25,20 @@ import java.util.HashMap
 
 /**
  * Provides command line execution utilities.
+ * <p>
+ * The methods execute a given command, passed as an argument to the method, and then return the String output of that command.  The methods differ in return types, error handling, and the type of argument for the command.
+ * <p>
+ * Two types of methods, differing in error handling and return values, are available to execute commands:
+ * <ol>
+ *   <li>exec(...) returns a Map of the result of the command that includes a boolean value if the command was successful or not based on the exit value, the integer exit value, the output as a String, and (if an error did occur) the error output as a String.</li>
+ *   <li>execWithException(...) returns the output of the command as a String or, if an error occurred, throws an exception.  The exit value and error output are captured in the exception's message.</li>
+ * </ol>
+ * <p>
+ * Methods accepting two types of arguments for the command to execute are available:
+ * <ol>
+ *   <li>argument 'String' is generally simpler of the two methods to use, however complex commands/arguments may not work as expected</li>
+ *   <li>argument 'String[]' will work as expected for more complex commands/arguments</li>
+ * </ol>
  *
  */
 final class ExecUtils {
@@ -33,9 +47,9 @@ final class ExecUtils {
    /**
     * Executes the command as a command line process under the current working directory using Groovy's String.execute() method, and returns a String result on success or throws an exception on failure.
     * <p>
-    * Returns the trimmed output returned by the process as a String, which could be an empty String.
+    * Returns the output returned by the process as a trimmed String, which could be an empty String if the command didn't generate output.
     * <p>
-    * This method is generally simpler to use than than the 'execWithException( String[] task )', however that method may be required over this one when using arguments that have spaces or wildcards; and also similar to 'exec( String task ), except that method will return a Map with results while this method returns a String on success and throws an exception on failure.
+    * This method is generally simpler to use than than the 'execWithException( String[] task )', however that method may be required over this one for complex commands/arguments.  This method is similar to 'exec( String task ), except that method will return a Map with results (success or failure) while this method returns a String on success and throws an exception on failure.
     *
     * @param task
     *    the task (or command) to execute as a String
@@ -69,13 +83,13 @@ final class ExecUtils {
     * <p>
     * Returns a result as a Map with key-value pairs:
     * <ul>
-    *    <ol>success - boolean true (exitValue is 0) if the exec process was successful and false otherwise (exitValue is non-zero)</ol>
-    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
-    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred e.g. exitValue is non-zero</ol>
+    *    <ol>success - boolean true if the exec process was successful (exitValue is 0) and false otherwise (exitValue is non-zero)</ol>
+    *    <ol>exitValue - the integer exit value returned by the process on the range of [0,255]; 0 for success and other values indicate an error</ol>
+    *    <ol>out - the output returned by the process as a trimmed String, which could be an empty String</ol>
+    *    <ol>err - contains the error output returned by the process as a trimmed String; only present if an an error occurred e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
-    * This method is generally simpler to use than than the 'exec( String[] task )', however that method may be required over this one when using arguments that have spaces or wildcards; and also similar to 'execWithException( String task )', except that method returns a String result on success and throws an exception on failure while this method returns a Map with results.
+    * This method is generally simpler to use than than the 'exec( String[] task )', however that method may be required over this one for complex commands/arguments.  This method is similar to 'execWithException( String task )', except that method returns a String result on success and throws an exception on failure while this method returns a Map with results (success or failure).
     *
     * @param task
     *    the task (or command) to execute as a String
@@ -115,9 +129,9 @@ final class ExecUtils {
     * <p>
     * Calls Groovy's toString() method on each item in the array.  The first item in the array is treated as the command and executed with Groovy's String.execute() method and any additional array items are treated as parameters.
     * <p>
-    * Returns the trimmed output returned by the process as a String, which could be an empty String.
+    * Returns the output returned by the process as a trimmed String, which could be an empty String if the command didn't generate output.
     * <p>
-    * This method is needed to use over the simpler 'exec( String task )' when using arguments that have spaces or wildcards; and is similar to 'exec( String[] task )', except that method returns a Map with results while this method returns a String result on succcess and throws an exception on failure.
+    * This method is needed to use over the simpler 'exec( String task )' when using complex commands/arguments.  This method is similar to 'exec( String[] task )', except that method returns a Map with results (success or failure) while this method returns a String result on succcess and throws an exception on failure.
     *
     * @param task
     *    the task (or command) to execute as a String array, where the first item is the command and any subsequent items are arguments
@@ -151,15 +165,15 @@ final class ExecUtils {
     * <p>
     * Calls Groovy's toString() method on each item in the array.  The first item in the array is treated as the command and executed with Groovy's String.execute() method and any additional array items are treated as parameters.
     * <p>
-    * Returns a result as a Map<String,String> with key-value pairs:
+    * Returns a result as a Map with key-value pairs:
     * <ul>
-    *    <ol>success - boolean true (exitValue is 0) if the exec process was successful and false otherwise (exitValue is non-zero)</ol>
-    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for success and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
-    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred, e.g. exitValue is non-zero</ol>
+    *    <ol>success - boolean true if the exec process was successful (exitValue is 0) and false otherwise (exitValue is non-zero)</ol>
+    *    <ol>exitValue - the integer exit value returned by the process on the range of [0,255]; 0 for success and other values indicate an error</ol>
+    *    <ol>out - the output returned by the process as a trimmed String, which could be an empty String</ol>
+    *    <ol>err - contains the error output returned by the process as a trimmed String; only present if an an error occurred e.g. exitValue is non-zero</ol>
     * </ul>
     * <p>
-    * This method is needed to use over the simpler 'exec( String task )' when using arguments that have spaces or wildcards; and is similar to 'execWithException( String[] task )', except that method returns a String result on success and a Map on failure while this method returns a Map with results.
+    * This method is needed to use over the simpler 'exec( String task )' when using complex commands/arguments. This method is similar to 'execWithException( String[] task )', except that method returns a String result on success and an exception on failure while this method returns a Map with results (success or failure).
     *
     * @param task
     *    the task (or command) to execute as a String array, where the first item is the command and any subsequent items are arguments

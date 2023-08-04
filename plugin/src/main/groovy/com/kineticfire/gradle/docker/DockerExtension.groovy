@@ -22,7 +22,9 @@ package com.kineticfire.gradle.docker
  */
 class DockerExtension {
 
-    String buildDir
+    //todo can't get project
+    //String dockerBuildDir = "${project.buildDir}/docker"
+    String dockerBuildDir = 'mytestbuildir'
     String dockerfile
 
     String saveImageName      // registry[:port]/repository[:tag]

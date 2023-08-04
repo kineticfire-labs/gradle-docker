@@ -83,9 +83,9 @@ final class SystemUtils {
     * Returns a result as a Map with key-value pairs:
     * <ul>
     *    <ol>ok - boolean true if the script passed validation (exitValue will be 0) and false otherwise (exitValue will be non-zero)</ol>
-    *    <ol>exitValue - the integer exit value returned by the process in range of [0,255]; 0 for successful script validation and other value indicates error</ol>
-    *    <ol>out - the trimmed output returned by the process as a String, which could be an empty String</ol>
-    *    <ol>err - contains the error output returned by the process as a String; only present if an an error occurred e.g. 'ok' is false and 'exitValue' is non-zero</ol>
+    *    <ol>exitValue - the integer exit value returned by the process on range of [0,255]; 0 for successful script validation and other values indicate an error</ol>
+    *    <ol>out - the output returned by the process as a trimmed String, which could be an empty String</ol>
+    *    <ol>err - contains the error output returned by the process as a trimmed String; only present if an an error occurred e.g. 'ok' is false and 'exitValue' is non-zero</ol>
     * </ul>
     *
     * @param script
@@ -103,6 +103,8 @@ final class SystemUtils {
       } else {
          responseMap.ok = false
       }
+
+      responseMap.remove( 'success' )
 
       return( responseMap )
    }

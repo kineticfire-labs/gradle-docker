@@ -60,6 +60,8 @@ abstract class DockerSaveTask extends DefaultTask {
 
 
         //todo
+        println "DockerSaveTask dockerBuildDir: " + project.docker.dockerBuildDir
+        println "DockerSaveTask dockerfile: " + project.docker.dockerfile
         println "Hi from DockerSaveTask"
 
     }

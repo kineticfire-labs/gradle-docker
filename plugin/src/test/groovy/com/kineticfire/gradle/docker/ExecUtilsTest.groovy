@@ -32,112 +32,144 @@ import spock.lang.Timeout
 class ExecUtilsTest extends Specification {
 
     def "execWithException(String task) for successful command returns output"( ) {
-        given:
+        given: "command to execute to get the current username"
         String task = 'whoami'
-        String usernameExpected = System.properties[ 'user.name' ]
 
-        when:
+        when: "execute the command"
         String result = ExecUtils.execWithException( task )
 
-        then:
+        then: "return the current username"
+        String usernameExpected = System.properties[ 'user.name' ]
         usernameExpected.equals( result )
     }
 
     def "execWithException(String task) for failed command throws correct exception"( ) {
-        given:
+        given: "an invalid command to execute"
         String task = 'whoami x'
 
-        when:
+        when: "execute the command"
         String result = ExecUtils.execWithException( task )
 
-        then:
+        then: "throw an exception"
         thrown( IOException )
     }
 
     def "exec(String task) for successful command returns correct exit value and output"( ) {
-        given:
+        given: "command to execute to get the current username"
         String task = 'whoami'
-        String usernameExpected = System.properties[ 'user.name' ]
 
-        when:
+        when: "execute the command"
         def resultMap = ExecUtils.exec( task )
 
-        then:
+        then: "return a Map"
         resultMap instanceof Map
+
+        and: "map key 'success' is true"
         true == resultMap.success
+
+        and: "map key 'exitValue' is 0"
         0 == resultMap.get( 'exitValue' )
+
+        and: "returns the correct username from executing the command in map key 'out'"
+        String usernameExpected = System.properties[ 'user.name' ]
         usernameExpected.equals( resultMap.get( 'out' ) )
+
+        and: "map key 'err' is not present e.g null"
         null == resultMap.get( 'err' )
     }
 
     def "exec(String task) for failed command returns correct exit value and error output"( ) {
-        given:
+        given: "an invalid command to execute"
         String task = 'whoami x'
-        String errResponseExpected = 'extra operand'
 
-        when:
+        when: "execute the command"
         def resultMap = ExecUtils.exec( task )
 
-        then:
+        then: "return a map"
         resultMap instanceof Map
+
+        and: "map key 'success' is false"
         false == resultMap.success
+
+        and: "map key 'exitValue' is 1"
         1 == resultMap.get( 'exitValue' )
+
+        and: "map key 'out' is an empty String"
         ''.equals( resultMap.get( 'out' ) )
+
+        and: "map key 'err' contains an explanation of the failure"
+        String errResponseExpected = 'extra operand'
         resultMap.get( 'err' ).contains( errResponseExpected )
     }
 
     def "execWithException(String[] task) for successful command returns correct output"( ) {
-        given:
+        given: "command to execute"
         String[] task = [ 'whoami', '--help' ]
-        String responseExpected = 'Usage: whoami'
 
-        when:
+        when: "execute the command"
         String result = ExecUtils.execWithException( task )
 
-        then:
+        then: "return the result of the command"
+        String responseExpected = 'Usage: whoami'
         result.contains( responseExpected )
     }
 
     def "execWithException(String[] task) for failed command throws correct exception"( ) {
-        given:
+        given: "invalid command to execute"
         String[] task = [ 'whoami', '--help', 'x' ]
 
-        when:
+        when: "execute the command"
         String result = ExecUtils.execWithException( task )
 
-        then:
+        then: "throw an exception"
         thrown( IOException )
     }
 
     def "exec(String[] task) for successful command returns correct exit value and output"( ) {
-        given:
+        given: "command to execute"
         String[] task = [ 'whoami', '--help' ]
-        String responseExpected = 'Usage: whoami'
 
-        when:
+        when: "execute the command"
         def resultMap = ExecUtils.exec( task )
 
-        then:
+        then: "return a map"
         resultMap instanceof Map
+
+        and: "map key 'success' is true"
         true == resultMap.success
+
+        and: "map key 'exiteValue' is 0"
         0 == resultMap.get( 'exitValue' )
+
+        and: "map key 'out' contains the result of the executed command"
+        String responseExpected = 'Usage: whoami'
         resultMap.get( 'out' ).contains( responseExpected )
+
+        and: "map key 'err' is not set e.g. null"
         null == resultMap.get( 'err' )
     }
 
     def "exec(String[] task) for failed command returns correct exit value and error output"( ) {
-        given:
+        given: "an invalid command to execute"
         String[] task = [ 'whoami', '--help', 'x' ]
-        String errResponseExpected = 'whoami: unrecognized option'
 
-        when:
+        when: "execute the command"
         def resultMap = ExecUtils.exec( task )
 
-        then:
+        then: "return a map"
         resultMap instanceof Map
+
+        and: "map key 'success' is false"
         false == resultMap.success
+
+        and: "map key 'exiteValue' is 1"
         1 == resultMap.get( 'exitValue' )
+
+        and: "map key 'out' is an empty String"
         "".equals( resultMap.get( 'out' ) )
+
+        and: "map key 'err' contains an explanation of the error"
+        String errResponseExpected = 'whoami: unrecognized option'
         resultMap.get( 'err' ).contains( errResponseExpected )
     }
 

@@ -49,55 +49,51 @@ class SystemExecUtilsTest extends Specification {
 
 
     def "getUserName() returns correct user"( ) {
-        given:
-        String usernameExpected = System.properties[ 'user.name' ]
-
-        when:
+        when: "get username"
         String usernameResult = SystemUtils.getUserName( )
 
-        then:
+        then: "return the correct username"
+        String usernameExpected = System.properties[ 'user.name' ]
         usernameExpected.equals( usernameResult )
     }
 
-    def "getUid() returns correct UID"( ) {
-        given:
+    def "getUid() returns correct UID for current user"( ) {
+        when: "get UID for current user"
+        int uidResult = SystemUtils.getUid( )
+
+        then: "return the correct UID"
         String username = System.properties[ 'user.name' ]
         String uidString = [ 'id', '-u', username ].execute( ).text.trim( )
         int uidExpected = Integer.parseInt( uidString )
-
-        when:
-        int uidResult = SystemUtils.getUid( )
-
-        then:
         uidExpected == uidResult
     }
 
-    def "getUid(String username) returns correct UID for valid user"( ) {
-        given:
+    def "getUid(String username) returns correct UID for specified user"( ) {
+        given: "username"
         String username = System.properties[ 'user.name' ]
-        String uidString = [ 'id', '-u', username ].execute( ).text.trim( )
-        int uidExpected = Integer.parseInt( uidString )
 
-        when:
+        when: "get UID for specified username"
         int uidResult = SystemUtils.getUid( username )
 
-        then:
+        then: "return the correct UID"
+        String uidString = [ 'id', '-u', username ].execute( ).text.trim( )
+        int uidExpected = Integer.parseInt( uidString )
         uidExpected == uidResult
     }
 
     def "getUid(String username) returns correct UID for invalid username"( ) {
-        given:
+        given: "an invalid username"
         String username = 'xxxxxxxx'
 
-        when:
+        when: "get UID for the invalid username"
         int uidResult = SystemUtils.getUid( username )
 
-        then:
+        then: "return -1 to indicate username doesn't have a UID"
         uidResult == -1
     }
 
     def "validateScript(String scriptPath) returns correctly"( ) {
-        given:
+        given: "a valid bash script"
 
         // must put the shebang on the first line
         scriptFile <<
@@ -141,15 +137,26 @@ class SystemExecUtilsTest extends Specification {
                 exit 0
         """.stripIndent( )
 
-        when:
-
+        when: "validate the bash script"
         def resultMap = SystemUtils.validateScript( scriptFile.getAbsolutePath( ) )
 
-        then:
+        then: "return a map"
+        resultMap instanceof Map
+
+        and: "map key 'ok' should be true"
         true == resultMap.ok
+
+        and: "map key 'exitValue' should be 0"
         0 == resultMap.exitValue
+
+        and: "map key 'out' should be an empty String"
         '' == resultMap.out
+
+        and: "map key 'err' should not exist e.g. be null"
         null == resultMap.err
+
+        and: "map should not contain key 'success'"
+        !resultMap.containsKey( 'success' )
     }
 
     def "validateScript(String scriptPath) returns correctly with a script error"( ) {
@@ -201,11 +208,23 @@ class SystemExecUtilsTest extends Specification {
 
         def resultMap = SystemUtils.validateScript( scriptFile.getAbsolutePath( ) )
 
-        then:
+        then: "return a map"
+        resultMap instanceof Map
+
+        and: "map key 'ok' should be false"
         false == resultMap.ok
+
+        and: "map key 'exitValue' should be 1"
         1 == resultMap.exitValue
+
+        and: "map key 'out' should contain an explanation of the failure"
         resultMap.out.contains( "Couldn't find 'fi' for this 'if'" )
+
+        and: "map key 'err' should not exist e.g. be null"
         '' == resultMap.err
+
+        and: "map should not contain key 'success'"
+        !resultMap.containsKey( 'success' )
     }
 
 }
