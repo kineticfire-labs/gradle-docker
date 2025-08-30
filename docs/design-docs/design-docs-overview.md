@@ -21,7 +21,6 @@ feature.  The subtypes should cover a single aspect, such as a specific feature.
 
 Subtypes of requirements design documents include:
 
-
 | Requirements Document Sub-type              | Description                                                                                                                                                                                                                                                                                                                                                                    |
 |---------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Use Case Document (UCD)                     | describes how a user, called an "actor," interacts with a system to achieve a specific goal, outlining the steps involved, potential issues, and system responses from the user's perspective.  These drive functional and non-functional requirements documents.  For organization and focus, each document covers one use case.                                              |
