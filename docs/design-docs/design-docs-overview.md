@@ -1,6 +1,6 @@
 # Design Documents - Overview
 
-This document provides an overview of the design documents guiding the implementation of the `gradle-docker` project.
+This document provides an overview of the design documents guiding the implementation of this project.
 
 ## Design Documents - Types
 
@@ -10,27 +10,27 @@ There are two type of design documents in this project:
 |------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | Requirements Document (RD)   | outlines what a project or system needs to do, focusing on stakeholder needs and desired outcomes in a user-friendly, business-oriented language.  Requirements documents define the problem to be solved. |
 | Specifications Document (SD) | details how requirements will be achieved, providing technical and implementation-specific information for developers.  Specifications documents describe the solution to the problem.                     |
- 
-Requirements Documents (RD) are used to develop specifications documents.  Specification Document (SD) are used by 
+
+A Requirements Document (RD) is used to develop specifications documents.  A Specification Document (SD) is used by
 developers to implement the software.
 
-Subtypes of design documents help break-up long documents for organization and focus on specific aspects, such as a
-feature.  The subtypes should cover a single aspect, such as a specific feature.
+Subtypes of design documents--down to individual use cases, requirements and specification--help break-up long documents 
+for organization and focus on specific aspects, such as a feature.
 
-### Requirements Design Documents
+### Requirements Document
 
-Subtypes of requirements design documents include:
+Subtypes of requirements documents include:
 
 | Requirements Document Sub-type              | Description                                                                                                                                                                                                                                                                                                                                                                    |
 |---------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Use Case Document (UCD)                     | describes how a user, called an "actor," interacts with a system to achieve a specific goal, outlining the steps involved, potential issues, and system responses from the user's perspective.  These drive functional and non-functional requirements documents.  For organization and focus, each document covers one use case.                                              |
+| Use Case Document (UCD)                     | describes how a user, called an "actor," interacts with a system to achieve a specific goal, outlining the steps involved, potential issues, and system responses from the user's perspective.  These drive functional and non-functional requirements documents.                                                                                                              |
 | Functional Requirements Document (FRD)      | provides a detailed guide that specifies what a software or system must do by describing its features, functions, and user interactions. It acts as a blueprint, explaining the system's purpose and how users will interact with it, ensuring that the final product meets user needs and business goals.                                                                     |
 | Non-Functional Requirements Document (NFRD) | outlines the quality attributes and constraints of a system, describing how the system should work rather than what it should do. These documents are critical for setting measurable goals for performance, security, usability, reliability, and maintainability, and they are essential for guiding development, ensuring user satisfaction, and achieving project success. |
 
 
-### Specifications Design Documents
+### Specifications Document
 
-Subtypes of specifications design documents include:
+Subtypes of specifications documents include:
 
 | Specifications Document Sub-type              | Description                                                                                                                                                                                                              |
 |-----------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
@@ -73,15 +73,23 @@ Design documents are organized into this directory structure:
 
 ## Naming and Tracking of Design Documents
 
-Design documents (file names) are named per the following convention: 
-`<type abbreviation>-<4 digit ID>-<short description, using kebab case>`.
+The convention for titling design documents follows the names given in the 
+[Design Documents - Types](#design-documents---types), [Requirements Design Documents](#requirements-design-documents), 
+and [Specifications Design Documents](#specifications-design-documents) sections.  File names generally drop the ending
+"document".
 
-Example design document file name for a Use Case Document (UCD) with ID 1: `uc-0001-user-buy-item`.
+Individual use cases, requirements, and specification file names are named per the following convention: 
+`<type abbreviation>-<4 digit ID>-<short description, using kebab case>`. 
+- Example design document file name for a Use Case Document (UCD) with ID 1: `uc-0001-user-buy-item`.
+
+The title for those individual items are named per the following convention:
+`<type abbreviation> - <4 digit ID> - <short decription, using normal document titling spacing and capialization>`
+- An example title for the document above: `uc - 0001 - User Buys an Item`.
 
 ### Type Abbreviations
 
 Type abbreviations refer to the type of content in the document, e.g. a Use Case Document (UCD) defines one or more use
-cases (abbreviated below as "uc").  Note these are lowercase.
+cases (abbreviated below as "uc").
 
 | Type                         | Abbreviation |
 |------------------------------|--------------|
@@ -143,6 +151,14 @@ Update the document's _Status_ property as changes from the document are incorpo
 
 Update the document's _Version_ and _Date_ properties as the document content is modified or as the _Status_ changes.
 
+## Requirements
+
+The requirements for the project are defined by the [Requirements Document (RD)](requirements/requirements.md).
+
+## Specifications
+
+The specifications for the project are defined by the [Specifications Document (SD)](specifications/specifications.md).
+
 ## Acronyms
 
 | Acronym | Term                                   |
@@ -155,7 +171,6 @@ Update the document's _Version_ and _Date_ properties as the document content is
 | FSD     | Functional Specifications Document     |
 | NFSD    | Non-functional Specifications Document |
 | TSD     | Technical Specifications Document      |
-
 
 ## Glossary
 
