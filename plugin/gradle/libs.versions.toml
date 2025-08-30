@@ -1,0 +1,31 @@
+[versions]
+# Core language versions
+groovy = "4.0.28"
+java = "21"
+
+# Testing framework versions (standardized)
+spock = "2.4-M6-groovy-4.0"
+junit-jupiter = "5.13.4"
+junit-platform = "1.13.4"
+
+# Application dependencies
+guava = "31.1-jre"
+
+[libraries]
+# Core dependencies
+groovy = { module = "org.apache.groovy:groovy", version.ref = "groovy" }
+guava = { module = "com.google.guava:guava", version.ref = "guava" }
+
+# Testing dependencies
+spock-core = { module = "org.spockframework:spock-core", version.ref = "spock" }
+junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-jupiter" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+
+[bundles]
+testing = ["spock-core", "junit-platform-launcher"]
+testing-runtime = ["junit-jupiter-api", "junit-platform-launcher"]
+
+[plugins]
+javaGradlePlugin = { id = "java-gradle-plugin" }
+groovy = { id = "groovy" }
+application = { id = "application" }

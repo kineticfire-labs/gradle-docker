@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2023 KineticFire. All rights reserved.
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/*
+ * KineticFire Labs: https://labs.kineticfire.com/
+ *     project site: https://github.com/kineticfire-labs/gradle-docker/
+ */
 
 plugins {
     // Apply the Java Gradle plugin development plugin to add support for developing Gradle plugins
@@ -22,11 +26,11 @@ plugins {
     id 'groovy'
 }
 
-/* todo can specify version
-plugins {
-    id 'com.jfrog.bintray' version '1.8.5'
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
 }
-*/
 
 repositories {
     // Use Maven Central for resolving dependencies.
@@ -34,11 +38,12 @@ repositories {
 }
 
 dependencies {
-    // Use the awesome Spock testing and specification framework
-    testImplementation 'org.spockframework:spock-core:2.2-groovy-3.0'
+    implementation libs.groovy
+    testImplementation libs.bundles.testing
+    testRuntimeOnly libs.bundles.testing.runtime
 }
 
-group = 'com.kineticfire.gradle.docker'
+group = 'com.kineticfire.gradle.docker' // todo should be named .gradle-docker?
 version = '1.0.0'
 
 
@@ -46,13 +51,13 @@ gradlePlugin {
     // Define the plugins
     plugins {
         dockerPlugin {
-            id = 'com.kineticfire.docker'
+            id = 'com.kineticfire.docker' //todo should be GRADLE.docker-system?
             displayName = 'KineticFire Labs Gradle Docker'
             description = 'Docker interaction'
             implementationClass = 'com.kineticfire.gradle.docker.DockerPlugin'
         }
         dockerSystemPlugin {
-            id = 'com.kineticfire.docker-system'
+            id = 'com.kineticfire.docker-system' //todo should be GRADLE.docker-system?
             displayName = 'KineticFire Labs Gradle Docker-System'
             description = 'Docker compose, swarm, and script support'
             implementationClass = 'com.kineticfire.gradle.docker.DockerSystemPlugin'
@@ -60,9 +65,20 @@ gradlePlugin {
     }
 }
 
-
 jar {
-    archiveBaseName = 'gradle-docker-plugin'
+    archiveBaseName = 'gradle-docker'
+
+    manifest {
+        attributes(
+                'Implementation-Title': project.name,
+                'Implementation-Version': project.version,
+                'Implementation-Vendor': 'KineticFire Labs'
+        )
+    }
+
+    // Reproducible builds
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
 }
 
 
