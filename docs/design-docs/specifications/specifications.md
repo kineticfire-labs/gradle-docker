@@ -8,13 +8,25 @@ implementation-specific information for developers.  Specifications documents de
 A Requirements Document (RD) is used to develop specifications documents.  A SD is used by  developers to implement the
 software.
 
-This SD is divided into three parts:
-- [Function Specifications Document (SPD)](functional-specifications), which is formed from the sum of individual use 
-cases at `./functional-specifications/`
-- [Non-Functional Specifications Document (NFSD)](non-functional-specifications), which is formed from the sum of 
-individual non-functional specifications at `./non-functional-specifications/`
-- [Technical Specifications Document (TSD)](technical-specifications), which is formed from the sum of individual
-technical specifications at `./technical-specifications/`
+## Glossary
 
-A functional specification in the SPD or a non-functional specification in the NFSD each lead to a technical 
-specification in the TSD.
+| Term              | Definition                                                     |
+|-------------------|----------------------------------------------------------------|
+| Docker Compose v2 | docker compose (not legacy docker-compose, e.g. v1)            |
+| Compose           | will mean 'Docker Compose v2' for the purposes of this project |
+| Functional test   | runs Gradle build + plugin in an isolated temp project         |
+| Integration test  | creates real containers via Compose, asserts behavior          |
+
+## Function Specifications Document (SPD)
+The [Function Specifications Document (SPD)](functional-specifications), which is formed from the sum of individual use 
+cases at `./functional-specifications/`, defines the functional specifications.
+
+## Non-Functional Specifications Document (NFSD)
+The [Non-Functional Specifications Document (NFSD)](non-functional-specifications), which is formed from the sum of 
+individual non-functional specifications at `./non-functional-specifications/`, defines the non-functional 
+specifications.
+
+## Technical Specifications Document (TSD)
+The [Technical Specifications Document (TSD)](technical-specifications), which is formed from the sum of individual
+technical specifications at `./technical-specifications/`, defines the technical specifications.
+

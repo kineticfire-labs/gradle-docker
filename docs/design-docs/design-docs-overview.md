@@ -152,11 +152,9 @@ Update the document's _Status_ property as changes from the document are incorpo
 Update the document's _Version_ and _Date_ properties as the document content is modified or as the _Status_ changes.
 
 ## Requirements
-
 The requirements for the project are defined by the [Requirements Document (RD)](requirements/requirements.md).
 
 ## Specifications
-
 The specifications for the project are defined by the [Specifications Document (SD)](specifications/specifications.md).
 
 ## Acronyms
@@ -171,10 +169,3 @@ The specifications for the project are defined by the [Specifications Document (
 | FSD     | Functional Specifications Document     |
 | NFSD    | Non-functional Specifications Document |
 | TSD     | Technical Specifications Document      |
-
-## Glossary
-
-| Term | Definition |
-|------|------------|
-|      |            |
-

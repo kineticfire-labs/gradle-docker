@@ -8,12 +8,58 @@ outcomes in a user-friendly, business-oriented language.  Requirements documents
 A RD is used to develop specifications documents.  A Specification Document (SD) is used by  developers to implement the 
 software.
 
-This RD is divided into three parts:
-- [Use Case Document (UCD)](use-cases), which is formed from the sum of individual use cases at `./use-cases/`
-- [Functional Requirements Document (FRD)](functional-requirements), which is formed from the sum of individual 
-functional requirements at `./functional-requirements/`
-- [Non-Functional Requirements Document (NFRD)](non-functional-requirements), which is formed from the sum of individual
-non-functional requirements at `./non-functional-requirements/`
+## Purpose
 
-A use case in the UCD leads to the definition of functional requirements in the FRD and/or non-functional requirements 
-in the NFRD.
+Provide Gradle tasks and DSL to execute Docker and Docker Compose commands in a repeatable, testable, CI-friendly way;
+and provide a library to help with build and testing workflows.
+
+## Goals
+- Support key Docker commands--`build`, `tag`, `push`--as Gradle tasks, with conventions for DX and allowing 
+configuration for customization
+- Support key Docker Compose commands--`up`, `down`--as Gradle tasks, with conventions for DX and allowing configuration 
+for customization
+- One-line DX: `./gradlew dockerBuild`, `./gradlew composeUp`, etc.
+- Library of functions to support build and testing workflows with Docker and Docker Compose.  Example: wait for a set 
+of containers to reach `RUNNING` state or `HEALTHY` status.
+- Deterministic runs across dev/CI with clear logs and error handling.
+- Tests (unit, functional, integration) prove plugin correctness and safety.
+
+## Scope
+
+| In/Out Scope? | Description                                                                                                             |
+|---------------|-------------------------------------------------------------------------------------------------------------------------|
+| In-scope      | Docker CLI orchestration, Docker Compose v2 orchestration, task DSL, logging, exit-code mapping, basic caching hooks    |
+| Out-of-scope  | Docker Compose v1, Podman/Buildah, Kubernetes, remote Docker Engine auth flows, image signing, SBOM generation (future) |
+
+
+## Glossary
+
+| Term              | Definition                                                     |
+|-------------------|----------------------------------------------------------------|
+| Docker Compose v2 | docker compose (not legacy docker-compose, e.g. v1)            |
+| Compose           | will mean 'Docker Compose v2' for the purposes of this project |
+| Functional test   | runs Gradle build + plugin in an isolated temp project         |
+| Integration test  | creates real containers via Compose, asserts behavior          |
+
+
+## Use Case Document (UCD)
+The [Use Case Document (UCD)](use-cases), which is formed from the sum of individual use cases at `./use-cases/`, 
+defines the use cases.
+
+## Functional Requirements Document (FRD)
+The [Functional Requirements Document (FRD)](functional-requirements), which is formed from the sum of individual 
+functional requirements at `./functional-requirements/`, defines the functional requirements.
+
+## Non-Functional Requirements Document (NFRD)
+The [Non-Functional Requirements Document (NFRD)](non-functional-requirements), which is formed from the sum of 
+individual non-functional requirements at `./non-functional-requirements/`, defines the non-functional requirements.
+
+
+todo:
+## Document Metadata
+
+| Key     | Value      |
+|---------|------------|
+| Status  | Draft      |
+| Version | 0.0.1      |
+| Updated | 2025-08-30 |
