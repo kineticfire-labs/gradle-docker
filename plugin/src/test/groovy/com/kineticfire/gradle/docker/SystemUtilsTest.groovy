@@ -1,5 +1,5 @@
 /*
- * (c) Copyright 2023 KineticFire. All rights reserved.
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -12,6 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
+ */
+/*
+ * KineticFire Labs: https://labs.kineticfire.com/
+ *     project site: https://github.com/kineticfire-labs/gradle-docker/
  */
 package com.kineticfire.gradle.docker
 

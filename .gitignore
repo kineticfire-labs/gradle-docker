@@ -1,17 +1,126 @@
-.gradle
-/build/
+######################################
+# Operating System
+######################################
+# Linux
+.directory
+*~
 
+
+######################################
+# Editors
+######################################
+# Vim
+*.swp
+*.swo
+*~
+
+# Emacs
+*~
+#*#
+.#*
+
+
+######################################
+# Build/Distribution Artifacts
+######################################
+build/
+dist/
+out/
+*.zip
+*.tar.gz
+*.rar
+*.jar
+*.7z
+
+
+######################################
+# Logs and Temporary Files
+######################################
+*.log
+logs/
+tmp/
+.tmp/
+temp/
+.temp/
+*.tmp
+*.temp
+*.bak
+*.pid
+*.seed
+*.lock
+
+
+######################################
+# Gradle
+######################################
 # Ignore Gradle GUI config
 gradle-app.setting
-
 # Avoid ignoring Gradle wrapper jar file (.jar files are usually ignored)
 !gradle-wrapper.jar
-
+# Avoid ignore Gradle wrappper properties
+!gradle-wrapper.properties
 # Cache of project
 .gradletasknamecache
+.gradle/
 
-# # Work around https://youtrack.jetbrains.com/issue/IDEA-116898
-# gradle/wrapper/gradle-wrapper.properties
+# Java/JVM
+*.hprof
+hs_err_pid*
+.attach_pid*
 
-# Ignore Gradle build output directory
-build
+######################################
+# IntelliJ
+######################################
+.idea/*
+
+
+######################################
+# Claude
+######################################
+# Claude local settings
+.claude/settings.local.json
+# Local CLAUDE.md file
+CLAUDE.local.md
+# Claude Flow temporary data
+.swarm/
+.hive-mind/
+# Local project commands
+.claude/commands/local/
+# MCP servers
+.serena/
+
+
+######################################
+# Docker
+######################################
+Dockerfile.local
+docker-compose.override.yml
+
+
+######################################
+# Environment/Secrets
+######################################
+.env
+.env.local
+.env.*.local
+secrets.yml
+config/secrets.yml
+
+# Cloud Provider Credentials
+credentials
+.aws/credentials
+.gcp/credentials.json
+*-key.json
+.azure/credentials
+
+# SSH & GPG Keys
+id_rsa
+id_ed25519
+id_ecdsa
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.gpg
+.gnupg/
