@@ -10,19 +10,20 @@ software.
 
 ## Purpose
 
-Provide Gradle tasks and DSL to execute Docker and Docker Compose commands in a repeatable, testable, CI-friendly way;
-and provide a library to help with build and testing workflows.
+Provide a Gradle plugin with tasks and DSL to execute Docker and Docker Compose commands in a repeatable, testable, 
+CI-friendly way; and provide a library to help with build and testing workflows.
 
 ## Goals
-- Support key Docker commands--`build`, `tag`, `push`--as Gradle tasks, with conventions for DX and allowing 
-configuration for customization
-- Support key Docker Compose commands--`up`, `down`--as Gradle tasks, with conventions for DX and allowing configuration 
-for customization
-- One-line DX: `./gradlew dockerBuild`, `./gradlew composeUp`, etc.
-- Library of functions to support build and testing workflows with Docker and Docker Compose.  Example: wait for a set 
-of containers to reach `RUNNING` or `HEALTHY` state.
-- Deterministic runs across dev/CI with clear logs and error handling.
-- Tests (unit, functional, integration) prove plugin correctness and safety.
+- A Gradle plugin with:
+   - Support key Docker commands--`build`, `tag`, `push`--as Gradle tasks, with conventions for DX and allowing 
+   configuration for customization
+   - Support key Docker Compose commands--`up`, `down`--as Gradle tasks, with conventions for DX and allowing 
+   configuration  for customization
+   - One-line DX: `./gradlew dockerBuild`, `./gradlew composeUp`, etc.
+   - Library of functions to support build and testing workflows with Docker and Docker Compose.  Example: wait for a 
+   set of containers to reach `RUNNING` or `HEALTHY` state.
+   - Deterministic runs across dev/CI with clear logs and error handling.
+   - Tests (unit, functional, integration) prove plugin correctness and safety.
 
 ## Scope
 
@@ -42,10 +43,10 @@ of containers to reach `RUNNING` or `HEALTHY` state.
 
 ## Actors
 
-| Actor             | Description                                                                                                                                                                                           |
-|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Plugin Developer  | An individual who is using the `docker-gradle` plugin as part of their project, e.g. a consumer or customer of this project                                                                           |
-| Project Developer | An individual who is contributing to the `docker-gradle` project such as creating/modifying source code, tests, documentation, etc.; building the project, and publishing to the Gradle Plugin Portal |
+| Actor             | Description                                                                                                                                                                                            |
+|-------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin Developer  | An individual who is contributing to this `docker-gradle` project such as creating/modifying source code, tests, documentation, etc.; building the project, and publishing to the Gradle Plugin Portal |
+| Project Developer | An individual who is using this `docker-gradle` plugin as part of their project, e.g. a consumer or customer of this project                                                                           |
 
 ## Use Case Document (UCD)
 The [Use Case Document (UCD)](use-cases), which is formed from the sum of individual use cases at `./use-cases/`, 
