@@ -20,7 +20,7 @@ configuration for customization
 for customization
 - One-line DX: `./gradlew dockerBuild`, `./gradlew composeUp`, etc.
 - Library of functions to support build and testing workflows with Docker and Docker Compose.  Example: wait for a set 
-of containers to reach `RUNNING` state or `HEALTHY` status.
+of containers to reach `RUNNING` or `HEALTHY` state.
 - Deterministic runs across dev/CI with clear logs and error handling.
 - Tests (unit, functional, integration) prove plugin correctness and safety.
 
