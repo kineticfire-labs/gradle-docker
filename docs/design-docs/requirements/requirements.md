@@ -31,7 +31,6 @@ of containers to reach `RUNNING` state or `HEALTHY` status.
 | In-scope      | Docker CLI orchestration, Docker Compose v2 orchestration, task DSL, logging, exit-code mapping, basic caching hooks    |
 | Out-of-scope  | Docker Compose v1, Podman/Buildah, Kubernetes, remote Docker Engine auth flows, image signing, SBOM generation (future) |
 
-
 ## Glossary
 
 | Term              | Definition                                                     |
@@ -41,6 +40,12 @@ of containers to reach `RUNNING` state or `HEALTHY` status.
 | Functional test   | runs Gradle build + plugin in an isolated temp project         |
 | Integration test  | creates real containers via Compose, asserts behavior          |
 
+## Actors
+
+| Actor             | Description                                                                                                                                                                                           |
+|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin Developer  | An individual who is using the `docker-gradle` plugin as part of their project, e.g. a consumer or customer of this project                                                                           |
+| Project Developer | An individual who is contributing to the `docker-gradle` project such as creating/modifying source code, tests, documentation, etc.; building the project, and publishing to the Gradle Plugin Portal |
 
 ## Use Case Document (UCD)
 The [Use Case Document (UCD)](use-cases), which is formed from the sum of individual use cases at `./use-cases/`, 

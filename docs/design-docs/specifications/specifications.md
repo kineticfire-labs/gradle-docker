@@ -17,6 +17,13 @@ software.
 | Functional test   | runs Gradle build + plugin in an isolated temp project         |
 | Integration test  | creates real containers via Compose, asserts behavior          |
 
+## Actors
+
+| Actor             | Description                                                                                                                                                                                           |
+|-------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Plugin Developer  | An individual who is using the `docker-gradle` plugin as part of their project, e.g. a consumer or customer of this project                                                                           |
+| Project Developer | An individual who is contributing to the `docker-gradle` project such as creating/modifying source code, tests, documentation, etc.; building the project, and publishing to the Gradle Plugin Portal |
+
 ## Function Specifications Document (SPD)
 The [Function Specifications Document (SPD)](functional-specifications), which is formed from the sum of individual use 
 cases at `./functional-specifications/`, defines the functional specifications.
