@@ -43,7 +43,7 @@ dependencies {
     testRuntimeOnly libs.bundles.testing.runtime
 }
 
-group = 'com.kineticfire.gradle.docker' // todo should be named .gradle-docker?
+group = 'com.kineticfire.gradle.docker' // todo should be named com.kineticfire?
 version = '1.0.0'
 
 
@@ -51,13 +51,13 @@ gradlePlugin {
     // Define the plugins
     plugins {
         dockerPlugin {
-            id = 'com.kineticfire.docker' //todo should be GRADLE.docker-system?
+            id = 'com.kineticfire.docker' //todo should be com.kineticfire.gradle.gradle-docker?
             displayName = 'KineticFire Labs Gradle Docker'
             description = 'Docker interaction'
             implementationClass = 'com.kineticfire.gradle.docker.DockerPlugin'
         }
         dockerSystemPlugin {
-            id = 'com.kineticfire.docker-system' //todo should be GRADLE.docker-system?
+            id = 'com.kineticfire.docker-system' //todo should be com.kineticfire.gradle.gradle-docker-system?
             displayName = 'KineticFire Labs Gradle Docker-System'
             description = 'Docker compose, swarm, and script support'
             implementationClass = 'com.kineticfire.gradle.docker.DockerSystemPlugin'
@@ -80,7 +80,6 @@ jar {
     preserveFileTimestamps = false
     reproducibleFileOrder = true
 }
-
 
 // Add a source set for the functional test suite
 sourceSets {
@@ -108,8 +107,6 @@ tasks.named( 'test' ) {
     // Use JUnit Jupiter for unit tests.
     useJUnitPlatform( )
 }
-
-   
 
 // Added so that tests can be excluded on the command line.  For example, DockerUtilsTest.groovy require a lot of time to run.  To exclude:
 //    gradle clean test -PexcludeTests=**/*DockerUtilsTest*
