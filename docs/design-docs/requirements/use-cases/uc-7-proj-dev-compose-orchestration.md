@@ -2,11 +2,11 @@
 
 ## Document Metadata
 
-| Key     | Value      |
-|---------|------------|
-| Status  | Draft      |
-| Version | 0.0.0      |
-| Updated | 2025-08-30 |
+| Key     | Value       |
+|---------|-------------|
+| Status  | Implemented |
+| Version | 1.0.0       |
+| Updated | 2025-08-31  |
 
 ## Definition
 
@@ -29,9 +29,9 @@ by a yaml file(s), using Docker Compose
 containers/services
 1. Project Developer invokes the task (using the command line or triggered by another task) to stop the containers
 
-**Derived functional requirements**: todo
+**Derived functional requirements**: fr-23, fr-24, fr-25, fr-26, fr-27, fr-28, fr-29, fr-30, fr-31, fr-32
 
-**Derived non-functional requirements**:  
+**Derived non-functional requirements**: nfr-23, nfr-24, nfr-25, nfr-26, nfr-31  
 
 ## Assumptions
 
@@ -75,6 +75,71 @@ particularly with integration tests.  Within the `app-image/` directory, tests a
 - `app-image/src/functionalTest/`: contains functional tests
 - `app-image/src/integrationTest/`: contains integration tests
 
+## Implementation Phases
+
+The Docker Compose orchestration functionality will be implemented in phases:
+
+### Phase 1: Core Compose Operations
+- Basic `composeUp`/`composeDown` tasks
+- Stack definitions with file paths and project names
+- Wait for services in `running` state with timeout
+- Simple logging capture
+
+### Phase 2: Health Checking & Testing Integration  
+- Wait for `healthy` service state
+- JSON state file generation for service connectivity info
+- Test task integration with `usesCompose`
+- Basic lifecycle management (suite/class level)
+
+### Phase 3: Advanced Orchestration
+- Method-level lifecycle management
+- Complex waiting strategies (log pattern matching)
+- Advanced polling configurations
+- Enhanced error handling and retries
+
+## Service State Management
+
+**Supported Service States**:
+- **`running`**: Container is running but may not be ready for connections
+- **`healthy`**: Container passes health checks and is ready for use (preferred for testing)
+
+**Timeout Behavior**:
+- Each wait operation has a configurable `timeoutSeconds`
+- On timeout, tasks fail fast with clear error messages indicating which services failed to reach the desired state
+- Optional `pollSeconds` configuration for checking intervals (default: 2 seconds)
+
+## JSON State File Format
+
+The plugin generates a JSON state file containing service connectivity information:
+
+```json
+{
+  "stackName": "dbOnly",
+  "services": {
+    "db": {
+      "containerId": "abc123def456",
+      "containerName": "db-myproject-1",
+      "state": "healthy",
+      "publishedPorts": [
+        {"container": 5432, "host": 54321, "protocol": "tcp"}
+      ]
+    },
+    "api": {
+      "containerId": "def456ghi789", 
+      "containerName": "api-myproject-1",
+      "state": "running",
+      "publishedPorts": [
+        {"container": 8080, "host": 58080, "protocol": "tcp"}
+      ]
+    }
+  },
+  "composeProject": "db-myproject",
+  "timestamp": "2025-08-31T10:30:00Z"
+}
+```
+
+This file is written after successful `composeUp` and passed to test tasks via system properties.
+
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
 
 ### Complete Gradle Groovy DSL example
@@ -83,7 +148,7 @@ particularly with integration tests.  Within the `app-image/` directory, tests a
 plugins {
   id "groovy"
   id "java" // for integration tests in Java
-  id "com.kineticfire.gradle.gradle-docker" version "0.1.0" // plugin id for plugin produced by this project
+  id "com.kineticfire.gradle.gradle-docker" version "0.1.0"
 }
 
 repositories { mavenCentral() }
@@ -131,10 +196,10 @@ dockerOrch {
       files       = [file("compose-db.yml")]
       envFiles    = [file(".env")]
       projectName = "db-${project.name}"
-       waitForRunning {
-          services       = ["another"]
-          timeoutSeconds = 60
-       } 
+      waitForRunning {
+        services       = ["another"]
+        timeoutSeconds = 60
+      } 
       waitForHealthy {
         services       = ["db"]
         timeoutSeconds = 60
@@ -151,7 +216,7 @@ dockerOrch {
         services       = ["db","api"]
         timeoutSeconds = 90
         pollSeconds    = 2
-        successWhenLogsMatch = [ "api": "Started .* in .* seconds" ]
+        successWhenLogsMatch = [ "api": "Started .* in .* seconds" ]  # Phase 3 feature
       }
       logs { writeTo = file("$buildDir/compose/apiDb-logs") }
     }
@@ -166,8 +231,8 @@ tasks.register("functionalTest", Test) {
   classpath       = sourceSets.functionalTest.runtimeClasspath
   useJUnitPlatform() // Spock 2 runs on JUnit Platform
   // Choose lifecycle per group
-  usesCompose stack: "dbOnly", lifecycle: "class"   // suite|class|method
-  // Pass state file path to tests
+  usesCompose stack: "dbOnly", lifecycle: "class"   // suite|class|method (Phase 2/3)
+  // Pass state file path to tests  
   systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")
   shouldRunAfter("test")
 }
@@ -177,7 +242,7 @@ tasks.register("integrationTest", Test) {
   testClassesDirs = sourceSets.integrationTest.output.classesDirs
   classpath       = sourceSets.integrationTest.runtimeClasspath
   useJUnitPlatform()
-  usesCompose stack: "apiDb", lifecycle: "suite"    // or "method" if you need full isolation
+  usesCompose stack: "apiDb", lifecycle: "suite"    // or "method" if you need full isolation (Phase 3)
   systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("apiDb")
   mustRunAfter("functionalTest")
 }

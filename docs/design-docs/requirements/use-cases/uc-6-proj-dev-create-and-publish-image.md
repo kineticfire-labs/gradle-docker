@@ -2,11 +2,11 @@
 
 ## Document Metadata
 
-| Key     | Value      |
-|---------|------------|
-| Status  | Draft      |
-| Version | 0.0.0      |
-| Updated | 2025-08-30 |
+| Key     | Value       |
+|---------|-------------|
+| Status  | Implemented |
+| Version | 1.0.0       |
+| Updated | 2025-08-31  |
 
 ## Definition
 
@@ -34,14 +34,15 @@ save; build, tag, and publish; or to perform those actions on a per-image basis
 e.g., build, tag, save, publish.
 1. Project Developer invokes the appropriate tasks for all configured images or on a per-image basis 
 
-**Derived functional requirements**: fr-1, fr-2, fr-2.1, ... todo
+**Derived functional requirements**: fr-11, fr-12, fr-13, fr-14, fr-15, fr-16, fr-17, fr-18, fr-19, fr-20, fr-21, fr-22
 
-**Derived non-functional requirements**:  
+**Derived non-functional requirements**: nfr-23, nfr-24, nfr-25  
 
 ## Assumptions
 
 It is assumed, by convention defined by this plugin, that the Docker context (files used to build the Docker image 
-including the Dockerfile) are located at `src/main/docker`.
+including the Dockerfile) are located at `src/main/docker`. If no context is explicitly specified in the 
+configuration, the plugin will fallback to this convention.
 
 The plugin views a project with a goal of building a software application as a Docker image as having two subprojects:
 one to build the application and one to build the Docker image:
@@ -58,6 +59,18 @@ The `app-image/` directory then assembles the application into a Docker image.  
 to the image (not the original source code or resultant JAR file) like building, tagging, saving, and publishing the
 image; it could also perform integration tests on the image (not shown here or discussed in this use case, see 
 [Project Dev Compose Orchestration](uc-7-proj-dev-compose-orchestration.md)).
+
+## Task Naming Conventions and Dependencies
+
+The plugin generates tasks using the pattern `docker<Action><ImageName>` where:
+- `image("alpine")` generates tasks: `dockerBuildAlpine`, `dockerSaveAlpine`, `dockerTagAlpine`, `dockerPublishAlpine`
+- `image("ubuntu")` generates tasks: `dockerBuildUbuntu`, `dockerSaveUbuntu`, `dockerTagUbuntu`, `dockerPublishUbuntu`
+- Image names are capitalized in task names (first letter uppercase)
+
+**Task Dependencies**:
+- **With build context**: `dockerSave` depends on `dockerBuild`, `dockerPublish` depends on `dockerBuild`
+- **Without build context** (using `sourceRef`): Tasks are independent and operate on pre-existing images
+- Aggregate tasks (`dockerBuild`, `dockerSave`, etc.) operate on all configured images
 
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
 
@@ -136,25 +149,25 @@ docker {
 
 Invoke tasks to build, save, tag, and publish the images:
 ```bash
-# build all images
+# build all images (dockerSave/dockerPublish will depend on this)
 ./gradlew dockerBuild
 # build a specific image
-./gradlew dockerBuildUbuntu
+./gradlew dockerBuildAlpine dockerBuildUbuntu
 
-# retag as configured (optional block above)
+# retag as configured (optional dockerTag block above)
 ./gradlew dockerTag
-# retag a specific image
-./gradlew dockerTagUbuntu
+# retag a specific image  
+./gradlew dockerTagAlpine dockerTagUbuntu
 
-# save all configured images to files
+# save all configured images to files (depends on dockerBuild when context present)
 ./gradlew dockerSave
 # save a specific image
-./gradlew dockerSaveUbuntu
+./gradlew dockerSaveAlpine dockerSaveUbuntu
 
-# publish to all configured registries
+# publish to all configured registries (depends on dockerBuild when context present)
 ./gradlew dockerPublish
 # publish a specific image
-./gradlew dockerPublishUbuntu
+./gradlew dockerPublishAlpine dockerPublishUbuntu
 ```
 
 ### Tagging images (retag)
@@ -201,8 +214,8 @@ Invoke tasks to tag (retag images) without building:
 ```bash
 # tag all
 ./gradlew dockerTag
-# tag a specific image
-./gradlew dockerTagUbuntu
+# tag a specific image  
+./gradlew dockerTagAlpine dockerTagUbuntu
 ```
 
 ### Publishing multiple images without building
@@ -245,7 +258,7 @@ Invoke tasks to publish images without building:
 # publish all
 ./gradlew dockerPublish
 # publish specific image
-./gradlew dockerPublishUbuntu
+./gradlew dockerPublishAlpine dockerPublishUbuntu
 ```
 
 ### Save images to files without building
@@ -281,8 +294,8 @@ If the images aren’t local yet, ensure your plugin pulls them or document that
 
 Invoke tasks to save images without building:
 ```bash
-# save all
+# save all (no dependencies since no build context)
 ./gradlew dockerSave
 # save a specific image
-./gradlew dockerSaveUbuntu
+./gradlew dockerSaveAlpine dockerSaveUbuntu
 ```
