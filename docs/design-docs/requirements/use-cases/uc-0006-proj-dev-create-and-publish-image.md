@@ -15,7 +15,7 @@
 **Goal**: Create and publish a Docker image
 
 **Preconditions**: `gradle-docker` plugin applied to the build, Docker CLI installed, Docker daemon available, can run 
-Docker commands with `sudo`
+Docker commands without `sudo`
 
 **Post conditions**: Docker image is created, (optionally) additional tags are created, and (optionally) published to a 
 Docker image registry
@@ -32,7 +32,8 @@ more tags for the image
 1. Project Developer optionally invokes the task (using the command line or triggered by another task) to publish one or
    more tagged images to a Docker image registry
 
-**Derived functional requirements**: fr-0001, fr-0002, fr-0003, fr-0004, fr-0005, fr-0006, fr-0007
+**Derived functional requirements**: fr-0001, fr-0002, fr-0003, fr-0004, fr-0005, fr-0006, fr-0007, fr-0008, fr-0009,
+fr-0010, fr-0011
 
 **Derived non-functional requirements**:  
 
@@ -47,14 +48,11 @@ one to build the application and one to build the Docker image:
    - `app/`
       - `src/main/java/...`
       - `src/test/java/...`
-   - `app-docker/`
-      - `src/main/docker/`
-      - `src/test/`
-         - `docker/`
-         - `compose/`
+   - `app-image/`
+      - `src/docker/`
 
 In this scenario, the `app/` directory contains the source and build file to build the application, such as a JAR file.
-The `app-docker/` directory then assembles the application into a Docker image and tests it, possibly using images from
+The `app-image/` directory then assembles the application into a Docker image and tests it, possibly using images from
 `docker/` and/or `compose/` files to orchestration multiple containers.
 
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
