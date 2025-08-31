@@ -36,139 +36,53 @@ containers/services
 ## Assumptions
 
 It is assumed, by convention defined by this plugin, that the Docker context (files used to build the Docker image 
-including the Dockerfile) are located at `src/docker`.
+including the Dockerfile) are located at `src/main/docker`.
 
 The plugin views a project with a goal of building a software application as a Docker image as having two subprojects:
 one to build the application and one to build the Docker image:
-- `the-application-project/`
-   - `app/`
-      - `src/main/java/...`
-      - `src/test/java/...`
-   - `app-image/`
-      - `src/`
-         - `main/docker/`
-         - `test/`
-            - `docker/` // todo: intent to modify image created in `main`, but can only build 1
-            - `compose/`
-            - `groovy/`
-            - `java/`
+```
+the-application-project/
+├─ app/                         # builds the JAR (or whatever)
+│  ├─ src/main/java/...
+│  └─ src/test/java/...
+└─ app-image/                   # builds Docker image + tests it
+├─ src/main/docker/          # Dockerfile + build assets (context root)
+│  ├─ Dockerfile
+│  └─ ...                    # scripts, configs, etc.
+├─ src/functionalTest/groovy/
+├─ src/functionalTest/resources/
+│  ├─ compose/               # compose files for functional tests
+│  └─ docker/                # optional, extra test-only image assets
+├─ src/integrationTest/java/
+├─ src/integrationTest/resources/
+│  ├─ compose/               # compose files for integration tests
+│  └─ docker/                # optional, extra test-only image assets
+└─ build/                    # outputs (transcripts, saved tars, state json, etc.)
+```
 
 In this scenario, the `app/` directory contains the source and build file to build the application, such as a JAR file.
-The `app-image/` directory then assembles the application into a Docker image and tests it, possibly using images from
-`docker/` and/or `compose/` files to orchestration multiple containers.
+
+The `app-image/` directory then assembles the application into a Docker image and tests it.  This applies Separation of 
+Concerns (SoC) principle, given the amount of functionality is being performed in the process of building the image,
+particularly with integration tests.  Within the `app-image/` directory:
+- `app-image/src/main/docker/`: builds the image
+   - `app-image/src/functionalTest/`: contains functional tests
+      - `app-image/src/functionalTest/docker/`: optional, assets to build a final test image from the image under test,
+        if necessary
+      - `app-image/src/functionalTest/docker/`: one or more compose files needed to spin-up the image as a container,
+        and any other containers needed, for testing
+   - `app-image/src/integrationTest/`: contains integration tests
+      - `app-image/src/integrationTest/java/`: integration tests written in Java
+      - `app-image/src/integrationTest/docker/`: one or more compose files needed to spin-up the image as a container,
+        and any other containers needed, for testing
+      - `app-image/src/integrationTest/java/`: integration tests written in Java
+
+
+todo: issue that can only build one image from `app-image`?
+
+todo: issue that can only build one image from `functionalTest/docker/` and `integrationTest/docker/`.
 
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
-
-```groovy
-// --- Define one or more Compose stacks ---
-
-composeStacks {
-    stack("dbOnly") {
-        files       = [file("compose-db.yml")]
-        envFiles    = [file(".env")]
-        projectName = "db-${project.name}"
-        waitForHealthy {
-            services       = ["db"]
-            timeoutSeconds = 60
-        }
-        logs {
-            writeTo   = file("$buildDir/compose/dbOnly-logs")
-            tailLines = 200
-        }
-        downOptions {
-            removeVolumes  = false
-            removeOrphans  = true
-        }
-    }
-    stack("apiDb") {
-        files       = [file("compose-db.yml"), file("compose-api.yml")]
-        projectName = "api-${project.name}"
-        waitForHealthy {
-            services       = ["db","api"]
-            timeoutSeconds = 90
-            pollSeconds    = 2
-            successWhenLogsMatch = [ "api": "Started .* in .* seconds" ]
-        }
-        logs { writeTo = file("$buildDir/compose/apiDb-logs") }
-    }
-    stack("redisOnly") {
-        files       = [file("compose-redis.yml")]
-        projectName = "redis-${project.name}"
-    }
-}
-
-// --- Define test groups bound to stacks ---
-
-tasks.register("functionalTest", Test) {
-    description = "Functional tests against db-only stack"
-    useJUnitPlatform()
-    // Plugin hook: bring up/down per test *class* to guarantee clean state
-    usesCompose stack: "dbOnly", lifecycle: "class"  // "suite"|"class"|"method"
-    // Pass state path to tests (provided by plugin)
-    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")
-    shouldRunAfter("test")
-}
-
-tasks.register("integrationTest", Test) {
-    description = "Integration tests against api+db stack"
-    useJUnitPlatform()
-    // Bring up once per *suite* (faster end-to-end)
-    usesCompose stack: "apiDb", lifecycle: "suite"
-    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("apiDb")
-    mustRunAfter("functionalTest")
-}
-
-tasks.register("smokeTest", Test) {
-    description = "Smokes against redis-only"
-    useJUnitPlatform()
-    usesCompose stack: "redisOnly", lifecycle: "suite"
-    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("redisOnly")
-    shouldRunAfter("integrationTest")
-}
-
-tasks.named("check") {
-    dependsOn("functionalTest", "integrationTest", "smokeTest")
-}
-```
-
-## What does the lifecycle mean?
-```groovy
-What does lifecycle: "method" mean?
-- "suite": one compose up before the Test task starts; one compose down after it finishes. Fastest.
-- "class": up/down around each test class. Good isolation with moderate cost.
-- "method": up/down around each test method. Maximum isolation, slowest.
-The plugin would wrap per-method via a TestListener (beforeTest/afterTest).
-Typically also suffixes the Compose project name with a unique id (class#method hash) to avoid collisions.
-Use "method" only when you truly need a pristine environment per test method.
-```
-
-## “Are my tests in an external groovy/gradle file? How are they identified?”
-
-No—your tests are normal source files in the project (e.g., src/functionalTest/groovy, src/integrationTest/java).
-The Gradle DSL just wires which Test task runs which source set and how it’s composed.
-
-Common layout:
-
-src/test/groovy             // unit tests (Groovy/Spock)
-src/functionalTest/groovy   // functional tests (Groovy/Spock)
-src/integrationTest/java    // integration tests (Java/JUnit)
-
-Each Test task points at a source set (or patterns) and the plugin adds the compose lifecycle.
-
-
-## What does this do?
-systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")
-
-Your plugin’s composeUp writes a connection info JSON (e.g., service → ports, container names).
-
-composeStateFileFor("dbOnly") (helper from your plugin) resolves the path to that JSON for the dbOnly stack.
-
-systemProperty(...) injects the path into the test JVM as System.getProperty("COMPOSE_STATE_FILE").
-
-Tests read it to build URLs/connection strings. (Examples below.)
-
-
-## Full Example
 
 ### Complete Gradle Groovy DSL example
 
@@ -176,7 +90,7 @@ Tests read it to build URLs/connection strings. (Examples below.)
 plugins {
   id "groovy"
   id "java" // for integration tests in Java
-  id "com.example.docker-orch" version "0.1.0" // your plugin id
+  id "com.kineticfire.gradle.gradle-docker" version "0.1.0" // plugin id for plugin produced by this project
 }
 
 repositories { mavenCentral() }
@@ -224,6 +138,10 @@ dockerOrch {
       files       = [file("compose-db.yml")]
       envFiles    = [file(".env")]
       projectName = "db-${project.name}"
+       waitForRunning {
+          services       = ["another"]
+          timeoutSeconds = 60
+       } 
       waitForHealthy {
         services       = ["db"]
         timeoutSeconds = 60
@@ -276,9 +194,45 @@ tasks.named("check") {
 }
 ```
 
+#### Explaining Items from the Example DSL
+
+##### What does the 'lifecycle' mean?
+
+What does lifecycle: "method" mean?
+- "suite": one compose up before the Test task starts; one compose down after it finishes. Fastest.
+- "class": up/down around each test class. Good isolation with moderate cost.
+- "method": up/down around each test method. Maximum isolation, slowest.
+
+The plugin would wrap per-method via a TestListener (beforeTest/afterTest). Typically also suffixes the Compose project 
+name with a unique id (class#method hash) to avoid collisions. Use "method" only when you truly need a pristine 
+environment per test method.
+
+
+##### “Where and what are the tests?”
+
+Tests are normal source files in the project `src/integrationTest/java`).   The Gradle DSL just wires which Test task runs 
+which source set and how it’s composed.
+
+Each Test task points at a source set (or patterns) and the plugin adds the compose lifecycle.
+
+
+##### What does 'systemProperty' and 'composeStateFileFor' do?
+
+Reference the line `systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")`.
+
+The plugin’s `composeUp` writes a connection info JSON (e.g., service → ports, container reference (ID, 
+reference (name, ID, etc), etc.)).
+
+`composeStateFileFor("dbOnly")` (helper from the plugin) resolves the path to that JSON for the dbOnly stack.
+
+`systemProperty(...)` injects the path into the test JVM as `System.getProperty("COMPOSE_STATE_FILE")`.
+
+Tests read it to build URLs/connection strings. (Examples below.)
+
+
 ### Minimal test code to consume COMPOSE_STATE_FILE
 
-Groovy + Spock (functional tests)
+Example functional tests using Groovy + Spock.
 
 ```groovy
 import groovy.json.JsonSlurper
@@ -308,6 +262,8 @@ class ApiHealthSpec extends Specification {
 ```
 
 ### Java + JUnit 5 (integration tests)
+
+Example integration tests using Java + JUnit 5.
 
 ```groovy
 import com.fasterxml.jackson.databind.*;
