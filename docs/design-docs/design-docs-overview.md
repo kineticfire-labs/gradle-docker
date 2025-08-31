@@ -83,7 +83,7 @@ Individual use cases, requirements, and specification file names are named per t
 - Example design document file name for a Use Case Document (UCD) with ID 1: `uc-0001-user-buy-item`.
 
 The title for those individual items are named per the following convention:
-`<type abbreviation> - <4 digit ID> - <short decription, using normal document titling spacing and capialization>`
+`<type (spelled out)> - <4 digit ID> - <short decription, using normal document titling spacing and capialization>`
 - An example title for the document above: `uc - 0001 - User Buys an Item`.
 
 ### Type Abbreviations

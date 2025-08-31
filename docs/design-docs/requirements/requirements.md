@@ -53,19 +53,9 @@ The [Use Case Document (UCD)](use-cases), which is formed from the sum of indivi
 defines the use cases.
 
 ## Functional Requirements Document (FRD)
-The [Functional Requirements Document (FRD)](functional-requirements), which is formed from the sum of individual 
-functional requirements at `./functional-requirements/`, defines the functional requirements.
+The [Functional Requirements Document (FRD)](functional-requirements/functional-requirements.md) defines the functional 
+requirements.
 
 ## Non-Functional Requirements Document (NFRD)
-The [Non-Functional Requirements Document (NFRD)](non-functional-requirements), which is formed from the sum of 
-individual non-functional requirements at `./non-functional-requirements/`, defines the non-functional requirements.
-
-
-todo:
-## Document Metadata
-
-| Key     | Value      |
-|---------|------------|
-| Status  | Draft      |
-| Version | 0.0.1      |
-| Updated | 2025-08-30 |
+The [Non-Functional Requirements Document (NFRD)](non-functional-requirements/non-functional-requirements.md) defines 
+the non-functional requirements.
