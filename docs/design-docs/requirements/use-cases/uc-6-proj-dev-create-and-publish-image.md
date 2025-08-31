@@ -1,4 +1,4 @@
-# Use Case - 6 - Project Developer Create and Publish Image
+# Use Case - 6 - Project Developer Create, Tag, Save, and Publish Image
 
 ## Document Metadata
 
@@ -12,7 +12,7 @@
 
 **Actor**: Project Developer
 
-**Goal**: Create and publish a Docker image
+**Goal**: Create, tag, save, and/or publish a Docker image
 
 **Preconditions**: `gradle-docker` plugin applied to the build, Docker CLI installed, Docker daemon available, can run 
 Docker commands without `sudo`
@@ -23,16 +23,18 @@ Docker image registry
 **Steps by Actor to achieve goal**:
 1. Project Developer creates a `build.gradle` file
 1. Project Developer applies the `gradle-docker` plugin in their `build.gradle` file
-1. Project Developer invokes the task (using the command line or triggered by another task) to assemble the Docker build
-context and any configurations
-1. Project Developer invokes the task (using the command line or triggered by another task) to build the Docker image
-using the defined context
-1. Project Developer optionally invokes the task (using the command line or triggered by another task) to create one or
-more tags for the image
-1. Project Developer optionally invokes the task (using the command line or triggered by another task) to publish one or
-   more tagged images to a Docker image registry
+1. Project Developer configures the Gradle task in a task configuration block
+1. Project Developer invokes Gradle tasks to, for all images configured: build only; build and tag; build, tag, and 
+save; build, tag, and publish; or to perform those actions on a per-image basis  
 
-**Derived functional requirements**: fr-1, fr-2, fr-3, fr-4, fr-5, fr-6, fr-7, fr-8, fr-9, fr-10, fr-11
+**Alternative steps by Actor to achieve goal**:
+1. Project Developer creates a `build.gradle` file
+1. Project Developer applies the `gradle-docker` plugin in their `build.gradle` file
+1. Project Developer configures one or more Gradle tasks in a task configuration block, based on the desired outcomes,
+e.g., build, tag, save, publish.
+1. Project Developer invokes the appropriate tasks for all configured images or on a per-image basis 
+
+**Derived functional requirements**: fr-1, fr-2, fr-2.1, ... todo
 
 **Derived non-functional requirements**:  
 
@@ -51,138 +53,236 @@ one to build the application and one to build the Docker image:
       - `src/main/docker/`
 
 In this scenario, the `app/` directory contains the source and build file to build the application, such as a JAR file.
-The `app-image/` directory then assembles the application into a Docker image and tests it, possibly using images from
-`docker/` and/or `compose/` files to orchestration multiple containers.
+The `app-image/` directory then assembles the application into a Docker image.  This applies the Separation of Concern
+(SoC) principle, since the build in the `app-image` directory will carry out several activities specifically related
+to the image (not the original source code or resultant JAR file) like building, tagging, saving, and publishing the
+image; it could also perform integration tests on the image (not shown here or discussed in this use case, see 
+[Project Dev Compose Orchestration](uc-7-proj-dev-compose-orchestration.md)).
 
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
 
-### Define and Build Multiple Images
+### Configuration to Build, Tag, Save, and Publish
 
-DSL to define and build multiple images:
+DSL configuration to build, tag, save, and publish:
 ```groovy
-plugins {
-    id "com.kineticfire.gradle.gradle-docker" version "0.1.0"
-}
+plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
 
 docker {
     images {
         image("alpine") {
             context    = file("src/main/docker")
             dockerfile = file("src/main/docker/Dockerfile")
-            buildArgs  = [
-                    "BASE_IMAGE": "eclipse-temurin:21-jre-alpine",
-                    "JAR_FILE"  : "app.jar"
-            ]
-            tags = ["myapp:${version}-alpine", "myapp:alpine"]
-            // optional: artifact export for this image
+            buildArgs  = [ "BASE_IMAGE": "eclipse-temurin:21-jre-alpine", "JAR_FILE":"app.jar" ]
+            tags       = ["myapp:${version}-alpine", "myapp:alpine"]
             save {
-                compression = "gzip" // or "none"
-                outputFile  = layout.buildDirectory.file("docker/myapp-${version}-alpine.tar.gz")
+                compression = "gzip"
+                outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-alpine.tar.gz")
+            }
+            publish { // per-image publish targets
+                to {
+                    name       = "ghcr"
+                    repository = "ghcr.io/acme/myapp"
+                    tags       = ["${version}-alpine", "alpine"]
+                    auth {
+                        username = providers.gradleProperty("GHCR_USER")
+                        password = providers.gradleProperty("GHCR_TOKEN")
+                    }
+                }
+                to {
+                    name       = "dockerhub"
+                    repository = "acme/myapp" // docker.io/acme/myapp
+                    tags       = ["${version}-alpine"]
+                    auth {
+                        username = providers.gradleProperty("DH_USER")
+                        password = providers.gradleProperty("DH_TOKEN")
+                    }
+                }
             }
         }
+
         image("ubuntu") {
             context    = file("src/main/docker")
             dockerfile = file("src/main/docker/Dockerfile")
-            buildArgs  = [
-                    "BASE_IMAGE": "eclipse-temurin:21-jre-ubuntu",
-                    "JAR_FILE"  : "app.jar"
-            ]
-            tags = ["myapp:${version}-ubuntu", "myapp:ubuntu"]
+            buildArgs  = [ "BASE_IMAGE": "eclipse-temurin:21-jre-ubuntu", "JAR_FILE":"app.jar" ]
+            tags       = ["myapp:${version}-ubuntu", "myapp:ubuntu"]
+            save {
+                compression = "gzip"
+                outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-ubuntu.tar.gz")
+            }
+            publish {
+                to {
+                    name       = "private"
+                    repository = "registry.example.com/myteam/myapp"
+                    tags       = ["${version}-ubuntu", "ubuntu"]
+                    auth {
+                        helper = "generic"   // your plugin: e.g., reads REG_USER/REG_PASS env, or custom login
+                        username = providers.gradleProperty("PRIV_USER")
+                        password = providers.gradleProperty("PRIV_TOKEN")
+                    }
+                }
+            }
+        }
+    }
+
+    // OPTIONAL: extra retags after build (source → targets)
+    dockerTag {
+        images = [
+                "myapp:${version}-alpine": ["ghcr.io/acme/myapp:edge"],
+                "myapp:${version}-ubuntu": ["registry.example.com/myteam/myapp:latest"]
+        ]
+    }
+}
+```
+
+Invoke tasks to build, save, tag, and publish the images:
+```bash
+# build all images
+./gradlew dockerBuild
+# build a specific image
+./gradlew dockerBuildUbuntu
+
+# retag as configured (optional block above)
+./gradlew dockerTag
+# retag a specific image
+./gradlew dockerTagUbuntu
+
+# save all configured images to files
+./gradlew dockerSave
+# save a specific image
+./gradlew dockerSaveUbuntu
+
+# publish to all configured registries
+./gradlew dockerPublish
+# publish a specific image
+./gradlew dockerPublishUbuntu
+```
+
+### Tagging images (retag)
+
+DSL to tag (retag) images without building:
+```groovy
+docker {
+    images {
+        // No build context/dockerfile here → this is an *external* (prebuilt) image
+        image("alpine") {
+            sourceRef = "ghcr.io/acme/myapp:1.2.3-alpine"
+            tag {
+                pullIfMissing = true
+                to {
+                    repository = "docker.io/acme/myapp"
+                    tags       = ["1.2.3-alpine", "alpine"]
+                }
+                to {
+                    repository = "ghcr.io/acme/myapp"
+                    tags       = ["edge-alpine"]
+                }
+            }
+        }
+        image("ubuntu") {
+            sourceRef = "registry.example.com/myteam/myapp:1.2.3-ubuntu"
+            tag {
+                pullIfMissing = true
+                to {
+                    repository = "docker.io/acme/myapp"
+                    tags       = ["1.2.3-ubuntu", "ubuntu"]
+                }
+                to {
+                    repository = "registry.example.com/myteam/myapp"
+                    tags       = ["latest-ubuntu"]
+                }
+            }
+        }
+    }
+}
+```
+Assumes myapp:1.2.3-* already exist locally—e.g., built in a prior step or pulled.
+
+Invoke tasks to tag (retag images) without building:
+```bash
+# tag all
+./gradlew dockerTag
+# tag a specific image
+./gradlew dockerTagUbuntu
+```
+
+### Publishing multiple images without building
+
+DSL to publish multiple images without building:
+```groovy
+docker {
+    images {
+        // No build context/dockerfile here → this is an *external* (prebuilt) image
+        image("alpine") {
+            publish {
+                to {
+                    repository = "docker.io/acme/myapp"
+                    tags       = ["1.2.3-alpine", "alpine"]
+                    auth {
+                        username = providers.gradleProperty("DH_USER")
+                        password = providers.gradleProperty("DH_TOKEN")
+                    }
+                }
+            }
+        }
+        image("ubuntu") {
+            publish {
+                to {
+                    repository = "registry.example.com/myteam/myapp"
+                    tags       = ["1.2.3-ubuntu", "ubuntu"]
+                    auth {
+                        username = providers.gradleProperty("PRIV_USER")
+                        password = providers.gradleProperty("PRIV_TOKEN")
+                    }
+                }
+            }
         }
     }
 }
 ```
 
-Invoke tasks to build the images:
-```groovy
-./gradlew dockerBuildAlpine dockerBuildUbuntu
-# or all at once:
-./gradlew dockerBuildAll
+Invoke tasks to publish images without building:
+```bash
+# publish all
+./gradlew dockerPublish
+# publish specific image
+./gradlew dockerPublishUbuntu
 ```
 
-### Tagging multiple images (retag)
+### Save images to files without building
 
-DSL to tag (retag) multiple images:
+DSL to save images to file without building:
 ```groovy
-// Map sources → list of target tags (repo/tag)
-dockerTag {
-  images = [
-    "myapp:${version}-alpine": [
-      "ghcr.io/acme/myapp:${version}-alpine",
-      "ghcr.io/acme/myapp:alpine"
-    ],
-    "myapp:${version}-ubuntu": [
-      "ghcr.io/acme/myapp:${version}-ubuntu",
-      "ghcr.io/acme/myapp:ubuntu"
-    ]
-  ]
-}
-```
+plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
 
-Invoke tasks to tag (retag multiple images):
-```groovy
-./gradlew dockerTagAll    # runs all tag rules above
-# or task-per-image if your plugin exposes them, e.g.:
-# ./gradlew dockerTagAlpine dockerTagUbuntu
-```
-
-### Publishing multiple images
-
-DSL to publish multiple images:
-```groovy
-dockerPublish {
-  // push these exact refs (can mix local & retagged)
-  images = [
-    "ghcr.io/acme/myapp:${version}-alpine",
-    "ghcr.io/acme/myapp:alpine",
-    "ghcr.io/acme/myapp:${version}-ubuntu",
-    "ghcr.io/acme/myapp:ubuntu"
-  ]
-  // optional pass-through for registry auth/env; plugin shells out to `docker push`
-  registry {
-    // url = "ghcr.io"            // optional; informational
-    // username = providers.gradleProperty("REG_USER")
-    // password = providers.gradleProperty("REG_TOKEN")
-  }
-}
-```
-
-Invoke tasks to publish multiple images:
-```groovy
-./gradlew dockerPublishAll
-# or publish a subset:
-# ./gradlew dockerPublish --images ghcr.io/acme/myapp:${version}-alpine
-```
-
-### Save images to files
-
-DSL to save images to file (note the `save` block):
-```groovy
 docker {
-  images {
-    image("alpine") {
-      tags = ["myapp:${version}-alpine", "myapp:alpine"]
-      // ...
-      save {
-        compression = "gzip"  // "none" supported too
-        outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-alpine.tar.gz")
-      }
+    images {
+        // No build context/dockerfile here → this is an *external* (prebuilt) image
+        image("alpine") {
+            sourceRef   = "ghcr.io/acme/myapp:1.2.3-alpine"  // the image you want to save
+            save {
+                compression = "gzip"                            // or "none"
+                outputFile  = layout.buildDirectory.file("docker/pkg/myapp-1.2.3-alpine.tar.gz")
+                pullIfMissing = true                            // plugin pulls if not local
+            }
+        }
+        image("ubuntu") {
+            sourceRef   = "registry.example.com/myteam/myapp:1.2.3-ubuntu"
+            save {
+                compression = "gzip"
+                outputFile  = layout.buildDirectory.file("docker/pkg/myapp-1.2.3-ubuntu.tar.gz")
+                pullIfMissing = true
+            }
+        }
     }
-    image("ubuntu") {
-      tags = ["myapp:${version}-ubuntu", "myapp:ubuntu"]
-      // ...
-      save {
-        compression = "gzip"
-        outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-ubuntu.tar.gz")
-      }
-    }
-  }
 }
 ```
 
-Invoke tasks to save images:
-```groovy
-./gradlew dockerSaveAlpine dockerSaveUbuntu
-# or all:
-./gradlew dockerSaveAll
+If the images aren’t local yet, ensure your plugin pulls them or document that users should docker pull first.
+
+Invoke tasks to save images without building:
+```bash
+# save all
+./gradlew dockerSave
+# save a specific image
+./gradlew dockerSaveUbuntu
 ```

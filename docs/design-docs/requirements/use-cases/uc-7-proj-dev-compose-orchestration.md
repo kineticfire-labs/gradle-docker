@@ -14,9 +14,9 @@
 
 **Goal**: Orchestrate Docker containers using Docker Compose for testing
 
-**Preconditions**: `gradle-docker` plugin applied to the build, Docker CLI installed, Docker Compose installed, Docker 
-daemon available, can run Docker and Docker Compose commands without `sudo`, yaml file(s) for Docker Compose defines 
-services
+**Preconditions**: `gradle-docker` plugin applied to the build, Docker CLI installed, Docker Compose v2 installed, 
+Docker daemon available, can run Docker and Docker Compose commands without `sudo`, yaml file(s) for Docker Compose 
+defines services
 
 **Post conditions**: Docker Compose services started and stopped
 
@@ -29,58 +29,51 @@ by a yaml file(s), using Docker Compose
 containers/services
 1. Project Developer invokes the task (using the command line or triggered by another task) to stop the containers
 
-**Derived functional requirements**: 
+**Derived functional requirements**: todo
 
 **Derived non-functional requirements**:  
 
 ## Assumptions
 
-It is assumed, by convention defined by this plugin, that the Docker context (files used to build the Docker image 
-including the Dockerfile) are located at `src/main/docker`.
-
 The plugin views a project with a goal of building a software application as a Docker image as having two subprojects:
 one to build the application and one to build the Docker image:
+
 ```
 the-application-project/
-├─ app/                         # builds the JAR (or whatever)
-│  ├─ src/main/java/...
-│  └─ src/test/java/...
-└─ app-image/                   # builds Docker image + tests it
-├─ src/main/docker/          # Dockerfile + build assets (context root)
-│  ├─ Dockerfile
-│  └─ ...                    # scripts, configs, etc.
-├─ src/functionalTest/groovy/
-├─ src/functionalTest/resources/
-│  ├─ compose/               # compose files for functional tests
-│  └─ docker/                # optional, extra test-only image assets
-├─ src/integrationTest/java/
-├─ src/integrationTest/resources/
-│  ├─ compose/               # compose files for integration tests
-│  └─ docker/                # optional, extra test-only image assets
-└─ build/                    # outputs (transcripts, saved tars, state json, etc.)
+├─ app/                                   # builds the JAR (or other artifact)
+│  ├─ build.gradle
+│  └─ src/
+│     ├─ main/java/...
+│     └─ test/java/...
+└─ app-image/                              # builds the Docker image + tests it
+   ├─ build.gradle
+   ├─ src/
+   │  ├─ main/docker/                      # Dockerfile + build assets (image context)
+   │  │  ├─ Dockerfile
+   │  │  └─ ...                            # scripts, config, .dockerignore, etc.
+   │  ├─ functionalTest/groovy/            # Groovy/Spock functional tests
+   │  ├─ functionalTest/resources/
+   │  │  ├─ compose/                       # compose files for functional tests
+   │  │  └─ docker/                        # optional: test-only wrapper image assets
+   │  ├─ integrationTest/java/             # Java/JUnit integration tests
+   │  ├─ integrationTest/resources/
+   │  │  ├─ compose/                       # compose files for integration tests
+   │  │  └─ docker/                        # optional: test-only wrapper image assets
+   │  └─ testFixtures/                     # (optional) shared test helpers/utilities
+   ├─ docs/                                # (optional) runbooks, diagrams for tests
+   └─ build/                               # outputs: transcripts, logs, saved tars, state JSON, etc.
+      ├─ docker/                           # image tars (from dockerSave*)
+      ├─ compose-logs/                     # compose logs by task/suite
+      └─ compose/                          # compose state files (JSON) per stack
 ```
 
 In this scenario, the `app/` directory contains the source and build file to build the application, such as a JAR file.
 
 The `app-image/` directory then assembles the application into a Docker image and tests it.  This applies Separation of 
 Concerns (SoC) principle, given the amount of functionality is being performed in the process of building the image,
-particularly with integration tests.  Within the `app-image/` directory:
-- `app-image/src/main/docker/`: builds the image
-   - `app-image/src/functionalTest/`: contains functional tests
-      - `app-image/src/functionalTest/docker/`: optional, assets to build a final test image from the image under test,
-        if necessary
-      - `app-image/src/functionalTest/docker/`: one or more compose files needed to spin-up the image as a container,
-        and any other containers needed, for testing
-   - `app-image/src/integrationTest/`: contains integration tests
-      - `app-image/src/integrationTest/java/`: integration tests written in Java
-      - `app-image/src/integrationTest/docker/`: one or more compose files needed to spin-up the image as a container,
-        and any other containers needed, for testing
-      - `app-image/src/integrationTest/java/`: integration tests written in Java
-
-
-todo: issue that can only build one image from `app-image`?
-
-todo: issue that can only build one image from `functionalTest/docker/` and `integrationTest/docker/`.
+particularly with integration tests.  Within the `app-image/` directory, tests are located at:
+- `app-image/src/functionalTest/`: contains functional tests
+- `app-image/src/integrationTest/`: contains integration tests
 
 ## Concept Groovy DSL Using the Plugin's Docker Tasks
 
@@ -221,7 +214,7 @@ Each Test task points at a source set (or patterns) and the plugin adds the comp
 Reference the line `systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")`.
 
 The plugin’s `composeUp` writes a connection info JSON (e.g., service → ports, container reference (ID, 
-reference (name, ID, etc), etc.)).
+reference (name, ID, etc.), etc.)).
 
 `composeStateFileFor("dbOnly")` (helper from the plugin) resolves the path to that JSON for the dbOnly stack.
 
