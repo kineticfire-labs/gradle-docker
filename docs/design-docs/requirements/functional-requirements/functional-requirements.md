@@ -6,17 +6,17 @@ how users will interact with it, ensuring that the final product meets user need
 
 ## List of Functional Requirements
 
-| Use Case ID | Requirement ID | Description                                                                                                              | Status |
-|-------------|----------------|--------------------------------------------------------------------------------------------------------------------------|--------|
-| uc-1        | fr-1           | The plugin shall enforce minimum Java version 21 during build                                                            | Complete (fs-1) |
-| uc-1        | fr-2           | The plugin shall enforce minimum Gradle version 9.0.0 during build                                                       | Complete (fs-2) |
-| uc-1        | fr-3           | The plugin shall enforce minimum Groovy version 4.0 during build                                                         | Complete (fs-3) |
-| uc-1        | fr-4           | The plugin shall validate compatibility across supported version matrix through automated testing                        | Complete (fs-4) |
-| uc-2        | fr-5           | The plugin shall support Gradle Configuration Cache                                                                      | Complete (fs-5) |
-| uc-2        | fr-6           | The plugin shall use Provider API for lazy evaluation                                                                    | Complete (fs-6) |
-| uc-2        | fr-7           | The plugin shall display clear error messages for version compatibility issues                                           | Complete (fs-7) |
-| uc-3        | fr-8           | The plugin shall use Docker Java Client library for Docker daemon operations (build, tag, push, save)                    | Complete (fs-8) |
-| uc-3        | fr-9           | The plugin shall use Spock Framework for BDD-style testing                                                               | Complete (fs-9) |
+| Use Case ID | Requirement ID | Description                                                                                                              | Status           |
+|-------------|----------------|--------------------------------------------------------------------------------------------------------------------------|------------------|
+| uc-1        | fr-1           | The plugin shall enforce minimum Java version 21 during build                                                            | Complete (fs-1)  |
+| uc-1        | fr-2           | The plugin shall enforce minimum Gradle version 9.0.0 during build                                                       | Complete (fs-2)  |
+| uc-1        | fr-3           | The plugin shall enforce minimum Groovy version 4.0 during build                                                         | Complete (fs-3)  |
+| uc-1        | fr-4           | The plugin shall validate compatibility across supported version matrix through automated testing                        | Complete (fs-4)  |
+| uc-2        | fr-5           | The plugin shall support Gradle Configuration Cache                                                                      | Complete (fs-5)  |
+| uc-2        | fr-6           | The plugin shall use Provider API for lazy evaluation                                                                    | Complete (fs-6)  |
+| uc-2        | fr-7           | The plugin shall display clear error messages for version compatibility issues                                           | Complete (fs-7)  |
+| uc-3        | fr-8           | The plugin shall use Docker Java Client library for Docker daemon operations (build, tag, push, save)                    | Complete (fs-8)  |
+| uc-3        | fr-9           | The plugin shall use Spock Framework for BDD-style testing                                                               | Complete (fs-9)  |
 | uc-3        | fr-10          | The plugin shall use Jackson library for JSON parsing                                                                    | Complete (fs-10) |
 | uc-6        | fr-11          | The plugin shall provide a `dockerBuild` task to build Docker images                                                     | Complete (fs-11) |
 | uc-6        | fr-12          | The plugin shall provide a `dockerSave` task to save Docker images to tar.gz files                                       | Complete (fs-12) |
