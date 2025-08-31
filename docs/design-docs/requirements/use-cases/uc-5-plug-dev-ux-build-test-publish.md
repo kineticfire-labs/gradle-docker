@@ -1,4 +1,4 @@
-# Use Case - 00005 - Plugin Developer UX Build Test Publish
+# Use Case - 5 - Plugin Developer UX Build Test Publish
 
 ## Document Metadata
 
@@ -26,4 +26,4 @@ project
 
 **Derived functional requirements**:
 
-**Derived non-functional requirements**: nfr-0010, nfr-0011
+**Derived non-functional requirements**: nfr-10, nfr-11

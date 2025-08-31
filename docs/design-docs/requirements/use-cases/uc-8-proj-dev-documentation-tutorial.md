@@ -1,4 +1,4 @@
-# Use Case - 00001 - Project Developer Documentation & Tutorial
+# Use Case - 1 - Project Developer Documentation & Tutorial
 
 ## Document Metadata
 
@@ -23,4 +23,4 @@
 
 **Derived functional requirements**:
 
-**Derived non-functional requirements**: nfr-0012, nfr-0013 
+**Derived non-functional requirements**: nfr-12, nfr-13 

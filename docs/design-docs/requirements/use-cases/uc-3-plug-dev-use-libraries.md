@@ -1,4 +1,4 @@
-# Use Case - 00003 - Plugin Developer Use Libraries
+# Use Case - 3 - Plugin Developer Use Libraries
 
 ## Document Metadata
 
@@ -24,4 +24,4 @@
 
 **Derived functional requirements**:
 
-**Derived non-functional requirements**: nfr-0008, nfr-0009
+**Derived non-functional requirements**: nfr-8, nfr-9

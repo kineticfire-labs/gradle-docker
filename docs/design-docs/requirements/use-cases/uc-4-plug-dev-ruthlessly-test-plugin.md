@@ -1,4 +1,4 @@
-# Use Case - 00004 - Plugin Developer Ruthlessly Test Plugin
+# Use Case - 4 - Plugin Developer Ruthlessly Test Plugin
 
 ## Document Metadata
 
@@ -25,4 +25,4 @@
 
 **Derived functional requirements**:
 
-**Derived non-functional requirements**: nfr-0005, nfr-0006, nfr-0007
+**Derived non-functional requirements**: nfr-5, nfr-6, nfr-7

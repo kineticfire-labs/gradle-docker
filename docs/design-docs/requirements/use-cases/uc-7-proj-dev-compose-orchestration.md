@@ -1,4 +1,4 @@
-# Use Case - 00007 - Project Developer Compose Orchestration
+# Use Case - 7 - Project Developer Compose Orchestration
 
 ## Document Metadata
 

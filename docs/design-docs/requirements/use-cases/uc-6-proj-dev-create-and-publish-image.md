@@ -1,4 +1,4 @@
-# Use Case - 00006 - Project Developer Create and Publish Image
+# Use Case - 6 - Project Developer Create and Publish Image
 
 ## Document Metadata
 
@@ -32,8 +32,7 @@ more tags for the image
 1. Project Developer optionally invokes the task (using the command line or triggered by another task) to publish one or
    more tagged images to a Docker image registry
 
-**Derived functional requirements**: fr-0001, fr-0002, fr-0003, fr-0004, fr-0005, fr-0006, fr-0007, fr-0008, fr-0009,
-fr-0010, fr-0011
+**Derived functional requirements**: fr-1, fr-2, fr-3, fr-4, fr-5, fr-6, fr-7, fr-8, fr-9, fr-10, fr-11
 
 **Derived non-functional requirements**:  
 

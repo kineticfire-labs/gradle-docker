@@ -58,33 +58,35 @@ Design documents are organized into this directory structure:
    - `docs/design-docs/requirements/`: directory containing the requirements documents (RDs)
       - `docs/design-docs/requirements/requirements.md`: the top-level requirements document (RDs)
       - `docs/design-docs/requirements/use-cases/`: directory containing use cases documents (UCDs)
-      - `docs/design-docs/requirements/functional-requirements/`: directory containing  the functional 
+      - `docs/design-docs/requirements/functional-requirements/functional-requirements.md`: the functional 
       requirements (FRDs)
-      - `docs/design-docs/requirements/non-functional-requirements/`: directory containing the non-functional 
+      - `docs/design-docs/requirements/non-functional-requirements/non-functional-requirements.md`: the non-functional 
       requirements (NFRDs)
    - `docs/design-docs/specifications/`: directory containing the specifications documents (SDs)
        - `docs/design-docs/specifications/specifications.md`: the top-level specifications document (SDs)
-       - `docs/design-docs/specifications/functional-specifications/`: directory containing the functional 
+       - `docs/design-docs/specifications/functional-specifications/functional-specifications.md`: functional 
        specifications (FSD)
-       - `docs/design-docs/specifications/non-functional-specifications/`: directory containing the non-functional 
-       specifications (NFSD)
-       - `docs/design-docs/specifications/technical-specifications/`: directory containing the technical specifications 
-       (TSD)
+       - `docs/design-docs/specifications/non-functional-specifications/non-functional-specifications.md`: the 
+       non-functional specifications (NFSD)
+       - `docs/design-docs/specifications/technical-specifications/technical-specifications.md`: the technical 
+       specifications (TSD)
 
 ## Naming and Tracking of Design Documents
 
 The convention for titling design documents follows the names given in the 
-[Design Documents - Types](#design-documents---types), [Requirements Design Documents](#requirements-design-documents), 
-and [Specifications Design Documents](#specifications-design-documents) sections.  File names generally drop the ending
+[Design Documents - Types](#design-documents---types), [Requirements Design Documents](#requirements), 
+and [Specifications Design Documents](#specifications) sections.  File names generally drop the ending
 "document".
 
 Individual use cases, requirements, and specification file names are named per the following convention: 
-`<type abbreviation>-<4 digit ID>-<short description, using kebab case>`. 
-- Example design document file name for a Use Case Document (UCD) with ID 1: `uc-0001-user-buy-item`.
+`<type abbreviation>-<numeric ID>-<short description, using kebab case>`. 
+- Example design document file name for a Use Case Document (UCD) with ID 1: `uc-1-user-buy-item`.
 
 The title for those individual items are named per the following convention:
-`<type (spelled out)> - <4 digit ID> - <short decription, using normal document titling spacing and capialization>`
-- An example title for the document above: `uc - 0001 - User Buys an Item`.
+`<type (spelled out)> - <numeric ID> - <short decription, can differ from file name, using normal document titling spacing and capialization>`
+- An example title for the document above: `uc - 1 - User Buys an Item`.
+
+Sub use cases, requirements, and specifications use a dot, such '1.1', '1.2', and so on.
 
 ### Type Abbreviations
 
@@ -106,7 +108,7 @@ Each use case, requirement, and specification must have assigned a numeric ID.  
 category (e.g., functional requirement, non-functional requirement, functional specification, non-functional 
 specification, and technical specification).
 
-The ID is expressed as a four-digit number, so numbers less than four digits must receive preceding zeros.
+Sub use cases, requirements, and specifications use a dot, such '1.1', '1.2', and so on.
 
 ### Short Description
 

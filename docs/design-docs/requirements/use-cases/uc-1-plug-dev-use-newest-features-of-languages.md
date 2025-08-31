@@ -1,4 +1,4 @@
-# Use Case - 00001 - Plugin Developer Use Newest Features of Languages
+# Use Case - 1 - Plugin Developer Use Newest Features of Languages
 
 ## Document Metadata
 
@@ -25,4 +25,4 @@ achieved
 
 **Derived functional requirements**:
 
-**Derived non-functional requirements**: nfr-0001, nfr-0002, nfr-0003, nfr-0004
+**Derived non-functional requirements**: nfr-1, nfr-2, nfr-3, nfr-4
