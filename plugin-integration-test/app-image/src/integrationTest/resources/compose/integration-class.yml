@@ -1,0 +1,24 @@
+# Docker Compose for integration tests - class lifecycle
+# Purpose: Fresh environment per test class for balanced isolation vs performance
+
+services:
+  time-server:
+    image: time-server:latest
+    ports:
+      - "8082:8080"
+    environment:
+      - PORT=8080
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+    deploy:
+      restart_policy:
+        condition: on-failure
+        max_attempts: 3
+
+networks:
+  default:
+    name: integration-class-network

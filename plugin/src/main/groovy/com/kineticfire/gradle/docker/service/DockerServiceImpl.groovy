@@ -50,8 +50,8 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     
     private static final Logger logger = Logging.getLogger(DockerServiceImpl)
     
-    private final DockerClient dockerClient
-    private final ExecutorService executorService
+    protected final DockerClient dockerClient
+    protected final ExecutorService executorService
     
     @Inject
     DockerServiceImpl() {
@@ -64,7 +64,11 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         logger.info("DockerService initialized successfully")
     }
     
-    private DockerClient createDockerClient() {
+    protected DockerClient getDockerClient() {
+        return dockerClient
+    }
+    
+    protected DockerClient createDockerClient() {
         try {
             def dockerClientConfig = DefaultDockerClientConfig.createDefaultConfigBuilder()
                 .build()
@@ -100,26 +104,55 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 def buildImageResultCallback = new BuildImageResultCallback() {
                     @Override
                     void onNext(BuildResponseItem item) {
+                        // Handle stream output (build progress)
                         if (item.stream) {
                             def message = item.stream.trim()
                             if (message) {
-                                logger.info("Docker build: {}", message)
+                                logger.lifecycle("Docker build: {}", message)
                             }
                         }
+                        
+                        // Handle errors
                         if (item.errorDetail) {
                             logger.error("Docker build error: {}", item.errorDetail.message)
                         }
+                        if (item.error) {
+                            logger.error("Docker build error: {}", item.error)
+                        }
+                        
+                        // Pass to parent to handle image ID capture
+                        super.onNext(item)
+                    }
+                    
+                    @Override
+                    void onError(Throwable throwable) {
+                        logger.error("Docker build callback error: {}", throwable.message, throwable)
+                        super.onError(throwable)
+                    }
+                    
+                    @Override
+                    void onComplete() {
+                        logger.info("Docker build callback completed")
+                        super.onComplete()
                     }
                 }
                 
-                def imageId = dockerClient.buildImageCmd()
+                def buildCmd = dockerClient.buildImageCmd()
                     .withDockerfile(context.dockerfile.toFile())
                     .withBaseDirectory(context.contextPath.toFile())
                     .withTags(new HashSet<>(context.tags))
-                    .withBuildArgs(context.buildArgs)
                     .withNoCache(false)
-                    .exec(buildImageResultCallback)
-                    .awaitImageId()
+                    
+                // Add build arguments individually
+                context.buildArgs.each { key, value ->
+                    buildCmd.withBuildArg(key, value)
+                }
+                
+                def result = buildCmd.exec(buildImageResultCallback)
+                logger.info("Build command executed, awaiting image ID...")
+                
+                def imageId = result.awaitImageId()
+                logger.info("Received image ID: {}", imageId)
                     
                 logger.lifecycle("Successfully built Docker image: {} (ID: {})", context.tags.first(), imageId)
                 return imageId

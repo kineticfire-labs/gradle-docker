@@ -40,7 +40,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         logger.info("ComposeService initialized with docker-compose CLI")
     }
     
-    private void validateDockerCompose() {
+    protected void validateDockerCompose() {
         try {
             def process = new ProcessBuilder("docker", "compose", "version").start()
             process.waitFor()
@@ -68,7 +68,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
     }
     
-    private List<String> getComposeCommand() {
+    protected List<String> getComposeCommand() {
         // Try docker compose first (newer), fallback to docker-compose
         try {
             def process = new ProcessBuilder("docker", "compose", "version").start()
@@ -89,26 +89,28 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                 logger.info("Starting Docker Compose stack: {}", config.stackName)
                 
                 def composeCommand = getComposeCommand()
-                def command = composeCommand + [
-                    "-f", config.composeFile.toString(),
-                    "-p", config.projectName,
-                    "up", "-d"
-                ]
+                def command = composeCommand.clone()
                 
-                if (config.envFile) {
-                    command.addAll(1, ["--env-file", config.envFile.toString()])
+                // Add compose files
+                config.composeFiles.each { file ->
+                    command.addAll(["-f", file.toString()])
                 }
                 
-                if (config.profiles && !config.profiles.isEmpty()) {
-                    config.profiles.each { profile ->
-                        command.addAll(["--profile", profile])
-                    }
+                // Add project name
+                command.addAll(["-p", config.projectName])
+                
+                // Add env files
+                config.envFiles.each { envFile ->
+                    command.addAll(["--env-file", envFile.toString()])
                 }
+                
+                // Add the up command
+                command.addAll(["up", "-d"])
                 
                 logger.debug("Executing: {}", command.join(" "))
                 
                 def processBuilder = new ProcessBuilder(command)
-                processBuilder.directory(config.composeFile.parent.toFile())
+                processBuilder.directory(config.composeFiles.first().parent.toFile())
                 
                 def process = processBuilder.start()
                 def exitCode = process.waitFor()
@@ -127,9 +129,8 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                 
                 def composeState = new ComposeState(
                     config.stackName,
-                    services,
                     config.projectName,
-                    Instant.now()
+                    services
                 )
                 
                 logger.info("Docker Compose stack started: {}", config.stackName)
@@ -147,7 +148,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         })
     }
     
-    private Map<String, ServiceInfo> getStackServices(String projectName) {
+    protected Map<String, ServiceInfo> getStackServices(String projectName) {
         try {
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", "--format", "json"]
@@ -198,7 +199,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
     }
     
-    private ServiceState parseServiceState(String status) {
+    protected ServiceState parseServiceState(String status) {
         if (!status) return ServiceState.UNKNOWN
         
         def lowerStatus = status.toLowerCase()
@@ -299,7 +300,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         })
     }
     
-    private boolean checkServiceReady(String projectName, String serviceName, ServiceState targetState) {
+    protected boolean checkServiceReady(String projectName, String serviceName, ServiceState targetState) {
         try {
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", serviceName, "--format", "table"]

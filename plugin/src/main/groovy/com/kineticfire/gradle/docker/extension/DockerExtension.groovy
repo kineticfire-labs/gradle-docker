@@ -70,12 +70,12 @@ abstract class DockerExtension {
      * Validation method called during configuration
      */
     void validate() {
-        images.all { imageSpec ->
+        images.each { imageSpec ->
             validateImageSpec(imageSpec)
         }
     }
     
-    private void validateImageSpec(ImageSpec imageSpec) {
+    void validateImageSpec(ImageSpec imageSpec) {
         // Validate required properties
         if (!imageSpec.context.present && !imageSpec.sourceRef.present) {
             throw new GradleException(
@@ -118,7 +118,7 @@ abstract class DockerExtension {
         }
     }
     
-    private boolean isValidDockerTag(String tag) {
+    boolean isValidDockerTag(String tag) {
         // Basic Docker tag validation
         return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*:[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
     }

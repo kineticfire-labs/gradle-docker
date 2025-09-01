@@ -22,6 +22,7 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -37,7 +38,7 @@ abstract class DockerTagTask extends DefaultTask {
         tags.convention([])
     }
     
-    @Input
+    @Internal
     abstract Property<DockerService> getDockerService()
     
     @Input

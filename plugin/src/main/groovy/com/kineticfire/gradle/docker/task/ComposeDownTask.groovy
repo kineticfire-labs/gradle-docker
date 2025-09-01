@@ -16,18 +16,48 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.DefaultTask
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
 
 /**
  * Task for stopping Docker Compose stacks
- * This is a placeholder implementation for Phase 1
  */
 abstract class ComposeDownTask extends DefaultTask {
     
+    ComposeDownTask() {
+        group = 'docker compose'
+        description = 'Stop Docker Compose stack'
+    }
+    
+    @Internal
+    abstract Property<ComposeService> getComposeService()
+    
+    @Input
+    abstract Property<String> getProjectName()
+    
+    @Input
+    abstract Property<String> getStackName()
+    
     @TaskAction
     void composeDown() {
-        logger.lifecycle("ComposeDownTask: Stopping compose stack (placeholder implementation)")
-        // TODO: Implement actual Docker Compose down logic with service integration
+        def projectName = this.projectName.get()
+        def stackName = this.stackName.get()
+        
+        logger.lifecycle("Stopping Docker Compose stack: {} (project: {})", stackName, projectName)
+        
+        try {
+            // Stop the compose stack
+            def future = composeService.get().downStack(projectName)
+            future.get()
+            
+            logger.lifecycle("Successfully stopped compose stack '{}'", stackName)
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to stop compose stack '${stackName}': ${e.message}", e)
+        }
     }
 }

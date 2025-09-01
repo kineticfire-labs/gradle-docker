@@ -79,18 +79,18 @@ abstract class DockerOrchExtension {
      * Validation method called during configuration
      */
     void validate() {
-        composeStacks.all { stackSpec ->
+        composeStacks.each { stackSpec ->
             validateStackSpec(stackSpec)
         }
     }
     
-    private void validateStackSpec(ComposeStackSpec stackSpec) {
+    void validateStackSpec(ComposeStackSpec stackSpec) {
         // Validate compose files exist
-        if (stackSpec.files.present && !stackSpec.files.get().empty) {
-            stackSpec.files.get().each { file ->
-                if (!file.asFile.exists()) {
+        if (!stackSpec.files.empty) {
+            stackSpec.files.each { file ->
+                if (!file.exists()) {
                     throw new GradleException(
-                        "Compose file does not exist: ${file.asFile.absolutePath} in stack '${stackSpec.name}'\\n" +
+                        "Compose file does not exist: ${file.absolutePath} in stack '${stackSpec.name}'\\n" +
                         "Suggestion: Create the compose file or update the path"
                     )
                 }
@@ -98,11 +98,11 @@ abstract class DockerOrchExtension {
         }
         
         // Validate env files if specified
-        if (stackSpec.envFiles.present && !stackSpec.envFiles.get().empty) {
-            stackSpec.envFiles.get().each { file ->
-                if (!file.asFile.exists()) {
+        if (!stackSpec.envFiles.empty) {
+            stackSpec.envFiles.each { file ->
+                if (!file.exists()) {
                     throw new GradleException(
-                        "Environment file does not exist: ${file.asFile.absolutePath} in stack '${stackSpec.name}'\\n" +
+                        "Environment file does not exist: ${file.absolutePath} in stack '${stackSpec.name}'\\n" +
                         "Suggestion: Create the env file or remove it from configuration"
                     )
                 }

@@ -22,7 +22,7 @@ package com.kineticfire.gradle.docker.model
 class ComposeState {
     String configName
     String projectName
-    Map<String, ServiceState> services = [:]
+    Map<String, ServiceInfo> services = [:]
     List<String> networks = []
     
     // Default constructor for Jackson
@@ -37,7 +37,7 @@ class ComposeState {
     }
     
     // Traditional constructor
-    ComposeState(String configName, String projectName, Map<String, ServiceState> services = [:], List<String> networks = []) {
+    ComposeState(String configName, String projectName, Map<String, ServiceInfo> services = [:], List<String> networks = []) {
         this.configName = configName
         this.projectName = projectName
         this.services = services

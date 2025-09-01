@@ -18,12 +18,14 @@ package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
 import com.kineticfire.gradle.docker.task.*
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.testing.Test
 import org.gradle.util.GradleVersion
 import org.gradle.api.JavaVersion
 
@@ -54,6 +56,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Setup cleanup hooks
         configureCleanupHooks(project, dockerService, composeService)
+        
+        // Setup test integration extension methods
+        setupTestIntegration(project)
     }
     
     private void validateRequirements(Project project) {
@@ -270,21 +275,36 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void configureCleanupHooks(Project project, Provider<DockerService> dockerService, Provider<ComposeService> composeService) {
-        project.gradle.buildFinished { result ->
-            try {
-                dockerService.get().close()
-                project.logger.debug("Docker service closed successfully")
-            } catch (Exception e) {
-                project.logger.warn("Error closing Docker service: ${e.message}")
-            }
-        }
+        // BuildService implementations handle their own lifecycle cleanup automatically
+        // No explicit cleanup hooks needed for configuration cache compatibility
+        project.logger.debug("Service cleanup configured via BuildService lifecycle")
     }
     
-    // Task configuration methods (to be implemented with actual task classes)
+    // Task configuration methods
     private void configureDockerBuildTask(task, imageSpec, dockerService) {
-        // TODO: Implement when DockerBuildTask is created
         task.group = 'docker'
         task.description = "Build Docker image: ${imageSpec.name}"
+        
+        // Configure service dependency
+        task.dockerService.set(dockerService)
+        
+        // Configure build context and dockerfile
+        if (imageSpec.context.present) {
+            task.contextPath.set(imageSpec.context)
+        }
+        if (imageSpec.dockerfile.present) {
+            task.dockerfile.set(imageSpec.dockerfile)
+        }
+        
+        // Configure tags
+        task.tags.set(imageSpec.tags)
+        
+        // Configure build arguments
+        task.buildArgs.set(imageSpec.buildArgs)
+        
+        // Configure output image ID file
+        def outputDir = task.project.layout.buildDirectory.dir("docker/${imageSpec.name}")
+        task.imageId.set(outputDir.map { it.file('image-id.txt') })
     }
     
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
@@ -295,6 +315,18 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerTagTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Tag Docker image: ${imageSpec.name}"
+        
+        // Configure service dependency
+        task.dockerService.set(dockerService)
+        
+        // Configure source image (this needs to come from the build task's output)
+        // For now, use first tag as source - this will be refined when build->tag dependency is established
+        if (!imageSpec.tags.get().isEmpty()) {
+            task.sourceImage.set(imageSpec.tags.get().first())
+        }
+        
+        // Configure target tags
+        task.tags.set(imageSpec.tags)
     }
     
     private void configureDockerPublishTask(task, imageSpec, dockerService) {
@@ -305,10 +337,53 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {
         task.group = 'docker compose'
         task.description = "Start Docker Compose stack: ${stackSpec.name}"
+        
+        // Configure service dependency
+        task.composeService.set(composeService)
+        
+        // Configure compose files
+        task.composeFiles.setFrom(stackSpec.files)
+        if (stackSpec.envFiles && !stackSpec.envFiles.empty) {
+            task.envFiles.setFrom(stackSpec.envFiles)
+        }
+        
+        // Configure project and stack names
+        task.projectName.set(stackSpec.projectName.getOrElse(stackSpec.name))
+        task.stackName.set(stackSpec.name)
     }
     
     private void configureComposeDownTask(task, stackSpec, composeService) {
         task.group = 'docker compose'
         task.description = "Stop Docker Compose stack: ${stackSpec.name}"
+        
+        // Configure service dependency
+        task.composeService.set(composeService)
+        
+        // Configure project and stack names
+        task.projectName.set(stackSpec.projectName.getOrElse(stackSpec.name))
+        task.stackName.set(stackSpec.name)
+    }
+    
+    private void setupTestIntegration(Project project) {
+        def testIntegration = new TestIntegrationExtension(project)
+        
+        // Add extension methods to all Test tasks
+        project.tasks.withType(Test) { test ->
+            // Add usesCompose method
+            test.ext.usesCompose = { Map args ->
+                def stackName = args.stack
+                def lifecycle = args.lifecycle ?: 'suite'
+                testIntegration.usesCompose(test, stackName, lifecycle)
+            }
+            
+            // Add composeStateFileFor method to project for use in build scripts
+            if (!project.ext.has('composeStateFileFor')) {
+                project.ext.composeStateFileFor = { String stackName ->
+                    return testIntegration.composeStateFileFor(stackName)
+                }
+            }
+        }
+        
+        project.logger.debug("Test integration extension methods configured")
     }
 }

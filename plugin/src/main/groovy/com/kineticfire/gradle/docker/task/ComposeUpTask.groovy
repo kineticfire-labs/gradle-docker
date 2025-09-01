@@ -16,18 +16,74 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.model.ComposeConfig
+import com.kineticfire.gradle.docker.model.WaitConfig
+import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 
 /**
  * Task for starting Docker Compose stacks
- * This is a placeholder implementation for Phase 1
  */
 abstract class ComposeUpTask extends DefaultTask {
     
+    ComposeUpTask() {
+        group = 'docker compose'
+        description = 'Start Docker Compose stack'
+    }
+    
+    @Internal
+    abstract Property<ComposeService> getComposeService()
+    
+    @InputFiles
+    abstract ConfigurableFileCollection getComposeFiles()
+    
+    @InputFiles
+    @Optional
+    abstract ConfigurableFileCollection getEnvFiles()
+    
+    @Input
+    abstract Property<String> getProjectName()
+    
+    @Input
+    abstract Property<String> getStackName()
+    
     @TaskAction
     void composeUp() {
-        logger.lifecycle("ComposeUpTask: Starting compose stack (placeholder implementation)")
-        // TODO: Implement actual Docker Compose up logic with service integration
+        def projectName = this.projectName.get()
+        def stackName = this.stackName.get()
+        
+        logger.lifecycle("Starting Docker Compose stack: {} (project: {})", stackName, projectName)
+        
+        // Convert FileCollection to List<Path>
+        def composeFilePaths = composeFiles.files.collect { it.toPath() }
+        def envFilePaths = envFiles?.files?.collect { it.toPath() } ?: []
+        
+        // Create compose configuration
+        def config = new ComposeConfig(composeFilePaths, envFilePaths, projectName, stackName, [:])
+        
+        try {
+            // Start the compose stack
+            def future = composeService.get().upStack(config)
+            def composeState = future.get()
+            
+            logger.lifecycle("Successfully started compose stack '{}' with {} services", 
+                stackName, composeState.services.size())
+            
+            composeState.services.each { serviceName, serviceInfo ->
+                logger.info("  Service '{}': {} ({})", serviceName, 
+                    serviceInfo.state, serviceInfo.ports.collect { "${it.hostPort}:${it.containerPort}" }.join(', '))
+            }
+            
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to start compose stack '${stackName}': ${e.message}", e)
+        }
     }
 }

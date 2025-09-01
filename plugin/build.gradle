@@ -106,25 +106,42 @@ jar {
     reproducibleFileOrder = true
 }
 
-testing {
-    suites {
-        functionalTest(JvmTestSuite) {
-            dependencies {
-                implementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
-                implementation 'org.spockframework:spock-core'
-                implementation gradleTestKit()
-            }
-        }
+// Configure functional test source set manually to work around TestKit issues
+sourceSets {
+    functionalTest {
+        groovy.srcDir 'src/functionalTest/groovy'
+        resources.srcDir 'src/functionalTest/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
     }
 }
 
-tasks.named('check') {
-    dependsOn testing.suites.functionalTest
+configurations {
+    functionalTestImplementation.extendsFrom implementation
+    functionalTestRuntimeOnly.extendsFrom runtimeOnly
 }
 
-// Ensure functional tests have plugin metadata available
-tasks.named('functionalTest') {
-    dependsOn('pluginUnderTestMetadata')
+dependencies {
+    functionalTestImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
+    functionalTestImplementation 'org.spockframework:spock-core'
+    functionalTestImplementation gradleTestKit()
+    functionalTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    functionalTestRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+}
+
+tasks.register('functionalTest', Test) {
+    description = 'Runs functional tests'
+    group = 'verification'
+    
+    testClassesDirs = sourceSets.functionalTest.output.classesDirs
+    classpath = sourceSets.functionalTest.runtimeClasspath
+    useJUnitPlatform()
+    
+    dependsOn tasks.pluginUnderTestMetadata
+}
+
+tasks.named('check') {
+    dependsOn tasks.functionalTest
 }
 
 tasks.named('test') {
