@@ -23,6 +23,7 @@ plugins {
     id 'java-gradle-plugin'
     id 'maven-publish'
     id 'com.gradle.plugin-publish' version '1.2.1'
+    id 'jacoco'
 }
 
 java {
@@ -128,6 +129,24 @@ dependencies {
     functionalTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     functionalTestRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }
+
+//jacocoTestReport {
+//    reports {
+//        xml.required = true // Enable XML report generation
+//        html.enabled = true // Ensure HTML report is also generated
+//    }
+//    // Optional: Ensure tests run before report generation
+//    dependsOn test
+//}
+
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport) // Report is always generated after tests run
+}
+
+// todo
+//After successful execution, the generated reports will be found in your project's build/reports/jacoco/test directory
+// (or the path you configured). Open the index.html file in your browser to view the interactive HTML report. If you
+// enabled XML reports, you will also find a jacocoTestReport.xml file in the same location.
 
 tasks.register('functionalTest', Test) {
     description = 'Runs functional tests'
