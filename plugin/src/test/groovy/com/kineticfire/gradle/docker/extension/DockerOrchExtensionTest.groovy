@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.extension
 
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -37,100 +38,206 @@ class DockerOrchExtensionTest extends Specification {
     def "extension can be created"() {
         expect:
         extension != null
-        extension.composeConfigs != null
+        extension.composeStacks != null
     }
 
-    def "can configure single compose config"() {
+    def "can configure single compose stack"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
         when:
-        extension.composeConfigs {
-            testCompose {
-                composeFile = project.file('docker-compose.yml')
+        extension.composeStacks {
+            testStack {
+                files.from(project.file('docker-compose.yml'))
                 profiles = ['test']
-                envFile = project.file('.env.test')
             }
         }
 
         then:
-        extension.composeConfigs.size() == 1
-        extension.composeConfigs.getByName('testCompose') != null
-
+        extension.composeStacks.size() == 1
+        extension.composeStacks.getByName('testStack') != null
+        
         and:
-        ComposeStackSpec config = extension.composeConfigs.getByName('testCompose')
-        config.composeFile.get().asFile == project.file('docker-compose.yml')
-        config.profiles.get() == ['test']
-        config.envFile.get().asFile == project.file('.env.test')
+        ComposeStackSpec stack = extension.composeStacks.getByName('testStack')
+        stack.profiles.get() == ['test']
+        stack.projectName.get() == "${project.name}-testStack"
     }
 
-    def "can configure multiple compose configs"() {
+    def "can configure multiple compose stacks"() {
+        given:
+        project.file('docker-compose.dev.yml').text = 'version: "3.8"'
+        project.file('docker-compose.prod.yml').text = 'version: "3.8"'
+        
         when:
-        extension.composeConfigs {
+        extension.composeStacks {
             development {
-                composeFile = project.file('docker-compose.dev.yml')
+                files.from(project.file('docker-compose.dev.yml'))
                 profiles = ['dev', 'debug']
             }
             production {
-                composeFile = project.file('docker-compose.prod.yml')
+                files.from(project.file('docker-compose.prod.yml'))
                 profiles = ['prod']
-                envFile = project.file('.env.prod')
             }
         }
 
         then:
-        extension.composeConfigs.size() == 2
-        extension.composeConfigs.getByName('development') != null
-        extension.composeConfigs.getByName('production') != null
-
+        extension.composeStacks.size() == 2
+        extension.composeStacks.getByName('development') != null
+        extension.composeStacks.getByName('production') != null
+        
         and:
-        extension.composeConfigs.getByName('development').profiles.get() == ['dev', 'debug']
-        extension.composeConfigs.getByName('production').profiles.get() == ['prod']
+        extension.composeStacks.getByName('development').profiles.get() == ['dev', 'debug']
+        extension.composeStacks.getByName('production').profiles.get() == ['prod']
     }
 
-    def "can configure services for compose config"() {
-        when:
-        extension.composeConfigs {
-            fullStack {
-                composeFile = project.file('docker-compose.yml')
-                services = ['web', 'api', 'database']
+    def "validate passes for valid stack configuration"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        extension.composeStacks {
+            validStack {
+                files.from(project.file('docker-compose.yml'))
+                profiles = ['test']
             }
         }
 
+        when:
+        extension.validate()
+
         then:
-        ComposeStackSpec config = extension.composeConfigs.getByName('fullStack')
-        config.services.get() == ['web', 'api', 'database']
+        noExceptionThrown()
     }
 
-    def "can configure environment variables"() {
+    def "validate fails when compose file does not exist"() {
+        given:
+        extension.composeStacks {
+            missingFile {
+                files.from(project.file('non-existent-compose.yml'))
+                profiles = ['test']
+            }
+        }
+
         when:
-        extension.composeConfigs {
-            envTest {
-                composeFile = project.file('docker-compose.yml')
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Compose file does not exist")
+        ex.message.contains('missingFile')
+    }
+
+    def "validate fails when env file does not exist"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        extension.composeStacks {
+            missingEnv {
+                files.from(project.file('docker-compose.yml'))
+                envFiles.from(project.file('non-existent.env'))
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Environment file does not exist")
+        ex.message.contains('missingEnv')
+    }
+
+    def "can configure with environment variables"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        when:
+        extension.composeStacks {
+            envStack {
+                files.from(project.file('docker-compose.yml'))
                 environment = [
-                    'NODE_ENV': 'test',
-                    'DATABASE_URL': 'postgresql://localhost:5432/test'
+                    'ENV': 'test',
+                    'DEBUG': 'true'
                 ]
             }
         }
 
         then:
-        ComposeStackSpec config = extension.composeConfigs.getByName('envTest')
-        config.environment.get() == [
-            'NODE_ENV': 'test',
-            'DATABASE_URL': 'postgresql://localhost:5432/test'
-        ]
+        ComposeStackSpec stack = extension.composeStacks.getByName('envStack')
+        stack.environment.get() == [ENV: 'test', DEBUG: 'true']
     }
 
-    def "can access configured compose configs by name"() {
+    def "can configure with services list"() {
         given:
-        extension.composeConfigs {
-            config1 { composeFile = project.file('compose1.yml') }
-            config2 { composeFile = project.file('compose2.yml') }
-            config3 { composeFile = project.file('compose3.yml') }
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        when:
+        extension.composeStacks {
+            servicesStack {
+                files.from(project.file('docker-compose.yml'))
+                services = ['web', 'db']
+            }
+        }
+
+        then:
+        ComposeStackSpec stack = extension.composeStacks.getByName('servicesStack')
+        stack.services.get() == ['web', 'db']
+    }
+
+    def "can access stacks by name"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        extension.composeStacks {
+            stack1 { files.from(project.file('docker-compose.yml')) }
+            stack2 { files.from(project.file('docker-compose.yml')) }
         }
 
         expect:
-        extension.composeConfigs.getByName('config1') != null
-        extension.composeConfigs.getByName('config2') != null
-        extension.composeConfigs.getByName('config3') != null
-        extension.composeConfigs.getByName('config1').composeFile.get().asFile == project.file('compose1.yml')
+        extension.composeStacks.getByName('stack1') != null
+        extension.composeStacks.getByName('stack2') != null
+        extension.composeStacks.getByName('stack1').name == 'stack1'
+    }
+
+    def "composeConfigs is alias for composeStacks"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        when:
+        extension.composeConfigs {
+            aliasTest {
+                files.from(project.file('docker-compose.yml'))
+                profiles = ['test']
+            }
+        }
+
+        then:
+        extension.composeConfigs.size() == 1
+        extension.composeStacks.size() == 1
+        extension.composeConfigs.getByName('aliasTest') != null
+        extension.composeStacks.getByName('aliasTest') != null
+    }
+
+    def "validate handles empty stacks"() {
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "stack names are preserved"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        
+        when:
+        extension.composeStacks {
+            'my-test-stack' {
+                files.from(project.file('docker-compose.yml'))
+            }
+        }
+
+        then:
+        extension.composeStacks.getByName('my-test-stack').name == 'my-test-stack'
+        extension.composeStacks.getByName('my-test-stack').projectName.get() == "${project.name}-my-test-stack"
     }
 }

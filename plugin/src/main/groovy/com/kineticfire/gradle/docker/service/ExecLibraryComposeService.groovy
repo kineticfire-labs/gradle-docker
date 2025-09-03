@@ -50,7 +50,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                 process.waitFor()
                 if (process.exitValue() != 0) {
                     throw new ComposeServiceException(
-                        ComposeServiceException.ErrorType.COMPOSE_NOT_FOUND,
+                        ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
                         "Docker Compose is not available. Please install Docker Compose.",
                         "Install Docker Compose or Docker Desktop which includes Compose"
                     )
@@ -61,7 +61,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             }
         } catch (Exception e) {
             throw new ComposeServiceException(
-                ComposeServiceException.ErrorType.COMPOSE_NOT_FOUND,
+                ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
                 "Failed to validate Docker Compose installation: ${e.message}",
                 "Ensure Docker and Docker Compose are installed and accessible in PATH"
             )
@@ -199,21 +199,21 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
     }
     
-    protected ServiceState parseServiceState(String status) {
-        if (!status) return ServiceState.UNKNOWN
+    protected ServiceStatus parseServiceState(String status) {
+        if (!status) return ServiceStatus.UNKNOWN
         
         def lowerStatus = status.toLowerCase()
         if (lowerStatus.contains('running') || lowerStatus.contains('up')) {
             if (lowerStatus.contains('healthy')) {
-                return ServiceState.HEALTHY
+                return ServiceStatus.HEALTHY
             }
-            return ServiceState.RUNNING
+            return ServiceStatus.RUNNING
         } else if (lowerStatus.contains('exit') || lowerStatus.contains('stop')) {
-            return ServiceState.STOPPED
+            return ServiceStatus.STOPPED
         } else if (lowerStatus.contains('restart') || lowerStatus.contains('restarting')) {
-            return ServiceState.RESTARTING
+            return ServiceStatus.RESTARTING
         } else {
-            return ServiceState.UNKNOWN
+            return ServiceStatus.UNKNOWN
         }
     }
 
@@ -255,7 +255,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     }
     
     @Override
-    CompletableFuture<ServiceState> waitForServices(WaitConfig config) {
+    CompletableFuture<ServiceStatus> waitForServices(WaitConfig config) {
         return CompletableFuture.supplyAsync({
             try {
                 logger.info("Waiting for services: {}", config.services)
@@ -300,7 +300,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         })
     }
     
-    protected boolean checkServiceReady(String projectName, String serviceName, ServiceState targetState) {
+    protected boolean checkServiceReady(String projectName, String serviceName, ServiceStatus targetState) {
         try {
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", serviceName, "--format", "table"]
@@ -311,9 +311,9 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             
             if (exitCode == 0 && output) {
                 // Simple state checking - in real implementation would parse the output properly
-                if (targetState == ServiceState.RUNNING) {
+                if (targetState == ServiceStatus.RUNNING) {
                     return output.toLowerCase().contains("up") || output.toLowerCase().contains("running")
-                } else if (targetState == ServiceState.HEALTHY) {
+                } else if (targetState == ServiceStatus.HEALTHY) {
                     return output.toLowerCase().contains("healthy")
                 }
             }

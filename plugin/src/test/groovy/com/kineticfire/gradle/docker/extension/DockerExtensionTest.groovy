@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.extension
 
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -151,5 +152,388 @@ class DockerExtensionTest extends Specification {
         extension.images.getByName('image2') != null  
         extension.images.getByName('image3') != null
         extension.images.getByName('image1').tags.get() == ['test1:latest']
+    }
+
+    // ===== VALIDATION TESTS =====
+
+    def "validate passes for valid image configuration"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            validImage {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['myapp:latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate fails when context directory does not exist"() {
+        given:
+        extension.images {
+            invalidImage {
+                context.set(project.file('non-existent-directory'))
+                tags.set(['test:latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Docker context directory does not exist")
+        ex.message.contains('invalidImage')
+        ex.message.contains("Create the directory or update the context path")
+    }
+
+    def "validate fails when dockerfile does not exist"() {
+        given:
+        project.file('docker').mkdirs()
+        
+        extension.images {
+            missingDockerfile {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/NonExistentDockerfile'))
+                tags.set(['test:latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Dockerfile does not exist")
+        ex.message.contains('missingDockerfile')
+        ex.message.contains("Create the Dockerfile or update the dockerfile path")
+    }
+
+    def "validate fails when tag format is invalid"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            invalidTags {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['invalid tag format', 'another:bad:tag:format'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid Docker tag format")
+        ex.message.contains('invalidTags')
+        ex.message.contains("Use format 'repository:tag'")
+    }
+
+    def "validate handles empty tags list"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            emptyTags {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set([])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when tags not specified"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            noTags {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                // tags not set
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== TAG VALIDATION TESTS =====
+
+    def "isValidDockerTag validates correct tag formats"() {
+        expect:
+        extension.isValidDockerTag('myapp:latest')
+        extension.isValidDockerTag('registry.example.com/myapp:1.0.0')
+        extension.isValidDockerTag('user/repo:tag-123')
+        extension.isValidDockerTag('my-app:1.2.3-alpha')
+        extension.isValidDockerTag('repo.domain.com/namespace/app:stable')
+        extension.isValidDockerTag('a:b') // minimal valid case
+        extension.isValidDockerTag('1app:1tag') // starts with number
+    }
+
+    def "isValidDockerTag rejects invalid tag formats"() {
+        expect:
+        !extension.isValidDockerTag(null)
+        !extension.isValidDockerTag('')
+        !extension.isValidDockerTag('no-colon-separator')
+        !extension.isValidDockerTag(':no-repository')
+        !extension.isValidDockerTag('repo:')
+        !extension.isValidDockerTag('invalid tag with spaces:latest')
+        !extension.isValidDockerTag('repo:tag with spaces')
+        !extension.isValidDockerTag('-starts-with-dash:latest')
+        !extension.isValidDockerTag('repo:-starts-with-dash')
+        !extension.isValidDockerTag('localhost:5000/myapp:dev') // port number conflicts with colon separator
+        !extension.isValidDockerTag('app') // no tag separator
+        !extension.isValidDockerTag(':') // empty repo and tag
+        !extension.isValidDockerTag('::') // double colon
+    }
+
+    def "supports registry authentication in tag validation"() {
+        expect:
+        extension.isValidDockerTag('private-registry.company.com/team/app:1.0.0')
+        extension.isValidDockerTag('gcr.io/project-id/app:latest')
+        extension.isValidDockerTag('docker.io/library/nginx:alpine')
+    }
+
+    // ===== CONFIGURATION DSL TESTS =====
+
+    def "can configure images using Action syntax"() {
+        when:
+        extension.images { container ->
+            container.create('actionImage') { image ->
+                image.context.set(project.file('docker'))
+                image.tags.set(['action:test'])
+            }
+        }
+
+        then:
+        extension.images.size() == 1
+        extension.images.getByName('actionImage').tags.get() == ['action:test']
+    }
+
+    def "can configure complex image with all properties"() {
+        given:
+        project.file('complex/docker').mkdirs()
+        project.file('complex/docker/Dockerfile.prod').text = 'FROM alpine'
+        
+        when:
+        extension.images {
+            complexImage {
+                context.set(project.file('complex/docker'))
+                dockerfile.set(project.file('complex/docker/Dockerfile.prod'))
+                tags.set([
+                    'myapp:latest',
+                    'myapp:1.0.0',
+                    'registry.example.com/myapp:prod'
+                ])
+                buildArgs.set([
+                    VERSION: '1.0.0',
+                    BUILD_DATE: '2025-01-01',
+                    ENVIRONMENT: 'production',
+                    COMMIT_SHA: 'abc123def456'
+                ])
+            }
+        }
+
+        then:
+        def imageSpec = extension.images.getByName('complexImage')
+        imageSpec.context.get().asFile == project.file('complex/docker')
+        imageSpec.dockerfile.get().asFile == project.file('complex/docker/Dockerfile.prod')
+        imageSpec.tags.get().size() == 3
+        imageSpec.tags.get().containsAll(['myapp:latest', 'myapp:1.0.0', 'registry.example.com/myapp:prod'])
+        imageSpec.buildArgs.get().size() == 4
+        imageSpec.buildArgs.get()['VERSION'] == '1.0.0'
+        imageSpec.buildArgs.get()['ENVIRONMENT'] == 'production'
+    }
+
+    def "can configure multiple images with different settings"() {
+        given:
+        project.file('web').mkdirs()
+        project.file('web/Dockerfile').text = 'FROM nginx'
+        project.file('api').mkdirs()  
+        project.file('api/Dockerfile').text = 'FROM node'
+        
+        when:
+        extension.images {
+            webImage {
+                context.set(project.file('web'))
+                dockerfile.set(project.file('web/Dockerfile'))
+                tags.set(['myapp/web:latest'])
+                buildArgs.set([SERVICE: 'web'])
+            }
+            apiImage {
+                context.set(project.file('api'))
+                dockerfile.set(project.file('api/Dockerfile'))
+                tags.set(['myapp/api:latest', 'myapp/api:1.0.0'])
+                buildArgs.set([SERVICE: 'api', NODE_ENV: 'production'])
+            }
+        }
+
+        then:
+        extension.images.size() == 2
+        
+        def webImage = extension.images.getByName('webImage')
+        webImage.tags.get() == ['myapp/web:latest']
+        webImage.buildArgs.get()['SERVICE'] == 'web'
+        
+        def apiImage = extension.images.getByName('apiImage')
+        apiImage.tags.get().size() == 2
+        apiImage.buildArgs.get()['NODE_ENV'] == 'production'
+    }
+
+    def "validation handles multiple images with mixed validity"() {
+        given:
+        project.file('valid').mkdirs()
+        project.file('valid/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            validImage {
+                context.set(project.file('valid'))
+                dockerfile.set(project.file('valid/Dockerfile'))
+                tags.set(['valid:latest'])
+            }
+            invalidImage {
+                context.set(project.file('non-existent'))
+                tags.set(['invalid:latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Docker context directory does not exist")
+        ex.message.contains('invalidImage')
+    }
+
+    def "validate fails on first invalid image and stops"() {
+        given:
+        extension.images {
+            firstInvalid {
+                context.set(project.file('non-existent-first'))
+                tags.set(['first:latest'])
+            }
+            secondInvalid {
+                context.set(project.file('non-existent-second'))
+                tags.set(['second:latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        // Should fail on the first invalid image
+        ex.message.contains('firstInvalid')
+        ex.message.contains("Docker context directory does not exist")
+    }
+
+    // ===== EDGE CASE AND ERROR HANDLING TESTS =====
+
+    def "handles docker context with spaces in path"() {
+        given:
+        project.file('path with spaces').mkdirs()
+        project.file('path with spaces/Dockerfile').text = 'FROM alpine'
+        
+        when:
+        extension.images {
+            spacePath {
+                context.set(project.file('path with spaces'))
+                dockerfile.set(project.file('path with spaces/Dockerfile'))
+                tags.set(['spaces:latest'])
+            }
+        }
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+        extension.images.getByName('spacePath').context.get().asFile.name == 'path with spaces'
+    }
+
+    def "handles dockerfile with custom name"() {
+        given:
+        project.file('custom').mkdirs()
+        project.file('custom/Dockerfile.custom').text = 'FROM alpine'
+        
+        when:
+        extension.images {
+            customDockerfile {
+                context.set(project.file('custom'))
+                dockerfile.set(project.file('custom/Dockerfile.custom'))
+                tags.set(['custom:latest'])
+            }
+        }
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+        extension.images.getByName('customDockerfile').dockerfile.get().asFile.name == 'Dockerfile.custom'
+    }
+
+    def "supports registry authentication in tag validation"() {
+        expect:
+        extension.isValidDockerTag('private-registry.company.com/team/app:1.0.0')
+        extension.isValidDockerTag('gcr.io/project-id/app:latest')
+        extension.isValidDockerTag('docker.io/library/nginx:alpine')
+    }
+
+    def "validateImageSpec method can be called independently"() {
+        given:
+        project.file('test-context').mkdirs()
+        project.file('test-context/Dockerfile').text = 'FROM alpine'
+        
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec, 
+            'testImage', 
+            project
+        )
+        imageSpec.context.set(project.file('test-context'))
+        imageSpec.dockerfile.set(project.file('test-context/Dockerfile'))
+        imageSpec.tags.set(['test:validation'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "extension is properly initialized with defaults"() {
+        when:
+        extension.images {
+            defaultTest {
+                tags.set(['default:test'])
+            }
+        }
+
+        then:
+        def imageSpec = extension.images.getByName('defaultTest')
+        imageSpec.context.isPresent() // Should have default context
+        imageSpec.dockerfile.isPresent() // Should have default dockerfile
+        imageSpec.context.get().asFile.path.contains('src/main/docker')
     }
 }

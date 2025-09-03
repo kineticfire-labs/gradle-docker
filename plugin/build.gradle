@@ -18,6 +18,11 @@
  *     project site: https://github.com/kineticfire-labs/gradle-docker/
  */
 
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.TaskAction
+
 plugins {
     id 'groovy'
     id 'java-gradle-plugin'
@@ -68,7 +73,7 @@ dependencies {
 }
 
 group = 'com.kineticfire.gradle'
-version = '1.0.0'
+version = '1.0.0'  // todo: not used?
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -130,23 +135,135 @@ dependencies {
     functionalTestRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
 }
 
-//jacocoTestReport {
-//    reports {
-//        xml.required = true // Enable XML report generation
-//        html.enabled = true // Ensure HTML report is also generated
-//    }
-//    // Optional: Ensure tests run before report generation
-//    dependsOn test
-//}
-
-tasks.test {
-    finalizedBy(tasks.jacocoTestReport) // Report is always generated after tests run
+jacocoTestReport {
+    reports {
+        xml.required = true // Enable XML report generation
+        html.required = true // Ensure HTML report is also generated
+    }
+    // Ensure tests run before report generation
+    dependsOn test
 }
 
-// todo
-//After successful execution, the generated reports will be found in your project's build/reports/jacoco/test directory
-// (or the path you configured). Open the index.html file in your browser to view the interactive HTML report. If you
-// enabled XML reports, you will also find a jacocoTestReport.xml file in the same location.
+// This configuration is moved to after coverageSummary task registration below
+
+abstract class CoverageSummaryTask extends DefaultTask {
+    
+    @InputFile
+    abstract RegularFileProperty getReportFile()
+    
+    @InputFile  
+    abstract RegularFileProperty getHtmlReportFile()
+    
+    @TaskAction
+    void generateSummary() {
+        def reportFile = getReportFile().asFile.get()
+        def htmlReportPath = getHtmlReportFile().asFile.get().absolutePath
+        
+        if (!reportFile.exists()) {
+            println "JaCoCo XML report not found. Run tests first."
+            return
+        }
+        
+        def parser = new groovy.xml.XmlSlurper()
+        parser.setFeature("http://apache.org/xml/features/disallow-doctype-decl", false)
+        parser.setFeature("http://xml.org/sax/features/external-general-entities", false)
+        parser.setFeature("http://xml.org/sax/features/external-parameter-entities", false)
+        parser.setFeature("http://apache.org/xml/features/nonvalidating/load-external-dtd", false)
+        System.setProperty("javax.xml.accessExternalDTD", "all")
+        def root = parser.parse(reportFile)
+        
+        println "\n" + "="*80
+        println "TEST COVERAGE SUMMARY"
+        println "="*80
+        
+        // Overall totals
+        def totalInstr = root.counter.find { it.@type == 'INSTRUCTION' }
+        def totalBranch = root.counter.find { it.@type == 'BRANCH' }
+        def totalLine = root.counter.find { it.@type == 'LINE' }
+        def totalMethod = root.counter.find { it.@type == 'METHOD' }
+        def totalClass = root.counter.find { it.@type == 'CLASS' }
+        
+        if (totalInstr) {
+            def instrCovered = Integer.parseInt(totalInstr.@covered.toString())
+            def instrMissed = Integer.parseInt(totalInstr.@missed.toString())
+            def instrTotal = instrCovered + instrMissed
+            def instrPercent = instrTotal > 0 ? String.format("%.1f", (instrCovered * 100.0 / instrTotal)) : "0.0"
+            
+            def branchCovered = totalBranch ? Integer.parseInt(totalBranch.@covered.toString()) : 0
+            def branchMissed = totalBranch ? Integer.parseInt(totalBranch.@missed.toString()) : 0
+            def branchTotal = branchCovered + branchMissed
+            def branchPercent = branchTotal > 0 ? String.format("%.1f", (branchCovered * 100.0 / branchTotal)) : "n/a"
+            
+            def lineCovered = totalLine ? Integer.parseInt(totalLine.@covered.toString()) : 0
+            def lineMissed = totalLine ? Integer.parseInt(totalLine.@missed.toString()) : 0
+            def lineTotal = lineCovered + lineMissed
+            def linePercent = lineTotal > 0 ? String.format("%.1f", (lineCovered * 100.0 / lineTotal)) : "0.0"
+            
+            def methodCovered = totalMethod ? Integer.parseInt(totalMethod.@covered.toString()) : 0
+            def methodMissed = totalMethod ? Integer.parseInt(totalMethod.@missed.toString()) : 0
+            def methodTotal = methodCovered + methodMissed
+            def methodPercent = methodTotal > 0 ? String.format("%.1f", (methodCovered * 100.0 / methodTotal)) : "0.0"
+            
+            def classCovered = totalClass ? Integer.parseInt(totalClass.@covered.toString()) : 0
+            def classMissed = totalClass ? Integer.parseInt(totalClass.@missed.toString()) : 0
+            def classTotal = classCovered + classMissed
+            def classPercent = classTotal > 0 ? String.format("%.1f", (classCovered * 100.0 / classTotal)) : "0.0"
+            
+            println "OVERALL PROJECT COVERAGE:"
+            println String.format("  Instructions: %s%% (%,d/%,d)", instrPercent, instrCovered, instrTotal)
+            println String.format("  Branches:     %s%% (%,d/%,d)", branchPercent, branchCovered, branchTotal)
+            println String.format("  Lines:        %s%% (%,d/%,d)", linePercent, lineCovered, lineTotal)
+            println String.format("  Methods:      %s%% (%,d/%,d)", methodPercent, methodCovered, methodTotal)
+            println String.format("  Classes:      %s%% (%,d/%,d)", classPercent, classCovered, classTotal)
+            println ""
+        }
+        
+        // Package-level breakdown
+        println "COVERAGE BY PACKAGE:"
+        println String.format("%-50s %12s %12s", "Package", "Instructions", "Branches")
+        println "-" * 80
+        
+        root.package.each { pkg ->
+            def pkgName = pkg.@name.toString().replace('/', '.')
+            if (pkgName.isEmpty()) pkgName = "(default)"
+            
+            def pkgInstr = pkg.counter.find { it.@type == 'INSTRUCTION' }
+            def pkgBranch = pkg.counter.find { it.@type == 'BRANCH' }
+            
+            def instrCovered = pkgInstr ? Integer.parseInt(pkgInstr.@covered.toString()) : 0
+            def instrMissed = pkgInstr ? Integer.parseInt(pkgInstr.@missed.toString()) : 0
+            def instrTotal = instrCovered + instrMissed
+            def instrPercent = instrTotal > 0 ? String.format("%.1f%%", (instrCovered * 100.0 / instrTotal)) : "n/a"
+            
+            def branchCovered = pkgBranch ? Integer.parseInt(pkgBranch.@covered.toString()) : 0
+            def branchMissed = pkgBranch ? Integer.parseInt(pkgBranch.@missed.toString()) : 0
+            def branchTotal = branchCovered + branchMissed
+            def branchPercent = branchTotal > 0 ? String.format("%.1f%%", (branchCovered * 100.0 / branchTotal)) : "n/a"
+            
+            println String.format("%-50s %12s %12s", pkgName, instrPercent, branchPercent)
+        }
+        
+        println ""
+        println "HTML REPORT:"
+        println "file://" + htmlReportPath
+        println ""
+        println "="*80
+    }
+}
+
+tasks.register('coverageSummary', CoverageSummaryTask) {
+    description = 'Displays test coverage summary and HTML report link'
+    group = 'reporting'
+    dependsOn jacocoTestReport
+    
+    reportFile = layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml")
+    htmlReportFile = layout.buildDirectory.file("reports/jacoco/test/html/index.html")
+}
+
+// Configure test task to run coverage summary after tests complete
+tasks.test {
+    finalizedBy(tasks.jacocoTestReport, tasks.coverageSummary) // Report and summary are always generated after tests run
+}
 
 tasks.register('functionalTest', Test) {
     description = 'Runs functional tests'

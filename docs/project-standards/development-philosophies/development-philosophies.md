@@ -63,7 +63,6 @@ isolating concerns, you reduce entanglement, making it easier to modify, test, a
 * Support parallel work across teams.
 * Organize code as layered or feature-based modules.
 
-
 In short, SoC makes complex systems manageable by dividing them into clear, independent pieces.
 
 
@@ -100,16 +99,6 @@ continuing in an invalid state.
 * Document conventions once; enforce with linters and code reviews.
 * Outcome: less boilerplate, faster delivery, fewer mistakes.
 
-Common examples:
-1. Reporting errors immediately when input is invalid, instead of silently ignoring it
-1. Defensive programming checks (e.g., null checks, boundary checks)
-1. Validate Inputs Immediately: Check function arguments, user input, and external data as soon as they’re received. If
-   something is invalid, throw an exception right away instead of letting bad data propagate.
-1.  Use Assertions / Preconditions: Assert assumptions about program state so violations are caught early during
-    development
-1. Design with failures, Not Silent Failures: If something unexpected happens, raise an error instead of returning a
-   default or null value that hides the issue.
-
 In short, Fail Fast makes errors visible and contained, reducing the risk of subtle bugs and making systems more robust
 
 
@@ -131,8 +120,6 @@ APPLY WITH CAUTION and balance with the YAGNI principle:
 - Use good modular design and clean abstractions (so extending later is possible)
 - Avoid implementing speculative features until there’s a real need (YAGNI)
 
-That way, you’re prepared for change without wasting effort on imaginary futures.
-
 In short: anticipate change by making the system easy to extend, not easy to rewrite.
 
 
@@ -148,19 +135,6 @@ Why it helps
 1. Fewer bugs: Regular patterns reduce special-case logic (where defects hide).
 1. Better tooling & automation: Consistency enables code generation, static checks, and shared utilities.
 1. Easier testing: Standardized inputs/outputs make tests repeatable and reusable.
-
-How to apply it:
-1. Standard shapes for components: e.g., all handlers follow Input -> Domain -> Output with the same error type.
-1. Consistent naming and layout: one project structure, one naming scheme (verbs for commands, nouns for models).
-1. Uniform API contracts: same pagination, error envelope, and auth across endpoints.
-1. One way to do common tasks: choose a single logging, config, and validation approach; avoid parallel, competing
-   patterns.
-1. Regular data models: shared primitives (IDs, timestamps, money types) with common validation and serialization.
-1. Template the flow: scaffolds for “feature slices” that create controller/service/repository stubs with identical
-   wiring.
-1. Centralized cross-cutting: middleware for auth, tracing, and retries instead of bespoke code in each feature.
-1. Repeatable function sizes: small, single-purpose functions with similar signatures; prefer guard clauses to deep
-   nesting.
 
 ### Guardrails
 
@@ -182,39 +156,3 @@ as stated by Harold Abelson and Gerald Jay Sussman.
 * Prioritize readability to lower long-term maintenance cost.
 * Unreadable code blocks collaboration and breeds errors.
 * If code is hard to follow, refactor until it’s clear.
-
-Techniques for Writing Human-Readable Code
-1. Use Meaningful Names
-    1. Choose descriptive variable, function, and class names (calculateInvoiceTotal instead of calcInv)
-    1. Avoid cryptic abbreviations unless they’re universally understood
-1. Write Focused, Small Functions
-    1. Each function should do one thing well. Smaller units are easier to read, test, and reuse.
-1. Document the “Why,” Not the “What”
-    1. Use inline comments or docstrings to explain why something is done a certain way, not just restating the code.
-    1. Example:
-```
-# Using binary search for efficiency since the list is sorted
-index = binary_search(sorted_list, target)
-```
-1. Prefer Clarity Over Cleverness
-    1. Avoid overly compact, tricky syntax. Favor code that is slightly longer but obvious to the reader
-1. Use Consistent Formatting & Style
-    1. Stick to a style guide (e.g., PEP 8 for Python, Google Java Style)
-    1. Consistent indentation, spacing, and naming conventions make code predictable
-1. Break Up Large Blocks
-    1. Split long methods, conditionals, or expressions into smaller parts with clear names
-    1. Example: Replace nested if statements with guard clauses or helper methods
-1. Leverage Self-Describing Code Structures
-    1. Replace “magic numbers” or unexplained values with constants or enums
-    1. Example: MAX_RETRY_COUNT = 3 instead of just 3
-1. Write Unit Tests with Clear Names
-    1. Good test names document expected behavior (test_login_fails_with_invalid_password)
-    1. Tests serve as living documentation for how code is meant to be used
-1. Keep Related Code Together
-    1. Group functions, classes, and files logically (e.g., “auth” vs. “billing”)
-    1. Avoid scattering related logic across multiple places
-1. Refactor Ruthlessly
-    1. Continuously improve readability as you work — apply the Boy Scout Rule: leave the code cleaner than you found it
-
-The key idea: Readable code communicates intent. Future readers (including you) should be able to grasp the purpose and
-flow quickly, without guessing or reverse-engineering the logic.

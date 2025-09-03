@@ -13,7 +13,7 @@ Read the design documents at `docs/design-docs/`.  It is very important to under
 - how to update the document metadata--especially the status, version, and date--when creating and modifying the 
 documents
 
-Read the project development philosophies at `development-philosophies/` and the project style guide at `style/`.
+Read the project standards and practices at `docs/project-standards/`.
 
 Read key source files:
 - plugin source code: `plugin/src`

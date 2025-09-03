@@ -46,7 +46,7 @@ interface ComposeService {
      * @return CompletableFuture with final service state
      * @throws ComposeServiceException if timeout or other error occurs
      */
-    CompletableFuture<ServiceState> waitForServices(WaitConfig config)
+    CompletableFuture<ServiceStatus> waitForServices(WaitConfig config)
     
     /**
      * Capture logs from compose services

@@ -32,8 +32,9 @@ abstract class PublishSpec {
     @Inject
     PublishSpec(Project project) {
         this.objectFactory = project.objects
+        def factory = this.objectFactory
         this.targets = objectFactory.domainObjectContainer(PublishTarget) { name ->
-            objectFactory.newInstance(PublishTarget, name, project)
+            factory.newInstance(PublishTarget, name, project)
         }
     }
     

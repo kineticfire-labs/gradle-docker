@@ -46,21 +46,19 @@ class JsonServiceImplTest extends Specification {
             configName: 'testCompose',
             projectName: 'test_project',
             services: [
-                'web': new ServiceState(
-                    name: 'web',
-                    status: 'running',
-                    health: 'healthy',
-                    ports: [
+                'web': new ServiceInfo(
+                    containerId: 'web_container_id',
+                    containerName: 'web',
+                    state: 'running',
+                    publishedPorts: [
                         new PortMapping(hostPort: 8080, containerPort: 80, protocol: 'tcp')
-                    ],
-                    networks: ['default']
+                    ]
                 ),
-                'db': new ServiceState(
-                    name: 'db', 
-                    status: 'running',
-                    health: 'healthy',
-                    ports: [],
-                    networks: ['default']
+                'db': new ServiceInfo(
+                    containerId: 'db_container_id',
+                    containerName: 'db', 
+                    state: 'running',
+                    publishedPorts: []
                 )
             ],
             networks: ['default']
@@ -80,6 +78,8 @@ class JsonServiceImplTest extends Specification {
         content.contains('"db"')
         content.contains('"hostPort":8080')
         content.contains('"containerPort":80')
+        content.contains('"containerId":"web_container_id"')
+        content.contains('"containerName":"web"')
     }
 
     def "readComposeState reads valid JSON file"() {
@@ -91,17 +91,16 @@ class JsonServiceImplTest extends Specification {
             "projectName": "test_proj",
             "services": {
                 "service1": {
-                    "name": "service1",
-                    "status": "running",
-                    "health": "healthy",
-                    "ports": [
+                    "containerId": "service1_container_id",
+                    "containerName": "service1",
+                    "state": "running",
+                    "publishedPorts": [
                         {
                             "hostPort": 3000,
                             "containerPort": 3000,
                             "protocol": "tcp"
                         }
-                    ],
-                    "networks": ["app-network"]
+                    ]
                 }
             },
             "networks": ["app-network"]
@@ -116,11 +115,11 @@ class JsonServiceImplTest extends Specification {
         result.configName == 'testConfig'
         result.projectName == 'test_proj'
         result.services.size() == 1
-        result.services['service1'].name == 'service1'
-        result.services['service1'].status == 'running'
-        result.services['service1'].health == 'healthy'
-        result.services['service1'].ports.size() == 1
-        result.services['service1'].ports[0].hostPort == 3000
+        result.services['service1'].containerId == 'service1_container_id'
+        result.services['service1'].containerName == 'service1'
+        result.services['service1'].state == 'running'
+        result.services['service1'].publishedPorts.size() == 1
+        result.services['service1'].publishedPorts[0].hostPort == 3000
         result.networks == ['app-network']
     }
 
@@ -176,15 +175,14 @@ class JsonServiceImplTest extends Specification {
             configName: 'fullConfig',
             projectName: 'full_project',
             services: [
-                'complex-service': new ServiceState(
-                    name: 'complex-service',
-                    status: 'running',
-                    health: 'healthy',
-                    ports: [
+                'complex-service': new ServiceInfo(
+                    containerId: 'complex_service_container_id',
+                    containerName: 'complex-service',
+                    state: 'running',
+                    publishedPorts: [
                         new PortMapping(hostPort: 8080, containerPort: 80, protocol: 'tcp'),
                         new PortMapping(hostPort: 8443, containerPort: 443, protocol: 'tcp')
-                    ],
-                    networks: ['frontend', 'backend']
+                    ]
                 )
             ],
             networks: ['frontend', 'backend', 'database']
@@ -202,11 +200,10 @@ class JsonServiceImplTest extends Specification {
         and:
         def originalService = composeState.services['complex-service']
         def roundTripService = roundTrip.services['complex-service']
-        roundTripService.name == originalService.name
-        roundTripService.status == originalService.status
-        roundTripService.health == originalService.health
-        roundTripService.ports.size() == 2
-        roundTripService.networks == originalService.networks
+        roundTripService.containerId == originalService.containerId
+        roundTripService.containerName == originalService.containerName
+        roundTripService.state == originalService.state
+        roundTripService.publishedPorts.size() == 2
         
         and:
         roundTrip.networks.containsAll(['frontend', 'backend', 'database'])

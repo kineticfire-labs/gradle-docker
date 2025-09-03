@@ -20,21 +20,34 @@ package com.kineticfire.gradle.docker.model
  * Information about a Docker service/container
  */
 class ServiceInfo {
-    final String containerId
-    final String containerName
-    final String state
-    final List<PortMapping> publishedPorts
+    String containerId
+    String containerName
+    String state
+    List<PortMapping> publishedPorts = []
     
-    ServiceInfo(String containerId, String containerName, String state, List<PortMapping> publishedPorts) {
-        this.containerId = Objects.requireNonNull(containerId, "Container ID cannot be null")
-        this.containerName = Objects.requireNonNull(containerName, "Container name cannot be null")
-        this.state = Objects.requireNonNull(state, "State cannot be null")
+    // Default constructor for Jackson
+    ServiceInfo() {}
+    
+    // Support for named parameter constructor used by tests
+    ServiceInfo(Map<String, Object> args) {
+        this.containerId = args.containerId
+        this.containerName = args.containerName
+        this.state = args.state
+        this.publishedPorts = args.publishedPorts ?: []
+    }
+    
+    // Traditional constructor
+    ServiceInfo(String containerId, String containerName, String state, List<PortMapping> publishedPorts = []) {
+        this.containerId = containerId
+        this.containerName = containerName
+        this.state = state
         this.publishedPorts = publishedPorts ?: []
     }
     
     /**
      * Check if service is in healthy state
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     boolean isHealthy() {
         return state.toLowerCase().contains('healthy')
     }
@@ -42,6 +55,7 @@ class ServiceInfo {
     /**
      * Check if service is running
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     boolean isRunning() {
         return state.toLowerCase().contains('up') || state.toLowerCase().contains('running')
     }
@@ -49,6 +63,7 @@ class ServiceInfo {
     /**
      * Get port mapping for a container port
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     PortMapping getPortMapping(int containerPort) {
         return publishedPorts.find { it.container == containerPort }
     }
@@ -56,6 +71,7 @@ class ServiceInfo {
     /**
      * Get host port for a container port
      */
+    @com.fasterxml.jackson.annotation.JsonIgnore
     Integer getHostPort(int containerPort) {
         def mapping = getPortMapping(containerPort)
         return mapping?.host

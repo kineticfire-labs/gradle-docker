@@ -31,6 +31,7 @@ class ComposeServiceException extends RuntimeException {
         SERVICE_STOP_FAILED("Service shutdown failed. Services may still be running."),
         SERVICE_TIMEOUT("Service did not reach desired state within timeout period."),
         PLATFORM_UNSUPPORTED("Docker Compose operations not supported on this platform."),
+        LOGS_CAPTURE_FAILED("Failed to capture Docker Compose logs."),
         UNKNOWN("An unknown Docker Compose operation error occurred.")
         
         final String defaultSuggestion

@@ -28,9 +28,11 @@ ready for testing, indicated by the container or group of containers in states o
    - `plugin-integration-test/test/`: unit tests for the application
    - `plugin-integration-test/build.gradle`: the Gradle build for the test application that uses the plugin
 - `docs/`: documentation
-   - `docs/design-docs/`: documents covering design, requirements, and specifications
-   - `docs/development-philosophies/development-philosophies.md`: guiding development philosophies 
-   - `docs/style/`: style guide 
+   - `docs/design-docs/`: directory of documents covering design, requirements, specifications, and testing
+   - `docs/project-standards/`: directory of project standards and practices
+      - `docs/project-standards/testing/testing.md`: set standards for testing
+      - `docs/project-standards/development-philosophies/development-philosophies.md`: guiding sets development philosophies 
+      - `docs/project-standards/style/style.md`: sets standards for style 
 - `README.md`: project overview
 
 ### Commands

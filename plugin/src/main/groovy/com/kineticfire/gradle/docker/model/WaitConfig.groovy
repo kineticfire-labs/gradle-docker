@@ -16,29 +16,31 @@
 
 package com.kineticfire.gradle.docker.model
 
+import java.time.Duration
+
 /**
  * Configuration for waiting for services to reach a desired state
  */
 class WaitConfig {
     final String projectName
     final List<String> services
-    final int timeoutSeconds
-    final int pollSeconds
-    final ServiceState targetState
+    final Duration timeout
+    final Duration pollInterval
+    final ServiceStatus targetState
     
-    WaitConfig(String projectName, List<String> services, int timeoutSeconds, ServiceState targetState) {
+    WaitConfig(String projectName, List<String> services, Duration timeout, ServiceStatus targetState) {
         this.projectName = Objects.requireNonNull(projectName, "Project name cannot be null")
         this.services = Objects.requireNonNull(services, "Services list cannot be null")
-        this.timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60
-        this.pollSeconds = 2
+        this.timeout = timeout ?: Duration.ofSeconds(60)
+        this.pollInterval = Duration.ofSeconds(2)
         this.targetState = Objects.requireNonNull(targetState, "Target state cannot be null")
     }
     
-    WaitConfig(String projectName, List<String> services, int timeoutSeconds, int pollSeconds, ServiceState targetState) {
+    WaitConfig(String projectName, List<String> services, Duration timeout, Duration pollInterval, ServiceStatus targetState) {
         this.projectName = Objects.requireNonNull(projectName, "Project name cannot be null")
         this.services = Objects.requireNonNull(services, "Services list cannot be null")
-        this.timeoutSeconds = timeoutSeconds > 0 ? timeoutSeconds : 60
-        this.pollSeconds = pollSeconds > 0 ? pollSeconds : 2
+        this.timeout = timeout ?: Duration.ofSeconds(60)
+        this.pollInterval = pollInterval ?: Duration.ofSeconds(2)
         this.targetState = Objects.requireNonNull(targetState, "Target state cannot be null")
     }
     
@@ -46,11 +48,11 @@ class WaitConfig {
      * Calculate total wait attempts based on timeout and poll interval
      */
     int getTotalWaitAttempts() {
-        return Math.max(1, (timeoutSeconds / pollSeconds).intValue())
+        return Math.max(1, (timeout.toSeconds() / pollInterval.toSeconds()).intValue())
     }
     
     @Override
     String toString() {
-        return "WaitConfig{projectName='${projectName}', services=${services}, timeoutSeconds=${timeoutSeconds}, pollSeconds=${pollSeconds}, targetState=${targetState}}"
+        return "WaitConfig{projectName='${projectName}', services=${services}, timeout=${timeout}, pollInterval=${pollInterval}, targetState=${targetState}}"
     }
 }
