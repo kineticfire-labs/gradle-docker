@@ -208,4 +208,145 @@ class JsonServiceImplTest extends Specification {
         and:
         roundTrip.networks.containsAll(['frontend', 'backend', 'database'])
     }
+
+    def "writeComposeState handles null compose state"() {
+        given:
+        def outputFile = tempDir.resolve('output.json')
+
+        when:
+        service.writeComposeState(null, outputFile)
+
+        then:
+        Files.exists(outputFile)
+        Files.readString(outputFile) == "null"
+    }
+
+    def "writeComposeState throws exception for null output file"() {
+        given:
+        def composeState = new ComposeState('test', 'test', [:], [])
+
+        when:
+        service.writeComposeState(composeState, null)
+
+        then:
+        thrown(RuntimeException)
+    }
+
+    def "readComposeState throws exception for null input file"() {
+        when:
+        service.readComposeState(null)
+
+        then:
+        thrown(RuntimeException)
+    }
+
+    def "writeComposeState handles special characters in names"() {
+        given:
+        def outputFile = tempDir.resolve('special-chars.json')
+        def composeState = new ComposeState(
+            configName: 'config with spaces & symbols!@#',
+            projectName: 'project_with-dashes.and.dots',
+            services: [
+                'service-with_symbols.123': new ServiceInfo(
+                    containerId: 'container_with-special.chars_123',
+                    containerName: 'container with spaces',
+                    state: 'exited (0)',
+                    publishedPorts: []
+                )
+            ],
+            networks: ['network-with_special.chars']
+        )
+
+        when:
+        service.writeComposeState(composeState, outputFile)
+
+        then:
+        Files.exists(outputFile)
+        
+        and:
+        def content = Files.readString(outputFile)
+        content.contains('"config with spaces & symbols!@#"')
+        content.contains('"project_with-dashes.and.dots"')
+        content.contains('"service-with_symbols.123"')
+    }
+
+    def "readComposeState handles empty services object"() {
+        given:
+        def inputFile = tempDir.resolve('empty-services.json')
+        def jsonContent = '''
+        {
+            "configName": "emptyServicesConfig",
+            "projectName": "empty_services_project",
+            "services": {},
+            "networks": []
+        }
+        '''
+        Files.writeString(inputFile, jsonContent)
+
+        when:
+        def result = service.readComposeState(inputFile)
+
+        then:
+        result.configName == 'emptyServicesConfig'
+        result.projectName == 'empty_services_project'
+        result.services.isEmpty()
+        result.networks.isEmpty()
+    }
+
+    def "readComposeState handles malformed port mapping"() {
+        given:
+        def inputFile = tempDir.resolve('malformed-ports.json')
+        def jsonContent = '''
+        {
+            "configName": "malformedConfig",
+            "projectName": "malformed_project",
+            "services": {
+                "service1": {
+                    "containerId": "container_id",
+                    "containerName": "service1",
+                    "state": "running",
+                    "publishedPorts": [
+                        {
+                            "hostPort": "invalid",
+                            "containerPort": 3000,
+                            "protocol": "tcp"
+                        }
+                    ]
+                }
+            },
+            "networks": []
+        }
+        '''
+        Files.writeString(inputFile, jsonContent)
+
+        when:
+        service.readComposeState(inputFile)
+
+        then:
+        thrown(RuntimeException)
+    }
+
+    def "JsonServiceImpl implements JsonService interface"() {
+        expect:
+        JsonService.isAssignableFrom(JsonServiceImpl)
+    }
+
+    def "JsonServiceImpl extends BuildService"() {
+        expect:
+        org.gradle.api.services.BuildService.isAssignableFrom(JsonServiceImpl)
+    }
+
+    def "writeComposeState creates directory if it doesn't exist"() {
+        given:
+        def nestedDir = tempDir.resolve('nested/deep/directory')
+        def outputFile = nestedDir.resolve('compose-state.json')
+        def composeState = new ComposeState('test', 'test', [:], [])
+
+        when:
+        service.writeComposeState(composeState, outputFile)
+
+        then:
+        Files.exists(outputFile)
+        Files.exists(nestedDir)
+    }
 }

@@ -110,6 +110,97 @@ class ExecLibraryComposeServiceTest extends Specification {
         service.parseServiceState(null) == ServiceStatus.UNKNOWN
     }
 
+    def "upStack handles valid configuration successfully"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "version: '3'\nservices:\n  test:\n    image: alpine".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        
+        when:
+        def result = service.upStack(config)
+        
+        then:
+        result.get() != null
+        result.get().projectName == "test-project"
+    }
+
+    def "downStack handles valid project name successfully"() {
+        given:
+        def projectName = "test-project"
+        
+        when:
+        def result = service.downStack(projectName)
+        
+        then:
+        result.get() == null // CompletableFuture<Void> returns null on success
+    }
+
+    def "waitForServices handles valid configuration successfully"() {
+        given:
+        def config = new WaitConfig("test-project", ["service1", "service2"], Duration.ofSeconds(30), ServiceStatus.RUNNING)
+        
+        when:
+        def result = service.waitForServices(config)
+        
+        then:
+        result.get() == ServiceStatus.RUNNING
+    }
+
+    def "captureLogs handles valid parameters successfully"() {
+        given:
+        def projectName = "test-project"
+        def config = new LogsConfig(["service1", "service2"])
+        
+        when:
+        def result = service.captureLogs(projectName, config)
+        
+        then:
+        result.get() == "mock logs"
+    }
+
+    def "captureLogs throws exception for null config"() {
+        when:
+        service.captureLogs("project", null)
+        
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "upStack throws exception for empty compose files"() {
+        when:
+        new ComposeConfig([], "test-project", "test-stack")
+        
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "waitForServices handles empty service list"() {
+        given:
+        def config = new WaitConfig("test-project", [], Duration.ofSeconds(30), ServiceStatus.RUNNING)
+        
+        when:
+        def result = service.waitForServices(config)
+        
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "parseServiceState handles case variations correctly"() {
+        expect:
+        service.parseServiceState("UP 5 minutes") == ServiceStatus.RUNNING
+        service.parseServiceState("RUNNING") == ServiceStatus.RUNNING
+        service.parseServiceState("UP (HEALTHY)") == ServiceStatus.HEALTHY
+        service.parseServiceState("EXIT 1") == ServiceStatus.STOPPED
+        service.parseServiceState("STOPPED") == ServiceStatus.STOPPED
+        service.parseServiceState("RESTARTING (2)") == ServiceStatus.RESTARTING
+    }
+
+    def "parseServiceState handles edge cases"() {
+        expect:
+        service.parseServiceState("   ") == ServiceStatus.UNKNOWN
+        service.parseServiceState("up down") == ServiceStatus.RUNNING // Contains 'up'
+        service.parseServiceState("exit code 0") == ServiceStatus.STOPPED // Contains 'exit'
+    }
+
     /**
      * Simple test implementation of ComposeService for validation testing
      */
@@ -118,7 +209,10 @@ class ExecLibraryComposeServiceTest extends Specification {
         @Override
         CompletableFuture<ComposeState> upStack(ComposeConfig config) {
             Objects.requireNonNull(config, "ComposeConfig cannot be null")
-            return CompletableFuture.completedFuture(new ComposeState("test", "test-project", [:], []))
+            if (config.composeFiles.isEmpty()) {
+                throw new IllegalArgumentException("Compose files cannot be empty")
+            }
+            return CompletableFuture.completedFuture(new ComposeState("test", config.projectName, [:], []))
         }
 
         @Override
@@ -130,17 +224,21 @@ class ExecLibraryComposeServiceTest extends Specification {
         @Override
         CompletableFuture<ServiceStatus> waitForServices(WaitConfig config) {
             Objects.requireNonNull(config, "WaitConfig cannot be null")
+            if (config.services.isEmpty()) {
+                throw new IllegalArgumentException("Services list cannot be empty")
+            }
             return CompletableFuture.completedFuture(ServiceStatus.RUNNING)
         }
 
         @Override
         CompletableFuture<String> captureLogs(String projectName, LogsConfig config) {
             Objects.requireNonNull(projectName, "Project name cannot be null")
+            Objects.requireNonNull(config, "LogsConfig cannot be null")
             return CompletableFuture.completedFuture("mock logs")
         }
         
         ServiceStatus parseServiceState(String status) {
-            if (!status) return ServiceStatus.UNKNOWN
+            if (!status || status.trim().isEmpty()) return ServiceStatus.UNKNOWN
             
             def lowerStatus = status.toLowerCase()
             if (lowerStatus.contains('running') || lowerStatus.contains('up')) {

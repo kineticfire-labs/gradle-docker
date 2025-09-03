@@ -128,6 +128,121 @@ class DockerServiceImplTest extends Specification {
         noExceptionThrown()
     }
 
+    def "buildImage handles valid context successfully"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(tempDir, dockerfile, [:], ["test:latest"])
+        
+        when:
+        def result = service.buildImage(context)
+        
+        then:
+        result.get() == "mock-image-id"
+    }
+
+    def "tagImage handles valid parameters successfully"() {
+        given:
+        def sourceImage = "source:latest"
+        def targetTags = ["target1:latest", "target2:v1.0"]
+        
+        when:
+        def result = service.tagImage(sourceImage, targetTags)
+        
+        then:
+        result.get() == null // CompletableFuture<Void> returns null on success
+    }
+
+    def "tagImage throws exception for empty tags list"() {
+        when:
+        service.tagImage("source:latest", [])
+        
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "saveImage handles valid parameters successfully"() {
+        given:
+        def imageRef = "test:latest"
+        def outputFile = tempDir.resolve("output.tar")
+        def compression = CompressionType.NONE
+        
+        when:
+        def result = service.saveImage(imageRef, outputFile, compression)
+        
+        then:
+        result.get() == null // CompletableFuture<Void> returns null on success
+    }
+
+    def "saveImage handles GZIP compression"() {
+        given:
+        def imageRef = "test:latest"  
+        def outputFile = tempDir.resolve("output.tar.gz")
+        def compression = CompressionType.GZIP
+        
+        when:
+        def result = service.saveImage(imageRef, outputFile, compression)
+        
+        then:
+        result.get() == null
+    }
+
+    def "pushImage handles null auth config"() {
+        given:
+        def imageRef = "test:latest"
+        
+        when:
+        def result = service.pushImage(imageRef, null)
+        
+        then:
+        result.get() == null
+    }
+
+    def "pushImage handles valid auth config"() {
+        given:
+        def imageRef = "test:latest"
+        def auth = new AuthConfig("testuser", "testpass", null, "registry.example.com")
+        
+        when:
+        def result = service.pushImage(imageRef, auth)
+        
+        then:
+        result.get() == null
+    }
+
+    def "imageExists returns true for existing image"() {
+        given:
+        def imageRef = "existing:latest"
+        
+        when:
+        def result = service.imageExists(imageRef)
+        
+        then:
+        result.get() == true
+    }
+
+    def "pullImage handles null auth config"() {
+        given:
+        def imageRef = "test:latest"
+        
+        when:
+        def result = service.pullImage(imageRef, null)
+        
+        then:
+        result.get() == null
+    }
+
+    def "pullImage handles valid auth config"() {
+        given:
+        def imageRef = "test:latest"
+        def auth = new AuthConfig("testuser", "testpass", null, "registry.example.com")
+        
+        when:
+        def result = service.pullImage(imageRef, auth)
+        
+        then:
+        result.get() == null
+    }
+
     /**
      * Test implementation that provides simple validation without Docker operations
      */
@@ -163,6 +278,9 @@ class DockerServiceImplTest extends Specification {
         CompletableFuture<Void> tagImage(String sourceImageRef, List<String> targetTags) {
             Objects.requireNonNull(sourceImageRef, "Source image reference cannot be null")
             Objects.requireNonNull(targetTags, "Target tags cannot be null")
+            if (targetTags.isEmpty()) {
+                throw new IllegalArgumentException("Target tags list cannot be empty")
+            }
             return CompletableFuture.completedFuture(null)
         }
         
