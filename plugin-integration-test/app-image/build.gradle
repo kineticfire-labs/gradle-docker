@@ -48,6 +48,7 @@ sourceSets {
     }
     integrationTest {
         java.srcDir 'src/integrationTest/java'
+        groovy.srcDir 'src/integrationTest/groovy'
         resources.srcDir 'src/integrationTest/resources'  
         compileClasspath += sourceSets.main.output
         runtimeClasspath += output + compileClasspath
@@ -83,6 +84,11 @@ dependencies {
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
     integrationTestImplementation gradleTestKit()
     integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    
+    // Integration Test dependencies (Groovy/Spock for registry tests)
+    integrationTestImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
+    integrationTestImplementation 'org.spockframework:spock-core'
+    integrationTestImplementation 'org.spockframework:spock-junit4'
 }
 
 // DEMONSTRATING UC-6: Project Developer Create and Publish Docker Image
@@ -239,4 +245,16 @@ tasks.register('integrationTestMethod', Test) {
     
     dependsOn 'dockerBuildTimeServer'
     shouldRunAfter 'integrationTestClass'
+}
+
+tasks.register('integrationTestRegistry', Test) {
+    description = 'Integration tests for Docker registry publishing functionality'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/DockerRegistryPublishIntegrationIT.class'
+    
+    dependsOn 'dockerBuildTimeServer'
+    shouldRunAfter 'integrationTestMethod'
 }

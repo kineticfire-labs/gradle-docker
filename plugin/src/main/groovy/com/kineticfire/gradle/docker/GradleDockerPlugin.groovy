@@ -332,6 +332,33 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerPublishTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Publish Docker image: ${imageSpec.name}"
+        
+        // Configure service dependency
+        task.dockerService.set(dockerService)
+        
+        // Configure image name - prefer explicit image name over build task output
+        if (imageSpec.imageName.present) {
+            task.imageName.set(imageSpec.imageName)
+        } else {
+            // Wire to build task output if available
+            def buildTaskName = "dockerBuild${imageSpec.name.capitalize()}"
+            project.tasks.named(buildTaskName, DockerBuildTask) { buildTask ->
+                task.imageIdFile.set(buildTask.imageId)
+                task.dependsOn(buildTask)
+            }
+        }
+        
+        // Configure publish targets from DSL
+        if (imageSpec.publish.present) {
+            def publishSpec = imageSpec.publish.get()
+            task.publishTargets.set(publishSpec.to)
+        }
+        
+        // Set up task dependencies - publish depends on build and tag
+        def tagTaskName = "dockerTag${imageSpec.name.capitalize()}"
+        project.tasks.matching { it.name == tagTaskName }.configureEach { tagTask ->
+            task.dependsOn(tagTask)
+        }
     }
     
     private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {

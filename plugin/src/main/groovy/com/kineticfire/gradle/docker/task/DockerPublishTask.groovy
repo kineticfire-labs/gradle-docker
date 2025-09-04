@@ -16,18 +16,119 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.exception.DockerServiceException
+import com.kineticfire.gradle.docker.model.AuthConfig
+import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.spec.PublishTarget
 import org.gradle.api.DefaultTask
-import org.gradle.api.tasks.TaskAction
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.*
+
+import javax.inject.Inject
+import java.util.concurrent.CompletableFuture
 
 /**
  * Task for publishing Docker images to registries
- * This is a placeholder implementation for Phase 1
  */
 abstract class DockerPublishTask extends DefaultTask {
     
+    @Input
+    abstract Property<String> getImageName()
+    
+    @Input
+    abstract ListProperty<PublishTarget> getPublishTargets()
+    
+    @InputFile
+    @Optional
+    abstract RegularFileProperty getImageIdFile()
+    
+    @Nested
+    abstract Property<DockerService> getDockerService()
+    
+    @Inject
+    DockerPublishTask() {
+        group = 'docker'
+        description = 'Publishes Docker image to configured registries'
+    }
+    
     @TaskAction
     void publishImage() {
-        logger.lifecycle("DockerPublishTask: Publishing image (placeholder implementation)")
-        // TODO: Implement actual Docker publish logic with service integration
+        def service = dockerService.get()
+        def imageName = getImageNameToPublish()
+        def targets = publishTargets.get()
+        
+        if (targets.empty) {
+            logger.lifecycle("No publish targets configured, skipping publish")
+            return
+        }
+        
+        logger.lifecycle("Publishing image '{}' to {} targets", imageName, targets.size())
+        
+        def publishFutures = []
+        
+        targets.each { target ->
+            def repositoryName = target.repository.get()
+            def tags = target.tags.getOrElse([])
+            def authSpec = target.auth.orNull
+            
+            if (tags.empty) {
+                tags = ['latest']
+            }
+            
+            tags.each { tag ->
+                def fullImageRef = "${repositoryName}:${tag}"
+                logger.info("Publishing {} as {}", imageName, fullImageRef)
+                
+                def authConfig = createAuthConfig(authSpec)
+                def publishFuture = service.pushImage(fullImageRef, authConfig)
+                    .whenComplete { result, throwable ->
+                        if (throwable) {
+                            logger.error("Failed to push {}: {}", fullImageRef, throwable.message)
+                        } else {
+                            logger.lifecycle("Successfully pushed: {}", fullImageRef)
+                        }
+                    }
+                publishFutures << publishFuture
+            }
+        }
+        
+        try {
+            CompletableFuture.allOf(publishFutures as CompletableFuture[]).join()
+            logger.lifecycle("All publish operations completed successfully")
+        } catch (Exception e) {
+            def cause = e.cause
+            if (cause instanceof DockerServiceException) {
+                throw new org.gradle.api.GradleException(
+                    "Docker publish failed: ${cause.message}${cause.suggestion ? " - ${cause.suggestion}" : ""}", 
+                    cause
+                )
+            } else {
+                throw new org.gradle.api.GradleException("Docker publish failed: ${e.message}", e)
+            }
+        }
+    }
+    
+    private String getImageNameToPublish() {
+        def name = imageName.getOrNull()
+        if (name) {
+            return name
+        }
+        
+        def imageIdFile = this.imageIdFile.orNull
+        if (imageIdFile && imageIdFile.asFile.exists()) {
+            def imageId = imageIdFile.asFile.text.trim()
+            logger.debug("Read image ID from file: {}", imageId)
+            return imageId
+        }
+        
+        throw new org.gradle.api.GradleException(
+            "No image name specified and no image ID file found. Set imageName property or ensure imageIdFile exists."
+        )
+    }
+    
+    private AuthConfig createAuthConfig(authSpec) {
+        return authSpec?.toAuthConfig()
     }
 }

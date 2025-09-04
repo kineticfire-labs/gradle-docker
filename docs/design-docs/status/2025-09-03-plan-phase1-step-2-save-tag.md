@@ -6,6 +6,8 @@ This detailed plan focuses on implementing comprehensive Docker image export/imp
 
 ## Phase 1, Step 2: Docker Image Export/Import (9-11 hours total)
 
+**STATUS UPDATE (September 4, 2025)**: This step can proceed independently of Step 1 registry publishing, as it does not depend on the publish functionality that is currently blocked by the plugin validation bug.
+
 ### What Is Needed
 
 **1. Complete DockerSaveTask Implementation**

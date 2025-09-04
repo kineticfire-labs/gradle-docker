@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  # Basic registry for unauthenticated testing
+  registry:
+    image: registry:2
+    container_name: test-registry
+    ports:
+      - "5000:5000"
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: true
+    volumes:
+      - registry-data:/var/lib/registry
+    networks:
+      - registry-network
+
+  # Authenticated registry for authentication testing
+  registry-auth:
+    image: registry:2
+    container_name: test-registry-auth
+    ports:
+      - "5001:5000"
+    environment:
+      REGISTRY_AUTH: htpasswd
+      REGISTRY_AUTH_HTPASSWD_REALM: "Registry Realm"
+      REGISTRY_AUTH_HTPASSWD_PATH: /auth/htpasswd
+      REGISTRY_STORAGE_DELETE_ENABLED: true
+    volumes:
+      - ./test-auth:/auth:ro
+      - registry-auth-data:/var/lib/registry
+    networks:
+      - registry-network
+    depends_on:
+      - registry
+
+volumes:
+  registry-data:
+  registry-auth-data:
+
+networks:
+  registry-network:
+    driver: bridge
