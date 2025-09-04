@@ -309,8 +309,8 @@ docker {
             context = file('src/main/docker')
             dockerfile = file('src/main/docker/Dockerfile') 
             tags = [
-                "time-server:\$version",
-                "time-server:latest"
+                "\$version",
+                "latest"
             ]
             buildArgs = [
                 'JAR_FILE': "app-\$version.jar",
@@ -429,8 +429,8 @@ docker {
             context = file('src/main/docker')
             dockerfile = file('src/main/docker/Dockerfile') 
             tags = [
-                "time-server:\$version",
-                "time-server:latest"
+                "\$version",
+                "latest"
             ]
             buildArgs = [
                 'JAR_FILE': "app-\$version.jar",

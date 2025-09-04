@@ -34,7 +34,7 @@ class BuildContextTest extends Specification {
         given:
         def contextPath = tempDir
         def dockerfile = tempDir.resolve('Dockerfile')
-        def tags = ['myapp:latest', 'myapp:1.0.0']
+        def tags = ['latest', '1.0.0']
         def buildArgs = [VERSION: '1.0.0', BUILD_DATE: '2025-01-01']
         
         // Create required files
@@ -54,7 +54,7 @@ class BuildContextTest extends Specification {
         given:
         def contextPath = tempDir.resolve('simple')
         def dockerfile = contextPath.resolve('Dockerfile')
-        def tags = ['simple:latest']
+        def tags = ['latest']
         
         Files.createDirectories(contextPath)
         Files.createFile(dockerfile)

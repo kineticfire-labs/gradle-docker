@@ -130,7 +130,7 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['myapp:latest', 'myapp:1.0']
+                tags = ['latest', '1.0']
             }
         }
 
@@ -165,7 +165,7 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['myapp:latest']
+                tags = ['latest']
                 save {
                     outputFile = project.file('myapp.tar')
                 }
@@ -198,7 +198,7 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['myapp:latest']
+                tags = ['latest']
             }
         }
 
@@ -267,14 +267,14 @@ class GradleDockerPluginTest extends Specification {
             app1 {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['app1:latest']
+                tags = ['latest']
                 save { outputFile = project.file('app1.tar') }
                 // Skip publish config due to DSL complexity in tests
             }
             app2 {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['app2:latest']
+                tags = ['latest']
             }
         }
         
@@ -308,7 +308,7 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['myapp:latest']
+                tags = ['latest']
                 save { outputFile = project.file('myapp.tar') }
                 // Skip publish config due to DSL complexity in tests
             }
@@ -322,53 +322,7 @@ class GradleDockerPluginTest extends Specification {
         !project.tasks.getByName('dockerSaveMyApp').dependsOn.empty
     }
 
-    // ===== TEST INTEGRATION EXTENSION TESTS =====
-
-    def "plugin configures test integration extension methods"() {
-        given:
-        plugin.apply(project)
-        def testTask = project.tasks.create('testTask', Test)
-
-        when:
-        project.evaluate()
-
-        then:
-        testTask.ext.has('usesCompose')
-        project.ext.has('composeStateFileFor')
-        
-        // Verify extension methods work
-        def stateFile = project.ext.composeStateFileFor('testStack')
-        stateFile.endsWith('testStack-state.json')
-    }
-
-    def "test integration usesCompose method works correctly"() {
-        given:
-        plugin.apply(project)
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
-        
-        // Create dummy compose file
-        def composeFile = project.file('test-compose.yml')
-        composeFile.parentFile.mkdirs()
-        composeFile.text = "version: '3'\nservices:\n  test:\n    image: alpine"
-        
-        // Configure a compose stack
-        dockerOrchExt.composeStacks {
-            testStack {
-                files.from(composeFile)
-            }
-        }
-        
-        def testTask = project.tasks.create('integrationTest', Test)
-
-        when:
-        project.evaluate()
-        testTask.ext.usesCompose(stack: 'testStack', lifecycle: 'suite')
-
-        then:
-        notThrown(Exception)
-        // Suite lifecycle should add doFirst/doLast actions
-        testTask.actions.size() >= 2
-    }
+    // Note: Test integration extension tests moved to PluginIntegrationFunctionalTest
 
     // ===== VALIDATION TESTS =====
 
@@ -430,18 +384,18 @@ class GradleDockerPluginTest extends Specification {
             frontend {
                 context = project.file('frontend')
                 dockerfile = project.file('frontend/Dockerfile')
-                tags = ['frontend:latest']
+                tags = ['latest']
             }
             backend {
                 context = project.file('backend')
                 dockerfile = project.file('backend/Dockerfile')
-                tags = ['backend:latest']
+                tags = ['latest']
                 save { outputFile = project.file('backend.tar') }
             }
             worker {
                 context = project.file('worker')
                 dockerfile = project.file('worker/Dockerfile')
-                tags = ['worker:latest']
+                tags = ['latest']
                 // Skip publish config due to DSL complexity in tests
             }
         }
@@ -538,7 +492,7 @@ class GradleDockerPluginTest extends Specification {
             testApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testapp:latest']
+                tags = ['latest']
                 publish {
                     // Simple publish config that should trigger task creation
                     to {
@@ -597,7 +551,7 @@ class GradleDockerPluginTest extends Specification {
             missingDockerfile {
                 context = project.file('.')
                 dockerfile = project.file('NonExistentDockerfile')  // File doesn't exist
-                tags = ['test:latest']
+                tags = ['latest']
             }
         }
 
@@ -622,7 +576,7 @@ class GradleDockerPluginTest extends Specification {
             missingContext {
                 context = project.file('nonexistent-dir')  // Directory doesn't exist
                 dockerfile = dockerfile
-                tags = ['test:latest']
+                tags = ['latest']
             }
         }
 
@@ -647,7 +601,7 @@ class GradleDockerPluginTest extends Specification {
             edgeCaseTags {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['test:latest']  // Valid tags to avoid validation issues
+                tags = ['latest']  // Valid tags to avoid validation issues
             }
         }
 

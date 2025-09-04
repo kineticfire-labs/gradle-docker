@@ -87,7 +87,7 @@ class DockerFixtures {
             ]
         }
         
-        static BuildContext createBuildContext(String contextPath = "/tmp/docker", List<String> tags = ["test:latest"]) {
+        static BuildContext createBuildContext(String contextPath = "/tmp/docker", List<String> tags = ["latest"]) {
             def context = new File(contextPath)
             def dockerfile = new File(context, "Dockerfile")
             return new BuildContext(

@@ -171,7 +171,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             
             // Build task
             project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-                configureDockerBuildTask(task, imageSpec, dockerService)
+                configureDockerBuildTask(task, imageSpec, dockerService, project.layout)
             }
             
             // Save task
@@ -281,7 +281,7 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     // Task configuration methods
-    private void configureDockerBuildTask(task, imageSpec, dockerService) {
+    private void configureDockerBuildTask(task, imageSpec, dockerService, projectLayout) {
         task.group = 'docker'
         task.description = "Build Docker image: ${imageSpec.name}"
         
@@ -303,7 +303,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.buildArgs.set(imageSpec.buildArgs)
         
         // Configure output image ID file
-        def outputDir = task.project.layout.buildDirectory.dir("docker/${imageSpec.name}")
+        def outputDir = projectLayout.buildDirectory.dir("docker/${imageSpec.name}")
         task.imageId.set(outputDir.map { it.file('image-id.txt') })
     }
     
@@ -336,17 +336,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.dockerService.set(dockerService)
         
-        // Configure image name - prefer explicit image name over build task output
-        if (imageSpec.imageName.present) {
-            task.imageName.set(imageSpec.imageName)
-        } else {
-            // Wire to build task output if available
-            def buildTaskName = "dockerBuild${imageSpec.name.capitalize()}"
-            project.tasks.named(buildTaskName, DockerBuildTask) { buildTask ->
-                task.imageIdFile.set(buildTask.imageId)
-                task.dependsOn(buildTask)
-            }
+        // Configure image name - prefer source reference over build task output
+        if (imageSpec.sourceRef.present) {
+            task.imageName.set(imageSpec.sourceRef)
         }
+        // Note: Build task wiring and dependencies are handled in configureTaskDependencies method
         
         // Configure publish targets from DSL
         if (imageSpec.publish.present) {
@@ -354,11 +348,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             task.publishTargets.set(publishSpec.to)
         }
         
-        // Set up task dependencies - publish depends on build and tag
-        def tagTaskName = "dockerTag${imageSpec.name.capitalize()}"
-        project.tasks.matching { it.name == tagTaskName }.configureEach { tagTask ->
-            task.dependsOn(tagTask)
-        }
+        // Note: Task dependencies are configured in configureTaskDependencies method
     }
     
     private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {

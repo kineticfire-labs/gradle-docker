@@ -18,7 +18,9 @@ package com.kineticfire.gradle.docker.integration.appimage;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.kineticfire.gradle.docker.junit.DockerComposeClassExtension;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
@@ -38,6 +40,7 @@ import static org.assertj.core.api.Assertions.*;
  * Network: Uses integrationClass compose stack on port 8082  
  * Pattern: Fresh environment per class, moderate performance, good for stateful testing
  */
+@ExtendWith(DockerComposeClassExtension.class)
 class TimeServerClassLifecycleIT {
     
     private static final String BASE_URL = "http://localhost:8082";

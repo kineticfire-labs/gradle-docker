@@ -88,11 +88,11 @@ class ImageSpecTest extends Specification {
 
     def "tags property works correctly"() {
         when:
-        imageSpec.tags.set(['myapp:latest', 'myapp:v1.0', 'myapp:stable'])
+        imageSpec.tags.set(['latest', 'v1.0', 'stable'])
 
         then:
         imageSpec.tags.present
-        imageSpec.tags.get() == ['myapp:latest', 'myapp:v1.0', 'myapp:stable']
+        imageSpec.tags.get() == ['latest', 'v1.0', 'stable']
     }
 
     def "sourceRef property works correctly"() {
@@ -241,7 +241,7 @@ class ImageSpecTest extends Specification {
         imageSpec.context.set(contextDir)
         imageSpec.dockerfile.set(dockerFile)
         imageSpec.buildArgs.set(['BUILD_DATE': '2023-01-01', 'VERSION': '1.2.3'])
-        imageSpec.tags.set(['myapp:1.2.3', 'myapp:latest'])
+        imageSpec.tags.set(['1.2.3', 'latest'])
         imageSpec.sourceRef.set('node:18-alpine')
         imageSpec.save {
             outputFile.set(saveFile)
@@ -264,7 +264,7 @@ class ImageSpecTest extends Specification {
         imageSpec.context.get().asFile == contextDir
         imageSpec.dockerfile.get().asFile == dockerFile
         imageSpec.buildArgs.get() == ['BUILD_DATE': '2023-01-01', 'VERSION': '1.2.3']
-        imageSpec.tags.get() == ['myapp:1.2.3', 'myapp:latest']
+        imageSpec.tags.get() == ['1.2.3', 'latest']
         imageSpec.sourceRef.get() == 'node:18-alpine'
         imageSpec.save.present
         imageSpec.publish.present

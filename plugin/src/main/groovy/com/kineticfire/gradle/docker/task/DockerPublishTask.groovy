@@ -77,11 +77,13 @@ abstract class DockerPublishTask extends DefaultTask {
                 tags = ['latest']
             }
             
+            // Create auth config once per target (outside the inner loop)
+            def authConfig = authSpec?.toAuthConfig()
+            
             tags.each { tag ->
                 def fullImageRef = "${repositoryName}:${tag}"
                 logger.info("Publishing {} as {}", imageName, fullImageRef)
                 
-                def authConfig = createAuthConfig(authSpec)
                 def publishFuture = service.pushImage(fullImageRef, authConfig)
                     .whenComplete { result, throwable ->
                         if (throwable) {
@@ -105,7 +107,8 @@ abstract class DockerPublishTask extends DefaultTask {
                     cause
                 )
             } else {
-                throw new org.gradle.api.GradleException("Docker publish failed: ${e.message}", e)
+                def rootCause = e.cause ?: e
+                throw new org.gradle.api.GradleException("Docker publish failed: ${rootCause.message}", rootCause)
             }
         }
     }
@@ -128,7 +131,4 @@ abstract class DockerPublishTask extends DefaultTask {
         )
     }
     
-    private AuthConfig createAuthConfig(authSpec) {
-        return authSpec?.toAuthConfig()
-    }
 }

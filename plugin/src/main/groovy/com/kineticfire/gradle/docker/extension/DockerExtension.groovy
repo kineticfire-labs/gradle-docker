@@ -105,21 +105,37 @@ abstract class DockerExtension {
             }
         }
         
-        // Validate tags format
+        // Validate tags format - ImageSpec tags are tag names only (not full image references)
         if (imageSpec.tags.present && !imageSpec.tags.get().empty) {
             imageSpec.tags.get().each { tag ->
-                if (!isValidDockerTag(tag)) {
+                if (!isValidTagName(tag)) {
                     throw new GradleException(
-                        "Invalid Docker tag format: '${tag}' in image '${imageSpec.name}'\\n" +
-                        "Suggestion: Use format 'repository:tag' (e.g., 'myapp:latest')"
+                        "Invalid Docker tag name: '${tag}' in image '${imageSpec.name}'\\n" +
+                        "Suggestion: Use valid tag names (e.g., 'latest', 'v1.0.0', 'dev')"
                     )
                 }
             }
         }
     }
     
+    boolean isValidTagName(String tag) {
+        // Docker tag name validation (tag portion only, no repository)
+        // Valid examples: "latest", "v1.0.0", "dev-123", "1.0", "stable"
+        // Docker allows: letters, digits, underscores, periods, dashes
+        // Must not start with period or dash, max 128 characters
+        return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) && tag.length() <= 128 && !tag.contains(":")
+    }
+    
+    boolean isValidImageReference(String imageRef) {
+        // Docker image reference validation (repository:tag format)
+        // Valid examples: "myapp:latest", "registry.com/team/app:v1.0.0"
+        return imageRef && imageRef.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*:[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+    }
+    
+    @Deprecated
     boolean isValidDockerTag(String tag) {
-        // Basic Docker tag validation
-        return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*:[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
+        // Legacy method - kept for backward compatibility in tests
+        // This was the problematic method that required repository:tag format
+        return isValidImageReference(tag)
     }
 }

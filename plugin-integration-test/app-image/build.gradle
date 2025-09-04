@@ -35,6 +35,7 @@ group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
 repositories {
+    mavenLocal()
     mavenCentral()
 }
 
@@ -83,6 +84,7 @@ dependencies {
     integrationTestImplementation 'org.assertj:assertj-core:3.24.2'
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
     integrationTestImplementation gradleTestKit()
+    integrationTestImplementation 'com.kineticfire.gradle:gradle-docker:1.0.0'
     integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
     
     // Integration Test dependencies (Groovy/Spock for registry tests)
@@ -98,8 +100,8 @@ docker {
             context = file('src/main/docker')
             dockerfile = file('src/main/docker/Dockerfile') 
             tags = [
-                "time-server:${version}",
-                "time-server:latest"
+                "${version}",
+                "latest"
             ]
             buildArgs = [
                 'JAR_FILE': "app-${version}.jar",
@@ -222,9 +224,8 @@ tasks.register('integrationTestClass', Test) {
     include '**/TimeServerClassLifecycleIT.class'
     
     // DEMONSTRATE: Class lifecycle - compose up/down per test class  
-    // TODO: usesCompose functionality not yet implemented in plugin
-    // usesCompose stack: "integrationClass", lifecycle: "class"
-    // systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationClass")
+    usesCompose stack: "integrationClass", lifecycle: "class"
+    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationClass")
     
     dependsOn 'dockerBuildTimeServer'
     shouldRunAfter 'integrationTestSuite'
@@ -239,9 +240,8 @@ tasks.register('integrationTestMethod', Test) {
     include '**/TimeServerMethodLifecycleIT.class'
     
     // DEMONSTRATE: Method lifecycle - compose up/down per test method (maximum isolation)
-    // TODO: usesCompose functionality not yet implemented in plugin
-    // usesCompose stack: "integrationMethod", lifecycle: "method"
-    // systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationMethod")
+    usesCompose stack: "integrationMethod", lifecycle: "method"
+    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationMethod")
     
     dependsOn 'dockerBuildTimeServer'
     shouldRunAfter 'integrationTestClass'

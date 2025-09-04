@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.extension
 
 import org.gradle.api.Project
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.testing.Test
 
 /**
@@ -70,49 +71,52 @@ class TestIntegrationExtension {
     /**
      * Get the path to the compose state file for a given stack
      * @param stackName Name of the compose stack
-     * @return Path to the state file that will contain runtime information
+     * @return Provider of path to the state file that will contain runtime information
      */
-    String composeStateFileFor(String stackName) {
-        def stateDir = project.layout.buildDirectory.dir("compose-state").get().asFile
-        def stateFile = new File(stateDir, "${stackName}-state.json")
-        return stateFile.absolutePath
+    Provider<String> composeStateFileFor(String stackName) {
+        def buildDirProvider = project.layout.buildDirectory
+        def stateDirProvider = buildDirProvider.dir("compose-state")
+        return stateDirProvider.map { dir ->
+            dir.asFile.toPath().resolve("${stackName}-state.json").toString()
+        }
     }
     
     private void configureSuiteLifecycle(Test test, String stackName, stackSpec) {
         def upTaskName = "composeUp${stackName.capitalize()}"
         def downTaskName = "composeDown${stackName.capitalize()}"
         
-        // Ensure stack is up before test suite starts
-        test.doFirst {
-            project.logger.lifecycle("Starting compose stack '{}' for test suite", stackName)
-            project.tasks.findByName(upTaskName)?.actions?.each { it.execute(project.tasks.findByName(upTaskName)) }
-        }
-        
-        // Clean up after test suite ends
-        test.doLast {
-            project.logger.lifecycle("Stopping compose stack '{}' after test suite", stackName)
-            project.tasks.findByName(downTaskName)?.actions?.each { it.execute(project.tasks.findByName(downTaskName)) }
-        }
-        
-        // Add dependency on compose tasks
+        // Add dependency on compose tasks - this is sufficient for suite lifecycle
+        // The compose tasks will handle the actual Docker Compose operations
         test.dependsOn upTaskName
         test.finalizedBy downTaskName
+        
+        // Note: Removed doFirst/doLast logging to avoid configuration cache issues
+        // The compose tasks themselves handle logging of start/stop operations
     }
     
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {
-        // For class lifecycle, we'll use JUnit/TestNG listeners to start/stop per test class
-        // This is a simplified implementation - in practice would use test framework hooks
+        // Class lifecycle uses JUnit extension to manage compose per test class
+        // DO NOT add task dependencies - let JUnit extension handle lifecycle
+        
+        // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "class")
+        test.systemProperty("docker.compose.project", project.name)
         
-        project.logger.info("Test '{}' configured for per-class compose lifecycle", test.name)
+        project.logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
+        project.logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
     }
     
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
-        // For method lifecycle, we'll use JUnit/TestNG listeners to start/stop per test method
+        // Method lifecycle uses JUnit extension to manage compose per test method
+        // DO NOT add task dependencies - let JUnit extension handle lifecycle
+        
+        // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "method")
+        test.systemProperty("docker.compose.project", project.name)
         
-        project.logger.info("Test '{}' configured for per-method compose lifecycle", test.name)
+        project.logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
+        project.logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
     }
 }

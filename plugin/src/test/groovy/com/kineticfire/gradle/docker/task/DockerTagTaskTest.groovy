@@ -48,7 +48,7 @@ class DockerTagTaskTest extends Specification {
     def "tagImage action executes docker service tag"() {
         given:
         task.sourceImage.set('sha256:abc123')
-        task.tags.set(['myapp:latest', 'myapp:1.0.0'])
+        task.tags.set(['latest', '1.0.0'])
 
         and:
         mockDockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
@@ -57,12 +57,12 @@ class DockerTagTaskTest extends Specification {
         task.tagImage()
 
         then:
-        1 * mockDockerService.tagImage('sha256:abc123', ['myapp:latest', 'myapp:1.0.0'])
+        1 * mockDockerService.tagImage('sha256:abc123', ['latest', '1.0.0'])
     }
 
     def "task fails when sourceImage is not set"() {
         given:
-        task.tags.set(['test:latest'])
+        task.tags.set(['latest'])
 
         when:
         task.tagImage()
