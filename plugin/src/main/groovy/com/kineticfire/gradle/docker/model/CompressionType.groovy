@@ -21,7 +21,10 @@ package com.kineticfire.gradle.docker.model
  */
 enum CompressionType {
     NONE("none", "tar"),
-    GZIP("gzip", "tar.gz")
+    GZIP("gzip", "tar.gz"),
+    BZIP2("bzip2", "tar.bz2"),
+    XZ("xz", "tar.xz"),
+    ZIP("zip", "zip")
     
     final String type
     final String extension
@@ -42,6 +45,13 @@ enum CompressionType {
             case 'gzip':
             case 'gz':
                 return GZIP
+            case 'bzip2':
+            case 'bz2':
+                return BZIP2
+            case 'xz':
+                return XZ
+            case 'zip':
+                return ZIP
             case 'none':
             case 'tar':
             default:

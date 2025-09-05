@@ -16,18 +16,88 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.model.CompressionType
+import com.kineticfire.gradle.docker.service.DockerService
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
 /**
- * Task for saving Docker images to files
- * This is a placeholder implementation for Phase 1
+ * Task for saving Docker images to files with optional compression
  */
 abstract class DockerSaveTask extends DefaultTask {
     
+    DockerSaveTask() {
+        group = 'docker'
+        description = 'Save Docker image to file'
+        
+        // Set defaults
+        compression.convention(CompressionType.GZIP)
+        pullIfMissing.convention(false)
+    }
+    
+    @Internal
+    abstract Property<DockerService> getDockerService()
+    
+    @Input
+    @Optional
+    abstract Property<String> getImageName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRef()
+    
+    @Input
+    abstract Property<CompressionType> getCompression()
+    
+    @OutputFile
+    abstract RegularFileProperty getOutputFile()
+    
+    @Input
+    @Optional
+    abstract Property<Boolean> getPullIfMissing()
+    
     @TaskAction
     void saveImage() {
-        logger.lifecycle("DockerSaveTask: Saving image (placeholder implementation)")
-        // TODO: Implement actual Docker save logic with service integration
+        // Validate required properties
+        if (!imageName.present && !sourceRef.present) {
+            throw new IllegalStateException("Either imageName or sourceRef property must be set")
+        }
+        if (!outputFile.present) {
+            throw new IllegalStateException("outputFile property must be set")
+        }
+        
+        // Resolve image source (built vs sourceRef)
+        String imageToSave = resolveImageSource()
+        
+        logger.lifecycle("Saving image {} to {} with compression: {}", imageToSave, outputFile.get().asFile, compression.get())
+        
+        // Call existing service method
+        dockerService.get().saveImage(
+            imageToSave, 
+            outputFile.get().asFile.toPath(),
+            compression.get()
+        ).get()
+        
+        logger.lifecycle("Successfully saved image {} to {}", imageToSave, outputFile.get().asFile)
+    }
+    
+    private String resolveImageSource() {
+        if (sourceRef.present) {
+            String ref = sourceRef.get()
+            if (pullIfMissing.get() && !dockerService.get().imageExists(ref).get()) {
+                logger.lifecycle("Pulling missing image: {}", ref)
+                dockerService.get().pullImage(ref, null).get()
+            }
+            return ref
+        }
+        
+        // Use imageName if sourceRef is not present
+        return imageName.get()
     }
 }

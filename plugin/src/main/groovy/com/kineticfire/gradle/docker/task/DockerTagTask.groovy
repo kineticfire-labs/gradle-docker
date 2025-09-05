@@ -23,6 +23,7 @@ import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -36,6 +37,7 @@ abstract class DockerTagTask extends DefaultTask {
         
         // Set up default values
         tags.convention([])
+        pullIfMissing.convention(false)
     }
     
     @Internal
@@ -47,21 +49,46 @@ abstract class DockerTagTask extends DefaultTask {
     @Input
     abstract ListProperty<String> getTags()
     
+    @Input
+    @Optional
+    abstract Property<String> getSourceRef()
+    
+    @Input
+    @Optional
+    abstract Property<Boolean> getPullIfMissing()
+    
     @TaskAction
     void tagImage() {
         // Validate required properties
-        if (!sourceImage.present) {
-            throw new IllegalStateException("sourceImage property must be set")
+        if (!sourceImage.present && !sourceRef.present) {
+            throw new IllegalStateException("Either sourceImage or sourceRef property must be set")
         }
         if (!tags.present || tags.get().isEmpty()) {
             throw new IllegalStateException("tags property must be set and not empty")
         }
         
-        logger.lifecycle("DockerTagTask: Tagging image (placeholder implementation)")
-        logger.lifecycle("  Source Image: ${sourceImage.get()}")
-        logger.lifecycle("  Tags: ${tags.get()}")
+        // Resolve source image (built vs sourceRef)
+        String imageToTag = resolveSourceImage()
+        
+        logger.lifecycle("Tagging image {} with tags: {}", imageToTag, tags.get())
         
         // Call Docker service to tag the image
-        dockerService.get().tagImage(sourceImage.get(), tags.get())
+        dockerService.get().tagImage(imageToTag, tags.get())
+        
+        logger.lifecycle("Successfully tagged image {} with {} tags", imageToTag, tags.get().size())
+    }
+    
+    private String resolveSourceImage() {
+        if (sourceRef.present) {
+            String ref = sourceRef.get()
+            if (pullIfMissing.get() && !dockerService.get().imageExists(ref).get()) {
+                logger.lifecycle("Pulling missing image: {}", ref)
+                dockerService.get().pullImage(ref, null).get()
+            }
+            return ref
+        }
+        
+        // Use sourceImage if sourceRef is not present
+        return sourceImage.get()
     }
 }

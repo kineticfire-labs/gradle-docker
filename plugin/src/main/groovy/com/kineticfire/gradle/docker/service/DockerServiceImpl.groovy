@@ -42,6 +42,10 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import java.util.zip.GZIPOutputStream
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
+import org.apache.commons.compress.compressors.bzip2.BZip2CompressorOutputStream
+import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
 
 /**
  * Docker Java Client implementation of Docker service
@@ -216,15 +220,34 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 def inputStream = dockerClient.saveImageCmd(imageId).exec()
                 
-                if (compression == CompressionType.GZIP) {
-                    outputFile.withOutputStream { fileOut ->
-                        new GZIPOutputStream(fileOut).withStream { gzipOut ->
-                            gzipOut << inputStream
-                        }
-                    }
-                } else {
-                    outputFile.withOutputStream { fileOut ->
-                        fileOut << inputStream
+                outputFile.withOutputStream { fileOut ->
+                    switch (compression) {
+                        case CompressionType.GZIP:
+                            new GZIPOutputStream(fileOut).withStream { gzipOut ->
+                                gzipOut << inputStream
+                            }
+                            break
+                        case CompressionType.BZIP2:
+                            new BZip2CompressorOutputStream(fileOut).withStream { bz2Out ->
+                                bz2Out << inputStream
+                            }
+                            break
+                        case CompressionType.XZ:
+                            new XZCompressorOutputStream(fileOut).withStream { xzOut ->
+                                xzOut << inputStream
+                            }
+                            break
+                        case CompressionType.ZIP:
+                            new ZipOutputStream(fileOut).withStream { zipOut ->
+                                zipOut.putNextEntry(new ZipEntry("image.tar"))
+                                zipOut << inputStream
+                                zipOut.closeEntry()
+                            }
+                            break
+                        case CompressionType.NONE:
+                        default:
+                            fileOut << inputStream
+                            break
                     }
                 }
                 
