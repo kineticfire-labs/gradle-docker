@@ -22,6 +22,7 @@ import org.junit.jupiter.api.*;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.time.Duration;
 import java.time.Instant;
@@ -60,7 +61,7 @@ class EnhancedComposeIntegrationIT {
             final int index = i;
             threads[i] = new Thread(() -> {
                 try {
-                    URL url = new URL(BASE_URL_SUITE + "/time");
+                    URL url = URI.create(BASE_URL_SUITE + "/time").toURL();
                     HttpURLConnection connection = (HttpURLConnection) url.openConnection();
                     connection.setRequestMethod("GET");
                     connection.setConnectTimeout(5000);
@@ -105,7 +106,7 @@ class EnhancedComposeIntegrationIT {
     void serviceHealthCheckIntegrationWorksCorrectly() throws Exception {
         // Purpose: Test health check monitoring and reporting
         
-        URL healthUrl = new URL(BASE_URL_SUITE + "/health");
+        URL healthUrl = URI.create(BASE_URL_SUITE + "/health").toURL();
         
         // Test health endpoint multiple times to verify consistency
         for (int i = 0; i < 5; i++) {
@@ -149,7 +150,7 @@ class EnhancedComposeIntegrationIT {
         
         for (String testMessage : testCases) {
             String encodedMessage = java.net.URLEncoder.encode(testMessage, "UTF-8");
-            URL url = new URL(BASE_URL_SUITE + "/echo?msg=" + encodedMessage);
+            URL url = URI.create(BASE_URL_SUITE + "/echo?msg=" + encodedMessage).toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             
@@ -176,7 +177,7 @@ class EnhancedComposeIntegrationIT {
     void serviceMaintainsStateConsistencyAcrossRequests() throws Exception {
         // Purpose: Test service state management and persistence
         
-        URL metricsUrl = new URL(BASE_URL_SUITE + "/metrics");
+        URL metricsUrl = URI.create(BASE_URL_SUITE + "/metrics").toURL();
         
         // Get initial metrics
         HttpURLConnection initialConnection = (HttpURLConnection) metricsUrl.openConnection();
@@ -191,7 +192,7 @@ class EnhancedComposeIntegrationIT {
         String[] endpoints = {"/health", "/time", "/echo?msg=test"};
         
         for (String endpoint : endpoints) {
-            URL url = new URL(BASE_URL_SUITE + endpoint);
+            URL url = URI.create(BASE_URL_SUITE + endpoint).toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             connection.getResponseCode(); // Just make the request
@@ -229,7 +230,7 @@ class EnhancedComposeIntegrationIT {
     void serviceGracefullyHandlesNetworkTimeouts() throws Exception {
         // Purpose: Test timeout handling and connection management
         
-        URL url = new URL(BASE_URL_SUITE + "/time");
+        URL url = URI.create(BASE_URL_SUITE + "/time").toURL();
         
         // Test with very short timeout
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
@@ -260,7 +261,7 @@ class EnhancedComposeIntegrationIT {
         };
         
         for (String endpoint : malformedEndpoints) {
-            URL url = new URL(BASE_URL_SUITE + endpoint);
+            URL url = URI.create(BASE_URL_SUITE + endpoint).toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             
@@ -279,7 +280,7 @@ class EnhancedComposeIntegrationIT {
     void servicePerformanceRemainsStableOverTime() throws Exception {
         // Purpose: Test service performance consistency
         
-        URL timeUrl = new URL(BASE_URL_SUITE + "/time");
+        URL timeUrl = URI.create(BASE_URL_SUITE + "/time").toURL();
         int requestCount = 20;
         long[] responseTimes = new long[requestCount];
         
@@ -340,7 +341,7 @@ class EnhancedComposeIntegrationIT {
         Instant testStart = Instant.now();
         
         // Verify service is available
-        URL healthUrl = new URL(BASE_URL_SUITE + "/health");
+        URL healthUrl = URI.create(BASE_URL_SUITE + "/health").toURL();
         HttpURLConnection healthConnection = (HttpURLConnection) healthUrl.openConnection();
         healthConnection.setRequestMethod("GET");
         
@@ -349,7 +350,7 @@ class EnhancedComposeIntegrationIT {
             .isEqualTo(200);
         
         // Verify service has been running for some time (compose startup)
-        URL metricsUrl = new URL(BASE_URL_SUITE + "/metrics");
+        URL metricsUrl = URI.create(BASE_URL_SUITE + "/metrics").toURL();
         HttpURLConnection metricsConnection = (HttpURLConnection) metricsUrl.openConnection();
         metricsConnection.setRequestMethod("GET");
         String metricsResponse = new String(metricsConnection.getInputStream().readAllBytes());
@@ -364,7 +365,7 @@ class EnhancedComposeIntegrationIT {
         String[] mainEndpoints = {"/health", "/time", "/echo?msg=lifecycle-test", "/metrics"};
         
         for (String endpoint : mainEndpoints) {
-            URL url = new URL(BASE_URL_SUITE + endpoint);
+            URL url = URI.create(BASE_URL_SUITE + endpoint).toURL();
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("GET");
             

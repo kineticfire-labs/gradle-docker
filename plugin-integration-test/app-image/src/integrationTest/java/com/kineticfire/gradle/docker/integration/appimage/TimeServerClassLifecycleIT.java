@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 import static org.assertj.core.api.Assertions.*;
@@ -49,7 +50,7 @@ class TimeServerClassLifecycleIT {
     @Test
     void containerStartsWithFreshState() throws IOException {
         // Purpose: Verify fresh container environment provides clean initial state
-        URL url = new URL(BASE_URL + "/metrics");
+        URL url = URI.create(BASE_URL + "/metrics").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -66,7 +67,7 @@ class TimeServerClassLifecycleIT {
     @Test
     void healthCheckConfirmsContainerReadiness() throws IOException {
         // Purpose: Verify class lifecycle container reaches healthy state correctly
-        URL url = new URL(BASE_URL + "/health");
+        URL url = URI.create(BASE_URL + "/health").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -84,7 +85,7 @@ class TimeServerClassLifecycleIT {
     void echoServiceWorksInFreshEnvironment() throws IOException {
         // Purpose: Test service functionality in clean class-level container instance
         String testMessage = "class-lifecycle-test";
-        URL url = new URL(BASE_URL + "/echo?msg=" + testMessage);
+        URL url = URI.create(BASE_URL + "/echo?msg=" + testMessage).toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -103,7 +104,7 @@ class TimeServerClassLifecycleIT {
         // Purpose: Validate time service accuracy in isolated class environment
         long beforeCall = System.currentTimeMillis() / 1000;
         
-        URL url = new URL(BASE_URL + "/time");
+        URL url = URI.create(BASE_URL + "/time").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         

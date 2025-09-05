@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 import static org.assertj.core.api.Assertions.*;
@@ -46,7 +47,7 @@ class TimeServerSuiteLifecycleIT {
     @Test
     void healthCheckEndpointIsAccessible() throws IOException {
         // Purpose: Verify container health check endpoint is working
-        URL url = new URL(BASE_URL + "/health");
+        URL url = URI.create(BASE_URL + "/health").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -62,7 +63,7 @@ class TimeServerSuiteLifecycleIT {
     @Test
     void timeEndpointReturnsValidTimeData() throws IOException {
         // Purpose: Verify time service functionality works in containerized environment
-        URL url = new URL(BASE_URL + "/time");
+        URL url = URI.create(BASE_URL + "/time").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -80,7 +81,7 @@ class TimeServerSuiteLifecycleIT {
     void echoServiceProcessesParametersCorrectly() throws IOException {
         // Purpose: Test parameterized endpoints work correctly in Docker environment
         String testMessage = "integration-suite-test";
-        URL url = new URL(BASE_URL + "/echo?msg=" + testMessage);
+        URL url = URI.create(BASE_URL + "/echo?msg=" + testMessage).toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -97,7 +98,7 @@ class TimeServerSuiteLifecycleIT {
     @Test
     void metricsEndpointShowsApplicationState() throws IOException {
         // Purpose: Verify application metrics collection works in containerized deployment
-        URL url = new URL(BASE_URL + "/metrics");
+        URL url = URI.create(BASE_URL + "/metrics").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         

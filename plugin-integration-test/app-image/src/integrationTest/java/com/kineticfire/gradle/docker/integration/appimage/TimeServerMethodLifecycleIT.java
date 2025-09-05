@@ -24,6 +24,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 
 import static org.assertj.core.api.Assertions.*;
@@ -49,7 +50,7 @@ class TimeServerMethodLifecycleIT {
     @Test
     void eachMethodGetsFreshContainerForMaximumIsolation() throws IOException {
         // Purpose: Verify each test method gets completely fresh container environment
-        URL url = new URL(BASE_URL + "/metrics");
+        URL url = URI.create(BASE_URL + "/metrics").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -69,7 +70,7 @@ class TimeServerMethodLifecycleIT {
     @Test
     void healthCheckWorksInCompletelyIsolatedEnvironment() throws IOException {
         // Purpose: Validate health check in maximum isolation scenario
-        URL url = new URL(BASE_URL + "/health");
+        URL url = URI.create(BASE_URL + "/health").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -85,7 +86,7 @@ class TimeServerMethodLifecycleIT {
     @Test
     void timeServiceStartsCleanWithMethodLifecycle() throws IOException {
         // Purpose: Test that time service starts with clean state for each method
-        URL url = new URL(BASE_URL + "/time");
+        URL url = URI.create(BASE_URL + "/time").toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -107,7 +108,7 @@ class TimeServerMethodLifecycleIT {
     void echoServiceHasNoStateFromPreviousTests() throws IOException {
         // Purpose: Verify echo service has completely fresh state (no memory from other tests)
         String uniqueMessage = "method-isolation-" + System.nanoTime();
-        URL url = new URL(BASE_URL + "/echo?msg=" + uniqueMessage);
+        URL url = URI.create(BASE_URL + "/echo?msg=" + uniqueMessage).toURL();
         HttpURLConnection connection = (HttpURLConnection) url.openConnection();
         connection.setRequestMethod("GET");
         
@@ -123,7 +124,7 @@ class TimeServerMethodLifecycleIT {
         // Retry logic to handle race condition where the server's request counter
         // may not be immediately updated between HTTP requests in per-method isolated containers.
         // This ensures the metrics reflect both the echo request and metrics request.
-        URL metricsUrl = new URL(BASE_URL + "/metrics");
+        URL metricsUrl = URI.create(BASE_URL + "/metrics").toURL();
         long requestCount = 0;
         
         for (int attempt = 0; attempt < 5; attempt++) {
