@@ -45,6 +45,16 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
     
+    /**
+     * Creates a new DockerComposeClassExtension instance.
+     * 
+     * This extension manages Docker Compose lifecycle at the test class level,
+     * starting containers before all test methods and stopping them after completion.
+     */
+    public DockerComposeClassExtension() {
+        // Default constructor - no initialization required
+    }
+    
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);

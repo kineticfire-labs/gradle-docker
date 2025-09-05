@@ -46,6 +46,16 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
     
+    /**
+     * Creates a new DockerComposeMethodExtension instance.
+     * 
+     * This extension manages Docker Compose lifecycle at the test method level,
+     * starting fresh containers before each test method and stopping them after each method completes.
+     */
+    public DockerComposeMethodExtension() {
+        // Default constructor - no initialization required
+    }
+    
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);
