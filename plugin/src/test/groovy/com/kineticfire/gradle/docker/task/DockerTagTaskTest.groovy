@@ -155,4 +155,59 @@ class DockerTagTaskTest extends Specification {
         then:
         task.dockerService.get() == mockDockerService
     }
+
+    // ===== ADDITIONAL CONFIGURATION TESTS =====
+
+    def "task handles different tag name formats"() {
+        when:
+        task.sourceImage.set('test-image:latest')
+        task.tags.set(tagList)
+
+        then:
+        task.tags.get() == tagList
+
+        where:
+        tagList << [
+            ['v1.0.0'],
+            ['latest', 'stable'],
+            ['registry.example.com/app:v1.0.0'],
+            ['feature-branch-name', 'pr-123'],
+            ['alpha.1', 'beta.2', 'rc.3']
+        ]
+    }
+
+    def "task supports complex image references"() {
+        when:
+        task.sourceImage.set(sourceImageRef)
+        task.tags.set(['latest'])
+
+        then:
+        task.sourceImage.get() == sourceImageRef
+
+        where:
+        sourceImageRef << [
+            'sha256:abc123def456',
+            'myapp:v1.0.0',
+            'registry.example.com/namespace/app:tag',
+            'localhost:5000/test:latest'
+        ]
+    }
+
+    def "task handles sourceRef configurations"() {
+        when:
+        task.sourceRef.set(sourceRef)
+        task.tags.set(['latest'])
+        task.pullIfMissing.set(pullIfMissing)
+
+        then:
+        task.sourceRef.get() == sourceRef
+        task.pullIfMissing.get() == pullIfMissing
+
+        where:
+        sourceRef                              | pullIfMissing
+        'registry.example.com/app:v1.0.0'      | true
+        'docker.io/library/nginx:latest'       | false
+        'ghcr.io/owner/repo:main'              | true
+        'quay.io/namespace/image:tag'          | false
+    }
 }

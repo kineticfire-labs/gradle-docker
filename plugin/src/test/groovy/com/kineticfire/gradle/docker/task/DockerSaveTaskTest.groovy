@@ -240,4 +240,57 @@ class DockerSaveTaskTest extends Specification {
         then:
         task.dockerService.get() == mockDockerService
     }
+
+    // ===== ADDITIONAL VALIDATION TESTS =====
+    
+    def "task validates property combinations correctly"() {
+        expect:
+        // Test various property combination scenarios
+        task.imageName.set('test-image:latest')
+        task.imageName.get() == 'test-image:latest'
+        
+        task.sourceRef.set('registry.example.com/test:latest')
+        task.sourceRef.get() == 'registry.example.com/test:latest'
+        
+        task.compression.get() == CompressionType.GZIP  // default
+        task.pullIfMissing.get() == false  // default
+    }
+    
+    def "task can be configured with different compression formats"() {
+        when:
+        task.compression.set(compressionType)
+        
+        then:
+        task.compression.get() == compressionType
+        
+        where:
+        compressionType << [CompressionType.NONE, CompressionType.GZIP, CompressionType.BZIP2, CompressionType.XZ, CompressionType.ZIP]
+    }
+    
+    def "task supports pullIfMissing configurations"() {
+        when:
+        task.pullIfMissing.set(value)
+        
+        then:
+        task.pullIfMissing.get() == value
+        
+        where:
+        value << [true, false]
+    }
+    
+    def "task properly handles file path configurations"() {
+        when:
+        task.outputFile.set(project.file(filePath))
+        
+        then:
+        task.outputFile.get().asFile.name == expectedName
+        
+        where:
+        filePath           | expectedName
+        'test.tar'         | 'test.tar'
+        'output.tar.gz'    | 'output.tar.gz'
+        'image.tar.bz2'    | 'image.tar.bz2'
+        'docker.tar.xz'    | 'docker.tar.xz'
+        'backup.zip'       | 'backup.zip'
+    }
 }

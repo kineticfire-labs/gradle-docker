@@ -9,6 +9,10 @@
 4. Look for "todo" and "skip"
 5. plugin-integration-test has "src.backup"
 6. symlink .gradlew for plugin-integration-test subprojects
+7. Re-organize documents:
+   1. plugin/docs/claude/status... needed?  teh whole folder?
+   2. plugin/docs/{functional-test..., gradle-9...} these are more decisions
+   3. plugin-integration-test/docs ... move to plugin/docs?
 
 
 # DX
