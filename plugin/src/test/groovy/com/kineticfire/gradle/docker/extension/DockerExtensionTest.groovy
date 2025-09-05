@@ -237,7 +237,7 @@ class DockerExtensionTest extends Specification {
         def ex = thrown(GradleException)
         ex.message.contains("Invalid Docker tag name")
         ex.message.contains('invalidTags')
-        ex.message.contains("Use valid tag names")
+        ex.message.contains("Image tags should be simple names")
     }
 
     def "validate accepts simple tag names like latest - bug fix verification"() {
@@ -635,5 +635,194 @@ class DockerExtensionTest extends Specification {
         imageSpec.context.isPresent() // Should have default context
         imageSpec.dockerfile.isPresent() // Should have default dockerfile
         imageSpec.context.get().asFile.path.contains('src/main/docker')
+    }
+
+    // ===== ENHANCED VALIDATION TESTS =====
+
+    def "validate accepts image configuration with publish targets using simple tag names"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            publishableImage {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['latest', 'v1.0.0'])  // Simple tag names
+                publish {
+                    to('registry') {
+                        repository = 'localhost:5000/test-app'
+                        tags = ['latest', 'stable']  // Also simple tag names
+                    }
+                }
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePublishTarget fails when repository format is invalid"() {
+        given: "A publish target with invalid repository"
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project
+        )
+        publishTarget.repository.set('')  // Invalid empty repository
+        publishTarget.tags.set(['latest'])
+
+        when: "validation is performed on target with invalid repository"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+
+        then: "validation fails with descriptive error"
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid repository name")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "validatePublishTarget fails when target has invalid tag names"() {
+        given: "A publish target with invalid tag names"
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project
+        )
+        publishTarget.repository.set('localhost:5000/test-app')
+        publishTarget.tags.set(['invalid tag with spaces'])  // Invalid tag
+
+        when: "validation is performed directly on the publish target"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+
+        then: "validation fails with descriptive error"
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag name")
+        ex.message.contains("invalid tag with spaces")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "validatePublishConfiguration fails when configuration has no targets"() {
+        given: "A publish configuration with empty targets"
+        def publishSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishSpec,
+            project
+        )
+        // publishSpec.to is empty by default
+
+        when: "validation is performed on empty publish configuration"
+        extension.validatePublishConfiguration(publishSpec, 'testImage')
+
+        then: "validation fails with descriptive error"
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one target")
+        ex.message.contains('testImage')
+    }
+
+    def "validate fails when publish target has no repository"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        // Create publishTarget manually to test missing repository
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project
+        )
+        // Don't set repository - leave it empty
+        publishTarget.tags.set(['latest'])
+
+        when:
+        extension.validatePublishTarget(publishTarget, 'testImage')
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify a repository")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "validation distinguishes between image tags and publish target tags"() {
+        given: "Image with both image tags and publish configuration"
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            mixedTagsImage {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['dev', 'latest'])  // Image tags - simple names
+                publish {
+                    to('prod') {
+                        repository = 'registry.company.com/team/app'
+                        tags = ['prod', 'stable']  // Publish tags - also simple names
+                    }
+                    to('staging') {
+                        repository = 'localhost:5000/staging/app'  
+                        tags = ['staging', 'test']  // Multiple publish targets
+                    }
+                }
+            }
+        }
+
+        when: "validation is performed"
+        extension.validate()
+
+        then: "both contexts validate correctly without confusion"
+        noExceptionThrown()
+    }
+
+    def "regression test - exact configuration from integration tests"() {
+        given: "Configuration matching integration test patterns"
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            timeServer {  // Exact name from integration test
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['1.0.0', 'latest'])  // Version and latest tags
+                publish {
+                    to('basic') {
+                        repository = 'localhost:25000/time-server-integration'
+                        tags = ['latest']  // This should work correctly
+                    }
+                }
+            }
+        }
+
+        when: "validation is performed on real-world configuration"
+        extension.validate()
+
+        then: "validation passes without issues"
+        noExceptionThrown()
+    }
+
+    // ===== REPOSITORY NAME VALIDATION TESTS =====
+    
+    def "isValidRepositoryName accepts valid repository formats"() {
+        expect:
+        extension.isValidRepositoryName('myapp')
+        extension.isValidRepositoryName('docker.io/myapp')
+        extension.isValidRepositoryName('localhost:5000/myapp')
+        extension.isValidRepositoryName('registry.company.com/team/app')
+        extension.isValidRepositoryName('gcr.io/project-id/namespace/app')
+        extension.isValidRepositoryName('private-registry.com:8080/namespace/app')
+        extension.isValidRepositoryName('a1')  // minimal valid case
+    }
+    
+    def "isValidRepositoryName rejects invalid repository formats"() {
+        expect:
+        !extension.isValidRepositoryName(null)
+        !extension.isValidRepositoryName('')
+        !extension.isValidRepositoryName('-starts-with-dash')
+        !extension.isValidRepositoryName('ends-with-dash-')
+        !extension.isValidRepositoryName('contains spaces')
+        !extension.isValidRepositoryName('a' * 256)  // over 255 character limit
     }
 }

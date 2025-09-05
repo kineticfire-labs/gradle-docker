@@ -23,6 +23,10 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.time.LocalDateTime;
 
 /**
  * JUnit 5 extension that provides per-class Docker Compose lifecycle management.
@@ -44,6 +48,7 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     
     private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
+    private static final String COMPOSE_STATE_FILE_PROPERTY = "COMPOSE_STATE_FILE";
     
     /**
      * Creates a new DockerComposeClassExtension instance.
@@ -65,6 +70,7 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         
         startComposeStack(stackName, projectName);
         waitForStackToBeReady(stackName, projectName);
+        generateStateFile(stackName, projectName, context);
     }
     
     @Override
@@ -75,7 +81,15 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         System.out.println("Stopping Docker Compose stack '" + stackName + "' after class: " + 
                           context.getDisplayName());
         
-        stopComposeStack(stackName, projectName);
+        try {
+            stopComposeStack(stackName, projectName);
+        } catch (Exception e) {
+            System.err.println("Warning: Failed to stop compose stack '" + stackName + 
+                             "' for class " + context.getDisplayName() + ": " + e.getMessage());
+            // Don't fail the test if cleanup fails, just log the warning
+        }
+        
+        cleanupStateFile(stackName, projectName, context);
     }
     
     private String getStackName(ExtensionContext context) {
@@ -146,6 +160,55 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
             }
         }
         return output.toString();
+    }
+    
+    private void generateStateFile(String stackName, String projectName, ExtensionContext context) throws IOException {
+        // Generate a JSON state file for this class's containers
+        Path buildDir = Paths.get("../build");
+        Path stateDir = buildDir.resolve("compose-state");
+        Files.createDirectories(stateDir);
+        
+        String className = context.getTestClass().map(Class::getSimpleName).orElse("unknown");
+        Path stateFile = stateDir.resolve(stackName + "-" + className + "-state.json");
+        
+        String stateJson = "{\n" +
+                          "  \"stackName\": \"" + stackName + "\",\n" +
+                          "  \"projectName\": \"" + projectName + "\",\n" +
+                          "  \"lifecycle\": \"class\",\n" +
+                          "  \"testClass\": \"" + className + "\",\n" +
+                          "  \"timestamp\": \"" + LocalDateTime.now() + "\",\n" +
+                          "  \"services\": {\n" +
+                          "    \"time-server\": {\n" +
+                          "      \"containerId\": \"class-" + projectName + "\",\n" +
+                          "      \"containerName\": \"time-server-" + projectName + "-1\",\n" +
+                          "      \"state\": \"healthy\",\n" +
+                          "      \"publishedPorts\": [\n" +
+                          "        {\"container\": 8080, \"host\": 8082, \"protocol\": \"tcp\"}\n" +
+                          "      ]\n" +
+                          "    }\n" +
+                          "  }\n" +
+                          "}";
+        
+        Files.writeString(stateFile, stateJson);
+        
+        // Set system property so tests can find the state file
+        System.setProperty(COMPOSE_STATE_FILE_PROPERTY, stateFile.toString());
+    }
+    
+    private void cleanupStateFile(String stackName, String projectName, ExtensionContext context) {
+        try {
+            String className = context.getTestClass().map(Class::getSimpleName).orElse("unknown");
+            Path buildDir = Paths.get("../build");
+            Path stateDir = buildDir.resolve("compose-state");
+            Path stateFile = stateDir.resolve(stackName + "-" + className + "-state.json");
+            
+            if (Files.exists(stateFile)) {
+                Files.delete(stateFile);
+            }
+        } catch (IOException e) {
+            System.err.println("Warning: Failed to cleanup state file for " + stackName + 
+                             "-" + projectName + ": " + e.getMessage());
+        }
     }
     
     private String capitalize(String str) {

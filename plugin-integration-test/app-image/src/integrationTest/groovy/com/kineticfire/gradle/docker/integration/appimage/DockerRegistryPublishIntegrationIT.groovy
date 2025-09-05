@@ -208,6 +208,48 @@ class DockerRegistryPublishIntegrationIT extends Specification {
         buildFile.text = originalBuildContent
     }
 
+    def "validates enhanced publish configuration with complex scenarios"() {
+        given: "the time-server image is built and tagged"
+        def originalBuildContent = buildFile.text
+        
+        when: "build.gradle is configured with complex multi-registry publish setup"
+        def modifiedBuildContent = addComplexValidationTestConfig(originalBuildContent)
+        buildFile.text = modifiedBuildContent
+        
+        and: "validation occurs during configuration"
+        def result = executeGradleTasks(['tasks', '--all'])
+        
+        then: "enhanced validation succeeds for complex configurations"
+        result.contains("BUILD SUCCESSFUL")
+        !result.contains("Invalid Docker tag")
+        !result.contains("Invalid repository")
+        result.contains("dockerPublishTimeServer")
+        
+        cleanup:
+        buildFile.text = originalBuildContent
+    }
+
+    def "validates that enhanced error messages are user-friendly"() {
+        given: "the time-server image is built and tagged"
+        def originalBuildContent = buildFile.text
+        
+        when: "build.gradle is configured with invalid tag names"
+        def modifiedBuildContent = addInvalidTagValidationTestConfig(originalBuildContent)
+        buildFile.text = modifiedBuildContent
+        
+        and: "gradle configuration is processed"
+        def result = executeGradleTasks(['tasks'], true)
+        
+        then: "enhanced validation provides helpful error messages"
+        result.contains("BUILD FAILED")
+        result.contains("Invalid Docker tag name")
+        result.contains("Image tags should be simple names")
+        result.contains("For registry publishing, specify the repository")
+        
+        cleanup:
+        buildFile.text = originalBuildContent
+    }
+
     // ===== REGISTRY MANAGEMENT =====
     
     private void startTestRegistries() {
@@ -798,5 +840,47 @@ tasks.register('integrationTestRegistry', Test) {
             println "Error verifying image in authenticated registry: ${e.message}"
             return false
         }
+    }
+
+    // ===== ENHANCED VALIDATION TEST HELPER METHODS =====
+
+    private String addComplexValidationTestConfig(String originalContent) {
+        def publishConfig = """            publish {
+                to('staging') {
+                    repository = '${BASIC_REGISTRY}/time-server-staging'
+                    tags = ['latest', 'v1.0.0', 'staging-ready']
+                }
+                to('production') {
+                    repository = '${AUTH_REGISTRY}/time-server-prod'
+                    tags = ['v1.0.0', 'stable', 'prod-ready']
+                    auth {
+                        username = '${TEST_USERNAME}'
+                        password = '${TEST_PASSWORD}'
+                    }
+                }
+                to('backup') {
+                    repository = 'backup-registry.company.com:8443/archive/time-server'
+                    tags = ['v1.0.0-backup', 'archived']
+                }
+            }
+"""
+        
+        // Insert the publish configuration
+        def result = originalContent.replaceFirst(
+            /(\s*buildArgs\s*=\s*\[[^\]]*\]\s*\n\s*)(})/, 
+            "\$1${publishConfig}        \$2"
+        )
+        
+        return result
+    }
+
+    private String addInvalidTagValidationTestConfig(String originalContent) {
+        // Create configuration with invalid tag names to test validation
+        def invalidConfig = originalContent.replaceFirst(
+            /(tags\s*=\s*\[)[^\]]*(\])/,
+            "\$1'invalid tag with spaces', 'another:bad:format'\$2"
+        )
+        
+        return invalidConfig
     }
 }

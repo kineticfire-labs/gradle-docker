@@ -105,19 +105,86 @@ abstract class DockerExtension {
             }
         }
         
-        // Validate tags format - ImageSpec tags are tag names only (not full image references)
+        // Validate image tags format - ImageSpec tags are simple tag names only (not full image references)
         if (imageSpec.tags.present && !imageSpec.tags.get().empty) {
             imageSpec.tags.get().each { tag ->
                 if (!isValidTagName(tag)) {
                     throw new GradleException(
                         "Invalid Docker tag name: '${tag}' in image '${imageSpec.name}'\\n" +
-                        "Suggestion: Use valid tag names (e.g., 'latest', 'v1.0.0', 'dev')"
+                        "Image tags should be simple names like 'latest', 'v1.0.0', 'dev'.\\n" +
+                        "For registry publishing, specify the repository in publish configuration."
                     )
+                }
+            }
+        }
+        
+        // Validate publish configuration if present
+        if (imageSpec.publish.present) {
+            validatePublishConfiguration(imageSpec.publish.get(), imageSpec.name)
+        }
+    }
+    
+    /**
+     * Validates publish configuration for an image
+     */
+    void validatePublishConfiguration(def publishSpec, String imageName) {
+        def targets = publishSpec.to
+        if (!targets || targets.isEmpty()) {
+            throw new GradleException(
+                "Publish configuration for image '${imageName}' must specify at least one target using 'to()'"
+            )
+        }
+        
+        targets.each { target ->
+            validatePublishTarget(target, imageName)
+        }
+    }
+    
+    /**
+     * Validates a single publish target
+     */
+    void validatePublishTarget(def publishTarget, String imageName) {
+        // Validate repository format
+        if (!publishTarget.repository.present) {
+            throw new GradleException(
+                "Publish target '${publishTarget.name}' in image '${imageName}' must specify a repository"
+            )
+        }
+        
+        def repository = publishTarget.repository.get()
+        if (!isValidRepositoryName(repository)) {
+            throw new GradleException(
+                "Invalid repository name: '${repository}' in publish target '${publishTarget.name}' of image '${imageName}'\\n" +
+                "Repository should be in format: [registry/]namespace/name (e.g., 'docker.io/myapp', 'localhost:5000/test')"
+            )
+        }
+        
+        // Validate publish target tags - these should also be simple tag names
+        if (publishTarget.tags.present) {
+            def tags = publishTarget.tags.get()
+            if (!tags.isEmpty()) {
+                tags.each { tag ->
+                    if (!isValidTagName(tag)) {
+                        throw new GradleException(
+                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'\\n" +
+                            "Publish target tags should be simple names like 'latest', 'v1.0.0', 'stable'."
+                        )
+                    }
                 }
             }
         }
     }
     
+    /**
+     * Validates repository name format for publish targets
+     */
+    boolean isValidRepositoryName(String repository) {
+        // Repository name validation for Docker registries
+        // Valid examples: "myapp", "docker.io/myapp", "localhost:5000/namespace/app"
+        // Basic validation - allow alphanumeric, dots, colons, slashes, dashes
+        return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
+    }
+
     boolean isValidTagName(String tag) {
         // Docker tag name validation (tag portion only, no repository)
         // Valid examples: "latest", "v1.0.0", "dev-123", "1.0", "stable"
