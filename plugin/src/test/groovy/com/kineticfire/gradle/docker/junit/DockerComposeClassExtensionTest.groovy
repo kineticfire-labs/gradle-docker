@@ -39,6 +39,13 @@ class DockerComposeClassExtensionTest extends Specification {
         extension = new DockerComposeClassExtension()
     }
 
+    def cleanup() {
+        // Clean up system properties after each test
+        System.clearProperty("docker.compose.stack")
+        System.clearProperty("docker.compose.project")
+        System.clearProperty("COMPOSE_STATE_FILE")
+    }
+
     def "constructor creates instance successfully"() {
         when:
         def ext = new DockerComposeClassExtension()
@@ -86,6 +93,24 @@ class DockerComposeClassExtensionTest extends Specification {
 
         then:
         result == true
-        noExceptionThrown()
+    }
+    
+    def "BeforeAllCallback and AfterAllCallback interfaces implemented"() {
+        expect:
+        extension instanceof org.junit.jupiter.api.extension.BeforeAllCallback
+        extension instanceof org.junit.jupiter.api.extension.AfterAllCallback
+    }
+    
+    def "extension methods exist and are callable"() {
+        expect:
+        extension.metaClass.respondsTo(extension, "beforeAll").size() > 0
+        extension.metaClass.respondsTo(extension, "afterAll").size() > 0
+    }
+    
+    def "extension class has required fields"() {
+        expect:
+        extension.class.getDeclaredField("COMPOSE_STACK_PROPERTY") != null
+        extension.class.getDeclaredField("COMPOSE_PROJECT_PROPERTY") != null
+        extension.class.getDeclaredField("COMPOSE_STATE_FILE_PROPERTY") != null
     }
 }
