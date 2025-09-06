@@ -71,26 +71,26 @@ tasks.withType(ProcessResources) {
 
 dependencies {
     // Functional Test dependencies (Groovy/Spock)
-    functionalTestImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
-    functionalTestImplementation 'org.spockframework:spock-core'
-    functionalTestImplementation 'org.spockframework:spock-junit4'
-    functionalTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
-    functionalTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    functionalTestRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+    functionalTestImplementation platform(libs.spock.bom)
+    functionalTestImplementation libs.spock.core
+    functionalTestImplementation libs.spock.junit4
+    functionalTestImplementation libs.jackson.databind
+    functionalTestRuntimeOnly libs.junit.platform.launcher
+    functionalTestRuntimeOnly libs.junit.vintage.engine
     
     // Integration Test dependencies (Java/JUnit)  
-    integrationTestImplementation platform('org.junit:junit-bom:5.10.0')
-    integrationTestImplementation 'org.junit.jupiter:junit-jupiter'
-    integrationTestImplementation 'org.assertj:assertj-core:3.24.2'
-    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+    integrationTestImplementation platform(libs.junit.bom)
+    integrationTestImplementation libs.junit.jupiter
+    integrationTestImplementation libs.assertj.core
+    integrationTestImplementation libs.jackson.databind
     integrationTestImplementation gradleTestKit()
-    integrationTestImplementation 'com.kineticfire.gradle:gradle-docker:1.0.0'
-    integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    integrationTestImplementation libs.gradle.docker
+    integrationTestRuntimeOnly libs.junit.platform.launcher
     
     // Integration Test dependencies (Groovy/Spock for registry tests)
-    integrationTestImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
-    integrationTestImplementation 'org.spockframework:spock-core'
-    integrationTestImplementation 'org.spockframework:spock-junit4'
+    integrationTestImplementation platform(libs.spock.bom)
+    integrationTestImplementation libs.spock.core
+    integrationTestImplementation libs.spock.junit4
 }
 
 // DEMONSTRATING UC-6: Project Developer Create and Publish Docker Image

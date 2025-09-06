@@ -24,12 +24,12 @@ import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.TaskAction
 
 plugins {
-    id 'groovy'
-    id 'java-gradle-plugin'
-    id 'maven-publish'
-    id 'com.gradle.plugin-publish' version '1.2.1'
-    id 'jacoco'
-    id 'com.palantir.idea-test-fix' version '0.1.0'
+    alias(libs.plugins.groovy)
+    alias(libs.plugins.javaGradlePlugin)
+    alias(libs.plugins.maven.publish)
+    alias(libs.plugins.gradle.plugin.publish)
+    alias(libs.plugins.jacoco)
+    alias(libs.plugins.palantir.idea.test.fix)
 }
 
 java {
@@ -45,38 +45,35 @@ repositories {
 
 dependencies {
     // Docker Java Client
-    implementation 'com.github.docker-java:docker-java-core:3.3.4'
-    implementation 'com.github.docker-java:docker-java-transport-httpclient5:3.3.4'
+    implementation libs.docker.java.core
+    implementation libs.docker.java.transport.httpclient5
     
     // exec library for Docker Compose (placeholder - will implement in Phase 2)
     // implementation 'com.kineticfire.labs:exec:1.0.0'
     
     // JSON processing
-    implementation 'com.fasterxml.jackson.core:jackson-core:2.16.0'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
+    implementation libs.jackson.core
+    implementation libs.jackson.databind
     
     // Compression libraries
-    implementation 'org.apache.commons:commons-compress:1.24.0'
+    implementation libs.commons.compress
     
     // JUnit 5 for lifecycle extensions (provided as implementation for downstream consumers)
-    implementation 'org.junit.jupiter:junit-jupiter-api:5.10.1'
+    implementation libs.junit.jupiter.api
     
     // Gradle API
     compileOnly gradleApi()
     compileOnly localGroovy()
     
     // Testing
-    testImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
-    testImplementation 'org.spockframework:spock-core'
-    testImplementation 'org.spockframework:spock-junit4'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    testRuntimeOnly 'org.junit.platform:junit-platform-engine'
-    testRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+    testImplementation platform(libs.spock.bom)
+    testImplementation libs.spock.core
+    testImplementation libs.spock.junit4
+    testRuntimeOnly libs.junit.platform.launcher
+    testRuntimeOnly libs.junit.platform.engine
+    testRuntimeOnly libs.junit.vintage.engine
     testImplementation gradleTestKit()
-    testImplementation 'junit:junit:4.13.2'
-    
-    // Functional testing (will be configured by testing suites)
-    // Note: functionalTest dependencies configured by testing.suites
+    testImplementation libs.junit4
 }
 
 group = 'com.kineticfire.gradle'
@@ -135,11 +132,12 @@ configurations {
 }
 
 dependencies {
-    functionalTestImplementation platform('org.spockframework:spock-bom:2.4-M4-groovy-4.0')
-    functionalTestImplementation 'org.spockframework:spock-core'
+    // Functional testing dependencies
+    functionalTestImplementation platform(libs.spock.bom)
+    functionalTestImplementation libs.spock.core
     functionalTestImplementation gradleTestKit()
-    functionalTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    functionalTestRuntimeOnly 'org.junit.vintage:junit-vintage-engine'
+    functionalTestRuntimeOnly libs.junit.platform.launcher
+    functionalTestRuntimeOnly libs.junit.vintage.engine
 }
 
 jacocoTestReport {

@@ -45,15 +45,15 @@ repositories {
 
 dependencies {
     // Lightweight HTTP server
-    implementation 'io.javalin:javalin:6.1.3'
-    implementation 'com.fasterxml.jackson.core:jackson-databind:2.16.0'
-    implementation 'org.slf4j:slf4j-simple:2.0.9'
+    implementation libs.javalin
+    implementation libs.jackson.databind
+    implementation libs.slf4j.simple
     
     // Testing
-    testImplementation platform('org.junit:junit-bom:5.10.0')
-    testImplementation 'org.junit.jupiter:junit-jupiter'
-    testImplementation 'org.assertj:assertj-core:3.24.2'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation platform(libs.junit.bom)
+    testImplementation libs.junit.jupiter
+    testImplementation libs.assertj.core
+    testRuntimeOnly libs.junit.platform.launcher
 }
 
 test {
