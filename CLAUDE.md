@@ -1,54 +1,87 @@
 # CLAUDE.md
-This document provides guidance to Claude Code when working in this source code repository.
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## PURPOSE
-The purpose of the `gradle-docker` project is to create and publish a Gradle plugin to interact with Docker to support:
-- the build, tagging, and publication of Linux (Docker) images
-- the control of Docker Compose (e.g., `up` and `down`) to support testing of Docker images or systems composed of 
-Docker images
-- functionality to wait for a Docker image or group of Docker images, run either with `docker` or `docker compose` to be
-ready for testing, indicated by the container or group of containers in states of `RUNNING` or `HEALTHY`
+Create and publish a Gradle plugin that provides Docker integration for:
+- Building, tagging, saving, and publishing Docker images with multiple compression formats (none, gzip, bzip2, xz, zip)
+- Docker Compose orchestration (`up`/`down`) for container-based testing
+- Health checking and waiting for containers to reach `RUNNING` or `HEALTHY` states
+- JUnit 5 extensions for test lifecycle integration with Docker Compose
 
-## TECH STACK
-- **Language**: Groovy (for the plugin) and Java (for the integration test application)
-- **Build and Dependency Management**: Gradle
-- **Testing and Specification Framework**: JUnit and Spock
-- **Test DSL**: Groovy
-- **Version Control:** Git
-- **AI-assisted Infrastructure-as-Code & DevOps:** Claude Code
+## ARCHITECTURE OVERVIEW
 
-## PROJECT STRUCTURE
-- `plugin/`: the subproject to implement the plugin
-   - `plugin/src/main`: the source code for the plugin
-   - `plugin/src/test`: unit tests for the plugin
-   - `plugin/src/functionalTest`: functional tests for the plugin
-- `plugin-integration-test/`: the subproject to implement the plugin's integration test, by using a `build.gradle` that
-  uses the plugin to build a Docker image with a Java application
-   - `plugin-integration-test/src/`: the application's source code
-   - `plugin-integration-test/test/`: unit tests for the application
-   - `plugin-integration-test/build.gradle`: the Gradle build for the test application that uses the plugin
-- `docs/`: documentation
-   - `docs/design-docs/`: directory of documents covering design, requirements, specifications, and testing
-   - `docs/project-standards/`: directory of project standards and practices
-      - `docs/project-standards/testing/testing.md`: set standards for testing
-      - `docs/project-standards/development-philosophies/development-philosophies.md`: guiding sets development philosophies 
-      - `docs/project-standards/style/style.md`: sets standards for style 
-- `README.md`: project overview
+### Plugin Core Structure
+- **Main Plugin**: `GradleDockerPlugin` - Entry point, validates requirements, registers services and extensions
+- **Extensions**: `DockerExtension` (docker DSL), `DockerOrchExtension` (dockerOrch DSL), `TestIntegrationExtension`
+- **Service Layer**: Abstracts external dependencies via interfaces - `DockerService`, `ComposeService`, `JsonService`
+- **Task Layer**: Gradle tasks for operations - `DockerBuildTask`, `DockerSaveTask`, `DockerPublishTask`, etc.
 
-### Commands
-1. Run unit and functional tests
-   1. From the `plugin/` directory, run `./gradlew clean test` 
-1. Build the project
-   1. From the `plugin/` directory, run `./gradlew clean build`
-      1. Runs both unit tests and functional tests, then builds the plugin to 
-      `plugin/build/libs/example-gradle-plugin-<version>.jar` 
-1. Run integration tests
-   1. From the `plugin-integration-test/` directory, run `./gradlew -PpluginVersion=1.0.0 clean build` where the 
-   property `PpluginVersion` is the plugin's version 
-   1. Note: must first build the plugin to `plugin/build/libs/example-gradle-plugin-<version>.jar` by running 
-   `./gradlew clean build` from the `plugin/` directory
+### Key Design Patterns
+- **Service Abstraction**: `DockerServiceImpl` uses Docker Java Client, `ExecLibraryComposeService` uses exec library
+- **Provider API**: All configuration uses Gradle's modern `Property<T>` and `Provider<T>` for lazy evaluation
+- **Configuration Cache**: Tasks are serializable and don't capture Project references
+- **Task Generation**: Dynamic per-image tasks (e.g., `dockerBuildAlpine`, `dockerSaveUbuntu`)
 
-### Searching the Code Base
-1. Don't use grep `grep -r "pattern" .`, and instead use rg `rg "pattern"`.
-1. Don't use find with name `find . -name "*.clj`, and instead use rg with file filtering as either `rg --files | rg 
-   "\.clj$" or rg --files -g "*.clj"`
+### Testing Strategy
+- **100% Coverage Requirement**: Both line and branch coverage via JaCoCo
+- **Test Pyramid**: Unit tests (70%), functional tests (20%), integration tests (8%), e2e tests (2%)
+- **Service Mocking**: External dependencies (Docker daemon, exec library) are mocked in unit tests
+- **Gap Documentation**: Any coverage gaps must be documented in `docs/design-docs/testing/unit-test-gaps.md`
+
+## DEVELOPMENT COMMANDS
+
+### Plugin Development (from `plugin/` directory)
+```bash
+# Run unit tests only
+./gradlew clean test
+
+# Run functional tests only  
+./gradlew clean functionalTest
+
+# Build with full test suite
+./gradlew clean build
+
+# Coverage report (after tests)
+./gradlew jacocoTestReport
+# Reports in: build/reports/jacoco/test/html/index.html
+```
+
+### Integration Testing (from `plugin-integration-test/` directory)
+```bash
+# Full integration test with smoke + integration tests
+./gradlew clean testAll
+
+# Build application and Docker image
+./gradlew clean buildAll
+
+# Individual test suites
+./gradlew smokeTest
+./gradlew integrationTestSuite
+```
+
+### Development Workflow
+1. Build plugin: `cd plugin && ./gradlew clean build`
+2. Test integration: `cd ../plugin-integration-test && ./gradlew clean testAll`
+
+## PROJECT STANDARDS ENFORCEMENT
+
+### Testing Requirements (`docs/project-standards/testing/testing.md`)
+- Achieve 100% line and branch coverage or document gaps
+- Unit tests must be isolated (no network, filesystem, clock dependencies)
+- Use property-based testing where applicable for input domain coverage
+
+### Code Quality (`docs/project-standards/style/style.md`)
+- Files ≤ 500 lines, functions ≤ 30-40 lines, max 4 parameters
+- Line length ≤ 120 characters, use spaces (never tabs)
+- Cyclomatic complexity ≤ 10, nesting depth ≤ 3
+
+### Development Philosophies (`docs/project-standards/development-philosophies/development-philosophies.md`)
+- KISS, YAGNI, DRY principles
+- SOLID design patterns, Separation of Concerns
+- Convention over Configuration, Fail Fast
+- Write code for human understanding, favor regularity over special cases
+
+## SEARCH PATTERNS
+- Use `rg "pattern"` instead of `grep -r "pattern" .`
+- Use `rg --files -g "*.groovy"` instead of `find . -name "*.groovy"`
