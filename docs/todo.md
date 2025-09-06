@@ -17,17 +17,19 @@
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
-2. 'composeUp' should accept multiple compose files
 
 
 ## UX / Feature
 1. 'dockerBuild' should assemble src to its own temp folder (added to .gitignore)
 2. the 'dockerBuild' task should accept a copy/copySpec
-3. add 'rar' compression type
+3. docker compose accept multi file
 4. docker publish to public registry (e.g., Docker Hub, GitHub Package Registry, etc.)
 
 
 ## Documentation
+
+- concise description
+- marketing statements / value / benefits (succinct)
 
 ### docker stuff
 
@@ -45,7 +47,6 @@
    - show source folder
   - invoke task to do all or to do one by name
 
-
 ### test (compose) stuff
 
 - multi compose files
@@ -56,3 +57,7 @@
 - build plugin: g clean build <version prop: todo>
    - goes to  ?
 - run integration tests... lifecycle tests
+
+### Other
+
+- don't change license section

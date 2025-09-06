@@ -142,16 +142,35 @@ The plugin integrates with Gradle through standard extension mechanisms and prov
 
 #### Docker Operations Module (UC-6 Implementation)
 
-**Purpose**: Implements Docker image build, tag, save, publish operations  
-**Traceability**: fs-11 through fs-22, nfs-9, nfs-23-25
+**Purpose**: Implements Docker image build, tag, save, publish operations with multi-context support  
+**Traceability**: fs-11 through fs-22, fs-33 through fs-36, nfs-9, nfs-23-25
 
 **DSL Structure**:
 ```groovy
 docker {
     images {
         image("alpine") {
+            // Traditional single context approach
             context = file("src/main/docker")
             dockerfile = file("src/main/docker/Dockerfile")
+            
+            // OR Enhanced multi-context approach using Copy task
+            contextTask = tasks.register("prepareAlpineContext", Copy) {
+                into layout.buildDirectory.dir("docker-context/alpine")
+                from("src/main/docker")
+                from("build/libs") { 
+                    include "*.jar"
+                    rename { "app.jar" }
+                }
+            }
+            dockerfile = "Dockerfile"  // relative to contextTask output
+            
+            // OR Inline context configuration
+            context {
+                from("src/main/docker")
+                from("build/libs") { include "*.jar" }
+                from("config") { into "config/" }
+            }
             buildArgs = ["BASE_IMAGE": "eclipse-temurin:21-jre-alpine", "JAR_FILE": "app.jar"]
             tags = ["myapp:${version}-alpine", "myapp:alpine"]
             save {
@@ -184,7 +203,17 @@ docker {
 **Task Generation Pattern**:
 - `docker<Action><ImageName>` (e.g., `dockerBuildAlpine`, `dockerSaveAlpine`)
 - Aggregate tasks for all images (`dockerBuild`, `dockerSave`, etc.)
-- Dependency management based on build context presence
+- Dependency management based on build context type (traditional, multi-context, or sourceRef)
+
+**Multi-Context Implementation Strategy**:
+- **Copy Task Integration**: Leverages Gradle's Copy task for context assembly with incremental build support
+- **Temporary Build Directories**: Context assembled in `build/docker-context/<imageName>/` for debugging visibility
+- **Task Dependencies**: Docker build tasks automatically depend on context preparation tasks
+- **Context Resolution Logic**: 
+  1. If `contextTask` specified → use Copy task output as build context
+  2. If inline `context {}` used → create anonymous Copy task automatically  
+  3. If traditional `context` property → use directory directly
+  4. If `sourceRef` only → no context preparation needed
 
 **Modern Gradle Features**:
 ```groovy
@@ -205,13 +234,19 @@ tasks.register("dockerBuild${imageName.capitalize()}", DockerBuildTask) {
 **Data Structures**:
 ```groovy
 abstract class ImageSpec {
-    abstract Property<RegularFile> getContext()
-    abstract Property<RegularFile> getDockerfile()
+    // Multi-context support - mutually exclusive options
+    abstract DirectoryProperty getContext()  // Traditional single context
+    abstract Property<TaskProvider<Copy>> getContextTask()  // Explicit Copy task reference
+    
+    abstract RegularFileProperty getDockerfile()
     abstract MapProperty<String, String> getBuildArgs()
     abstract ListProperty<String> getTags()
     abstract Property<String> getSourceRef()
     abstract SaveSpec getSave()
     abstract PublishSpec getPublish()
+    
+    // DSL method for inline context configuration
+    void context(@DelegatesTo(Copy) Closure<Void> closure)
 }
 
 abstract class SaveSpec {
@@ -885,6 +920,7 @@ class GradleDockerPluginFunctionalSpec extends Specification {
 |-----------|------------|------------------|-------------|
 | DockerExtension | Docker DSL | fs-11, fs-12, fs-13, fs-14 | Core Docker tasks |
 | ImageSpec | Multi-image support | fs-15, fs-16, fs-17, fs-18, fs-19, fs-20, fs-21, fs-22 | Image configuration |
+| ImageSpec | Multi-context support | fs-33, fs-34, fs-35, fs-36 | Enhanced context assembly |
 | DockerOrchExtension | Compose DSL | fs-23, fs-24, fs-25 | Compose orchestration |
 | ComposeStackSpec | Service management | fs-26, fs-27, fs-28 | State and health checking |
 | Test Integration | usesCompose | fs-29, fs-30, fs-31 | Test lifecycle |
@@ -1268,9 +1304,20 @@ void configureDependencies(Project project, DockerExtension dockerExt) {
             def saveTaskName = "dockerSave${imageName.capitalize()}"
             def publishTaskName = "dockerPublish${imageName.capitalize()}"
             
-            // Dependency rules based on build context presence
-            if (imageSpec.context.present) {
-                // Has build context - save/publish depend on build
+            // Dependency rules based on build context type
+            if (imageSpec.contextTask.present) {
+                // Multi-context with explicit Copy task - build depends on context preparation
+                project.tasks.named(buildTaskName) {
+                    dependsOn imageSpec.contextTask.get()
+                }
+                project.tasks.named(saveTaskName) {
+                    dependsOn buildTaskName
+                }
+                project.tasks.named(publishTaskName) {
+                    dependsOn buildTaskName
+                }
+            } else if (imageSpec.context.present) {
+                // Traditional single context - save/publish depend on build
                 project.tasks.named(saveTaskName) {
                     dependsOn buildTaskName
                 }

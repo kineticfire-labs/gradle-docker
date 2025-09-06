@@ -44,6 +44,10 @@ It is assumed, by convention defined by this plugin, that the Docker context (fi
 including the Dockerfile) are located at `src/main/docker`. If no context is explicitly specified in the 
 configuration, the plugin will fallback to this convention.
 
+**Enhanced Context Support**: The plugin supports flexible context configuration through Gradle Copy tasks, allowing 
+users to aggregate files from multiple sources into a temporary build context directory (`build/docker-context/<imageName>/`). 
+This enables complex build scenarios where Docker context files are scattered across different project directories.
+
 The plugin views a project with a goal of building a software application as a Docker image as having two subprojects:
 one to build the application and one to build the Docker image:
 - `the-application-project/`
@@ -69,6 +73,7 @@ The plugin generates tasks using the pattern `docker<Action><ImageName>` where:
 
 **Task Dependencies**:
 - **With build context**: `dockerSave` depends on `dockerBuild`, `dockerPublish` depends on `dockerBuild`
+- **With contextTask**: `dockerBuild` depends on the specified Copy task for context preparation
 - **Without build context** (using `sourceRef`): Tasks are independent and operate on pre-existing images
 - Aggregate tasks (`dockerBuild`, `dockerSave`, etc.) operate on all configured images
 
@@ -76,7 +81,7 @@ The plugin generates tasks using the pattern `docker<Action><ImageName>` where:
 
 ### Configuration to Build, Tag, Save, and Publish
 
-DSL configuration to build, tag, save, and publish:
+DSL configuration to build, tag, save, and publish (traditional single context):
 ```groovy
 plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
 
@@ -168,6 +173,111 @@ Invoke tasks to build, save, tag, and publish the images:
 ./gradlew dockerPublish
 # publish a specific image
 ./gradlew dockerPublishAlpine dockerPublishUbuntu
+```
+
+### Multi-Context Configuration (Enhanced)
+
+DSL configuration using Gradle Copy tasks to aggregate multiple context sources:
+```groovy
+plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
+
+docker {
+    images {
+        image("alpine") {
+            contextTask = tasks.register("prepareAlpineContext", Copy) {
+                into layout.buildDirectory.dir("docker-context/alpine")
+                
+                // Base Docker files
+                from("src/main/docker") 
+                
+                // Application JAR
+                from("build/libs") { 
+                    include "app-*.jar"
+                    rename { "app.jar" }
+                }
+                
+                // Configuration files
+                from("config/production") {
+                    include "*.properties", "*.yml"
+                }
+                
+                // Scripts
+                from("scripts") {
+                    include "entrypoint.sh"
+                    fileMode = 0755
+                }
+            }
+            
+            dockerfile = "Dockerfile"  // relative to contextTask output
+            buildArgs = ["BASE_IMAGE": "eclipse-temurin:21-jre-alpine", "JAR_FILE": "app.jar"]
+            tags = ["myapp:${version}-alpine", "myapp:alpine"]
+            save {
+                compression = "gzip"
+                outputFile = layout.buildDirectory.file("docker/pkg/myapp-${version}-alpine.tar.gz")
+            }
+            publish {
+                to {
+                    name = "ghcr"
+                    repository = "ghcr.io/acme/myapp"
+                    tags = ["${version}-alpine", "alpine"]
+                    auth {
+                        username = providers.gradleProperty("GHCR_USER")
+                        password = providers.gradleProperty("GHCR_TOKEN")
+                    }
+                }
+            }
+        }
+
+        image("ubuntu") {
+            // Inline context configuration
+            context {
+                from("src/main/docker")
+                from("build/libs") { 
+                    include "*.jar"
+                    rename { "app.jar" }
+                }
+                from("config") { 
+                    include "*.conf"
+                    into "config/"
+                }
+            }
+            
+            dockerfile = "Dockerfile"
+            buildArgs = ["BASE_IMAGE": "eclipse-temurin:21-jre-ubuntu", "JAR_FILE": "app.jar"]
+            tags = ["myapp:${version}-ubuntu", "myapp:ubuntu"]
+            save {
+                compression = "gzip"
+                outputFile = layout.buildDirectory.file("docker/pkg/myapp-${version}-ubuntu.tar.gz")
+            }
+            publish {
+                to {
+                    name = "private"
+                    repository = "registry.example.com/myteam/myapp"
+                    tags = ["${version}-ubuntu", "ubuntu"]
+                    auth {
+                        username = providers.gradleProperty("PRIV_USER")
+                        password = providers.gradleProperty("PRIV_TOKEN")
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+Invoke tasks to build with multi-context preparation:
+```bash
+# Context preparation happens automatically as part of build dependencies
+./gradlew dockerBuild
+./gradlew dockerBuildAlpine dockerBuildUbuntu
+
+# Inspect assembled context for debugging
+ls -la build/docker-context/alpine/
+ls -la build/docker-context/ubuntu/
+
+# Save and publish work the same way
+./gradlew dockerSave
+./gradlew dockerPublish
 ```
 
 ### Tagging images (retag)

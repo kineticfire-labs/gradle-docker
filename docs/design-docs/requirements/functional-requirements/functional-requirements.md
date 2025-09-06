@@ -25,6 +25,10 @@ how users will interact with it, ensuring that the final product meets user need
 | uc-6        | fr-15          | The plugin shall support multiple Docker images per project                                                              | Complete (fs-15) |
 | uc-6        | fr-16          | The plugin shall generate per-image tasks (e.g., `dockerBuildAlpine`, `dockerSaveUbuntu`)                                | Complete (fs-16) |
 | uc-6        | fr-17          | The plugin shall support Docker build context configuration with fallback to `src/main/docker`                           | Complete (fs-17) |
+| uc-6        | fr-33          | The plugin shall support multi-source context assembly using Gradle Copy tasks                                           | Planned (fs-33)  |
+| uc-6        | fr-34          | The plugin shall support contextTask property for explicit Copy task references                                          | Planned (fs-34)  |
+| uc-6        | fr-35          | The plugin shall support inline context configuration for dynamic context assembly                                       | Planned (fs-35)  |
+| uc-6        | fr-36          | The plugin shall generate temporary build contexts in `build/docker-context/<imageName>/` directories                   | Planned (fs-36)  |
 | uc-6        | fr-18          | The plugin shall support Docker build arguments configuration                                                            | Complete (fs-18) |
 | uc-6        | fr-19          | The plugin shall support multiple image tags per image                                                                   | Complete (fs-19) |
 | uc-6        | fr-20          | The plugin shall support multiple registry publishing targets per image                                                  | Complete (fs-20) |
