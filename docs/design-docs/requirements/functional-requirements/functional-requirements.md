@@ -19,7 +19,7 @@ how users will interact with it, ensuring that the final product meets user need
 | uc-3        | fr-9           | The plugin shall use Spock Framework for BDD-style testing                                                               | Complete (fs-9)  |
 | uc-3        | fr-10          | The plugin shall use Jackson library for JSON parsing                                                                    | Complete (fs-10) |
 | uc-6        | fr-11          | The plugin shall provide a `dockerBuild` task to build Docker images                                                     | Complete (fs-11) |
-| uc-6        | fr-12          | The plugin shall provide a `dockerSave` task to save Docker images to tar.gz files                                       | Complete (fs-12) |
+| uc-6        | fr-12          | The plugin shall provide a `dockerSave` task to save Docker images to compressed files (none, gzip, bzip2, xz, zip)                                       | Complete (fs-12) |
 | uc-6        | fr-13          | The plugin shall provide a `dockerTag` task to tag Docker images                                                         | Complete (fs-13) |
 | uc-6        | fr-14          | The plugin shall provide a `dockerPublish` task to publish Docker images to registries                                   | Complete (fs-14) |
 | uc-6        | fr-15          | The plugin shall support multiple Docker images per project                                                              | Complete (fs-15) |

@@ -88,7 +88,7 @@ docker {
             buildArgs  = [ "BASE_IMAGE": "eclipse-temurin:21-jre-alpine", "JAR_FILE":"app.jar" ]
             tags       = ["myapp:${version}-alpine", "myapp:alpine"]
             save {
-                compression = "gzip"
+                compression = "gzip"  // Options: "none", "gzip", "bzip2", "xz", "zip"
                 outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-alpine.tar.gz")
             }
             publish { // per-image publish targets
@@ -119,7 +119,7 @@ docker {
             buildArgs  = [ "BASE_IMAGE": "eclipse-temurin:21-jre-ubuntu", "JAR_FILE":"app.jar" ]
             tags       = ["myapp:${version}-ubuntu", "myapp:ubuntu"]
             save {
-                compression = "gzip"
+                compression = "gzip"  // Options: "none", "gzip", "bzip2", "xz", "zip"
                 outputFile  = layout.buildDirectory.file("docker/pkg/myapp-${version}-ubuntu.tar.gz")
             }
             publish {
@@ -273,7 +273,7 @@ docker {
         image("alpine") {
             sourceRef   = "ghcr.io/acme/myapp:1.2.3-alpine"  // the image you want to save
             save {
-                compression = "gzip"                            // or "none"
+                compression = "gzip"  // Options: "none", "gzip", "bzip2", "xz", "zip"                            // or "none"
                 outputFile  = layout.buildDirectory.file("docker/pkg/myapp-1.2.3-alpine.tar.gz")
                 pullIfMissing = true                            // plugin pulls if not local
             }
@@ -281,7 +281,7 @@ docker {
         image("ubuntu") {
             sourceRef   = "registry.example.com/myteam/myapp:1.2.3-ubuntu"
             save {
-                compression = "gzip"
+                compression = "gzip"  // Options: "none", "gzip", "bzip2", "xz", "zip"
                 outputFile  = layout.buildDirectory.file("docker/pkg/myapp-1.2.3-ubuntu.tar.gz")
                 pullIfMissing = true
             }

@@ -22,7 +22,7 @@ business needs, user experiences, and features like inputs, processing, and outp
 | uc-3        | fr-9           | fs-9             | The plugin shall use Spock Framework for BDD-style testing                                                               | Draft  |
 | uc-3        | fr-10          | fs-10            | The plugin shall use Jackson library for JSON parsing                                                                    | Draft  |
 | uc-6        | fr-11          | fs-11            | The plugin shall provide a `dockerBuild` task to build Docker images                                                     | Draft  |
-| uc-6        | fr-12          | fs-12            | The plugin shall provide a `dockerSave` task to save Docker images to tar.gz files                                       | Draft  |
+| uc-6        | fr-12          | fs-12            | The plugin shall provide a `dockerSave` task to save Docker images to compressed files (none, gzip, bzip2, xz, zip)                                       | Draft  |
 | uc-6        | fr-13          | fs-13            | The plugin shall provide a `dockerTag` task to tag Docker images                                                         | Draft  |
 | uc-6        | fr-14          | fs-14            | The plugin shall provide a `dockerPublish` task to publish Docker images to registries                                   | Draft  |
 | uc-6        | fr-15          | fs-15            | The plugin shall support multiple Docker images per project                                                              | Draft  |

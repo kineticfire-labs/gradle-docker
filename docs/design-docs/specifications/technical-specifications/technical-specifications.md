@@ -155,7 +155,7 @@ docker {
             buildArgs = ["BASE_IMAGE": "eclipse-temurin:21-jre-alpine", "JAR_FILE": "app.jar"]
             tags = ["myapp:${version}-alpine", "myapp:alpine"]
             save {
-                compression = "gzip"
+                compression = "gzip"  // Options: "none", "gzip", "bzip2", "xz", "zip"
                 outputFile = layout.buildDirectory.file("docker/pkg/myapp-${version}-alpine.tar.gz")
             }
             publish {
@@ -587,7 +587,7 @@ enum ServiceState {
 }
 
 enum CompressionType {
-    NONE, GZIP
+    NONE, GZIP, BZIP2, XZ, ZIP
 }
 
 // Authentication and Registry Support Classes
