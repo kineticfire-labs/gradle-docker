@@ -76,30 +76,43 @@ abstract class DockerExtension {
     }
     
     void validateImageSpec(ImageSpec imageSpec) {
-        // Validate required properties
-        if (!imageSpec.context.present && !imageSpec.sourceRef.present) {
+        // Check if any context configuration is explicitly provided
+        def hasExplicitContext = imageSpec.context.isPresent() && !isConventionValue(imageSpec.context)
+        def hasContextTask = imageSpec.contextTask.present
+        def hasSourceRef = imageSpec.sourceRef.present
+        
+        // Validate required properties - now supports multiple context types
+        if (!hasExplicitContext && !hasContextTask && !hasSourceRef) {
             throw new GradleException(
-                "Image '${imageSpec.name}' must specify either 'context' for building or 'sourceRef' for referencing existing image"
+                "Image '${imageSpec.name}' must specify either 'context', 'contextTask', or 'sourceRef'"
             )
         }
         
-        // Validate context exists if specified
-        if (imageSpec.context.present) {
+        // Validate mutually exclusive context configuration
+        def contextCount = [hasExplicitContext, hasContextTask].count(true)
+        if (contextCount > 1) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' must specify only one of: 'context', 'contextTask', or inline 'context {}' block"
+            )
+        }
+        
+        // Validate traditional context directory exists if explicitly specified
+        if (hasExplicitContext) {
             def contextDir = imageSpec.context.get().asFile
             if (!contextDir.exists()) {
                 throw new GradleException(
-                    "Docker context directory does not exist: ${contextDir.absolutePath}\\n" +
+                    "Docker context directory does not exist: ${contextDir.absolutePath}\n" +
                     "Suggestion: Create the directory or update the context path in image '${imageSpec.name}'"
                 )
             }
         }
         
-        // Validate dockerfile exists
-        if (imageSpec.dockerfile.present) {
+        // Validate dockerfile exists (but not for sourceRef images)
+        if (imageSpec.dockerfile.present && !hasSourceRef) {
             def dockerfileFile = imageSpec.dockerfile.get().asFile
             if (!dockerfileFile.exists()) {
                 throw new GradleException(
-                    "Dockerfile does not exist: ${dockerfileFile.absolutePath}\\n" +
+                    "Dockerfile does not exist: ${dockerfileFile.absolutePath}\n" +
                     "Suggestion: Create the Dockerfile or update the dockerfile path in image '${imageSpec.name}'"
                 )
             }
@@ -110,8 +123,8 @@ abstract class DockerExtension {
             imageSpec.tags.get().each { tag ->
                 if (!isValidTagName(tag)) {
                     throw new GradleException(
-                        "Invalid Docker tag name: '${tag}' in image '${imageSpec.name}'\\n" +
-                        "Image tags should be simple names like 'latest', 'v1.0.0', 'dev'.\\n" +
+                        "Invalid Docker tag name: '${tag}' in image '${imageSpec.name}'\n" +
+                        "Image tags should be simple names like 'latest', 'v1.0.0', 'dev'.\n" +
                         "For registry publishing, specify the repository in publish configuration."
                     )
                 }
@@ -183,6 +196,19 @@ abstract class DockerExtension {
         // Valid examples: "myapp", "docker.io/myapp", "localhost:5000/namespace/app"
         // Basic validation - allow alphanumeric, dots, colons, slashes, dashes
         return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
+    }
+
+    /**
+     * Check if a property value is a convention (default) value rather than explicitly set
+     */
+    private boolean isConventionValue(def property) {
+        // For Directory/File properties, check if the value matches the default convention
+        if (property.present) {
+            def value = property.get().asFile
+            def conventionPath = project.layout.projectDirectory.dir("src/main/docker").asFile
+            return value == conventionPath
+        }
+        return false
     }
 
     boolean isValidTagName(String tag) {

@@ -347,4 +347,100 @@ class ImageSpecTest extends Specification {
         imageSpec.context.get().asFile == updatedContext
         imageSpec.tags.get() == ['v2.0', 'latest']
     }
+
+    // ===== NEW CONTEXT TASK TESTS =====
+
+    def "contextTask property works correctly"() {
+        given:
+        def copyTask = project.tasks.register('testContextTask', org.gradle.api.tasks.Copy)
+
+        when:
+        imageSpec.contextTask.set(copyTask)
+
+        then:
+        imageSpec.contextTask.present
+        imageSpec.contextTask.get() == copyTask.get()
+    }
+
+    def "context(Closure) creates Copy task with correct configuration"() {
+        given:
+        def srcDir = project.file('src')
+        def libsDir = project.file('libs')
+
+        when:
+        imageSpec.context {
+            from(srcDir)
+            from(libsDir) {
+                include '*.jar'
+            }
+        }
+
+        then:
+        imageSpec.contextTask.present
+        def copyTask = imageSpec.contextTask.get()
+        copyTask.name == 'prepareTestImageContext'
+        copyTask.group == 'docker'
+        copyTask.description.contains('Prepare build context for Docker image')
+    }
+
+    def "context(Action) creates Copy task with correct configuration"() {
+        given:
+        def srcDir = project.file('src')
+
+        when:
+        imageSpec.context(new org.gradle.api.Action<org.gradle.api.tasks.Copy>() {
+            @Override
+            void execute(org.gradle.api.tasks.Copy task) {
+                task.from(srcDir)
+                task.include('**/*.txt')
+            }
+        })
+
+        then:
+        imageSpec.contextTask.present
+        def copyTask = imageSpec.contextTask.get()
+        copyTask.name == 'prepareTestImageContext'
+        copyTask.group == 'docker'
+        copyTask.description.contains('Prepare build context for Docker image')
+    }
+
+    def "context method overrides previous contextTask"() {
+        given:
+        def manualTask = project.tasks.register('manualContext', org.gradle.api.tasks.Copy)
+        def srcDir = project.file('src')
+
+        when:
+        imageSpec.contextTask.set(manualTask)
+
+        then:
+        imageSpec.contextTask.get() == manualTask.get()
+
+        when:
+        imageSpec.context {
+            from(srcDir)
+        }
+
+        then:
+        imageSpec.contextTask.present
+        imageSpec.contextTask.get() != manualTask.get()
+        imageSpec.contextTask.get().name == 'prepareTestImageContext'
+    }
+
+    def "multiple context configurations create separate tasks"() {
+        given:
+        def image1 = project.objects.newInstance(ImageSpec, 'webapp', project)
+        def image2 = project.objects.newInstance(ImageSpec, 'api', project)
+        def srcDir = project.file('src')
+
+        when:
+        image1.context { from(srcDir) }
+        image2.context { from(srcDir) }
+
+        then:
+        image1.contextTask.present
+        image2.contextTask.present
+        image1.contextTask.get().name == 'prepareWebappContext'
+        image2.contextTask.get().name == 'prepareApiContext'
+        image1.contextTask.get() != image2.contextTask.get()
+    }
 }

@@ -20,6 +20,7 @@ import org.gradle.api.*
 import org.gradle.api.file.*
 import org.gradle.api.provider.*
 import org.gradle.api.tasks.*
+import org.gradle.api.tasks.Copy
 
 import javax.inject.Inject
 
@@ -44,6 +45,10 @@ abstract class ImageSpec {
     @Input
     @Optional
     abstract DirectoryProperty getContext()
+    
+    @Input
+    @Optional
+    abstract Property<Task> getContextTask()
     
     @Input
     @Optional
@@ -92,5 +97,35 @@ abstract class ImageSpec {
         def publishSpec = project.objects.newInstance(PublishSpec, project)
         action.execute(publishSpec)
         publish.set(publishSpec)
+    }
+    
+    /**
+     * Configure inline context using Copy task DSL
+     * Creates an anonymous Copy task to prepare build context
+     */
+    void context(@DelegatesTo(Copy) Closure closure) {
+        def contextTaskName = "prepare${name.capitalize()}Context"
+        def copyTask = project.tasks.register(contextTaskName, Copy) { Copy task ->
+            task.group = 'docker'
+            task.description = "Prepare build context for Docker image: ${name}"
+            task.into(project.layout.buildDirectory.dir("docker-context/${name}"))
+            closure.delegate = task
+            closure.call()
+        }
+        contextTask.set(copyTask)
+    }
+    
+    /**
+     * Configure inline context using Copy task Action
+     */
+    void context(Action<Copy> action) {
+        def contextTaskName = "prepare${name.capitalize()}Context"
+        def copyTask = project.tasks.register(contextTaskName, Copy) { Copy task ->
+            task.group = 'docker'
+            task.description = "Prepare build context for Docker image: ${name}"
+            task.into(project.layout.buildDirectory.dir("docker-context/${name}"))
+            action.execute(task)
+        }
+        contextTask.set(copyTask)
     }
 }

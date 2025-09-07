@@ -825,4 +825,104 @@ class DockerExtensionTest extends Specification {
         !extension.isValidRepositoryName('contains spaces')
         !extension.isValidRepositoryName('a' * 256)  // over 255 character limit
     }
+
+    // ===== CONTEXT TASK VALIDATION TESTS =====
+    
+    def "validate passes for image with contextTask"() {
+        given:
+        def copyTask = project.tasks.register('testCopyTask', org.gradle.api.tasks.Copy)
+        project.file('Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            contextTaskImage {
+                contextTask.set(copyTask)
+                dockerfile.set(project.file('Dockerfile'))
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+    
+    def "validate fails when both context and contextTask are specified"() {
+        given:
+        project.file('docker').mkdirs()
+        def copyTask = project.tasks.register('testCopyTask', org.gradle.api.tasks.Copy)
+        
+        extension.images {
+            conflictingContext {
+                context.set(project.file('docker'))
+                contextTask.set(copyTask)
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify only one of: 'context', 'contextTask'")
+        ex.message.contains('conflictingContext')
+    }
+    
+    def "validate fails when neither context nor contextTask nor sourceRef are specified"() {
+        given:
+        extension.images {
+            noContextImage {
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+        ex.message.contains('noContextImage')
+    }
+
+    def "validate passes for image with sourceRef and no context"() {
+        given:
+        extension.images {
+            sourceRefImage {
+                sourceRef.set('alpine:3.16')
+                tags.set(['latest'])
+                // Don't set dockerfile for sourceRef images
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes for image with inline context block"() {
+        given:
+        def srcDir = project.file('src')
+        srcDir.mkdirs()
+        project.file('Dockerfile').text = 'FROM alpine'
+        
+        when:
+        extension.images {
+            inlineContextImage {
+                context {
+                    from(srcDir)
+                }
+                dockerfile.set(project.file('Dockerfile'))
+                tags.set(['latest'])
+            }
+        }
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
 }

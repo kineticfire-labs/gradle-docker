@@ -21,6 +21,9 @@ import com.kineticfire.gradle.docker.extension.DockerOrchExtension
 import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
 import com.kineticfire.gradle.docker.task.*
+import com.kineticfire.gradle.docker.spec.ImageSpec
+import org.gradle.api.tasks.Copy
+import org.gradle.api.file.ProjectLayout
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
 import org.gradle.api.Project
@@ -288,10 +291,10 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.dockerService.set(dockerService)
         
-        // Configure build context and dockerfile
-        if (imageSpec.context.present) {
-            task.contextPath.set(imageSpec.context)
-        }
+        // Configure build context - support multiple context types
+        configureContextPath(task, imageSpec, projectLayout)
+        
+        // Configure dockerfile
         if (imageSpec.dockerfile.present) {
             task.dockerfile.set(imageSpec.dockerfile)
         }
@@ -305,6 +308,34 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure output image ID file
         def outputDir = projectLayout.buildDirectory.dir("docker/${imageSpec.name}")
         task.imageId.set(outputDir.map { it.file('image-id.txt') })
+    }
+    
+    /**
+     * Configure the context path for Docker build task based on context type
+     */
+    private void configureContextPath(DockerBuildTask task, ImageSpec imageSpec, ProjectLayout projectLayout) {
+        if (imageSpec.contextTask.present) {
+            // Use Copy task output as context
+            def copyTaskProvider = imageSpec.contextTask.get()
+            task.dependsOn(copyTaskProvider)
+            // For Copy tasks, use the destination directory provider
+            task.contextPath.set(copyTaskProvider.flatMap { copyTask ->
+                if (copyTask instanceof Copy) {
+                    return projectLayout.buildDirectory.dir("docker-context/${imageSpec.name}")
+                } else {
+                    throw new GradleException(
+                        "contextTask for image '${imageSpec.name}' must be a Copy task, but was: ${copyTask.class.name}"
+                    )
+                }
+            })
+        } else if (imageSpec.context.present) {
+            // Use traditional context directory
+            task.contextPath.set(imageSpec.context)
+        } else {
+            throw new GradleException(
+                "Image '${imageSpec.name}' must specify either 'context' or 'contextTask'"
+            )
+        }
     }
     
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
