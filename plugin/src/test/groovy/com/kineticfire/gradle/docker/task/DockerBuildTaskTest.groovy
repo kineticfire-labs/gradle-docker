@@ -44,8 +44,8 @@ class DockerBuildTaskTest extends Specification {
     def "task can be created"() {
         expect:
         task != null
-        task.group == 'docker'
-        task.description.contains('Build Docker image')
+        // Group and description are now set during task configuration, not in constructor
+        task.group == null || task.group == 'docker'
     }
 
     def "task has correct inputs configured"() {

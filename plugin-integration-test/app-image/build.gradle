@@ -97,8 +97,15 @@ dependencies {
 docker {
     images {
         timeServer {
-            context = file('src/main/docker')
-            dockerfile = file('src/main/docker/Dockerfile') 
+            contextTask.set(tasks.register('prepareTimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for time server image'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')  // Include all files from Docker context including JAR
+                dependsOn tasks.named('copyAppJar')
+                dependsOn project(':app').tasks.jar
+            })
+            dockerfile.set(file('src/main/docker/Dockerfile'))
             tags = [
                 "${version}",
                 "latest"
@@ -174,13 +181,7 @@ tasks.register('copyAppJar', Copy) {
     rename { "app-${version}.jar" }
 }
 
-// Ensure JAR is copied before Docker build
-afterEvaluate {
-    tasks.named('dockerBuildTimeServer') {
-        dependsOn 'copyAppJar'
-        dependsOn ':app:jar'
-    }
-}
+// JAR copying and Docker build dependencies are now handled through contextTask configuration
 
 // SMOKE TESTS: Quick validation using suite lifecycle (fastest)
 tasks.register('smokeTest', Test) {

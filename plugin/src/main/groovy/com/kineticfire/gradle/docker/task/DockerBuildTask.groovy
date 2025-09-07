@@ -38,8 +38,8 @@ import org.gradle.api.tasks.TaskAction
 abstract class DockerBuildTask extends DefaultTask {
     
     DockerBuildTask() {
-        group = 'docker'
-        description = 'Build Docker image'
+        // Avoid setting group/description in constructor to prevent configuration cache issues
+        // These will be set during task configuration in the plugin
         
         // Set up default values
         buildArgs.convention([:])
@@ -61,12 +61,16 @@ abstract class DockerBuildTask extends DefaultTask {
     @Input
     @Optional
     abstract MapProperty<String, String> getBuildArgs()
-    
+
     @OutputFile
     abstract RegularFileProperty getImageId()
     
     @TaskAction
     void buildImage() {
+        // NOTE: This implementation works without configuration cache.
+        // The configuration cache issue is a known limitation that needs deeper investigation.
+        // For now, users can run with --no-configuration-cache for Docker build tasks.
+        
         // Validate required properties
         if (!dockerfile.present) {
             throw new IllegalStateException("dockerfile property must be set")
@@ -74,15 +78,8 @@ abstract class DockerBuildTask extends DefaultTask {
         if (!tags.present || tags.get().isEmpty()) {
             throw new IllegalStateException("tags property must be set and not empty")
         }
-        
-        logger.lifecycle("DockerBuildTask: Building image (placeholder implementation)")
-        logger.lifecycle("  Dockerfile: ${dockerfile.get().asFile}")
-        logger.lifecycle("  Context: ${contextPath.get().asFile}")
-        logger.lifecycle("  Tags: ${tags.get()}")
-        logger.lifecycle("  Build Args: ${buildArgs.get()}")
-        
-        // TODO: Implement actual Docker build logic with service integration
-        // Create a build context and call the service
+
+        // Build Docker image using service
         def context = new com.kineticfire.gradle.docker.model.BuildContext(
             contextPath.get().asFile.toPath(),
             dockerfile.get().asFile.toPath(),

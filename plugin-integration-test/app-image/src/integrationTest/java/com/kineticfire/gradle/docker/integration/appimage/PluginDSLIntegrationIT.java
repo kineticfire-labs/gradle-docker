@@ -70,8 +70,11 @@ class PluginDSLIntegrationIT {
             docker {
                 images {
                     testImage {
-                        context = file('src/main/docker')
-                        dockerfile = file('src/main/docker/Dockerfile')
+                        contextTask = tasks.register('prepareTestImageContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/testImage')
+                            from('src/main/docker')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['test:latest', 'test:1.0.0']
                         buildArgs = [
                             'BUILD_VERSION': '1.0.0'
@@ -112,8 +115,11 @@ class PluginDSLIntegrationIT {
             docker {
                 images {
                     myApp {
-                        context = file('docker')
-                        dockerfile = file('docker/Dockerfile')
+                        contextTask = tasks.register('prepareMyAppContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/myApp')
+                            from('docker')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['my-app:test']
                         buildArgs = [
                             'BUILD_TIME': new Date().toString()
@@ -201,14 +207,20 @@ class PluginDSLIntegrationIT {
             docker {
                 images {
                     frontend {
-                        context = file('frontend-docker')
-                        dockerfile = file('frontend-docker/Dockerfile')
+                        contextTask = tasks.register('prepareFrontendContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/frontend')
+                            from('frontend-docker')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['frontend:latest', 'frontend:dev']
                     }
                     
                     backend {
-                        context = file('backend-docker')
-                        dockerfile = file('backend-docker/Dockerfile')
+                        contextTask = tasks.register('prepareBackendContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/backend')
+                            from('backend-docker')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['backend:latest', 'backend:dev']
                         buildArgs = [
                             'SERVICE_TYPE': 'backend'
@@ -316,8 +328,11 @@ class PluginDSLIntegrationIT {
             docker {
                 images {
                     app {
-                        context = file('docker')
-                        dockerfile = file('docker/Dockerfile')
+                        contextTask = tasks.register('prepareMyAppContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/myApp')
+                            from('docker')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['app:test']
                     }
                 }
@@ -359,8 +374,11 @@ class PluginDSLIntegrationIT {
             docker {
                 images {
                     invalidImage {
-                        context = file('nonexistent')
-                        dockerfile = file('nonexistent/Dockerfile')
+                        contextTask = tasks.register('prepareInvalidContext', Copy) {
+                            into layout.buildDirectory.dir('docker-context/invalidImage')
+                            from('nonexistent')
+                        }
+                        dockerfile = 'Dockerfile'
                         tags = ['invalid:test']
                     }
                 }

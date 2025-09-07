@@ -348,8 +348,11 @@ repositories {
 docker {
     images {
         timeServer {
-            context = file('src/main/docker')
-            dockerfile = file('src/main/docker/Dockerfile') 
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+            }
+            dockerfile = 'Dockerfile' 
             tags = [
                 "\$version",
                 "latest"
@@ -468,8 +471,11 @@ dependencies {
 docker {
     images {
         timeServer {
-            context = file('src/main/docker')
-            dockerfile = file('src/main/docker/Dockerfile') 
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+            }
+            dockerfile = 'Dockerfile' 
             tags = [
                 "\$version",
                 "latest"

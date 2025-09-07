@@ -315,8 +315,8 @@ class GradleDockerPlugin implements Plugin<Project> {
      */
     private void configureContextPath(DockerBuildTask task, ImageSpec imageSpec, ProjectLayout projectLayout) {
         if (imageSpec.contextTask.present) {
-            // Use Copy task output as context
-            def copyTaskProvider = imageSpec.contextTask.get()
+            // Use Copy task output as context - avoid .get() during configuration
+            def copyTaskProvider = imageSpec.contextTask
             task.dependsOn(copyTaskProvider)
             // For Copy tasks, use the destination directory provider
             task.contextPath.set(copyTaskProvider.flatMap { copyTask ->
