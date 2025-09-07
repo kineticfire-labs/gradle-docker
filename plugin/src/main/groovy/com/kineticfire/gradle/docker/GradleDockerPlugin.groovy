@@ -288,19 +288,38 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.group = 'docker'
         task.description = "Build Docker image: ${imageSpec.name}"
         
-        // Configure service dependency
+        // Configure service dependency - ensure configuration cache compatibility
         task.dockerService.set(dockerService)
+        task.usesService(dockerService)
         
         // Configure build context - support multiple context types
         configureContextPath(task, imageSpec, projectLayout)
         
         // Configure dockerfile
         if (imageSpec.dockerfile.present) {
-            task.dockerfile.set(imageSpec.dockerfile)
+            if (imageSpec.contextTask.present) {
+                // When using contextTask, dockerfile should be relative to the context directory
+                // The Copy task should have copied the dockerfile into the context
+                task.dockerfile.set(projectLayout.buildDirectory.file("docker-context/${imageSpec.name}/Dockerfile"))
+            } else {
+                // Traditional approach - dockerfile path is absolute
+                task.dockerfile.set(imageSpec.dockerfile)
+            }
+        } else {
+            // Default Dockerfile location
+            if (imageSpec.contextTask.present) {
+                task.dockerfile.set(projectLayout.buildDirectory.file("docker-context/${imageSpec.name}/Dockerfile"))
+            } else {
+                task.dockerfile.set(projectLayout.projectDirectory.file("Dockerfile"))
+            }
         }
         
-        // Configure tags
-        task.tags.set(imageSpec.tags)
+        // Configure tags - combine image name with tag to create full image references
+        // Convert camelCase to kebab-case for Docker image naming convention
+        def dockerImageName = imageSpec.name.replaceAll(/([A-Z])/, '-$1').toLowerCase().replaceFirst(/^-/, '')
+        task.tags.set(imageSpec.tags.map { tagList ->
+            tagList.collect { tag -> "${dockerImageName}:${tag}" }
+        })
         
         // Configure build arguments
         task.buildArgs.set(imageSpec.buildArgs)
@@ -315,19 +334,12 @@ class GradleDockerPlugin implements Plugin<Project> {
      */
     private void configureContextPath(DockerBuildTask task, ImageSpec imageSpec, ProjectLayout projectLayout) {
         if (imageSpec.contextTask.present) {
-            // Use Copy task output as context - avoid .get() during configuration
+            // Use Copy task output as context - configuration cache compatible
             def copyTaskProvider = imageSpec.contextTask
             task.dependsOn(copyTaskProvider)
-            // For Copy tasks, use the destination directory provider
-            task.contextPath.set(copyTaskProvider.flatMap { copyTask ->
-                if (copyTask instanceof Copy) {
-                    return projectLayout.buildDirectory.dir("docker-context/${imageSpec.name}")
-                } else {
-                    throw new GradleException(
-                        "contextTask for image '${imageSpec.name}' must be a Copy task, but was: ${copyTask.class.name}"
-                    )
-                }
-            })
+            // Directly set the expected destination directory without accessing the Task object
+            // This avoids configuration cache issues with Task serialization
+            task.contextPath.set(projectLayout.buildDirectory.dir("docker-context/${imageSpec.name}"))
         } else if (imageSpec.context.present) {
             // Use traditional context directory
             task.contextPath.set(imageSpec.context)
@@ -395,8 +407,11 @@ class GradleDockerPlugin implements Plugin<Project> {
             task.envFiles.setFrom(stackSpec.envFiles)
         }
         
-        // Configure project and stack names
-        task.projectName.set(stackSpec.projectName.getOrElse(stackSpec.name))
+        // Configure project and stack names with property override support
+        def project = task.project
+        task.projectName.set(project.provider {
+            project.findProperty("compose.project.name") ?: stackSpec.projectName.getOrElse(stackSpec.name)
+        })
         task.stackName.set(stackSpec.name)
     }
     
@@ -407,8 +422,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.composeService.set(composeService)
         
-        // Configure project and stack names
-        task.projectName.set(stackSpec.projectName.getOrElse(stackSpec.name))
+        // Configure project and stack names with property override support
+        def project = task.project
+        task.projectName.set(project.provider {
+            project.findProperty("compose.project.name") ?: stackSpec.projectName.getOrElse(stackSpec.name)
+        })
         task.stackName.set(stackSpec.name)
     }
     

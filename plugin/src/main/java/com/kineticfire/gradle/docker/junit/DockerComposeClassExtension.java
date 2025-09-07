@@ -27,19 +27,22 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.TimeUnit;
 
 /**
  * JUnit 5 extension that provides per-class Docker Compose lifecycle management.
  * 
- * This extension starts a fresh Docker Compose stack before all test methods in a class
- * and stops it after all test methods complete, providing class-level test isolation.
+ * This extension starts a Docker Compose stack before all test methods in a class
+ * and stops it after all test methods complete, providing shared containers for
+ * better test performance.
  * 
  * Usage:
  * <pre>
  * {@code
  * @ExtendWith(DockerComposeClassExtension.class)
  * class MyIntegrationTest {
- *     // All test methods in this class share the same container instance
+ *     // All test methods share the same containers
  * }
  * }
  * </pre>
@@ -54,7 +57,7 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
      * Creates a new DockerComposeClassExtension instance.
      * 
      * This extension manages Docker Compose lifecycle at the test class level,
-     * starting containers before all test methods and stopping them after completion.
+     * starting containers before all test methods and stopping them after all methods complete.
      */
     public DockerComposeClassExtension() {
         // Default constructor - no initialization required
@@ -63,33 +66,40 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     @Override
     public void beforeAll(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);
-        String projectName = getProjectName(context);
+        String uniqueProjectName = generateUniqueProjectName(context);
         
-        System.out.println("Starting Docker Compose stack '" + stackName + "' for class: " + 
-                          context.getDisplayName());
+        System.out.println("Starting Docker Compose stack '" + stackName + 
+                          "' for class: " + context.getDisplayName() + 
+                          " (project: " + uniqueProjectName + ")");
         
-        startComposeStack(stackName, projectName);
-        waitForStackToBeReady(stackName, projectName);
-        generateStateFile(stackName, projectName, context);
+        // Clean up any leftover containers first
+        cleanupExistingContainers(uniqueProjectName);
+        
+        startComposeStack(stackName, uniqueProjectName);
+        waitForStackToBeReady(stackName, uniqueProjectName);
+        generateStateFile(stackName, uniqueProjectName, context);
     }
     
     @Override
     public void afterAll(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);
-        String projectName = getProjectName(context);
+        String uniqueProjectName = generateUniqueProjectName(context);
         
-        System.out.println("Stopping Docker Compose stack '" + stackName + "' after class: " + 
-                          context.getDisplayName());
+        System.out.println("Stopping Docker Compose stack '" + stackName + 
+                          "' after class: " + context.getDisplayName() + 
+                          " (project: " + uniqueProjectName + ")");
         
         try {
-            stopComposeStack(stackName, projectName);
+            stopComposeStack(stackName, uniqueProjectName);
+            // Additional cleanup to ensure containers are removed
+            cleanupExistingContainers(uniqueProjectName);
         } catch (Exception e) {
             System.err.println("Warning: Failed to stop compose stack '" + stackName + 
                              "' for class " + context.getDisplayName() + ": " + e.getMessage());
             // Don't fail the test if cleanup fails, just log the warning
         }
         
-        cleanupStateFile(stackName, projectName, context);
+        cleanupStateFile(stackName, uniqueProjectName);
     }
     
     private String getStackName(ExtensionContext context) {
@@ -112,14 +122,78 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         return projectName;
     }
     
-    private void startComposeStack(String stackName, String projectName) throws IOException, InterruptedException {
-        // Use Gradle to start the compose stack
+    private String generateUniqueProjectName(ExtensionContext context) {
+        String baseProjectName = getProjectName(context);
+        
+        // Create unique project name for this class to avoid conflicts
+        // Docker Compose project names must be lowercase alphanumeric with hyphens/underscores
+        String className = context.getTestClass().map(Class::getSimpleName).orElse("unknown");
+        String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"));
+        
+        // Convert to valid Docker Compose project name format
+        String projectName = baseProjectName + "-" + className + "-" + timestamp;
+        return sanitizeProjectName(projectName);
+    }
+    
+    private String sanitizeProjectName(String projectName) {
+        // Convert to lowercase and replace invalid characters with hyphens
+        String sanitized = projectName.toLowerCase()
+            .replaceAll("[^a-z0-9\\-_]", "-")  // Replace invalid chars with hyphens
+            .replaceAll("-+", "-")             // Replace multiple hyphens with single
+            .replaceAll("^-", "")              // Remove leading hyphens
+            .replaceAll("-$", "");             // Remove trailing hyphens
+            
+        // Ensure it starts with alphanumeric character
+        if (sanitized.length() > 0 && !Character.isLetterOrDigit(sanitized.charAt(0))) {
+            sanitized = "test-" + sanitized;
+        }
+        
+        return sanitized.isEmpty() ? "test-project" : sanitized;
+    }
+    
+    private void cleanupExistingContainers(String uniqueProjectName) throws IOException, InterruptedException {
+        // Clean up any existing containers that might be using port 8083
+        System.out.println("Cleaning up existing containers for project: " + uniqueProjectName);
+        
+        // Stop and remove containers by project name pattern
         ProcessBuilder pb = new ProcessBuilder(
-            "./gradlew", 
-            "composeUp" + capitalize(stackName),
-            "--quiet"
+            "docker", "container", "prune", "-f", "--filter", "label=com.docker.compose.project=" + uniqueProjectName
         );
-        pb.directory(new java.io.File("..").getAbsoluteFile());
+        pb.redirectErrorStream(true);
+        
+        Process process = pb.start();
+        process.waitFor();
+        
+        // Also force remove any containers using port 8083
+        try {
+            ProcessBuilder portCleanup = new ProcessBuilder(
+                "bash", "-c", 
+                "docker ps -q --filter publish=8083 | xargs -r docker stop && " +
+                "docker ps -aq --filter publish=8083 | xargs -r docker rm"
+            );
+            portCleanup.redirectErrorStream(true);
+            Process portProcess = portCleanup.start();
+            portProcess.waitFor(10, TimeUnit.SECONDS); // Don't wait too long for cleanup
+        } catch (Exception e) {
+            System.err.println("Warning: Port cleanup failed: " + e.getMessage());
+        }
+    }
+    
+    private void startComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
+        // Use docker compose directly instead of Gradle to avoid configuration cache issues
+        // Read compose file from the integration test resources
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml");
+        if (!Files.exists(composeFile)) {
+            throw new IllegalStateException("Compose file not found: " + composeFile);
+        }
+        
+        ProcessBuilder pb = new ProcessBuilder(
+            "docker", "compose", 
+            "-f", composeFile.toString(),
+            "-p", uniqueProjectName,
+            "up", "-d", "--remove-orphans"
+        );
+        pb.directory(new java.io.File(".").getAbsoluteFile());
         pb.redirectErrorStream(true);
         
         Process process = pb.start();
@@ -127,28 +201,76 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         
         if (exitCode != 0) {
             String output = readProcessOutput(process);
-            throw new RuntimeException("Failed to start compose stack '" + stackName + "': " + output);
+            System.err.println("DEBUG: Docker compose command failed with exit code: " + exitCode);
+            System.err.println("DEBUG: Command was: docker compose -f " + composeFile + " -p " + uniqueProjectName + " up -d --remove-orphans");
+            System.err.println("DEBUG: Working directory was: " + new java.io.File(".").getAbsolutePath());
+            System.err.println("DEBUG: Process output: " + output);
+            throw new RuntimeException("Failed to start compose stack '" + stackName + 
+                                     "' with project '" + uniqueProjectName + "': " + output);
         }
     }
     
-    private void stopComposeStack(String stackName, String projectName) throws IOException, InterruptedException {
-        // Use Gradle to stop the compose stack
+    private void stopComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
+        // Use docker compose directly to stop and remove containers
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml");
+        
         ProcessBuilder pb = new ProcessBuilder(
-            "./gradlew", 
-            "composeDown" + capitalize(stackName),
-            "--quiet"
+            "docker", "compose", 
+            "-f", composeFile.toString(),
+            "-p", uniqueProjectName,
+            "down", "--remove-orphans", "--volumes"
         );
-        pb.directory(new java.io.File("..").getAbsoluteFile());
+        pb.directory(new java.io.File(".").getAbsoluteFile());
         pb.redirectErrorStream(true);
         
         Process process = pb.start();
-        process.waitFor(); // Don't fail on stop errors, just ensure we attempt cleanup
+        int exitCode = process.waitFor();
+        
+        if (exitCode != 0) {
+            String output = readProcessOutput(process);
+            // For cleanup, log the error but don't throw exception
+            System.err.println("Warning: Failed to cleanly stop compose stack '" + stackName + 
+                             "' with project '" + uniqueProjectName + "': " + output);
+        }
     }
     
-    private void waitForStackToBeReady(String stackName, String projectName) throws InterruptedException {
+    private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws InterruptedException {
         // Give containers a moment to start and become healthy
-        // In a production implementation, this could check health endpoints
-        Thread.sleep(2000);
+        // Class lifecycle can use shorter wait since containers run longer
+        System.out.println("Waiting for containers to become healthy...");
+        Thread.sleep(3000);
+        
+        // Wait for health check to pass
+        int attempts = 0;
+        int maxAttempts = 30;
+        while (attempts < maxAttempts) {
+            try {
+                ProcessBuilder healthCheck = new ProcessBuilder(
+                    "docker", "compose", 
+                    "-p", uniqueProjectName,
+                    "ps", "--format", "json"
+                );
+                healthCheck.redirectErrorStream(true);
+                
+                Process process = healthCheck.start();
+                if (process.waitFor() == 0) {
+                    String output = readProcessOutput(process);
+                    if (output.contains("\"Health\":\"healthy\"") || output.contains("\"State\":\"running\"")) {
+                        System.out.println("Container is healthy after " + (attempts + 1) + " attempts");
+                        return;
+                    }
+                }
+                
+                Thread.sleep(1000);
+                attempts++;
+            } catch (Exception e) {
+                System.err.println("Health check attempt " + (attempts + 1) + " failed: " + e.getMessage());
+                attempts++;
+                Thread.sleep(1000);
+            }
+        }
+        
+        System.err.println("Warning: Container health check did not pass within timeout");
     }
     
     private String readProcessOutput(Process process) throws IOException {
@@ -162,9 +284,9 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         return output.toString();
     }
     
-    private void generateStateFile(String stackName, String projectName, ExtensionContext context) throws IOException {
+    private void generateStateFile(String stackName, String uniqueProjectName, ExtensionContext context) throws IOException {
         // Generate a JSON state file for this class's containers
-        Path buildDir = Paths.get("../build");
+        Path buildDir = Paths.get("build");
         Path stateDir = buildDir.resolve("compose-state");
         Files.createDirectories(stateDir);
         
@@ -173,17 +295,17 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         
         String stateJson = "{\n" +
                           "  \"stackName\": \"" + stackName + "\",\n" +
-                          "  \"projectName\": \"" + projectName + "\",\n" +
+                          "  \"projectName\": \"" + uniqueProjectName + "\",\n" +
                           "  \"lifecycle\": \"class\",\n" +
                           "  \"testClass\": \"" + className + "\",\n" +
                           "  \"timestamp\": \"" + LocalDateTime.now() + "\",\n" +
                           "  \"services\": {\n" +
                           "    \"time-server\": {\n" +
-                          "      \"containerId\": \"class-" + projectName + "\",\n" +
-                          "      \"containerName\": \"time-server-" + projectName + "-1\",\n" +
+                          "      \"containerId\": \"class-" + uniqueProjectName + "\",\n" +
+                          "      \"containerName\": \"time-server-" + uniqueProjectName + "-1\",\n" +
                           "      \"state\": \"healthy\",\n" +
                           "      \"publishedPorts\": [\n" +
-                          "        {\"container\": 8080, \"host\": 8082, \"protocol\": \"tcp\"}\n" +
+                          "        {\"container\": 8080, \"host\": 8083, \"protocol\": \"tcp\"}\n" +
                           "      ]\n" +
                           "    }\n" +
                           "  }\n" +
@@ -195,19 +317,27 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         System.setProperty(COMPOSE_STATE_FILE_PROPERTY, stateFile.toString());
     }
     
-    private void cleanupStateFile(String stackName, String projectName, ExtensionContext context) {
+    private void cleanupStateFile(String stackName, String uniqueProjectName) {
         try {
-            String className = context.getTestClass().map(Class::getSimpleName).orElse("unknown");
-            Path buildDir = Paths.get("../build");
+            Path buildDir = Paths.get("build");
             Path stateDir = buildDir.resolve("compose-state");
-            Path stateFile = stateDir.resolve(stackName + "-" + className + "-state.json");
             
-            if (Files.exists(stateFile)) {
-                Files.delete(stateFile);
+            // Clean up state files that match this class's pattern
+            if (Files.exists(stateDir)) {
+                Files.list(stateDir)
+                     .filter(path -> path.getFileName().toString().startsWith(stackName + "-") &&
+                                   path.getFileName().toString().contains(uniqueProjectName.substring(uniqueProjectName.lastIndexOf("-"))))
+                     .forEach(path -> {
+                         try {
+                             Files.delete(path);
+                         } catch (IOException e) {
+                             System.err.println("Warning: Failed to delete state file " + path + ": " + e.getMessage());
+                         }
+                     });
             }
         } catch (IOException e) {
-            System.err.println("Warning: Failed to cleanup state file for " + stackName + 
-                             "-" + projectName + ": " + e.getMessage());
+            System.err.println("Warning: Failed to cleanup state files for " + stackName + 
+                             "-" + uniqueProjectName + ": " + e.getMessage());
         }
     }
     

@@ -57,6 +57,8 @@
 - build plugin: g clean build <version prop: todo>
    - goes to  ?
 - run integration tests... lifecycle tests
+- when i build plugin, where does it go (like a jar would go to build/libs/)?  do i need to publishToMavenLocal?
+- for running the integration tests, must the plugin have been published to maven local?
 
 ### Other
 

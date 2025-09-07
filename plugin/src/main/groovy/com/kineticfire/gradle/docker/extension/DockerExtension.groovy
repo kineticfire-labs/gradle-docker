@@ -76,12 +76,18 @@ abstract class DockerExtension {
     }
     
     void validateImageSpec(ImageSpec imageSpec) {
-        // Check if any context configuration is explicitly provided
-        def hasExplicitContext = imageSpec.context.isPresent() && !isConventionValue(imageSpec.context)
         def hasContextTask = imageSpec.contextTask.present
         def hasSourceRef = imageSpec.sourceRef.present
         
-        // Validate required properties - now supports multiple context types
+        // Check if context was explicitly set (not just the convention)
+        def hasExplicitContext = false
+        if (imageSpec.context.isPresent()) {
+            def contextFile = imageSpec.context.get().asFile
+            def conventionFile = project.layout.projectDirectory.dir("src/main/docker").asFile
+            hasExplicitContext = !contextFile.equals(conventionFile)
+        }
+        
+        // Validate required properties - must have at least one context source
         if (!hasExplicitContext && !hasContextTask && !hasSourceRef) {
             throw new GradleException(
                 "Image '${imageSpec.name}' must specify either 'context', 'contextTask', or 'sourceRef'"
@@ -198,18 +204,7 @@ abstract class DockerExtension {
         return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
     }
 
-    /**
-     * Check if a property value is a convention (default) value rather than explicitly set
-     */
-    private boolean isConventionValue(def property) {
-        // For Directory/File properties, check if the value matches the default convention
-        if (property.present) {
-            def value = property.get().asFile
-            def conventionPath = project.layout.projectDirectory.dir("src/main/docker").asFile
-            return value == conventionPath
-        }
-        return false
-    }
+
 
     boolean isValidTagName(String tag) {
         // Docker tag name validation (tag portion only, no repository)

@@ -71,6 +71,9 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
                           "' for method: " + context.getDisplayName() + 
                           " (project: " + uniqueProjectName + ")");
         
+        // Clean up any leftover containers first
+        cleanupExistingContainers(uniqueProjectName);
+        
         startComposeStack(stackName, uniqueProjectName);
         waitForStackToBeReady(stackName, uniqueProjectName);
         generateStateFile(stackName, uniqueProjectName, context);
@@ -87,6 +90,8 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         
         try {
             stopComposeStack(stackName, uniqueProjectName);
+            // Additional cleanup to ensure containers are removed
+            cleanupExistingContainers(uniqueProjectName);
         } catch (Exception e) {
             System.err.println("Warning: Failed to stop compose stack '" + stackName + 
                              "' for method " + context.getDisplayName() + ": " + e.getMessage());
@@ -120,22 +125,75 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         String baseProjectName = getProjectName(context);
         
         // Create unique project name for this method to avoid conflicts
+        // Docker Compose project names must be lowercase alphanumeric with hyphens/underscores
         String className = context.getTestClass().map(Class::getSimpleName).orElse("unknown");
         String methodName = context.getTestMethod().map(m -> m.getName()).orElse("unknown");
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("HHmmss"));
         
-        return baseProjectName + "-" + className + "-" + methodName + "-" + timestamp;
+        // Convert to valid Docker Compose project name format
+        String projectName = baseProjectName + "-" + className + "-" + methodName + "-" + timestamp;
+        return sanitizeProjectName(projectName);
+    }
+    
+    private String sanitizeProjectName(String projectName) {
+        // Convert to lowercase and replace invalid characters with hyphens
+        String sanitized = projectName.toLowerCase()
+            .replaceAll("[^a-z0-9\\-_]", "-")  // Replace invalid chars with hyphens
+            .replaceAll("-+", "-")             // Replace multiple hyphens with single
+            .replaceAll("^-", "")              // Remove leading hyphens
+            .replaceAll("-$", "");             // Remove trailing hyphens
+            
+        // Ensure it starts with alphanumeric character
+        if (sanitized.length() > 0 && !Character.isLetterOrDigit(sanitized.charAt(0))) {
+            sanitized = "test-" + sanitized;
+        }
+        
+        return sanitized.isEmpty() ? "test-project" : sanitized;
+    }
+    
+    private void cleanupExistingContainers(String uniqueProjectName) throws IOException, InterruptedException {
+        // Clean up any existing containers that might be using port 8083
+        System.out.println("Cleaning up existing containers for project: " + uniqueProjectName);
+        
+        // Stop and remove containers by project name pattern
+        ProcessBuilder pb = new ProcessBuilder(
+            "docker", "container", "prune", "-f", "--filter", "label=com.docker.compose.project=" + uniqueProjectName
+        );
+        pb.redirectErrorStream(true);
+        
+        Process process = pb.start();
+        process.waitFor();
+        
+        // Also force remove any containers using port 8083
+        try {
+            ProcessBuilder portCleanup = new ProcessBuilder(
+                "bash", "-c", 
+                "docker ps -q --filter publish=8083 | xargs -r docker stop && " +
+                "docker ps -aq --filter publish=8083 | xargs -r docker rm"
+            );
+            portCleanup.redirectErrorStream(true);
+            Process portProcess = portCleanup.start();
+            portProcess.waitFor(10, TimeUnit.SECONDS); // Don't wait too long for cleanup
+        } catch (Exception e) {
+            System.err.println("Warning: Port cleanup failed: " + e.getMessage());
+        }
     }
     
     private void startComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
-        // Use Gradle to start the compose stack with unique project name
+        // Use docker compose directly instead of Gradle to avoid configuration cache issues
+        // Read compose file from the integration test resources
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-method.yml");
+        if (!Files.exists(composeFile)) {
+            throw new IllegalStateException("Compose file not found: " + composeFile);
+        }
+        
         ProcessBuilder pb = new ProcessBuilder(
-            "./gradlew", 
-            "composeUp" + capitalize(stackName),
-            "-Pcompose.project.name=" + uniqueProjectName,
-            "--quiet"
+            "docker", "compose", 
+            "-f", composeFile.toString(),
+            "-p", uniqueProjectName,
+            "up", "-d", "--remove-orphans"
         );
-        pb.directory(new java.io.File("..").getAbsoluteFile());
+        pb.directory(new java.io.File(".").getAbsoluteFile());
         pb.redirectErrorStream(true);
         
         Process process = pb.start();
@@ -143,20 +201,26 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         
         if (exitCode != 0) {
             String output = readProcessOutput(process);
+            System.err.println("DEBUG: Docker compose command failed with exit code: " + exitCode);
+            System.err.println("DEBUG: Command was: docker compose -f " + composeFile + " -p " + uniqueProjectName + " up -d --remove-orphans");
+            System.err.println("DEBUG: Working directory was: " + new java.io.File(".").getAbsolutePath());
+            System.err.println("DEBUG: Process output: " + output);
             throw new RuntimeException("Failed to start compose stack '" + stackName + 
                                      "' with project '" + uniqueProjectName + "': " + output);
         }
     }
     
     private void stopComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
-        // Use Gradle to stop the compose stack with unique project name
+        // Use docker compose directly to stop and remove containers
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-method.yml");
+        
         ProcessBuilder pb = new ProcessBuilder(
-            "./gradlew", 
-            "composeDown" + capitalize(stackName),
-            "-Pcompose.project.name=" + uniqueProjectName,
-            "--quiet"
+            "docker", "compose", 
+            "-f", composeFile.toString(),
+            "-p", uniqueProjectName,
+            "down", "--remove-orphans", "--volumes"
         );
-        pb.directory(new java.io.File("..").getAbsoluteFile());
+        pb.directory(new java.io.File(".").getAbsoluteFile());
         pb.redirectErrorStream(true);
         
         Process process = pb.start();
@@ -173,7 +237,40 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws InterruptedException {
         // Give containers a moment to start and become healthy
         // Method lifecycle needs longer wait for fresh containers
-        Thread.sleep(3000);
+        System.out.println("Waiting for containers to become healthy...");
+        Thread.sleep(5000);
+        
+        // Wait for health check to pass
+        int attempts = 0;
+        int maxAttempts = 30;
+        while (attempts < maxAttempts) {
+            try {
+                ProcessBuilder healthCheck = new ProcessBuilder(
+                    "docker", "compose", 
+                    "-p", uniqueProjectName,
+                    "ps", "--format", "json"
+                );
+                healthCheck.redirectErrorStream(true);
+                
+                Process process = healthCheck.start();
+                if (process.waitFor() == 0) {
+                    String output = readProcessOutput(process);
+                    if (output.contains("\"Health\":\"healthy\"") || output.contains("\"State\":\"running\"")) {
+                        System.out.println("Container is healthy after " + (attempts + 1) + " attempts");
+                        return;
+                    }
+                }
+                
+                Thread.sleep(1000);
+                attempts++;
+            } catch (Exception e) {
+                System.err.println("Health check attempt " + (attempts + 1) + " failed: " + e.getMessage());
+                attempts++;
+                Thread.sleep(1000);
+            }
+        }
+        
+        System.err.println("Warning: Container health check did not pass within timeout");
     }
     
     private String readProcessOutput(Process process) throws IOException {
@@ -190,7 +287,7 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private void generateStateFile(String stackName, String uniqueProjectName, ExtensionContext context) throws IOException {
         // Generate a JSON state file for this method's containers
         // In production, this would query Docker daemon for actual container info
-        Path buildDir = Paths.get("../build");
+        Path buildDir = Paths.get("build");
         Path stateDir = buildDir.resolve("compose-state");
         Files.createDirectories(stateDir);
         
@@ -225,7 +322,7 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     
     private void cleanupStateFile(String stackName, String uniqueProjectName) {
         try {
-            Path buildDir = Paths.get("../build");
+            Path buildDir = Paths.get("build");
             Path stateDir = buildDir.resolve("compose-state");
             
             // Clean up state files that match this method's pattern

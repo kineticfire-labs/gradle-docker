@@ -67,10 +67,7 @@ abstract class DockerBuildTask extends DefaultTask {
     
     @TaskAction
     void buildImage() {
-        // NOTE: This implementation works without configuration cache.
-        // The configuration cache issue is a known limitation that needs deeper investigation.
-        // For now, users can run with --no-configuration-cache for Docker build tasks.
-        
+        // Configuration cache compatible implementation
         // Validate required properties
         if (!dockerfile.present) {
             throw new IllegalStateException("dockerfile property must be set")
@@ -79,7 +76,8 @@ abstract class DockerBuildTask extends DefaultTask {
             throw new IllegalStateException("tags property must be set and not empty")
         }
 
-        // Build Docker image using service
+        // Build Docker image using service - use usesService to ensure proper configuration cache handling
+        def service = dockerService.get()
         def context = new com.kineticfire.gradle.docker.model.BuildContext(
             contextPath.get().asFile.toPath(),
             dockerfile.get().asFile.toPath(),
@@ -87,7 +85,7 @@ abstract class DockerBuildTask extends DefaultTask {
             tags.get()
         )
         
-        def future = dockerService.get().buildImage(context)
+        def future = service.buildImage(context)
         def actualImageId = future.get()
         
         // Write the image ID to the output file

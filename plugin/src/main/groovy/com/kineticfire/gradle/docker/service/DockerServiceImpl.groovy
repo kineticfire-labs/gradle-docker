@@ -29,8 +29,7 @@ import com.github.dockerjava.core.DockerClientImpl
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient
 import com.kineticfire.gradle.docker.exception.DockerServiceException
 import com.kineticfire.gradle.docker.model.*
-import org.gradle.api.logging.Logger
-import org.gradle.api.logging.Logging
+
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 
@@ -52,7 +51,8 @@ import org.apache.commons.compress.compressors.xz.XZCompressorOutputStream
  */
 abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.None>, DockerService {
     
-    private static final Logger logger = Logging.getLogger(DockerServiceImpl)
+    // private static final Logger logger = Logging.getLogger(DockerServiceImpl)
+    // Removed logger to fix Gradle 9 configuration cache compatibility issues
     
     protected final DockerClient dockerClient
     protected final ExecutorService executorService
@@ -65,7 +65,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
             thread.daemon = true
             return thread
         }
-        logger.info("DockerService initialized successfully")
+        println "DockerService initialized successfully"
     }
     
     protected DockerClient getDockerClient() {
@@ -87,7 +87,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
             // Test connection
             client.pingCmd().exec()
-            logger.debug("Docker client connected to: {}", dockerClientConfig.getDockerHost())
+            println "Docker client connected to: ${dockerClientConfig.getDockerHost()}"
             
             return client
         } catch (Exception e) {
@@ -103,7 +103,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     CompletableFuture<String> buildImage(BuildContext context) {
         return CompletableFuture.supplyAsync({
             try {
-                logger.lifecycle("Building Docker image with context: {}", context.contextPath)
+                println "Building Docker image with context: ${context.contextPath}"
                 
                 def buildImageResultCallback = new BuildImageResultCallback() {
                     @Override
@@ -112,16 +112,16 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                         if (item.stream) {
                             def message = item.stream.trim()
                             if (message) {
-                                logger.lifecycle("Docker build: {}", message)
+                                println "Docker build: ${message}"
                             }
                         }
                         
                         // Handle errors
                         if (item.errorDetail) {
-                            logger.error("Docker build error: {}", item.errorDetail.message)
+                            System.err.println("Docker build error: ${item.errorDetail.message}")
                         }
                         if (item.error) {
-                            logger.error("Docker build error: {}", item.error)
+                            System.err.println("Docker build error: ${item.error}")
                         }
                         
                         // Pass to parent to handle image ID capture
@@ -130,13 +130,13 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                     
                     @Override
                     void onError(Throwable throwable) {
-                        logger.error("Docker build callback error: {}", throwable.message, throwable)
+                        System.err.println("Docker build callback error: ${throwable.message}")
                         super.onError(throwable)
                     }
                     
                     @Override
                     void onComplete() {
-                        logger.info("Docker build callback completed")
+                        println "Docker build callback completed"
                         super.onComplete()
                     }
                 }
@@ -153,12 +153,12 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 }
                 
                 def result = buildCmd.exec(buildImageResultCallback)
-                logger.info("Build command executed, awaiting image ID...")
+                println "Build command executed, awaiting image ID..."
                 
                 def imageId = result.awaitImageId()
-                logger.info("Received image ID: {}", imageId)
+                println "Received image ID: ${imageId}"
                     
-                logger.lifecycle("Successfully built Docker image: {} (ID: {})", context.tags.first(), imageId)
+                println "Successfully built Docker image: ${context.tags.first()} (ID: ${imageId})"
                 return imageId
                 
             } catch (DockerException e) {
@@ -182,15 +182,15 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     CompletableFuture<Void> tagImage(String sourceImage, List<String> tags) {
         return CompletableFuture.runAsync({
             try {
-                logger.info("Tagging image {} with {} tags", sourceImage, tags.size())
+                println "Tagging image ${sourceImage} with ${tags.size()} tags"
                 
                 tags.each { tag ->
                     def parts = ImageRefParts.parse(tag)
                     dockerClient.tagImageCmd(sourceImage, parts.fullRepository, parts.tag).exec()
-                    logger.debug("Tagged {} as {}", sourceImage, tag)
+                    // Debug: Tagged ${sourceImage} as ${tag}
                 }
                 
-                logger.info("Successfully tagged image {} with all tags", sourceImage)
+                println "Successfully tagged image ${sourceImage} with all tags"
                 
             } catch (DockerException e) {
                 throw new DockerServiceException(
@@ -213,7 +213,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     CompletableFuture<Void> saveImage(String imageId, Path outputFile, CompressionType compression) {
         return CompletableFuture.runAsync({
             try {
-                logger.info("Saving image {} to {} with compression: {}", imageId, outputFile, compression)
+                println "Saving image ${imageId} to ${outputFile} with compression: ${compression}"
                 
                 // Create parent directories
                 Files.createDirectories(outputFile.parent)
@@ -253,7 +253,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 inputStream.close()
                 
-                logger.info("Successfully saved image {} to {}", imageId, outputFile)
+                println "Successfully saved image ${imageId} to ${outputFile}"
                 
             } catch (DockerException e) {
                 throw new DockerServiceException(
@@ -277,13 +277,13 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         return CompletableFuture.runAsync({
             try {
                 def parts = ImageRefParts.parse(imageRef)
-                logger.info("Pushing image {} to registry", imageRef)
+                println "Pushing image ${imageRef} to registry"
                 
                 def pushCallback = new ResultCallback.Adapter<PushResponseItem>() {
                     @Override
                     void onNext(PushResponseItem item) {
                         if (item.status) {
-                            logger.debug("Push status: {}", item.status)
+                            // Debug: Push status: ${item.status}
                         }
                     }
                 }
@@ -296,7 +296,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 pushCmd.exec(pushCallback).awaitCompletion()
                 
-                logger.info("Successfully pushed image {}", imageRef)
+                println "Successfully pushed image ${imageRef}"
                 
             } catch (DockerException e) {
                 throw new DockerServiceException(
@@ -324,7 +324,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
             } catch (NotFoundException e) {
                 return false
             } catch (Exception e) {
-                logger.debug("Error checking if image exists: {}", e.message)
+                // Debug: Error checking if image exists: ${e.message}
                 return false
             }
         }, executorService)
@@ -335,13 +335,13 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         return CompletableFuture.runAsync({
             try {
                 def parts = ImageRefParts.parse(imageRef)
-                logger.info("Pulling image {}", imageRef)
+                println "Pulling image ${imageRef}"
                 
                 def pullCallback = new ResultCallback.Adapter<PullResponseItem>() {
                     @Override
                     void onNext(PullResponseItem item) {
                         if (item.status) {
-                            logger.debug("Pull status: {}", item.status)
+                            // Debug: Pull status: ${item.status}
                         }
                     }
                 }
@@ -354,7 +354,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 pullCmd.exec(pullCallback).awaitCompletion()
                 
-                logger.info("Successfully pulled image {}", imageRef)
+                println "Successfully pulled image ${imageRef}"
                 
             } catch (DockerException e) {
                 throw new DockerServiceException(
@@ -378,15 +378,15 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         try {
             if (executorService && !executorService.isShutdown()) {
                 executorService.shutdown()
-                logger.debug("Docker service executor shutdown")
+                // Debug: Docker service executor shutdown
             }
             
             if (dockerClient) {
                 dockerClient.close()
-                logger.debug("Docker client closed")
+                // Debug: Docker client closed
             }
         } catch (Exception e) {
-            logger.warn("Error closing Docker service: {}", e.message)
+            System.err.println("Error closing Docker service: ${e.message}")
         }
     }
 }
