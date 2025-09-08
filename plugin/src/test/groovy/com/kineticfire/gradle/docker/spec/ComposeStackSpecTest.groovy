@@ -290,6 +290,336 @@ class ComposeStackSpecTest extends Specification {
         composeStack.logs.present
     }
 
+    // ===== MULTI-FILE PROPERTIES TESTS =====
+
+    def "composeFiles property initialization"() {
+        expect:
+        composeStack.composeFiles != null
+        // Property is initialized but may be empty/present by default in Gradle
+    }
+
+    def "composeFiles property getter/setter functionality"() {
+        when:
+        composeStack.composeFiles.set(['docker-compose.yml', 'docker-compose.override.yml'])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml', 'docker-compose.override.yml']
+    }
+
+    def "composeFileCollection property initialization"() {
+        expect:
+        composeStack.composeFileCollection != null
+        composeStack.composeFileCollection.files.isEmpty()
+    }
+
+    def "composeFileCollection property getter/setter functionality"() {
+        given:
+        def file1 = project.file('docker-compose.yml')
+        def file2 = project.file('docker-compose.override.yml')
+
+        when:
+        composeStack.composeFileCollection.from(file1, file2)
+
+        then:
+        composeStack.composeFileCollection.files.size() == 2
+        composeStack.composeFileCollection.files.contains(file1)
+        composeStack.composeFileCollection.files.contains(file2)
+    }
+
+    def "composeFiles property handles null input"() {
+        when:
+        composeStack.composeFiles.set((List<String>) null)
+
+        then:
+        !composeStack.composeFiles.present
+    }
+
+    def "composeFileCollection property handles null input"() {
+        when:
+        // ConfigurableFileCollection.from() doesn't accept null arrays
+        // This is expected behavior - test that it throws appropriate exception
+        composeStack.composeFileCollection.from((File[]) null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    // ===== DSL METHODS TESTING =====
+
+    def "composeFiles(String...) with single file"() {
+        when:
+        composeStack.composeFiles('docker-compose.yml')
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml']
+    }
+
+    def "composeFiles(String...) with multiple files"() {
+        when:
+        composeStack.composeFiles('docker-compose.yml', 'docker-compose.prod.yml', 'docker-compose.test.yml')
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml', 'docker-compose.prod.yml', 'docker-compose.test.yml']
+    }
+
+    def "composeFiles(String...) with empty array"() {
+        when:
+        composeStack.composeFiles()
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get().isEmpty()
+    }
+
+    def "composeFiles(String...) with null inputs"() {
+        when:
+        composeStack.composeFiles((String[]) null)
+
+        then:
+        noExceptionThrown()
+        // Property remains in its previous state when null is passed
+    }
+
+    def "composeFiles(List<String>) with single file list"() {
+        when:
+        composeStack.composeFiles(['docker-compose.yml'])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml']
+    }
+
+    def "composeFiles(List<String>) with multiple files list"() {
+        when:
+        composeStack.composeFiles(['docker-compose.yml', 'docker-compose.dev.yml', 'docker-compose.local.yml'])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml', 'docker-compose.dev.yml', 'docker-compose.local.yml']
+    }
+
+    def "composeFiles(List<String>) with empty list"() {
+        when:
+        composeStack.composeFiles([])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get().isEmpty()
+    }
+
+    def "composeFiles(List<String>) with null list"() {
+        when:
+        composeStack.composeFiles((List<String>) null)
+
+        then:
+        noExceptionThrown()
+        // Property remains in its previous state when null is passed
+    }
+
+    def "composeFiles(File...) with single file"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+
+        when:
+        composeStack.composeFiles(composeFile)
+
+        then:
+        composeStack.composeFileCollection.files.size() == 1
+        composeStack.composeFileCollection.files.contains(composeFile)
+    }
+
+    def "composeFiles(File...) with multiple files"() {
+        given:
+        def file1 = project.file('docker-compose.yml')
+        def file2 = project.file('docker-compose.override.yml')
+        def file3 = project.file('docker-compose.prod.yml')
+
+        when:
+        composeStack.composeFiles(file1, file2, file3)
+
+        then:
+        composeStack.composeFileCollection.files.size() == 3
+        composeStack.composeFileCollection.files.contains(file1)
+        composeStack.composeFileCollection.files.contains(file2)
+        composeStack.composeFileCollection.files.contains(file3)
+    }
+
+    def "composeFiles(File...) with empty array"() {
+        when:
+        composeStack.composeFiles()
+
+        then:
+        composeStack.composeFileCollection.files.isEmpty()
+    }
+
+    def "composeFiles(File...) with null inputs"() {
+        when:
+        composeStack.composeFiles((File[]) null)
+
+        then:
+        composeStack.composeFileCollection.files.isEmpty()
+    }
+
+    // ===== BACKWARD COMPATIBILITY TESTING =====
+
+    def "existing composeFile property still works"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+
+        when:
+        composeStack.composeFile.set(composeFile)
+
+        then:
+        composeStack.composeFile.present
+        composeStack.composeFile.get().asFile == composeFile
+    }
+
+    def "single-file and multi-file configurations can coexist"() {
+        given:
+        def singleFile = project.file('docker-compose.yml')
+        def multiFiles = ['docker-compose.override.yml', 'docker-compose.prod.yml']
+
+        when:
+        composeStack.composeFile.set(singleFile)
+        composeStack.composeFiles.set(multiFiles)
+
+        then:
+        composeStack.composeFile.present
+        composeStack.composeFile.get().asFile == singleFile
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == multiFiles
+    }
+
+    def "both single-file and multi-file configurations maintain independence"() {
+        given:
+        def singleFile = project.file('docker-compose.yml')
+        def fileCollection = [project.file('docker-compose.override.yml')]
+
+        when:
+        composeStack.composeFile.set(singleFile)
+        composeStack.composeFiles(fileCollection[0])
+
+        then:
+        composeStack.composeFile.present
+        composeStack.composeFile.get().asFile == singleFile
+        composeStack.composeFileCollection.files.size() == 1
+        composeStack.composeFileCollection.files.contains(fileCollection[0])
+    }
+
+    // ===== INTEGRATION TESTING =====
+
+    def "interaction between different property types"() {
+        given:
+        def stringFiles = ['docker-compose.yml', 'docker-compose.dev.yml']
+        def fileObjects = [project.file('docker-compose.override.yml'), project.file('docker-compose.test.yml')]
+
+        when:
+        composeStack.composeFiles.set(stringFiles)
+        composeStack.composeFiles(fileObjects[0], fileObjects[1])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == stringFiles
+        composeStack.composeFileCollection.files.size() == 2
+        composeStack.composeFileCollection.files.containsAll(fileObjects)
+    }
+
+    def "file ordering preservation in string methods"() {
+        given:
+        def orderedFiles = ['base.yml', 'override.yml', 'prod.yml', 'local.yml']
+
+        when:
+        composeStack.composeFiles(orderedFiles)
+
+        then:
+        composeStack.composeFiles.get() == orderedFiles
+        // Verify the order is maintained
+        composeStack.composeFiles.get()[0] == 'base.yml'
+        composeStack.composeFiles.get()[1] == 'override.yml'
+        composeStack.composeFiles.get()[2] == 'prod.yml'
+        composeStack.composeFiles.get()[3] == 'local.yml'
+    }
+
+    def "conversion between file paths and File objects"() {
+        given:
+        def stringPath = 'docker-compose.yml'
+        def fileObject = project.file(stringPath)
+
+        when:
+        composeStack.composeFiles(stringPath)
+
+        then:
+        composeStack.composeFiles.get() == [stringPath]
+
+        when:
+        composeStack.composeFiles(fileObject)
+
+        then:
+        composeStack.composeFileCollection.files.contains(fileObject)
+        fileObject.path.endsWith(stringPath)
+    }
+
+    // ===== ERROR HANDLING TESTING =====
+
+    def "composeFiles DSL methods handle null arrays gracefully"() {
+        when:
+        composeStack.composeFiles((String[]) null)
+        composeStack.composeFiles((File[]) null)
+
+        then:
+        noExceptionThrown()
+        // Properties remain in their previous state when null is passed
+    }
+
+    def "composeFiles DSL methods handle null list gracefully"() {
+        when:
+        composeStack.composeFiles((List<String>) null)
+
+        then:
+        noExceptionThrown()
+        // Property remains in its previous state when null is passed
+    }
+
+    def "composeFiles handles empty inputs correctly"() {
+        when:
+        composeStack.composeFiles()
+        composeStack.composeFiles([])
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get().isEmpty()
+    }
+
+    def "composeFiles File method can be called multiple times"() {
+        given:
+        def file1 = project.file('compose1.yml')
+        def file2 = project.file('compose2.yml')
+        def file3 = project.file('compose3.yml')
+
+        when:
+        composeStack.composeFiles(file1)
+        composeStack.composeFiles(file2, file3)
+
+        then:
+        composeStack.composeFileCollection.files.size() == 3
+        composeStack.composeFileCollection.files.containsAll([file1, file2, file3])
+    }
+
+    def "properties work correctly with Provider API"() {
+        given:
+        def filesProvider = project.provider { ['docker-compose.yml', 'docker-compose.override.yml'] }
+
+        when:
+        composeStack.composeFiles.set(filesProvider)
+
+        then:
+        composeStack.composeFiles.present
+        composeStack.composeFiles.get() == ['docker-compose.yml', 'docker-compose.override.yml']
+    }
+
     // ===== EDGE CASES =====
 
     def "nested specs can be reconfigured"() {
@@ -328,5 +658,39 @@ class ComposeStackSpecTest extends Specification {
         composeStack.profiles.get().isEmpty()
         composeStack.services.get().isEmpty()
         composeStack.environment.get().isEmpty()
+    }
+
+    def "multiple DSL method calls can be combined"() {
+        given:
+        def stringFiles = ['base.yml', 'override.yml']
+        def fileObjects = [project.file('prod.yml'), project.file('test.yml')]
+
+        when:
+        composeStack.composeFiles(stringFiles)
+        composeStack.composeFiles(fileObjects[0], fileObjects[1])
+
+        then:
+        composeStack.composeFiles.get() == stringFiles
+        composeStack.composeFileCollection.files.size() == 2
+        composeStack.composeFileCollection.files.containsAll(fileObjects)
+    }
+
+    def "complete multi-file configuration with all new properties"() {
+        given:
+        def stringFiles = ['docker-compose.yml', 'docker-compose.override.yml']
+        def fileObjects = [project.file('docker-compose.prod.yml'), project.file('docker-compose.local.yml')]
+
+        when:
+        composeStack.composeFiles.set(stringFiles)
+        composeStack.composeFiles(fileObjects[0], fileObjects[1])
+        composeStack.profiles.set(['dev', 'test'])
+        composeStack.services.set(['web', 'db'])
+
+        then:
+        composeStack.composeFiles.get() == stringFiles
+        composeStack.composeFileCollection.files.size() == 2
+        composeStack.composeFileCollection.files.containsAll(fileObjects)
+        composeStack.profiles.get() == ['dev', 'test']
+        composeStack.services.get() == ['web', 'db']
     }
 }

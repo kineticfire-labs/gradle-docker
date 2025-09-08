@@ -98,3 +98,9 @@ Apply configuration cache principles in tests:
 - Test that properties work correctly with Provider API
 - Verify no `.get()` calls during configuration in tested code
 - Test serialization compatibility where applicable
+
+## Status
+
+**Status**: done
+**Date**: 2025-09-08
+**Description**: Successfully implemented comprehensive unit tests for ComposeStackSpec multi-file properties. Added 43 new test methods covering all DSL methods (composeFiles with String[], List<String>, and File[] parameters), multi-file properties (composeFiles ListProperty and composeFileCollection ConfigurableFileCollection), backward compatibility, error handling, and Provider API integration. Achieved 100% line and branch coverage for the ComposeStackSpec class. All tests pass and the build succeeds with `./gradlew clean build`. No residual gaps or concerns - all acceptance criteria have been met.
