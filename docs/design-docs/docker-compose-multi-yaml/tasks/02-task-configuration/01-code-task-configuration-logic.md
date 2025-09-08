@@ -27,23 +27,40 @@ Update task configuration to:
 - Handle backward compatibility with `ComposeStackSpec.composeFile` (existing single-file)
 - Convert file paths to File objects for validation
 
-#### Backward Compatibility Logic
-Implement priority logic:
+#### Configure ComposeDownTask.composeFiles (Critical UX Enhancement)
+**Key Requirement**: ComposeDown must use the same files as ComposeUp for proper service teardown:
+- **Automatically configure `ComposeDownTask.composeFiles` with same files as `ComposeUpTask`**
+- Maintain same file order for proper Docker Compose precedence during teardown
+- Allow optional override if user specifies different ComposeDown files
+- Ensure ComposeDown can properly tear down services created by multi-file ComposeUp
+
+#### Task Configuration Priority Logic
+Implement configuration logic for both ComposeUp and ComposeDown:
 ```groovy
-// Pseudo-code for task configuration
-if (stackSpec.composeFiles.present || stackSpec.composeFileCollection.present) {
-    // Use new multi-file configuration
-    task.composeFiles.from(stackSpec.composeFileCollection)
-    // Convert string paths to files if needed
-    stackSpec.composeFiles.orElse([]).each { path ->
-        task.composeFiles.from(project.file(path))
+// Pseudo-code for ComposeUp task configuration
+def composeFiles = configureComposeFiles(stackSpec)
+composeUpTask.composeFiles.from(composeFiles)
+
+// Pseudo-code for ComposeDown task configuration  
+// ComposeDown automatically uses same files as ComposeUp for proper teardown
+composeDownTask.composeFiles.from(composeFiles)
+
+def configureComposeFiles(stackSpec) {
+    if (stackSpec.composeFiles.present || stackSpec.composeFileCollection.present) {
+        // Use new multi-file configuration
+        def files = []
+        files.addAll(stackSpec.composeFileCollection)
+        stackSpec.composeFiles.orElse([]).each { path ->
+            files.add(project.file(path))
+        }
+        return files
+    } else if (stackSpec.composeFile.present) {
+        // Use legacy single-file configuration  
+        return [stackSpec.composeFile.get()]
+    } else {
+        // Error: no compose files specified
+        throw new GradleException("No compose files specified for stack '${stackSpec.name}'")
     }
-} else if (stackSpec.composeFile.present) {
-    // Use legacy single-file configuration  
-    task.composeFiles.from(stackSpec.composeFile)
-} else {
-    // Error: no compose files specified
-    throw new GradleException("No compose files specified for stack '${stackSpec.name}'")
 }
 ```
 
@@ -64,10 +81,11 @@ Follow `@docs/design-docs/gradle-9-configuration-cache-guidance.md`:
 
 ### 5. Integration Points
 Ensure integration with:
-- Existing `ComposeDownTask` if it needs similar updates
-- Validation logic in `DockerOrchExtension.validateStackSpec()`
-- Task naming and dependency configuration
-- Any existing task configuration patterns
+- **ComposeDownTask**: Configure `ComposeDownTask` to automatically use same files as `ComposeUpTask`
+- **Validation logic**: Update `DockerOrchExtension.validateStackSpec()` to validate multi-file configurations
+- **Task naming**: Ensure task naming and dependency configuration work with multi-file stacks
+- **Task dependencies**: Maintain proper ComposeUp/ComposeDown task dependencies
+- **Existing patterns**: Follow existing task configuration patterns in the plugin
 
 ## Files to Modify
 Likely files (investigate to confirm):
@@ -76,19 +94,23 @@ Likely files (investigate to confirm):
 - Any task factory or configuration helper classes
 
 ## Investigation Required
-1. Find where `ComposeUpTask` instances are created and configured
-2. Identify current task configuration patterns
-3. Locate validation logic for compose stack specifications
-4. Understand existing file handling and conversion logic
+1. **Find task creation**: Locate where `ComposeUpTask` and `ComposeDownTask` instances are created and configured
+2. **Task configuration patterns**: Identify current task configuration patterns for both Up and Down tasks
+3. **Validation logic**: Locate validation logic for compose stack specifications in `DockerOrchExtension`
+4. **File handling**: Understand existing file handling and conversion logic
+5. **ComposeDownTask capabilities**: Verify `ComposeDownTask` has `composeFiles` property like `ComposeUpTask`
+6. **Task relationships**: Understand current relationship and dependencies between Up and Down tasks
 
 ## Acceptance Criteria
-1. Task configuration logic handles both single-file and multi-file configurations
-2. Backward compatibility is maintained - existing configurations work unchanged
-3. File validation is implemented with clear error messages
-4. File order is preserved for Docker Compose precedence
-5. Configuration is compatible with Gradle 9 configuration cache
-6. Code follows existing project patterns and conventions
-7. Integration with existing validation logic is maintained
+1. **Multi-file support**: Both ComposeUp and ComposeDown tasks handle single-file and multi-file configurations
+2. **Automatic ComposeDown**: ComposeDown automatically uses same files as ComposeUp for proper teardown
+3. **Backward compatibility**: Existing single-file configurations work unchanged
+4. **File validation**: File validation implemented with clear error messages
+5. **File order preservation**: File order preserved for Docker Compose precedence in both Up and Down
+6. **Configuration cache**: Compatible with Gradle 9 configuration cache requirements
+7. **Project conventions**: Code follows existing project patterns and conventions
+8. **Validation integration**: Integration with existing validation logic is maintained
+9. **UX enhancement**: Seamless user experience - no need to specify ComposeDown files separately
 
 ## Configuration Cache Guidance
 Key principles from `@docs/design-docs/gradle-9-configuration-cache-guidance.md`:

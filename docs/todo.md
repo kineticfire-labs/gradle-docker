@@ -7,7 +7,7 @@
    1. Try to re-enable functional tests?
    2. Need to add any, even if disabled? 
 4. Look for "todo" and "skip"
-5. plugin-integration-test has "src.backup"
+5. look for ".backup" files/dirs
 6. symlink .gradlew for plugin-integration-test subprojects
 7. Re-organize documents:
    1. plugin/docs/claude/status... needed?  teh whole folder?
@@ -50,6 +50,7 @@
 ### test (compose) stuff
 
 - single vs. multi compose files (they have different syntax)
+- composeDown will automatically use the yaml files used by composeUp, but can override with different files if desired
 - lifecycle: suite, class, method
 
 ### Developer stuff

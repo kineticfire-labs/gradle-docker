@@ -12,6 +12,8 @@ This document outlines the implementation plan to enhance the Gradle Docker Plug
 - Multiple compose files via new `composeFiles` collection property
 - Multiple files passed as `docker compose -f <file1> -f <file2> -f <file3>` 
 - Order-sensitive file merging (last file takes precedence)
+- **ComposeDown automatically uses same files as ComposeUp** for proper service teardown
+- User can optionally specify different files for ComposeDown if needed
 - Backward compatibility with existing single-file configurations
 
 ## Key Findings
@@ -21,9 +23,10 @@ This document outlines the implementation plan to enhance the Gradle Docker Plug
 **Good News**: The core infrastructure already supports multiple files!
 
 1. **`ComposeUpTask`** (line 46): Already has `ConfigurableFileCollection getComposeFiles()`
-2. **`ComposeConfig`** (line 26): Already accepts `List<Path> composeFiles`  
-3. **`ExecLibraryComposeService`** (lines 95-97): Already iterates over multiple files
-4. **Tests**: `ComposeUpTaskTest.groovy` line 168 already tests multiple file scenarios
+2. **`ComposeDownTask`**: Likely has similar `ConfigurableFileCollection getComposeFiles()` capability
+3. **`ComposeConfig`** (line 26): Already accepts `List<Path> composeFiles`  
+4. **`ExecLibraryComposeService`** (lines 95-97): Already iterates over multiple files
+5. **Tests**: `ComposeUpTaskTest.groovy` line 168 already tests multiple file scenarios
 
 **Main Gap**: The DSL configuration (`ComposeStackSpec`) only exposes single-file properties to users.
 
@@ -76,6 +79,8 @@ void composeFiles(File... files) {
 
 **In plugin configuration** (where tasks are created):
 - Configure `ComposeUpTask.composeFiles` from `ComposeStackSpec.composeFiles` 
+- **Configure `ComposeDownTask.composeFiles` to automatically use same files as `ComposeUpTask`**
+- Allow optional override: if `ComposeStackSpec` has separate down files, use those instead
 - Handle backward compatibility: if `composeFile` is set, use it; if `composeFiles` is set, use that
 - Validate at least one file is specified
 - Convert file paths to File objects and validate existence
@@ -99,10 +104,16 @@ dockerOrch {
     composeStacks {
         webapp {
             composeFiles('docker-compose.yml', 'docker-compose.override.yml')
+            // ComposeDown automatically uses same files as ComposeUp
+            
             // OR
             composeFiles = ['docker-compose.yml', 'docker-compose.override.yml'] 
+            
             // OR  
             composeFiles(file('base.yml'), file('prod.yml'))
+            
+            // Optional: Specify different files for ComposeDown if needed
+            // composeDownFiles('docker-compose.yml')  // hypothetical API
         }
     }
 }
@@ -127,6 +138,12 @@ dockerOrch {
    - Verify file order is preserved in `ComposeConfig`
    - Test mixed single/multi-file configurations
 
+3. **`ComposeDownTaskTest.groovy`** updates:
+   - Test that ComposeDown automatically uses same files as ComposeUp
+   - Test file order preservation for proper service teardown
+   - Test optional override capability for ComposeDown-specific files
+   - Test integration between ComposeUp and ComposeDown task configuration
+
 3. **`DockerOrchExtensionTest.groovy`** updates:
    - Test new multi-file DSL parsing
    - Test validation of multi-file stacks
@@ -140,8 +157,10 @@ dockerOrch {
 
 1. **Multi-file compose up/down** test:
    - Base compose file + override file
-   - Verify services from both files are running
+   - Verify services from both files are running after composeUp
    - Test precedence (override file wins for conflicts)
+   - **Verify composeDown uses same files automatically for proper teardown**
+   - Test that all services are properly stopped
 
 2. **Complex multi-file scenario**:
    - 3+ compose files with overlapping services

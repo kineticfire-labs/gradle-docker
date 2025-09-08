@@ -41,7 +41,9 @@ Execute tasks in the following order:
 ```
 02-task-configuration/01-code-task-configuration-logic.md
 02-task-configuration/02-review-task-configuration.md
+02-task-configuration/08-update-validation-logic.md
 02-task-configuration/03-unit-test-task-configuration.md
+02-task-configuration/09-unit-test-validation-logic.md
 02-task-configuration/04-review-unit-tests.md
 02-task-configuration/05-functional-test-task-configuration.md
 02-task-configuration/06-review-functional-tests.md

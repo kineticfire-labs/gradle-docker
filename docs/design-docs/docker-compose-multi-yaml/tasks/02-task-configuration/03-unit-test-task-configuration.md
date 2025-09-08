@@ -16,10 +16,11 @@ You are a Test Engineer and Principal Software Engineer expert at Java, Gradle, 
 
 #### Task Configuration Testing
 - Test configuration of `ComposeUpTask.composeFiles` from multi-file properties
-- Test configuration from single-file properties (backward compatibility)
+- **Test configuration of `ComposeDownTask.composeFiles` automatically uses same files as ComposeUp**
+- Test configuration from single-file properties (backward compatibility) for both Up and Down tasks
 - Test priority logic when both single-file and multi-file are specified
 - Test file path to File object conversion
-- Test file order preservation
+- Test file order preservation for both ComposeUp and ComposeDown tasks
 
 #### Validation Testing
 - Test validation of at least one compose file requirement
@@ -29,10 +30,10 @@ You are a Test Engineer and Principal Software Engineer expert at Java, Gradle, 
 - Test mixed valid/invalid file scenarios
 
 #### Extension Integration Testing
-- Test integration with `DockerOrchExtension.validateStackSpec()`
-- Test task naming and registration
-- Test configuration with different stack names
-- Test integration with existing validation patterns
+- Test integration with updated `DockerOrchExtension.validateStackSpec()` for multi-file validation
+- Test task naming and registration with multi-file stacks
+- Test configuration with different stack names and file combinations
+- Test integration with existing validation patterns and error handling
 
 #### Provider API Testing
 - Test that configuration uses Provider API correctly
@@ -60,10 +61,11 @@ You are a Test Engineer and Principal Software Engineer expert at Java, Gradle, 
 - Test validation works with single file
 
 #### Multi-File Scenarios
-- Test `composeFiles` string list configuration
-- Test `composeFileCollection` File collection configuration
+- Test `composeFiles` string list configuration for both ComposeUp and ComposeDown
+- Test `composeFileCollection` File collection configuration for both tasks
 - Test mixed configuration approaches
-- Test file ordering preservation
+- Test file ordering preservation in both ComposeUp and ComposeDown
+- **Test ComposeDown inherits exact same files and order as ComposeUp**
 
 #### Error Scenarios
 - Test configuration with no files specified
@@ -72,9 +74,10 @@ You are a Test Engineer and Principal Software Engineer expert at Java, Gradle, 
 - Test meaningful error messages
 
 #### Integration Scenarios
-- Test plugin configuration creates correct tasks
-- Test task dependencies are maintained
+- Test plugin configuration creates correct ComposeUp and ComposeDown tasks
+- Test task dependencies are maintained between Up and Down tasks
 - Test multiple stacks with different configurations
+- **Test ComposeUp/ComposeDown file synchronization across multiple stacks**
 
 ### 4. Testing Patterns
 Follow existing project patterns:
@@ -107,7 +110,7 @@ def setup() {
 
 ### Multi-File Test Example
 ```groovy
-def "configures task with multiple compose files"() {
+def "configures both ComposeUp and ComposeDown tasks with multiple compose files"() {
     given:
     def composeFile1 = project.file('compose1.yml')
     def composeFile2 = project.file('compose2.yml')
@@ -125,29 +128,41 @@ def "configures task with multiple compose files"() {
     project.evaluate() // Trigger task configuration
 
     then:
-    def task = project.tasks.getByName('composeUpWebapp')
-    task.composeFiles.files.containsAll([composeFile1, composeFile2])
+    def upTask = project.tasks.getByName('composeUpWebapp')
+    def downTask = project.tasks.getByName('composeDownWebapp')
+    
+    // Both tasks should have same files in same order
+    upTask.composeFiles.files.containsAll([composeFile1, composeFile2])
+    downTask.composeFiles.files.containsAll([composeFile1, composeFile2])
+    
+    // Verify file order is preserved in both tasks
+    def upFiles = upTask.composeFiles.files as List
+    def downFiles = downTask.composeFiles.files as List
+    upFiles == downFiles  // Same order
 }
 ```
 
 ## Acceptance Criteria
-1. All new configuration logic is thoroughly tested
-2. Backward compatibility is verified through tests
-3. Error scenarios are properly tested
-4. 100% line and branch coverage achieved for new code
-5. All tests pass with `./gradlew clean test`
-6. Build succeeds with `./gradlew clean build`
-7. Tests follow existing project conventions
-8. Provider API usage is tested correctly
-9. Integration with existing extension logic is verified
+1. All new configuration logic is thoroughly tested for both ComposeUp and ComposeDown
+2. **ComposeDown automatic file inheritance from ComposeUp is verified through tests**
+3. Backward compatibility is verified through tests
+4. Error scenarios are properly tested
+5. 100% line and branch coverage achieved for new code
+6. All tests pass with `./gradlew clean test`
+7. Build succeeds with `./gradlew clean build`
+8. Tests follow existing project conventions
+9. Provider API usage is tested correctly
+10. Integration with existing extension logic is verified
+11. **File order preservation is tested for both Up and Down tasks**
 
 ## Coverage Areas
 Ensure tests cover:
-- Task configuration from multi-file properties
-- Task configuration from single-file properties
+- Task configuration from multi-file properties for both ComposeUp and ComposeDown
+- Task configuration from single-file properties for both tasks
+- **ComposeDown automatic inheritance of ComposeUp file configuration**
 - Priority and precedence logic
 - File validation and error handling
 - Integration with extension validation
 - Provider API usage and serialization
-- File order preservation
+- File order preservation in both Up and Down tasks
 - Error message quality and clarity

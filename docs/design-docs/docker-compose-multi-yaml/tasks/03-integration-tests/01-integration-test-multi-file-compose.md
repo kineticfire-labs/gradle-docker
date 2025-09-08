@@ -15,6 +15,7 @@ You are a Principal Software Engineer expert at Java, Gradle, custom Gradle plug
 ### 1. Integration Test Scope
 Create end-to-end integration tests that verify:
 - Multi-file Docker Compose stack operations (up/down)
+- **ComposeDown automatically uses same files as ComposeUp for proper teardown**
 - File precedence and merging behavior
 - Service orchestration with multiple compose files
 - Real Docker Compose CLI interaction
@@ -25,21 +26,27 @@ Create end-to-end integration tests that verify:
 #### Basic Multi-File Scenario
 - **Base compose file** with core services (e.g., web application)
 - **Override compose file** with environment-specific configurations
-- Verify services from both files are deployed correctly
+- Verify services from both files are deployed correctly after composeUp
 - Test that override file takes precedence for conflicts
+- **Verify composeDown properly tears down all services using same files**
+- Confirm no services remain running after composeDown
 
 #### Complex Multi-File Scenario  
 - **Base compose file** with shared services (database, cache)
 - **Application compose file** with application services
 - **Environment compose file** with environment-specific overrides (ports, volumes)
-- Verify final configuration matches expected precedence order
+- Verify final configuration matches expected precedence order after composeUp
 - Test service dependencies and networking
+- **Verify composeDown tears down complex multi-file stack completely**
+- Test that all services across all files are properly stopped
 
 #### File Ordering and Precedence
 - Create compose files with conflicting configurations
-- Verify Docker Compose's precedence rules are respected
+- Verify Docker Compose's precedence rules are respected during composeUp
 - Test that file order specified in plugin matches Docker Compose behavior
 - Validate port mappings, environment variables, and volume mounts
+- **Verify composeDown uses exact same file order for proper teardown**
+- Test that precedence order affects both service creation and destruction
 
 #### Environment File Integration
 - Test multi-file compose with environment files
@@ -59,19 +66,27 @@ class MultiFileComposeIntegrationIT {
     @Test
     @DisplayName("Multi-file compose stack starts and stops correctly")
     void multiFileComposeStackStartsAndStopsCorrectly() throws Exception {
-        // Test implementation
+        // Test composeUp deploys all services from multiple files
+        // Test composeDown tears down all services using same files
+    }
+
+    @Test
+    @DisplayName("ComposeDown automatically uses same files as ComposeUp")
+    void composeDownUseSameFilesAsComposeUp() throws Exception {
+        // Test that composeDown inherits composeUp file configuration
+        // Verify proper teardown of multi-file services
     }
 
     @Test
     @DisplayName("File precedence works correctly with conflicting configurations")
     void filePrecedenceWorksCorrectly() throws Exception {
-        // Test implementation
+        // Test precedence during composeUp and proper teardown with composeDown
     }
 
     @Test
     @DisplayName("Complex multi-file scenario with service dependencies")
     void complexMultiFileScenarioWorks() throws Exception {
-        // Test implementation
+        // Test complex stacks with proper up/down lifecycle
     }
 }
 ```
@@ -123,8 +138,8 @@ services:
 ### 5. Test Verification Points
 
 #### Service Deployment Verification
-- Verify all expected services are running
-- Check that services have correct configurations
+- Verify all expected services are running after composeUp
+- Check that services have correct configurations from multiple files
 - Validate port mappings match expectations
 - Confirm environment variables are set correctly
 
@@ -135,10 +150,12 @@ services:
 - Test port, environment, and volume precedence
 
 #### Integration Verification
-- Test compose up/down operations work correctly
-- Verify service health checking works
-- Test log capture functionality
-- Validate service discovery and networking
+- Test compose up/down operations work correctly with multi-file stacks
+- **Verify composeDown properly cleans up all services from multi-file configuration**
+- Verify service health checking works across multiple compose files
+- Test log capture functionality during up/down operations
+- Validate service discovery and networking with complex multi-file setups
+- **Confirm no residual containers or networks after composeDown**
 
 ### 6. Configuration Cache Compatibility
 
@@ -182,18 +199,22 @@ cd plugin-integration-test
 ## Acceptance Criteria
 1. **Comprehensive Coverage**: All multi-file compose functionality is tested end-to-end
 2. **Real Environment**: Tests use actual Docker and Docker Compose CLI
-3. **Precedence Verification**: File precedence and merging behavior is validated
-4. **Service Verification**: All expected services are deployed and configured correctly
-5. **Build Integration**: Tests run successfully with `./gradlew clean fullTest`
-6. **Configuration Cache**: Plugin behavior is compatible with configuration cache
-7. **Reliability**: Tests pass consistently and are not flaky
-8. **Performance**: Tests complete in reasonable time
-9. **Resource Management**: Tests properly clean up Docker resources
+3. **ComposeDown Integration**: ComposeDown automatically uses same files as ComposeUp for proper teardown
+4. **Precedence Verification**: File precedence and merging behavior is validated
+5. **Service Verification**: All expected services are deployed and configured correctly
+6. **Teardown Verification**: All services are properly stopped and cleaned up by ComposeDown
+7. **Build Integration**: Tests run successfully with `./gradlew clean fullTest`
+8. **Configuration Cache**: Plugin behavior is compatible with configuration cache
+9. **Reliability**: Tests pass consistently and are not flaky
+10. **Performance**: Tests complete in reasonable time
+11. **Resource Management**: Tests properly clean up Docker resources with no residual containers
 
 ## Success Metrics
 - All integration tests pass consistently
 - Multi-file compose stacks deploy correctly
+- **ComposeDown properly tears down all services from multi-file ComposeUp**
 - File precedence behavior matches Docker Compose specifications
-- Service configurations are applied correctly
+- Service configurations are applied correctly during both up and down operations
+- **No residual containers or networks remain after composeDown**
 - Tests provide confidence in end-to-end functionality
 - Build succeeds with all integration tests

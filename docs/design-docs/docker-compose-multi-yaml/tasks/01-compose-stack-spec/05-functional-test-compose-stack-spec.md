@@ -13,9 +13,11 @@ You are a Test Engineer and Principal Software Engineer expert at Java, Gradle, 
 ## Requirements
 
 ### 1. TestKit Compatibility Considerations
-- Be aware that Gradle 9.0.0 has TestKit compatibility issues with `withPluginClasspath()`
-- Tests using `withPluginClasspath()` may need to be disabled due to `InvalidPluginMetadataException`
-- Code should be compatible with Gradle configuration cache, but tests may be disabled if they use problematic dependencies
+- **CRITICAL**: Gradle 9.0.0 has TestKit compatibility issues with `withPluginClasspath()`
+- Tests using `withPluginClasspath()` cause `InvalidPluginMetadataException` and must be disabled
+- **Status Check**: First verify if TestKit issues have been resolved by checking existing functional tests
+- If 18/20 functional tests are still disabled, this task will focus on documentation rather than implementation
+- Code must be compatible with Gradle configuration cache regardless of test status
 
 ### 2. Functional Test Areas
 
