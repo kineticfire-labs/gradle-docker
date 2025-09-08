@@ -24,6 +24,7 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 
+import java.util.Arrays
 import javax.inject.Inject
 
 /**
@@ -46,6 +47,8 @@ abstract class ComposeStackSpec {
     
     // Properties expected by tests
     abstract RegularFileProperty getComposeFile()
+    abstract ListProperty<String> getComposeFiles()
+    abstract ConfigurableFileCollection getComposeFileCollection()
     abstract RegularFileProperty getEnvFile()
     abstract ListProperty<String> getProfiles()
     abstract ListProperty<String> getServices()
@@ -96,5 +99,17 @@ abstract class ComposeStackSpec {
         def logsSpec = project.objects.newInstance(LogsSpec, project)
         action.execute(logsSpec)
         logs.set(logsSpec)
+    }
+    
+    void composeFiles(String... files) {
+        composeFiles.set(Arrays.asList(files))
+    }
+
+    void composeFiles(List<String> files) {
+        composeFiles.set(files)  
+    }
+
+    void composeFiles(File... files) {
+        composeFileCollection.from(files)
     }
 }

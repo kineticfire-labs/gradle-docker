@@ -66,3 +66,9 @@ Reference the following guidance from `@docs/design-docs/gradle-9-configuration-
 - Never call `.get()` on providers during configuration
 - Avoid accessing `task.project` in doFirst/doLast blocks
 - Don't use `project.*` references in task actions
+
+## Status
+- **Status**: done
+- **Date**: 2025-09-08
+- **Description**: Added `ListProperty<String> getComposeFiles()` and `ConfigurableFileCollection getComposeFileCollection()` properties to ComposeStackSpec, along with three DSL convenience methods: `composeFiles(String...)`, `composeFiles(List<String>)`, and `composeFiles(File...)`. All changes follow Gradle 9 configuration cache compliance using Provider API correctly without calling `.get()` during configuration.
+- **Gaps/Concerns**: None - all requirements met and code compiles successfully.
