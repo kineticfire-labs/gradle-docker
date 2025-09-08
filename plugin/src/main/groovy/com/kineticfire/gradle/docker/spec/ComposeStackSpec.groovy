@@ -24,6 +24,7 @@ import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 
+import java.io.File
 import java.util.Arrays
 import javax.inject.Inject
 
@@ -102,14 +103,20 @@ abstract class ComposeStackSpec {
     }
     
     void composeFiles(String... files) {
-        composeFiles.set(Arrays.asList(files))
+        if (files != null) {
+            composeFiles.set(Arrays.asList(files))
+        }
     }
 
     void composeFiles(List<String> files) {
-        composeFiles.set(files)  
+        if (files != null) {
+            composeFiles.set(files)
+        }
     }
 
     void composeFiles(File... files) {
-        composeFileCollection.from(files)
+        if (files != null) {
+            composeFileCollection.from(files)
+        }
     }
 }
