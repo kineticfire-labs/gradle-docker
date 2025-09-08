@@ -84,6 +84,9 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     
     @Override
     CompletableFuture<ComposeState> upStack(ComposeConfig config) {
+        if (config == null) {
+            throw new NullPointerException("Compose config cannot be null")
+        }
         return CompletableFuture.supplyAsync({
             try {
                 logger.info("Starting Docker Compose stack: {}", config.stackName)
@@ -219,6 +222,9 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
 
     @Override
     CompletableFuture<Void> downStack(String projectName) {
+        if (projectName == null) {
+            throw new NullPointerException("Project name cannot be null")
+        }
         return CompletableFuture.runAsync({
             try {
                 logger.info("Stopping Docker Compose stack: {}", projectName)
@@ -255,7 +261,69 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     }
     
     @Override
+    CompletableFuture<Void> downStack(ComposeConfig config) {
+        if (config == null) {
+            throw new NullPointerException("Compose config cannot be null")
+        }
+        return CompletableFuture.runAsync({
+            try {
+                logger.info("Stopping Docker Compose stack: {} (project: {})", config.stackName, config.projectName)
+                
+                def composeCommand = getComposeCommand()
+                def command = composeCommand.clone()
+                
+                // Add compose files for proper teardown
+                config.composeFiles.each { file ->
+                    command.addAll(["-f", file.toString()])
+                }
+                
+                // Add project name
+                command.addAll(["-p", config.projectName])
+                
+                // Add env files if present
+                config.envFiles.each { envFile ->
+                    command.addAll(["--env-file", envFile.toString()])
+                }
+                
+                // Add the down command
+                command.addAll(["down", "--remove-orphans"])
+                
+                logger.debug("Executing: {}", command.join(" "))
+                
+                def processBuilder = new ProcessBuilder(command)
+                processBuilder.directory(config.composeFiles.first().parent.toFile())
+                
+                def process = processBuilder.start()
+                def exitCode = process.waitFor()
+                
+                if (exitCode != 0) {
+                    def errorOutput = process.errorStream.text
+                    throw new ComposeServiceException(
+                        ComposeServiceException.ErrorType.SERVICE_STOP_FAILED,
+                        "Docker Compose down failed with exit code ${exitCode}: ${errorOutput}",
+                        "Check your compose file syntax and project configuration"
+                    )
+                }
+                
+                logger.info("Docker Compose stack stopped: {} (project: {})", config.stackName, config.projectName)
+                
+            } catch (ComposeServiceException e) {
+                throw e
+            } catch (Exception e) {
+                throw new ComposeServiceException(
+                    ComposeServiceException.ErrorType.SERVICE_STOP_FAILED,
+                    "Failed to stop compose stack: ${e.message}",
+                    e
+                )
+            }
+        })
+    }
+    
+    @Override
     CompletableFuture<ServiceStatus> waitForServices(WaitConfig config) {
+        if (config == null) {
+            throw new NullPointerException("Wait config cannot be null")
+        }
         return CompletableFuture.supplyAsync({
             try {
                 logger.info("Waiting for services: {}", config.services)
@@ -328,6 +396,12 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     
     @Override
     CompletableFuture<String> captureLogs(String projectName, LogsConfig config) {
+        if (projectName == null) {
+            throw new NullPointerException("Project name cannot be null")
+        }
+        if (config == null) {
+            throw new NullPointerException("Logs config cannot be null")
+        }
         return CompletableFuture.supplyAsync({
             try {
                 logger.info("Capturing logs for project: {}", projectName)

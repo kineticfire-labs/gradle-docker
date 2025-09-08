@@ -85,25 +85,44 @@ abstract class DockerOrchExtension {
     }
     
     void validateStackSpec(ComposeStackSpec stackSpec) {
-        // Validate compose files exist
-        if (!stackSpec.files.empty) {
+        // Check if any configuration is present using original files collection
+        def hasFiles = !stackSpec.files.empty
+        def hasComposeFile = stackSpec.composeFile.present
+        def hasComposeFiles = stackSpec.composeFiles.present && !stackSpec.composeFiles.get().empty
+        def hasComposeFileCollection = !stackSpec.composeFileCollection.empty
+        
+        if (!hasFiles && !hasComposeFile && !hasComposeFiles && !hasComposeFileCollection) {
+            throw new GradleException(
+                "Stack '${stackSpec.name}': No compose files specified"
+            )
+        }
+        
+        // Validate compose files exist (use the files collection for immediate validation)
+        if (hasFiles) {
             stackSpec.files.each { file ->
                 if (!file.exists()) {
                     throw new GradleException(
-                        "Compose file does not exist: ${file.absolutePath} in stack '${stackSpec.name}'\\n" +
-                        "Suggestion: Create the compose file or update the path"
+                        "Stack '${stackSpec.name}': Compose file does not exist: ${file.absolutePath}"
                     )
                 }
             }
         }
         
-        // Validate env files if specified
+        // Validate env files if specified  
+        validateEnvFiles(stackSpec)
+    }
+    
+    private void validateEnvFiles(ComposeStackSpec stackSpec) {
         if (!stackSpec.envFiles.empty) {
             stackSpec.envFiles.each { file ->
                 if (!file.exists()) {
                     throw new GradleException(
-                        "Environment file does not exist: ${file.absolutePath} in stack '${stackSpec.name}'\\n" +
-                        "Suggestion: Create the env file or remove it from configuration"
+                        "Stack '${stackSpec.name}': Environment file does not exist: ${file.absolutePath}"
+                    )
+                }
+                if (!file.canRead()) {
+                    throw new GradleException(
+                        "Stack '${stackSpec.name}': Environment file is not readable: ${file.absolutePath}"
                     )
                 }
             }

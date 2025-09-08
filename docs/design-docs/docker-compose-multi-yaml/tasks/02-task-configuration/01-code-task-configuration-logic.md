@@ -122,3 +122,24 @@ Key principles from `@docs/design-docs/gradle-9-configuration-cache-guidance.md`
 
 ## Testing Note
 Do not write tests in this task - tests will be covered in subsequent tasks.
+
+## Status
+
+**Status**: done  
+**Date**: 2025-09-08  
+**Implementation Summary**: Successfully implemented multi-file Docker Compose support with automatic ComposeDown configuration:
+
+1. **Enhanced ComposeDownTask**: Added `composeFiles` and `envFiles` properties to support multi-file configurations matching ComposeUpTask
+2. **Updated Task Configuration**: Modified `configureComposeUpTask` and `configureComposeDownTask` methods to use new `configureComposeFiles` helper that implements priority-based configuration logic
+3. **Multi-file Configuration Logic**: Implemented `configureComposeFiles` method with proper priority handling:
+   - Priority 1: New multi-file properties (`composeFiles`, `composeFileCollection`)
+   - Priority 2: Legacy single-file property (`composeFile`) for backward compatibility  
+   - Priority 3: Existing `files` property (current behavior)
+4. **Enhanced Validation**: Updated `DockerOrchExtension.validateStackSpec` to validate all multi-file configuration sources with clear error messages
+5. **Service Interface Enhancement**: Added `downStack(ComposeConfig)` overload to `ComposeService` interface and implementation for proper file-specific teardown
+6. **Automatic ComposeDown Configuration**: ComposeDown tasks now automatically use the same files as ComposeUp for proper service teardown
+7. **Configuration Cache Compliance**: All changes use Provider API and avoid `.get()` calls during configuration phase
+
+**Key UX Enhancement**: Users no longer need to specify ComposeDown files separately - they automatically match ComposeUp files for seamless teardown.
+
+**No Residual Gaps or Concerns**: Implementation is complete and ready for testing in subsequent tasks.

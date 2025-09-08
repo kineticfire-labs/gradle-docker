@@ -122,3 +122,9 @@ cd plugin
 
 ## Expected Outcome
 Either working functional tests or properly documented disabled tests, ensuring that the build succeeds and the multi-file functionality would be properly tested once TestKit compatibility is resolved.
+
+## Status
+**Status**: done  
+**Date**: 2025-09-08  
+**Description**: Created ComposeStackSpecFunctionalTest.groovy with 9 comprehensive functional tests for multi-file properties, all properly documented and disabled due to Gradle 9.0.0 TestKit compatibility issues. Tests cover all multi-file DSL configurations (String arrays, List assignment, File objects), plugin application, task generation, validation, backward compatibility, mixed configurations, and migration scenarios. Build succeeds with disabled tests.  
+**Residual gaps**: Tests remain disabled until TestKit compatibility with Gradle 9.0.0 is resolved. No functional test execution coverage for multi-file scenarios until then.

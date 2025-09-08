@@ -62,7 +62,7 @@ class ExecLibraryComposeServiceTest extends Specification {
 
     def "downStack throws exception for null project name"() {
         when:
-        service.downStack(null)
+        service.downStack((String) null)
         
         then:
         thrown(NullPointerException)
@@ -218,6 +218,12 @@ class ExecLibraryComposeServiceTest extends Specification {
         @Override
         CompletableFuture<Void> downStack(String projectName) {
             Objects.requireNonNull(projectName, "Project name cannot be null")
+            return CompletableFuture.completedFuture(null)
+        }
+
+        @Override
+        CompletableFuture<Void> downStack(ComposeConfig config) {
+            Objects.requireNonNull(config, "ComposeConfig cannot be null")
             return CompletableFuture.completedFuture(null)
         }
 

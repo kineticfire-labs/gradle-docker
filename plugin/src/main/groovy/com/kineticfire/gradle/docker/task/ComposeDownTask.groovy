@@ -16,11 +16,15 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.model.ComposeConfig
 import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.DefaultTask
+import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -36,6 +40,14 @@ abstract class ComposeDownTask extends DefaultTask {
     @Internal
     abstract Property<ComposeService> getComposeService()
     
+    @InputFiles
+    @Optional
+    abstract ConfigurableFileCollection getComposeFiles()
+    
+    @InputFiles
+    @Optional
+    abstract ConfigurableFileCollection getEnvFiles()
+    
     @Input
     abstract Property<String> getProjectName()
     
@@ -50,9 +62,23 @@ abstract class ComposeDownTask extends DefaultTask {
         logger.lifecycle("Stopping Docker Compose stack: {} (project: {})", stackName, projectName)
         
         try {
-            // Stop the compose stack
-            def future = composeService.get().downStack(projectName)
-            future.get()
+            // Use compose files if provided, otherwise fall back to project name only
+            if (composeFiles?.files?.size() > 0) {
+                // Convert FileCollection to List<Path>
+                def composeFilePaths = composeFiles.files.collect { it.toPath() }
+                def envFilePaths = envFiles?.files?.collect { it.toPath() } ?: []
+                
+                // Create compose configuration
+                def config = new ComposeConfig(composeFilePaths, envFilePaths, projectName, stackName, [:])
+                
+                // Stop the compose stack with specific files
+                def future = composeService.get().downStack(config)
+                future.get()
+            } else {
+                // Stop the compose stack by project name only (legacy behavior)
+                def future = composeService.get().downStack(projectName)
+                future.get()
+            }
             
             logger.lifecycle("Successfully stopped compose stack '{}'", stackName)
             

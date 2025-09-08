@@ -167,7 +167,7 @@ networks:
 
     def "downStack validates project name parameter"() {
         when:
-        service.downStack(null)
+        service.downStack((String) null)
         
         then:
         thrown(NullPointerException)
@@ -537,6 +537,16 @@ DEBUG=true
         @Override
         CompletableFuture<Void> downStack(String projectName) {
             Objects.requireNonNull(projectName, "Project name cannot be null")
+            return CompletableFuture.failedFuture(new ComposeServiceException(
+                ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
+                "Docker Compose not available in test environment",
+                "This is expected in unit tests"
+            ))
+        }
+        
+        @Override
+        CompletableFuture<Void> downStack(ComposeConfig config) {
+            Objects.requireNonNull(config, "ComposeConfig cannot be null")
             return CompletableFuture.failedFuture(new ComposeServiceException(
                 ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
                 "Docker Compose not available in test environment",

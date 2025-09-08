@@ -41,6 +41,14 @@ interface ComposeService {
     CompletableFuture<Void> downStack(String projectName)
     
     /**
+     * Stop a Docker Compose stack with specific configuration
+     * @param config Compose configuration with files, project name, etc.
+     * @return CompletableFuture that completes when stack is stopped
+     * @throws ComposeServiceException if shutdown fails
+     */
+    CompletableFuture<Void> downStack(ComposeConfig config)
+    
+    /**
      * Wait for services to reach a desired state
      * @param config Wait configuration including services, timeout, target state
      * @return CompletableFuture with final service state

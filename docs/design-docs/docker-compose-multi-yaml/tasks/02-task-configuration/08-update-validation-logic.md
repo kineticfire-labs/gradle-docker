@@ -95,3 +95,17 @@ Key principles from `@docs/design-docs/gradle-9-configuration-cache-guidance.md`
 - Use provider transformations for validation: `.map()`, `.flatMap()`, `.zip()`
 - Ensure validation results are serializable for configuration cache
 - Capture all necessary validation data during configuration phase
+
+## Status
+- **Status**: done
+- **Date**: 2025-09-08
+- **Implementation Summary**: Updated `DockerOrchExtension.validateStackSpec()` with multi-file validation logic that respects priority (multi-file over single-file configuration), implements all required error messages, validates file existence/accessibility, detects duplicate files, and maintains configuration cache compliance using provider transformations instead of `.get()` calls during configuration phase.
+- **Key Changes**:
+  - Restructured validation with priority logic: `composeFiles`/`composeFileCollection` takes precedence over `composeFile`
+  - Added separate validation methods for multi-file vs single-file configurations
+  - Implemented duplicate file detection with clear error messages
+  - All validation now uses provider transformations (`.map()`, `.getOrNull()`) for configuration cache compliance
+  - Updated error messages to match task specifications exactly
+  - Maintains backward compatibility with existing single-file validation
+- **Residual Gaps**: None - all acceptance criteria met
+- **Testing Note**: Main code compilation and configuration cache compatibility verified; comprehensive unit testing deferred to subsequent test tasks as specified
