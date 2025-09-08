@@ -49,7 +49,7 @@
 
 ### test (compose) stuff
 
-- multi compose files
+- single vs. multi compose files (they have different syntax)
 - lifecycle: suite, class, method
 
 ### Developer stuff
