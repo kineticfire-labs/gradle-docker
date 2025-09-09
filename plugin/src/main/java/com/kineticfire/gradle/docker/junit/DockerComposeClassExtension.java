@@ -75,9 +75,21 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         // Clean up any leftover containers first
         cleanupExistingContainers(uniqueProjectName);
         
-        startComposeStack(stackName, uniqueProjectName);
-        waitForStackToBeReady(stackName, uniqueProjectName);
-        generateStateFile(stackName, uniqueProjectName, context);
+        try {
+            startComposeStack(stackName, uniqueProjectName);
+            waitForStackToBeReady(stackName, uniqueProjectName);
+            generateStateFile(stackName, uniqueProjectName, context);
+        } catch (Exception e) {
+            // If startup fails, try to clean up any partial containers before re-throwing
+            System.err.println("Startup failed, attempting cleanup...");
+            try {
+                cleanupExistingContainers(uniqueProjectName);
+                stopComposeStack(stackName, uniqueProjectName);
+            } catch (Exception cleanupException) {
+                System.err.println("Warning: Cleanup after startup failure also failed: " + cleanupException.getMessage());
+            }
+            throw e; // Re-throw the original exception
+        }
     }
     
     @Override
@@ -152,10 +164,23 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     }
     
     private void cleanupExistingContainers(String uniqueProjectName) throws IOException, InterruptedException {
-        // Clean up any existing containers that might be using port 8083
+        // Clean up any existing containers that might be using integration test ports
         System.out.println("Cleaning up existing containers for project: " + uniqueProjectName);
         
-        // Stop and remove containers by project name pattern
+        // First, force stop and remove any containers with the project name (including created/failed containers)
+        try {
+            ProcessBuilder forceCleanup = new ProcessBuilder(
+                "bash", "-c", 
+                "docker ps -aq --filter name=" + uniqueProjectName + " | xargs -r docker rm -f"
+            );
+            forceCleanup.redirectErrorStream(true);
+            Process forceProcess = forceCleanup.start();
+            forceProcess.waitFor(15, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            System.err.println("Warning: Force container cleanup failed: " + e.getMessage());
+        }
+        
+        // Stop and remove containers by project name pattern using compose label
         ProcessBuilder pb = new ProcessBuilder(
             "docker", "container", "prune", "-f", "--filter", "label=com.docker.compose.project=" + uniqueProjectName
         );
@@ -164,18 +189,21 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
         Process process = pb.start();
         process.waitFor();
         
-        // Also force remove any containers using port 8083
-        try {
-            ProcessBuilder portCleanup = new ProcessBuilder(
-                "bash", "-c", 
-                "docker ps -q --filter publish=8083 | xargs -r docker stop && " +
-                "docker ps -aq --filter publish=8083 | xargs -r docker rm"
-            );
-            portCleanup.redirectErrorStream(true);
-            Process portProcess = portCleanup.start();
-            portProcess.waitFor(10, TimeUnit.SECONDS); // Don't wait too long for cleanup
-        } catch (Exception e) {
-            System.err.println("Warning: Port cleanup failed: " + e.getMessage());
+        // Clean up containers using integration test ports (8081, 8082, 8083, 8084, 8085)
+        String[] ports = {"8081", "8082", "8083", "8084", "8085"};
+        for (String port : ports) {
+            try {
+                ProcessBuilder portCleanup = new ProcessBuilder(
+                    "bash", "-c", 
+                    "docker ps -q --filter publish=" + port + " | xargs -r docker stop && " +
+                    "docker ps -aq --filter publish=" + port + " | xargs -r docker rm"
+                );
+                portCleanup.redirectErrorStream(true);
+                Process portProcess = portCleanup.start();
+                portProcess.waitFor(10, TimeUnit.SECONDS); // Don't wait too long for cleanup
+            } catch (Exception e) {
+                System.err.println("Warning: Port " + port + " cleanup failed: " + e.getMessage());
+            }
         }
     }
     

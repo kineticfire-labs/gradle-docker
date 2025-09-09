@@ -178,7 +178,8 @@ tasks.register('copyAppJar', Copy) {
     description = 'Copy app JAR to Docker build context'
     from project(':app').tasks.jar.outputs.files
     into 'src/main/docker'
-    rename { "app-${version}.jar" }
+    def projectVersion = version // Capture version during configuration time
+    rename { "app-${projectVersion}.jar" }
 }
 
 // JAR copying and Docker build dependencies are now handled through contextTask configuration
@@ -258,4 +259,16 @@ tasks.register('integrationTestRegistry', Test) {
     
     dependsOn 'dockerBuildTimeServer'
     shouldRunAfter 'integrationTestMethod'
+}
+
+tasks.register('integrationTestMultiFileCompose', Test) {
+    description = 'Integration tests for multi-file Docker Compose functionality'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/MultiFileComposeIntegrationIT.class'
+    
+    dependsOn 'dockerBuildTimeServer'
+    shouldRunAfter 'integrationTestRegistry'
 }

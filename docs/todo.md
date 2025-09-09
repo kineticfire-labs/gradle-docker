@@ -9,11 +9,14 @@
 4. Look for "todo" and "skip"
 5. look for ".backup" files/dirs
 6. symlink .gradlew for plugin-integration-test subprojects
+7. remove "version" in docker compose
 7. Re-organize documents:
    1. plugin/docs/claude/status... needed?  teh whole folder?
    2. plugin/docs/{functional-test..., gradle-9...} these are more decisions
    3. plugin-integration-test/docs ... move to plugin/docs?
-
+7. Be sure using "docker compose" and not with hyphen "docker-compose"
+8. put all the dependencies in the toml file
+9. "docker ps -a" should leave any containers after integration test code runs
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it

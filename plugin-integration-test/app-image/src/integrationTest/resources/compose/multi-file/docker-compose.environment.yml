@@ -1,0 +1,25 @@
+version: '3.8'
+services:
+  web:
+    environment:
+      - DEBUG=true
+      - LOG_LEVEL=debug
+    labels:
+      - "test=multi-file-environment"
+      - "compose-file=environment"
+      
+  db:
+    environment:
+      POSTGRES_PASSWORD: envpass
+      POSTGRES_MAX_CONNECTIONS: 200
+    labels:
+      - "test=multi-file-environment"
+      - "compose-file=environment"
+      
+  monitoring:
+    image: prom/prometheus:latest
+    ports:
+      - "9090:9090"
+    labels:
+      - "test=multi-file-environment"
+      - "compose-file=environment"
