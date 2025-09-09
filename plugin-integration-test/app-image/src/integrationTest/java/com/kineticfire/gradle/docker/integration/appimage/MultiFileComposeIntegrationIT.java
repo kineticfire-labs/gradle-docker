@@ -445,14 +445,20 @@ class MultiFileComposeIntegrationIT {
             "docker", "ps", "-a", "--filter", "name=" + COMPOSE_PROJECT_PREFIX, "--format", "{{.Names}}"
         ).start();
         
-        listProcess.waitFor(10, TimeUnit.SECONDS);
+        boolean completed = listProcess.waitFor(15, TimeUnit.SECONDS);
+        if (!completed) {
+            listProcess.destroyForcibly();
+            return;
+        }
         String output = readOutput(listProcess);
         
         if (!output.trim().isEmpty()) {
             String[] containerNames = output.trim().split("\n");
             for (String containerName : containerNames) {
-                if (!containerName.trim().isEmpty()) {
-                    forceRemoveContainer(containerName.trim());
+                containerName = containerName.trim();
+                if (!containerName.isEmpty() && containerName.startsWith(COMPOSE_PROJECT_PREFIX)) {
+                    System.out.println("Cleaning up leftover container: " + containerName);
+                    forceRemoveContainer(containerName);
                 }
             }
         }
@@ -462,15 +468,22 @@ class MultiFileComposeIntegrationIT {
             "docker", "network", "ls", "--filter", "name=" + COMPOSE_PROJECT_PREFIX, "--format", "{{.Name}}"
         ).start();
         
-        networkListProcess.waitFor(10, TimeUnit.SECONDS);
+        completed = networkListProcess.waitFor(15, TimeUnit.SECONDS);
+        if (!completed) {
+            networkListProcess.destroyForcibly();
+            return;
+        }
         String networkOutput = readOutput(networkListProcess);
         
         if (!networkOutput.trim().isEmpty()) {
             String[] networkNames = networkOutput.trim().split("\n");
             for (String networkName : networkNames) {
-                if (!networkName.trim().isEmpty() && !networkName.equals("bridge") && 
-                    !networkName.equals("host") && !networkName.equals("none")) {
-                    forceRemoveNetwork(networkName.trim());
+                networkName = networkName.trim();
+                if (!networkName.isEmpty() && !networkName.equals("bridge") && 
+                    !networkName.equals("host") && !networkName.equals("none") &&
+                    networkName.startsWith(COMPOSE_PROJECT_PREFIX)) {
+                    System.out.println("Cleaning up leftover network: " + networkName);
+                    forceRemoveNetwork(networkName);
                 }
             }
         }
@@ -480,29 +493,43 @@ class MultiFileComposeIntegrationIT {
             "docker", "volume", "ls", "--filter", "name=" + COMPOSE_PROJECT_PREFIX, "--format", "{{.Name}}"
         ).start();
         
-        volumeListProcess.waitFor(10, TimeUnit.SECONDS);
+        completed = volumeListProcess.waitFor(15, TimeUnit.SECONDS);
+        if (!completed) {
+            volumeListProcess.destroyForcibly();
+            return;
+        }
         String volumeOutput = readOutput(volumeListProcess);
         
         if (!volumeOutput.trim().isEmpty()) {
             String[] volumeNames = volumeOutput.trim().split("\n");
             for (String volumeName : volumeNames) {
-                if (!volumeName.trim().isEmpty()) {
-                    forceRemoveVolume(volumeName.trim());
+                volumeName = volumeName.trim();
+                if (!volumeName.isEmpty() && volumeName.startsWith(COMPOSE_PROJECT_PREFIX)) {
+                    System.out.println("Cleaning up leftover volume: " + volumeName);
+                    forceRemoveVolume(volumeName);
                 }
             }
         }
     }
 
     private void forceCleanupProject(String projectName) throws Exception {
+        System.out.println("Force cleaning up project: " + projectName);
+        
         try {
             // Force down with all cleanup options
             Process downProcess = new ProcessBuilder(
                 "docker", "compose", "-p", projectName,
                 "down", "--remove-orphans", "--volumes", "--rmi", "local"
             ).start();
-            downProcess.waitFor(30, TimeUnit.SECONDS);
+            boolean downCompleted = downProcess.waitFor(45, TimeUnit.SECONDS);
+            if (!downCompleted) {
+                downProcess.destroyForcibly();
+                System.err.println("Docker compose down timed out for project: " + projectName);
+            } else if (downProcess.exitValue() != 0) {
+                System.err.println("Docker compose down failed for project: " + projectName + " with exit code: " + downProcess.exitValue());
+            }
         } catch (Exception e) {
-            // Ignore cleanup errors in finally blocks
+            System.err.println("Exception during docker compose down for project " + projectName + ": " + e.getMessage());
         }
         
         // Force remove any remaining containers
@@ -511,47 +538,80 @@ class MultiFileComposeIntegrationIT {
                 "docker", "ps", "-a", "--filter", "name=" + projectName, "--format", "{{.Names}}"
             ).start();
             
-            listProcess.waitFor(10, TimeUnit.SECONDS);
+            boolean listCompleted = listProcess.waitFor(15, TimeUnit.SECONDS);
+            if (!listCompleted) {
+                listProcess.destroyForcibly();
+                return;
+            }
+            
             String output = readOutput(listProcess);
             
             if (!output.trim().isEmpty()) {
                 String[] containerNames = output.trim().split("\n");
                 for (String containerName : containerNames) {
-                    forceRemoveContainer(containerName.trim());
+                    containerName = containerName.trim();
+                    if (!containerName.isEmpty()) {
+                        System.out.println("Force removing remaining container: " + containerName);
+                        forceRemoveContainer(containerName);
+                    }
                 }
             }
         } catch (Exception e) {
-            // Ignore cleanup errors
+            System.err.println("Exception while cleaning up remaining containers for project " + projectName + ": " + e.getMessage());
+        }
+        
+        // Add small delay to ensure cleanup completes
+        try {
+            Thread.sleep(2000);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
     private void forceRemoveContainer(String containerName) {
         try {
-            Process stopProcess = new ProcessBuilder("docker", "stop", containerName).start();
-            stopProcess.waitFor(10, TimeUnit.SECONDS);
+            // First try to stop gracefully
+            Process stopProcess = new ProcessBuilder("docker", "stop", "-t", "5", containerName).start();
+            boolean stopCompleted = stopProcess.waitFor(15, TimeUnit.SECONDS);
+            if (!stopCompleted) {
+                stopProcess.destroyForcibly();
+            }
             
+            // Then force remove
             Process removeProcess = new ProcessBuilder("docker", "rm", "-f", containerName).start();
-            removeProcess.waitFor(10, TimeUnit.SECONDS);
+            boolean removeCompleted = removeProcess.waitFor(15, TimeUnit.SECONDS);
+            if (!removeCompleted) {
+                removeProcess.destroyForcibly();
+                System.err.println("Failed to remove container: " + containerName);
+            }
         } catch (Exception e) {
-            // Ignore cleanup errors
+            System.err.println("Exception while removing container " + containerName + ": " + e.getMessage());
         }
     }
 
     private void forceRemoveNetwork(String networkName) {
         try {
             Process removeProcess = new ProcessBuilder("docker", "network", "rm", networkName).start();
-            removeProcess.waitFor(10, TimeUnit.SECONDS);
+            boolean completed = removeProcess.waitFor(15, TimeUnit.SECONDS);
+            if (!completed) {
+                removeProcess.destroyForcibly();
+                System.err.println("Failed to remove network: " + networkName);
+            }
         } catch (Exception e) {
-            // Ignore cleanup errors
+            System.err.println("Exception while removing network " + networkName + ": " + e.getMessage());
         }
     }
 
     private void forceRemoveVolume(String volumeName) {
         try {
             Process removeProcess = new ProcessBuilder("docker", "volume", "rm", "-f", volumeName).start();
-            removeProcess.waitFor(10, TimeUnit.SECONDS);
+            boolean completed = removeProcess.waitFor(15, TimeUnit.SECONDS);
+            if (!completed) {
+                removeProcess.destroyForcibly();
+                System.err.println("Failed to remove volume: " + volumeName);
+            }
         } catch (Exception e) {
-            // Ignore cleanup errors
+            System.err.println("Exception while removing volume " + volumeName + ": " + e.getMessage());
         }
     }
 }
