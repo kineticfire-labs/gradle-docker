@@ -34,7 +34,7 @@
 - concise description
 - marketing statements / value / benefits (succinct)
    - gradle controls image actions like build, tag (retag), save, and publish
-   - test the actual image that will be delivere, deployed, and used!  don't just assume the image will work because the
+   - test the actual image that will be delivered, deployed, and used!  don't just assume the image will work because the
    app inside it was tested.  there's a lot that can cause issues with a docker image/container. 
 
 ### docker stuff
