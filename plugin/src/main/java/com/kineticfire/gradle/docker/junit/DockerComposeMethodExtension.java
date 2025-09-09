@@ -52,6 +52,9 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
     private static final String COMPOSE_STATE_FILE_PROPERTY = "COMPOSE_STATE_FILE";
     
+    // Store the unique project name per test thread to ensure cleanup uses the same name
+    private final ThreadLocal<String> uniqueProjectName = new ThreadLocal<>();
+    
     /**
      * Creates a new DockerComposeMethodExtension instance.
      * 
@@ -65,25 +68,27 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     @Override
     public void beforeEach(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);
-        String uniqueProjectName = generateUniqueProjectName(context);
+        String projectName = generateUniqueProjectName(context);
+        // Store the project name for reuse in afterEach
+        uniqueProjectName.set(projectName);
         
         System.out.println("Starting Docker Compose stack '" + stackName + 
                           "' for method: " + context.getDisplayName() + 
-                          " (project: " + uniqueProjectName + ")");
+                          " (project: " + projectName + ")");
         
         // Clean up any leftover containers first
-        cleanupExistingContainers(uniqueProjectName);
+        cleanupExistingContainers(projectName);
         
         try {
-            startComposeStack(stackName, uniqueProjectName);
-            waitForStackToBeReady(stackName, uniqueProjectName);
-            generateStateFile(stackName, uniqueProjectName, context);
+            startComposeStack(stackName, projectName);
+            waitForStackToBeReady(stackName, projectName);
+            generateStateFile(stackName, projectName, context);
         } catch (Exception e) {
             // If startup fails, try to clean up any partial containers before re-throwing
             System.err.println("Startup failed, attempting cleanup...");
             try {
-                cleanupExistingContainers(uniqueProjectName);
-                stopComposeStack(stackName, uniqueProjectName);
+                cleanupExistingContainers(projectName);
+                stopComposeStack(stackName, projectName);
             } catch (Exception cleanupException) {
                 System.err.println("Warning: Cleanup after startup failure also failed: " + cleanupException.getMessage());
             }
@@ -94,23 +99,57 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     @Override
     public void afterEach(ExtensionContext context) throws Exception {
         String stackName = getStackName(context);
-        String uniqueProjectName = generateUniqueProjectName(context);
+        String storedProjectName = uniqueProjectName.get();
+        if (storedProjectName == null) {
+            // Fallback if somehow the project name wasn't stored
+            storedProjectName = generateUniqueProjectName(context);
+        }
         
         System.out.println("Stopping Docker Compose stack '" + stackName + 
                           "' after method: " + context.getDisplayName() + 
-                          " (project: " + uniqueProjectName + ")");
+                          " (project: " + storedProjectName + ")");
+        
+        // Always attempt cleanup, regardless of previous failures
+        // Use multiple cleanup strategies to ensure containers are removed
+        Exception lastException = null;
         
         try {
-            stopComposeStack(stackName, uniqueProjectName);
-            // Additional cleanup to ensure containers are removed
-            cleanupExistingContainers(uniqueProjectName);
+            stopComposeStack(stackName, storedProjectName);
         } catch (Exception e) {
-            System.err.println("Warning: Failed to stop compose stack '" + stackName + 
-                             "' for method " + context.getDisplayName() + ": " + e.getMessage());
-            // Don't fail the test if cleanup fails, just log the warning
+            System.err.println("Warning: Compose down failed for " + stackName + ": " + e.getMessage());
+            lastException = e;
         }
         
-        cleanupStateFile(stackName, uniqueProjectName);
+        try {
+            // Additional cleanup to ensure containers are removed - this should always run
+            cleanupExistingContainers(storedProjectName);
+        } catch (Exception e) {
+            System.err.println("Warning: Container cleanup failed for " + storedProjectName + ": " + e.getMessage());
+            if (lastException == null) lastException = e;
+        }
+        
+        try {
+            // Aggressive cleanup - remove any containers with matching names
+            forceRemoveContainersByName(storedProjectName);
+        } catch (Exception e) {
+            System.err.println("Warning: Force cleanup failed for " + storedProjectName + ": " + e.getMessage());
+            if (lastException == null) lastException = e;
+        }
+        
+        try {
+            cleanupStateFile(stackName, storedProjectName);
+        } catch (Exception e) {
+            System.err.println("Warning: State file cleanup failed: " + e.getMessage());
+            // Don't set lastException for state file cleanup - it's less critical
+        }
+        
+        // Log final status but don't fail the test
+        if (lastException != null) {
+            System.err.println("Warning: Some cleanup operations failed but test execution will continue");
+        }
+        
+        // Clear the ThreadLocal to prevent memory leaks
+        uniqueProjectName.remove();
     }
     
     private String getStackName(ExtensionContext context) {
@@ -372,6 +411,79 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         }
     }
     
+    private void forceRemoveContainersByName(String uniqueProjectName) throws IOException, InterruptedException {
+        // Most aggressive cleanup - find and remove any containers with names containing the project name
+        System.out.println("Force removing containers containing: " + uniqueProjectName);
+        
+        // First approach: Remove by name pattern
+        try {
+            ProcessBuilder pb = new ProcessBuilder("docker", "ps", "-aq", "--filter", "name=" + uniqueProjectName);
+            pb.redirectErrorStream(true);
+            Process listProcess = pb.start();
+            listProcess.waitFor();
+            
+            String containerIds = readProcessOutput(listProcess);
+            if (!containerIds.trim().isEmpty()) {
+                System.out.println("Found containers to remove: " + containerIds.trim().replace("\n", ", "));
+                
+                String[] containerIdArray = containerIds.trim().split("\n");
+                for (String containerId : containerIdArray) {
+                    if (!containerId.trim().isEmpty()) {
+                        ProcessBuilder removeBuilder = new ProcessBuilder("docker", "rm", "-f", containerId.trim());
+                        removeBuilder.redirectErrorStream(true);
+                        Process removeProcess = removeBuilder.start();
+                        int exitCode = removeProcess.waitFor();
+                        
+                        if (exitCode != 0) {
+                            String output = readProcessOutput(removeProcess);
+                            System.err.println("Failed to remove container " + containerId.trim() + ": " + output);
+                        } else {
+                            System.out.println("Successfully removed container: " + containerId.trim());
+                        }
+                    }
+                }
+            } else {
+                System.out.println("No containers found with name pattern: " + uniqueProjectName);
+            }
+        } catch (Exception e) {
+            System.err.println("Error in name-based cleanup: " + e.getMessage());
+        }
+        
+        // Second approach: Remove by compose project label
+        try {
+            ProcessBuilder labelBuilder = new ProcessBuilder("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=" + uniqueProjectName);
+            labelBuilder.redirectErrorStream(true);
+            Process labelListProcess = labelBuilder.start();
+            labelListProcess.waitFor();
+            
+            String labelContainerIds = readProcessOutput(labelListProcess);
+            if (!labelContainerIds.trim().isEmpty()) {
+                System.out.println("Found containers by compose label: " + labelContainerIds.trim().replace("\n", ", "));
+                
+                String[] containerIdArray = labelContainerIds.trim().split("\n");
+                for (String containerId : containerIdArray) {
+                    if (!containerId.trim().isEmpty()) {
+                        ProcessBuilder removeBuilder = new ProcessBuilder("docker", "rm", "-f", containerId.trim());
+                        removeBuilder.redirectErrorStream(true);
+                        Process removeProcess = removeBuilder.start();
+                        int exitCode = removeProcess.waitFor();
+                        
+                        if (exitCode != 0) {
+                            String output = readProcessOutput(removeProcess);
+                            System.err.println("Failed to remove container by label " + containerId.trim() + ": " + output);
+                        } else {
+                            System.out.println("Successfully removed container by label: " + containerId.trim());
+                        }
+                    }
+                }
+            } else {
+                System.out.println("No containers found with compose label: " + uniqueProjectName);
+            }
+        } catch (Exception e) {
+            System.err.println("Error in label-based cleanup: " + e.getMessage());
+        }
+    }
+
     private String capitalize(String str) {
         if (str == null || str.isEmpty()) {
             return str;
