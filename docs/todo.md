@@ -25,6 +25,7 @@
 ## UX / Feature
 1. 'dockerBuild' should assemble src to its own temp folder (added to .gitignore)
 4. docker publish to public registry (e.g., Docker Hub, GitHub Package Registry, etc.)
+5. use TestContainers
 
 
 ## Documentation
