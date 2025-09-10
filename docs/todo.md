@@ -32,8 +32,11 @@
 - concise description
 - marketing statements / value / benefits (succinct)
    - gradle controls image actions like build, tag (retag), save, and publish
-   - test the actual image that will be delivered, deployed, and used!  don't just assume the image will work because the
+   - test the actual image that will be delivered, deployed, and used!  don't just assume the image will work because the 
    app inside it was tested.  there's a lot that can cause issues with a docker image/container. 
+      - strategic foundation with "test what you ship" philosophy
+   - Strategic Positioning: "Gradle-native Docker testing solution" with performance and developer experience advantages 
+   over generic alternatives.
 
 ### docker stuff
 
@@ -55,7 +58,8 @@
 
 - single vs. multi compose files (they have different syntax)
 - composeDown will automatically use the yaml files used by composeUp, but can override with different files if desired
-- lifecycle: suite, class, method
+- lifecycle to optimize (isolation vs speed) tests: suite, class, method
+- wait for container healthy/running
 
 ### Developer stuff
 
