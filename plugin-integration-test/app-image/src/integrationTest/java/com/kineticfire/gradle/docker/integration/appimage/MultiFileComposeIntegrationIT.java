@@ -67,7 +67,7 @@ class MultiFileComposeIntegrationIT {
                 "docker", "compose",
                 "-p", projectName,
                 "-f", COMPOSE_DIR.resolve("docker-compose.base.yml").toString(),
-                "-f", COMPOSE_DIR.resolve("docker-compose.override.yml").toString(),
+                "-f", COMPOSE_DIR.resolve("docker-compose.test-override.yml").toString(),
                 "up", "-d"
             ).start();
             
@@ -108,7 +108,7 @@ class MultiFileComposeIntegrationIT {
                 "docker", "compose",
                 "-p", projectName,
                 "-f", COMPOSE_DIR.resolve("docker-compose.base.yml").toString(),
-                "-f", COMPOSE_DIR.resolve("docker-compose.override.yml").toString(),
+                "-f", COMPOSE_DIR.resolve("docker-compose.test-override.yml").toString(),
                 "down", "--remove-orphans"
             ).start();
             
@@ -199,7 +199,7 @@ class MultiFileComposeIntegrationIT {
                 "docker", "compose",
                 "-p", projectName,
                 "-f", COMPOSE_DIR.resolve("docker-compose.base.yml").toString(),
-                "-f", COMPOSE_DIR.resolve("docker-compose.override.yml").toString(),
+                "-f", COMPOSE_DIR.resolve("docker-compose.test-override.yml").toString(),
                 "-f", COMPOSE_DIR.resolve("docker-compose.environment.yml").toString(),
                 "up", "-d"
             ).start();
@@ -241,7 +241,7 @@ class MultiFileComposeIntegrationIT {
                 "docker", "compose",
                 "-p", projectName,
                 "-f", COMPOSE_DIR.resolve("docker-compose.base.yml").toString(),
-                "-f", COMPOSE_DIR.resolve("docker-compose.override.yml").toString(),
+                "-f", COMPOSE_DIR.resolve("docker-compose.test-override.yml").toString(),
                 "-f", COMPOSE_DIR.resolve("docker-compose.environment.yml").toString(),
                 "down", "--remove-orphans"
             ).start();
