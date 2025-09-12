@@ -17,6 +17,7 @@
 8. put all the dependencies in the toml file
 9. "docker ps -a" should leave any containers after integration test code runs
 9. if i `./gradlw build` then functional tests should run
+10. tests that are *.disabled
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
