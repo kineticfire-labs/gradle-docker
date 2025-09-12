@@ -73,7 +73,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 # project above!
 
 # Full integration test with smoke + integration tests
-./gradlew clean testAll
+./gradlew clean testAll integrationTestComprehensive
 
 # Build application and Docker image
 ./gradlew clean buildAll
@@ -121,7 +121,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Do not declare success until every integration test passes.
   - Run:
       - Rebuild plugin to Maven local: `./gradlew build publishToMavenLocal` (from `plugin/` directory).
-      - Run tests: `./gradlew clean fullTest` (from `plugin-integration-test/` directory).
+      - Run tests: `./gradlew clean testAll integrationTestComprehensive` (from `plugin-integration-test/` directory).
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 - **No lingering containers may remain.**
   - Do not declare success until `docker ps -a` shows no containers.

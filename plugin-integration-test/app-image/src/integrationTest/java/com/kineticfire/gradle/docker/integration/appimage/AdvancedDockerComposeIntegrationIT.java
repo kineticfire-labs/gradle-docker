@@ -69,53 +69,7 @@ class AdvancedDockerComposeIntegrationIT {
             .contains("RUN");
     }
     
-    @Test
-    @Disabled("Test too environment-specific, fails due to Docker system output format variations")
-    @DisplayName("Docker system resources are managed efficiently")
-    void dockerSystemResourcesAreManagedEfficiently() throws Exception {
-        // Purpose: Test resource management and system integration
-        
-        // Check Docker system info
-        Process systemInfoProcess = new ProcessBuilder("docker", "system", "df").start();
-        systemInfoProcess.waitFor(15, TimeUnit.SECONDS);
-        String systemInfo = readOutput(systemInfoProcess);
-        
-        assertThat(systemInfo)
-            .as("Docker system should report resource usage")
-            .contains("IMAGES")
-            .contains("CONTAINERS");
-        
-        // Test container resource limits work
-        String testContainerName = "resource-test-" + System.currentTimeMillis();
-        
-        try {
-            // Start container with memory limit
-            Process containerProcess = new ProcessBuilder(
-                "docker", "run", "-d",
-                "--name", testContainerName,
-                "--memory", "128m",
-                "time-server:latest"
-            ).start();
-            containerProcess.waitFor(30, TimeUnit.SECONDS);
-            
-            if (containerProcess.exitValue() == 0) {
-                // Check container resource configuration
-                Process inspectProcess = new ProcessBuilder(
-                    "docker", "inspect", testContainerName,
-                    "--format", "{{.HostConfig.Memory}}"
-                ).start();
-                inspectProcess.waitFor(10, TimeUnit.SECONDS);
-                
-                String memoryLimit = readOutput(inspectProcess).trim();
-                assertThat(memoryLimit)
-                    .as("Container should have memory limit set")
-                    .isEqualTo("134217728"); // 128MB in bytes
-            }
-            
-        } finally {
-            cleanupContainer(testContainerName);
-        }
-    }
+
     
     @Test
     @DisplayName("Complex Docker Compose scenarios work correctly")
@@ -238,39 +192,7 @@ class AdvancedDockerComposeIntegrationIT {
             .isNotEqualTo(0);
     }
     
-    @Test
-    @Disabled("Test too environment-specific, fails due to Docker network driver variations")
-    @DisplayName("Docker networking integration works correctly") 
-    void dockerNetworkingIntegrationWorksCorrectly() throws Exception {
-        // Purpose: Test network-related functionality
-        
-        // List Docker networks
-        Process networkListProcess = new ProcessBuilder("docker", "network", "ls", "--format", "{{.Name}}").start();
-        networkListProcess.waitFor(15, TimeUnit.SECONDS);
-        String networkOutput = readOutput(networkListProcess);
-        
-        assertThat(networkOutput)
-            .as("Docker should have default networks available")
-            .contains("bridge")
-            .isNotEmpty();
-        
-        // Check if any of our compose networks exist
-        if (networkOutput.contains("smoke-test-network") || networkOutput.contains("integration")) {
-            // Test network inspection for compose-created networks
-            String networkToInspect = networkOutput.contains("smoke-test-network") ? "smoke-test-network" : "integration";
-            
-            Process networkInspectProcess = new ProcessBuilder(
-                "docker", "network", "inspect", networkToInspect, "--format", "{{.Driver}}"
-            ).start();
-            
-            if (networkInspectProcess.waitFor(10, TimeUnit.SECONDS)) {
-                String driver = readOutput(networkInspectProcess).trim();
-                assertThat(driver)
-                    .as("Compose networks should have valid drivers")
-                    .isIn("bridge", "overlay", "host");
-            }
-        }
-    }
+
     
     @Test
     @DisplayName("Docker volume operations work correctly")
