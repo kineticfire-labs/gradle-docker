@@ -139,6 +139,29 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 - **Apply property-based testing** where applicable to achieve input domain coverage.
 - **Do not declare success if partial coverage or untested code exists without explicit gap documentation.**
 
+### Adhere to Integration Testing Requirements
+
+Write **real, end-to-end** integration tests that exercise the Gradle Docker/Compose plugin exactly like a user would.  
+**Do not** test DSL or internals here. Prove that:
+- Write integration tasks that use the plugin's Gradle tasks to build, tag, save, and publish a Docker image by actually 
+  calling the Docker engine
+  - Verify build and tag operations by listing images with `docker images`
+  - Verify save operations by doing an `ls` on the filesystem
+  - Verify the publish operations by using a local, temporary Docker private registry and checking that registry for the
+    expected image; public Docker repository functionality will be added later, but must be verified to work in a
+    similar manner 
+- `composeUp` actually brings containers up by actually calling Docker Compose, checking the containers are in the 
+  expected status with `docker ps -a`, and test code interacts with the containers
+- `composeDown` actually calls Docker Compose and tears down the containers, and check with `docker ps -a`
+
+#### Follow Ground Rules
+1. **No mocks/stubs/fakes** for Docker, Compose, filesystem, or network. Use the real stack.
+2. Run tests against a **peer project** laid out like a normal user project (builds a JAR, applies the plugin, uses its 
+   tasks).
+3. Each test must **create and clean up** all resources it uses (images, tags, containers, networks, temp files, temp 
+   registry).
+4. **Fail fast with clear messages** and leave **zero** residual containers, images, or networks on success.
+
 ### Ensure Code Quality (`docs/project-standards/style/style.md`)
 - **Keep files ≤ 500 lines, functions ≤ 30–40 lines, and max 4 parameters per function.**
 - **Limit line length to 120 characters; use spaces (never tabs).**

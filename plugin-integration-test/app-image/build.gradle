@@ -115,6 +115,12 @@ docker {
                 'BUILD_VERSION': version,
                 'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
             ]
+            publish {
+                to('basic') {
+                    repository = 'localhost:25000/time-server-integration'
+                    tags = ['latest']
+                }
+            }
         }
     }
 }
@@ -258,6 +264,141 @@ tasks.register('integrationTestRegistry', Test) {
     
     dependsOn 'dockerBuildTimeServer'
     shouldRunAfter 'integrationTestMethod'
+}
+
+// ENHANCED INTEGRATION TESTS: New comprehensive end-to-end tests
+
+tasks.register('integrationTestPluginTasks', Test) {
+    description = 'Integration tests for actual plugin Docker task execution'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/PluginDockerTaskExecutionIT.class'
+    
+    shouldRunAfter 'integrationTestRegistry'
+}
+
+tasks.register('integrationTestComposeOrchestration', Test) {
+    description = 'Integration tests for plugin compose orchestration management'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/ComposeOrchestrationExecutionIT.class'
+    
+    shouldRunAfter 'integrationTestPluginTasks'
+}
+
+tasks.register('integrationTestEndToEndWorkflows', Test) {
+    description = 'Integration tests for complete end-to-end workflows'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/EndToEndWorkflowIT.class'
+    
+    shouldRunAfter 'integrationTestComposeOrchestration'
+}
+
+tasks.register('integrationTestEnhancedDSL', Test) {
+    description = 'Enhanced integration tests for plugin DSL with actual Docker execution'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/PluginDSLIntegrationIT.class'
+    
+    shouldRunAfter 'integrationTestEndToEndWorkflows'
+}
+
+tasks.register('integrationTestErrorHandling', Test) {
+    description = 'Integration tests for error handling and edge cases'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/ErrorHandlingIntegrationIT.class'
+    
+    shouldRunAfter 'integrationTestEnhancedDSL'
+}
+
+// COMPREHENSIVE INTEGRATION TEST SUITE
+
+tasks.register('integrationTestComprehensive', Test) {
+    description = 'Complete comprehensive integration test suite - all existing integration tests'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    // Include only the compatible integration tests that work with suite lifecycle
+    include '**/AdvancedDockerComposeIntegrationIT.class'
+    include '**/DockerOperationsIntegrationIT.class' 
+    include '**/EnhancedComposeIntegrationIT.class'
+    include '**/StateFileConsumptionIT.class'
+    include '**/TimeServerSuiteLifecycleIT.class'
+    
+    // COMPREHENSIVE TEST: Use suite lifecycle with integrationSuite stack for all tests
+    usesCompose stack: "integrationSuite", lifecycle: "suite"
+    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationSuite")
+    
+    dependsOn 'dockerBuildTimeServer'
+}
+
+tasks.register('integrationTestClassLifecycleOnly', Test) {
+    description = 'Class lifecycle integration tests only'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/TimeServerClassLifecycleIT.class'
+    
+    usesCompose stack: "integrationClass", lifecycle: "class"
+    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationClass")
+    
+    dependsOn 'dockerBuildTimeServer'
+}
+
+tasks.register('integrationTestMethodLifecycleOnly', Test) {
+    description = 'Method lifecycle integration tests only'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/TimeServerMethodLifecycleIT.class'
+    
+    usesCompose stack: "integrationMethod", lifecycle: "method"
+    systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationMethod")
+    
+    dependsOn 'dockerBuildTimeServer'
+}
+
+tasks.register('integrationTestRegistryOnly', Test) {
+    description = 'Docker registry integration tests only - manages own Docker registries'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/DockerRegistryPublishIntegrationIT.class'
+    
+    dependsOn 'dockerBuildTimeServer'
+}
+
+// Update existing tasks to run after new comprehensive suite
+tasks.named('integrationTestSuite') {
+    shouldRunAfter 'integrationTestComprehensive'
+}
+
+tasks.named('integrationTestClass') {
+    shouldRunAfter 'integrationTestComprehensive'
+}
+
+tasks.named('integrationTestMethod') {
+    shouldRunAfter 'integrationTestComprehensive'
+}
+
+tasks.named('integrationTestRegistry') {
+    shouldRunAfter 'integrationTestComprehensive'
 }
 
 
