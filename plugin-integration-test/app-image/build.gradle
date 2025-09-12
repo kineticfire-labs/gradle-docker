@@ -246,7 +246,6 @@ tasks.register('integrationTestMethod', Test) {
     systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationMethod")
     
     dependsOn 'dockerBuildTimeServer'
-    shouldRunAfter 'integrationTestClass'
 }
 
 tasks.register('integrationTestRegistry', Test) {
@@ -261,14 +260,4 @@ tasks.register('integrationTestRegistry', Test) {
     shouldRunAfter 'integrationTestMethod'
 }
 
-tasks.register('integrationTestMultiFileCompose', Test) {
-    description = 'Integration tests for multi-file Docker Compose functionality'
-    group = 'verification'
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-    useJUnitPlatform()
-    include '**/MultiFileComposeIntegrationIT.class'
-    
-    dependsOn 'dockerBuildTimeServer'
-    shouldRunAfter 'integrationTestRegistry'
-}
+

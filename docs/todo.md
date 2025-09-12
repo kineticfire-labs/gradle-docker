@@ -20,6 +20,7 @@
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
+2. Figure out the build dirs under plugin-integration-test/app-image/build/ ... these right?
 
 
 ## UX / Feature

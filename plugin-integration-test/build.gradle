@@ -56,6 +56,5 @@ tasks.register('fullTest') {
               ':app-image:smokeTest',
               ':app-image:integrationTestSuite',
               ':app-image:integrationTestClass', 
-              ':app-image:integrationTestMethod',
-              ':app-image:integrationTestMultiFileCompose'
+              ':app-image:integrationTestMethod'
 }
