@@ -98,7 +98,7 @@ docker {
                 dependsOn project(':app').tasks.jar
             })
             //dockerfile.set(file('src/main/docker/Dockerfile')) //todo
-            tags.set([
+            tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
                 "${version}",
                 "latest"
             ])
@@ -110,7 +110,7 @@ docker {
             publish {
                 to('basic') {
                     repository = 'localhost:25000/time-server-integration'
-                    publishTags = ['latest']
+                    publishTags = ['latest'] // note different syntax to list tax vs docker/images/<name>/tags
                 }
             }
         }
