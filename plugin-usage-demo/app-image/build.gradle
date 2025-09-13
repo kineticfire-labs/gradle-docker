@@ -97,7 +97,7 @@ docker {
                 dependsOn tasks.named('copyAppJar')
                 dependsOn project(':app').tasks.jar
             })
-            dockerfile.set(file('src/main/docker/Dockerfile'))
+            //dockerfile.set(file('src/main/docker/Dockerfile')) //todo
             tags = [
                 "${version}",
                 "latest"

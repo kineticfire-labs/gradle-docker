@@ -105,7 +105,7 @@ docker {
                 dependsOn tasks.named('copyAppJar')
                 dependsOn project(':app').tasks.jar
             })
-            dockerfile.set(file('src/main/docker/Dockerfile'))
+            // dockerfile defaults to Dockerfile within the context - no need to specify
             tags = [
                 "${version}",
                 "latest"

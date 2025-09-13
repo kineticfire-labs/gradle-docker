@@ -751,4 +751,101 @@ class GradleDockerPluginTest extends Specification {
         testProject.extensions.findByType(DockerExtension) != null
         testProject.extensions.findByType(DockerOrchExtension) != null
     }
+
+    def "plugin defaults to context/Dockerfile when dockerfile not explicitly set with context directory"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create context directory with Dockerfile inside it
+        def contextDir = project.file('docker-build')
+        contextDir.mkdirs()
+        def dockerfileInContext = project.file('docker-build/Dockerfile')
+        dockerfileInContext.text = "FROM openjdk:21"
+        
+        // Also create a Dockerfile in project root (this should NOT be used after fix)
+        def dockerfileInRoot = project.file('Dockerfile') 
+        dockerfileInRoot.text = "FROM alpine"
+        
+        dockerExt.images {
+            myService {
+                context = contextDir
+                tags = ['latest', 'v1.0']
+                // dockerfile property is NOT set - should default to context/Dockerfile
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildMyService')
+        
+        // AFTER FIX: This should pass because it will use context/Dockerfile
+        buildTask.dockerfile.get().asFile == dockerfileInContext
+        buildTask.dockerfile.get().asFile != dockerfileInRoot
+    }
+
+    def "plugin defaults to contextTask/Dockerfile when dockerfile not explicitly set with contextTask"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create source directory with Dockerfile
+        def sourceDir = project.file('src/main/docker')
+        sourceDir.mkdirs()
+        def sourceDockerfile = project.file('src/main/docker/Dockerfile')
+        sourceDockerfile.text = "FROM openjdk:21"
+        
+        dockerExt.images {
+            myApp {
+                contextTask.set(project.tasks.register('prepareContext', org.gradle.api.tasks.Copy) {
+                    from sourceDir
+                    into project.layout.buildDirectory.dir('docker-context/myApp')
+                })
+                tags = ['latest']
+                // dockerfile property is NOT set - should default to prepared context/Dockerfile
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildMyApp')
+        def expectedDockerfile = project.layout.buildDirectory.file('docker-context/myApp/Dockerfile').get().asFile
+        
+        buildTask.dockerfile.get().asFile == expectedDockerfile
+    }
+
+    def "plugin fails when no context is specified for image without dockerfile"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        dockerExt.images {
+            badImage {
+                tags = ['latest']
+                // No context and no dockerfile - should fail
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def ex = thrown(Exception)  // Catch any exception type first
+        // The GradleException gets wrapped in a ProjectConfigurationException
+        // We need to check the cause chain for the actual validation message
+        def actualMessage = findRootCauseMessage(ex)
+        actualMessage.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+    }
+    
+    private String findRootCauseMessage(Exception ex) {
+        def current = ex
+        while (current.cause != null) {
+            current = current.cause
+        }
+        return current.message
+    }
 }

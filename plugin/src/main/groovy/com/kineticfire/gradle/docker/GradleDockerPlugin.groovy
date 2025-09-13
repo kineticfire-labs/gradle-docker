@@ -172,6 +172,14 @@ class GradleDockerPlugin implements Plugin<Project> {
             def imageName = imageSpec.name
             def capitalizedName = imageName.capitalize()
             
+            // Validate that tags are specified for build tasks - validate during registration, not lazy configuration
+            if (!imageSpec.tags.present || imageSpec.tags.get().empty) {
+                throw new GradleException(
+                    "Image '${imageSpec.name}' must specify at least one tag\n" +
+                    "Example: tags = ['latest', 'v1.0.0']"
+                )
+            }
+            
             // Build task
             project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
                 configureDockerBuildTask(task, imageSpec, dockerService, project.layout)
@@ -297,20 +305,22 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure dockerfile
         if (imageSpec.dockerfile.present) {
-            if (imageSpec.contextTask.present) {
-                // When using contextTask, dockerfile should be relative to the context directory
-                // The Copy task should have copied the dockerfile into the context
-                task.dockerfile.set(projectLayout.buildDirectory.file("docker-context/${imageSpec.name}/Dockerfile"))
-            } else {
-                // Traditional approach - dockerfile path is absolute
-                task.dockerfile.set(imageSpec.dockerfile)
-            }
+            // When dockerfile is explicitly set, always use it regardless of contextTask
+            task.dockerfile.set(imageSpec.dockerfile)
         } else {
-            // Default Dockerfile location
+            // Default Dockerfile location - always relative to context
             if (imageSpec.contextTask.present) {
+                // When using contextTask, expect Dockerfile in the prepared context
                 task.dockerfile.set(projectLayout.buildDirectory.file("docker-context/${imageSpec.name}/Dockerfile"))
+            } else if (imageSpec.context.present) {
+                // When using direct context directory, look for Dockerfile within it
+                task.dockerfile.set(imageSpec.context.file("Dockerfile"))
             } else {
-                task.dockerfile.set(projectLayout.projectDirectory.file("Dockerfile"))
+                // No context specified - this should be an error
+                throw new GradleException(
+                    "Image '${imageSpec.name}' must specify either 'context' or 'contextTask'. " +
+                    "A Dockerfile cannot exist without a build context."
+                )
             }
         }
         

@@ -45,10 +45,8 @@ abstract class DockerExtension {
                 project.layout.projectDirectory.dir("src/main/docker")
             )
             
-            // Set default dockerfile if not specified  
-            imageSpec.dockerfile.convention(
-                imageSpec.context.file("Dockerfile")
-            )
+            // Note: dockerfile defaults are now handled in GradleDockerPlugin.configureDockerBuildTask()
+            // to properly support both context and contextTask scenarios
             return imageSpec
         }
     }

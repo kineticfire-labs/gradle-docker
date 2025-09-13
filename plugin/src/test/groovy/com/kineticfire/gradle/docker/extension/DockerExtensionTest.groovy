@@ -113,7 +113,8 @@ class DockerExtensionTest extends Specification {
         ImageSpec imageSpec = extension.images.getByName('defaultImage')
         // These should use the default values from configureImageDefaults
         imageSpec.context.isPresent()
-        imageSpec.dockerfile.isPresent()
+        // Note: dockerfile defaults are now handled in GradleDockerPlugin, not in extension
+        !imageSpec.dockerfile.isPresent()
     }
 
     def "can configure build args"() {
@@ -633,7 +634,7 @@ class DockerExtensionTest extends Specification {
         then:
         def imageSpec = extension.images.getByName('defaultTest')
         imageSpec.context.isPresent() // Should have default context
-        imageSpec.dockerfile.isPresent() // Should have default dockerfile
+        !imageSpec.dockerfile.isPresent() // dockerfile defaults handled in plugin, not extension
         imageSpec.context.get().asFile.path.contains('src/main/docker')
     }
 
