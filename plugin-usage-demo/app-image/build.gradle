@@ -98,10 +98,10 @@ docker {
                 dependsOn project(':app').tasks.jar
             })
             //dockerfile.set(file('src/main/docker/Dockerfile')) //todo
-            tags = [
+            tags.set([
                 "${version}",
                 "latest"
-            ]
+            ])
             buildArgs = [
                 'JAR_FILE': "app-${version}.jar",
                 'BUILD_VERSION': version,
@@ -110,7 +110,7 @@ docker {
             publish {
                 to('basic') {
                     repository = 'localhost:25000/time-server-integration'
-                    tags = ['latest']
+                    publishTags = ['latest']
                 }
             }
         }

@@ -23,6 +23,10 @@
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
 2. Figure out the build dirs under plugin-integration-test/app-image/build/ ... these right?
 
+Setting tags uses different syntax:
+1. the 'tags' in docker build block: Line 101-104: Changed tags = [...] to tags.set([...]) - you must use Gradle's Property API syntax
+2. docker/publish/to block: Line 113: Changed tags = ['latest'] to publishTags = ['latest'] - the publish configuration uses a different property name to avoid conflicts
+
 
 ## UX / Feature
 1. 'dockerBuild' should assemble src to its own temp folder (added to .gitignore)
