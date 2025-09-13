@@ -40,6 +40,11 @@
       - strategic foundation with "test what you ship" philosophy
    - Strategic Positioning: "Gradle-native Docker testing solution" with performance and developer experience advantages 
    over generic alternatives.
+  
+### Overall
+
+- opinionated with Docker image build and tests in a subproject peer to the one that builds the application to be put 
+  into a Docker container.  separation of concerns.
 
 ### docker stuff
 
