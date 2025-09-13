@@ -104,6 +104,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         return CompletableFuture.supplyAsync({
             try {
                 println "Building Docker image with context: ${context.contextPath}"
+                println "Requested tags: ${context.tags}"
                 
                 def buildImageResultCallback = new BuildImageResultCallback() {
                     @Override
@@ -141,10 +142,13 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                     }
                 }
                 
+                // Build with the primary tag first (prefer non-latest tags, fallback to first tag)
+                def primaryTag = context.tags.find { !it.endsWith(':latest') } ?: context.tags.first()
+                
                 def buildCmd = dockerClient.buildImageCmd()
                     .withDockerfile(context.dockerfile.toFile())
                     .withBaseDirectory(context.contextPath.toFile())
-                    .withTags(new HashSet<>(context.tags))
+                    .withTag(primaryTag)  // Use single primary tag for build
                     .withNoCache(false)
                     
                 // Add build arguments individually
@@ -157,8 +161,18 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 def imageId = result.awaitImageId()
                 println "Received image ID: ${imageId}"
-                    
-                println "Successfully built Docker image: ${context.tags.first()} (ID: ${imageId})"
+                
+                // Apply additional tags if there are more than one
+                if (context.tags.size() > 1) {
+                    def additionalTags = context.tags.findAll { it != primaryTag }
+                    println "Applying additional tags: ${additionalTags}"
+                    additionalTags.each { tag ->
+                        println "Tagging ${imageId} as ${tag}"
+                        dockerClient.tagImageCmd(imageId, tag.split(':')[0], tag.split(':')[1]).exec()
+                    }
+                }
+                
+                println "Successfully built Docker image with all tags: ${context.tags} (ID: ${imageId})"
                 return imageId
                 
             } catch (DockerException e) {

@@ -653,7 +653,7 @@ class DockerExtensionTest extends Specification {
                 publish {
                     to('registry') {
                         repository = 'localhost:5000/test-app'
-                        tags = ['latest', 'stable']  // Also simple tag names
+                        publishTags = ['latest', 'stable']  // Also simple tag names
                     }
                 }
             }
@@ -674,7 +674,7 @@ class DockerExtensionTest extends Specification {
             project
         )
         publishTarget.repository.set('')  // Invalid empty repository
-        publishTarget.tags.set(['latest'])
+        publishTarget.publishTags.set(['latest'])
 
         when: "validation is performed on target with invalid repository"
         extension.validatePublishTarget(publishTarget, 'testImage')
@@ -694,7 +694,7 @@ class DockerExtensionTest extends Specification {
             project
         )
         publishTarget.repository.set('localhost:5000/test-app')
-        publishTarget.tags.set(['invalid tag with spaces'])  // Invalid tag
+        publishTarget.publishTags.set(['invalid tag with spaces'])  // Invalid tag
 
         when: "validation is performed directly on the publish target"
         extension.validatePublishTarget(publishTarget, 'testImage')
@@ -736,7 +736,7 @@ class DockerExtensionTest extends Specification {
             project
         )
         // Don't set repository - leave it empty
-        publishTarget.tags.set(['latest'])
+        publishTarget.publishTags.set(['latest'])
 
         when:
         extension.validatePublishTarget(publishTarget, 'testImage')
@@ -761,11 +761,11 @@ class DockerExtensionTest extends Specification {
                 publish {
                     to('prod') {
                         repository = 'registry.company.com/team/app'
-                        tags = ['prod', 'stable']  // Publish tags - also simple names
+                        publishTags = ['prod', 'stable']  // Publish tags - also simple names
                     }
                     to('staging') {
                         repository = 'localhost:5000/staging/app'  
-                        tags = ['staging', 'test']  // Multiple publish targets
+                        publishTags = ['staging', 'test']  // Multiple publish targets
                     }
                 }
             }
@@ -791,7 +791,7 @@ class DockerExtensionTest extends Specification {
                 publish {
                     to('basic') {
                         repository = 'localhost:25000/time-server-integration'
-                        tags = ['latest']  // This should work correctly
+                        publishTags = ['latest']  // This should work correctly
                     }
                 }
             }

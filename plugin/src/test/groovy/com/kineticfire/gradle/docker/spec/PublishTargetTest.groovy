@@ -64,20 +64,20 @@ class PublishTargetTest extends Specification {
 
     def "tags property works correctly"() {
         when:
-        publishTarget.tags.set(['v1.0', 'latest', 'stable'])
+        publishTarget.publishTags.set(['v1.0', 'latest', 'stable'])
 
         then:
-        publishTarget.tags.present
-        publishTarget.tags.get() == ['v1.0', 'latest', 'stable']
+        publishTarget.publishTags.present
+        publishTarget.publishTags.get() == ['v1.0', 'latest', 'stable']
     }
 
     def "tags property with empty list"() {
         when:
-        publishTarget.tags.set([])
+        publishTarget.publishTags.set([])
 
         then:
-        publishTarget.tags.present
-        publishTarget.tags.get().isEmpty()
+        publishTarget.publishTags.present
+        publishTarget.publishTags.get().isEmpty()
     }
 
     def "auth property initially not present"() {
@@ -173,7 +173,7 @@ class PublishTargetTest extends Specification {
     def "complete configuration with all properties"() {
         when:
         publishTarget.repository.set('private.registry.com/myproject/myapp')
-        publishTarget.tags.set(['v1.0.0', '1.0', 'latest'])
+        publishTarget.publishTags.set(['v1.0.0', '1.0', 'latest'])
         publishTarget.auth {
             username = 'deployuser'
             password = 'deploypass'
@@ -183,7 +183,7 @@ class PublishTargetTest extends Specification {
         then:
         publishTarget.name == 'testTarget'
         publishTarget.repository.get() == 'private.registry.com/myproject/myapp'
-        publishTarget.tags.get() == ['v1.0.0', '1.0', 'latest']
+        publishTarget.publishTags.get() == ['v1.0.0', '1.0', 'latest']
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'deployuser'
         publishTarget.auth.get().password.get() == 'deploypass'
@@ -217,14 +217,14 @@ class PublishTargetTest extends Specification {
     def "properties can be updated after initial configuration"() {
         given:
         publishTarget.repository.set('initial.repo.com/app')
-        publishTarget.tags.set(['v1.0'])
+        publishTarget.publishTags.set(['v1.0'])
 
         when:
         publishTarget.repository.set('updated.repo.com/app')
-        publishTarget.tags.set(['v2.0', 'latest'])
+        publishTarget.publishTags.set(['v2.0', 'latest'])
 
         then:
         publishTarget.repository.get() == 'updated.repo.com/app'
-        publishTarget.tags.get() == ['v2.0', 'latest']
+        publishTarget.publishTags.get() == ['v2.0', 'latest']
     }
 }

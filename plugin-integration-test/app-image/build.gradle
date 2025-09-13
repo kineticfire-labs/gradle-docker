@@ -106,10 +106,10 @@ docker {
                 dependsOn project(':app').tasks.jar
             })
             // dockerfile defaults to Dockerfile within the context - no need to specify
-            tags = [
-                "${version}",
+            tags.set([
+                "1.0.0",
                 "latest"
-            ]
+            ])
             buildArgs = [
                 'JAR_FILE': "app-${version}.jar",
                 'BUILD_VERSION': version,
@@ -118,7 +118,7 @@ docker {
             publish {
                 to('basic') {
                     repository = 'localhost:25000/time-server-integration'
-                    tags = ['latest']
+                    publishTags = ['latest']
                 }
             }
         }

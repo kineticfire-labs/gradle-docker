@@ -172,8 +172,8 @@ class GradleDockerPlugin implements Plugin<Project> {
             def imageName = imageSpec.name
             def capitalizedName = imageName.capitalize()
             
-            // Validate that tags are specified for build tasks - validate during registration, not lazy configuration
-            if (!imageSpec.tags.present || imageSpec.tags.get().empty) {
+            // Validate that tags are specified for build tasks - avoid calling .get() which forces early evaluation
+            if (!imageSpec.tags.present || imageSpec.tags.getOrElse([]).empty) {
                 throw new GradleException(
                     "Image '${imageSpec.name}' must specify at least one tag\n" +
                     "Example: tags = ['latest', 'v1.0.0']"

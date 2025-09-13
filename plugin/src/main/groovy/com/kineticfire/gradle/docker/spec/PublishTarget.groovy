@@ -42,7 +42,7 @@ abstract class PublishTarget {
     }
     
     abstract Property<String> getRepository()
-    abstract ListProperty<String> getTags()
+    abstract ListProperty<String> getPublishTags()
     abstract Property<AuthSpec> getAuth()
     
     void auth(@DelegatesTo(AuthSpec) Closure closure) {

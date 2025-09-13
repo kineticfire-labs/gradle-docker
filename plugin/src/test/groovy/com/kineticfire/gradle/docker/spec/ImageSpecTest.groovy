@@ -168,7 +168,7 @@ class ImageSpecTest extends Specification {
         imageSpec.publish {
             to('dockerhub') {
                 repository.set('docker.io/myuser/myapp')
-                tags.set(['latest', 'v1.0'])
+                publishTags.set(['latest', 'v1.0'])
                 auth {
                     username.set('myuser')
                     password.set('mypass')
@@ -182,7 +182,7 @@ class ImageSpecTest extends Specification {
         
         def target = imageSpec.publish.get().to.getByName('dockerhub')
         target.repository.get() == 'docker.io/myuser/myapp'
-        target.tags.get() == ['latest', 'v1.0']
+        target.publishTags.get() == ['latest', 'v1.0']
         target.auth.present
         target.auth.get().username.get() == 'myuser'
         target.auth.get().password.get() == 'mypass'
@@ -195,7 +195,7 @@ class ImageSpecTest extends Specification {
             void execute(PublishSpec publishSpec) {
                 publishSpec.to('quay') {
                     repository.set('quay.io/myorg/myapp')
-                    tags.set(['production'])
+                    publishTags.set(['production'])
                 }
             }
         })
@@ -206,7 +206,7 @@ class ImageSpecTest extends Specification {
         
         def target = imageSpec.publish.get().to.getByName('quay')
         target.repository.get() == 'quay.io/myorg/myapp'
-        target.tags.get() == ['production']
+        target.publishTags.get() == ['production']
     }
 
     def "publish with multiple targets"() {
@@ -214,11 +214,11 @@ class ImageSpecTest extends Specification {
         imageSpec.publish {
             to('dockerhub') {
                 repository.set('docker.io/myuser/app')
-                tags.set(['latest'])
+                publishTags.set(['latest'])
             }
             to('ghcr') {
                 repository.set('ghcr.io/myuser/app')
-                tags.set(['main'])
+                publishTags.set(['main'])
             }
         }
 
@@ -251,7 +251,7 @@ class ImageSpecTest extends Specification {
         imageSpec.publish {
             to('production') {
                 repository.set('prod.registry.com/myapp')
-                tags.set(['1.2.3', 'stable'])
+                publishTags.set(['1.2.3', 'stable'])
                 auth {
                     registryToken.set('prod-token-123')
                     serverAddress.set('prod.registry.com')

@@ -293,14 +293,14 @@ class DockerPublishTaskTest extends Specification {
     private PublishTarget createPublishTarget(String repository, List<String> tags) {
         def target = project.objects.newInstance(PublishTarget, "test", project)
         target.repository.set(repository)
-        target.tags.set(tags)
+        target.publishTags.set(tags)
         return target
     }
     
     private PublishTarget createPublishTargetWithAuth(String repository, List<String> tags, AuthSpec authSpec) {
         def target = project.objects.newInstance(PublishTarget, "test", project)
         target.repository.set(repository)
-        target.tags.set(tags)
+        target.publishTags.set(tags)
         target.auth.set(authSpec)
         return target
     }

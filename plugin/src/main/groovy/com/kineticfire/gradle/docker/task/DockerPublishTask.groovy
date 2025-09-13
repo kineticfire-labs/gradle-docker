@@ -70,7 +70,7 @@ abstract class DockerPublishTask extends DefaultTask {
         
         targets.each { target ->
             def repositoryName = target.repository.get()
-            def tags = target.tags.getOrElse([])
+            def tags = target.publishTags.getOrElse([])
             def authSpec = target.auth.orNull
             
             if (tags.empty) {

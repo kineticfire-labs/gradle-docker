@@ -45,6 +45,9 @@ abstract class DockerExtension {
                 project.layout.projectDirectory.dir("src/main/docker")
             )
             
+            // Set empty convention to prevent implicit defaults  
+            imageSpec.tags.convention([])
+            
             // Note: dockerfile defaults are now handled in GradleDockerPlugin.configureDockerBuildTask()
             // to properly support both context and contextTask scenarios
             return imageSpec
@@ -177,13 +180,13 @@ abstract class DockerExtension {
         }
         
         // Validate publish target tags - these should also be simple tag names
-        if (publishTarget.tags.present) {
-            def tags = publishTarget.tags.get()
+        if (publishTarget.publishTags.present) {
+            def tags = publishTarget.publishTags.get()
             if (!tags.isEmpty()) {
                 tags.each { tag ->
                     if (!isValidTagName(tag)) {
                         throw new GradleException(
-                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'\\n" +
+                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'\n" +
                             "Publish target tags should be simple names like 'latest', 'v1.0.0', 'stable'."
                         )
                     }

@@ -47,34 +47,34 @@ class PublishSpecTest extends Specification {
         when:
         publishSpec.to {
             repository.set('docker.io/myrepo')
-            tags.set(['v1.0', 'latest'])
+            publishTags.set(['v1.0', 'latest'])
         }
 
         then:
         publishSpec.to.size() == 1
         publishSpec.to.getByName('target0').repository.get() == 'docker.io/myrepo'
-        publishSpec.to.getByName('target0').tags.get() == ['v1.0', 'latest']
+        publishSpec.to.getByName('target0').publishTags.get() == ['v1.0', 'latest']
     }
 
     def "to(String, Closure) creates named target"() {
         when:
         publishSpec.to('production') {
             repository.set('registry.company.com/app')
-            tags.set(['prod', 'v1.0.0'])
+            publishTags.set(['prod', 'v1.0.0'])
         }
 
         then:
         publishSpec.to.size() == 1
         publishSpec.to.getByName('production').name == 'production'
         publishSpec.to.getByName('production').repository.get() == 'registry.company.com/app'
-        publishSpec.to.getByName('production').tags.get() == ['prod', 'v1.0.0']
+        publishSpec.to.getByName('production').publishTags.get() == ['prod', 'v1.0.0']
     }
 
     def "to(Closure) with auth configuration"() {
         when:
         publishSpec.to {
             repository.set('private.registry.com/app')
-            tags.set(['latest'])
+            publishTags.set(['latest'])
             auth {
                 username.set('myuser')
                 password.set('mypass')
@@ -97,14 +97,14 @@ class PublishSpecTest extends Specification {
             @Override
             void execute(PublishTarget target) {
                 target.repository.set('docker.io/myapp')
-                target.tags.set(['v2.0', 'stable'])
+                target.publishTags.set(['v2.0', 'stable'])
             }
         })
 
         then:
         publishSpec.to.size() == 1
         publishSpec.to.getByName('target0').repository.get() == 'docker.io/myapp'
-        publishSpec.to.getByName('target0').tags.get() == ['v2.0', 'stable']
+        publishSpec.to.getByName('target0').publishTags.get() == ['v2.0', 'stable']
     }
 
     def "to(String, Action) creates named target"() {
@@ -113,7 +113,7 @@ class PublishSpecTest extends Specification {
             @Override
             void execute(PublishTarget target) {
                 target.repository.set('staging.registry.com/app')
-                target.tags.set(['staging'])
+                target.publishTags.set(['staging'])
             }
         })
 
@@ -122,7 +122,7 @@ class PublishSpecTest extends Specification {
         def target = publishSpec.to.getByName('staging')
         target.name == 'staging'
         target.repository.get() == 'staging.registry.com/app'
-        target.tags.get() == ['staging']
+        target.publishTags.get() == ['staging']
     }
 
     def "to(Action) with auth configuration"() {
@@ -131,7 +131,7 @@ class PublishSpecTest extends Specification {
             @Override
             void execute(PublishTarget target) {
                 target.repository.set('secure.registry.com/app')
-                target.tags.set(['secure'])
+                target.publishTags.set(['secure'])
                 target.auth(new Action<AuthSpec>() {
                     @Override
                     void execute(AuthSpec auth) {
@@ -156,11 +156,11 @@ class PublishSpecTest extends Specification {
         when:
         publishSpec.to {
             repository.set('docker.io/app')
-            tags.set(['latest'])
+            publishTags.set(['latest'])
         }
         publishSpec.to {
             repository.set('quay.io/app')
-            tags.set(['v1.0'])
+            publishTags.set(['v1.0'])
         }
 
         then:
@@ -173,15 +173,15 @@ class PublishSpecTest extends Specification {
         when:
         publishSpec.to('dockerhub') {
             repository.set('docker.io/myapp')
-            tags.set(['latest'])
+            publishTags.set(['latest'])
         }
         publishSpec.to {
             repository.set('ghcr.io/myapp')
-            tags.set(['dev'])
+            publishTags.set(['dev'])
         }
         publishSpec.to('quay') {
             repository.set('quay.io/myapp')
-            tags.set(['stable'])
+            publishTags.set(['stable'])
         }
 
         then:

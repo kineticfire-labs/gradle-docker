@@ -31,11 +31,14 @@ abstract class ImageSpec {
     
     private final String name
     private final Project project
+    private final ListProperty<String> tagsProperty
     
     @Inject
     ImageSpec(String name, Project project) {
         this.name = name
         this.project = project
+        // Create concrete ListProperty to avoid Gradle's abstract property decoration
+        this.tagsProperty = project.objects.listProperty(String)
     }
     
     String getName() { 
@@ -58,7 +61,10 @@ abstract class ImageSpec {
     abstract MapProperty<String, String> getBuildArgs()
     
     @Input
-    abstract ListProperty<String> getTags()
+    @Optional
+    ListProperty<String> getTags() {
+        return tagsProperty
+    }
     
     @Input
     @Optional
