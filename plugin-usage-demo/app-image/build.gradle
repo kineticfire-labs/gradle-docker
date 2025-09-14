@@ -97,7 +97,7 @@ docker {
                 dependsOn tasks.named('copyAppJar')
                 dependsOn project(':app').tasks.jar
             })
-            //dockerfile.set(file('src/main/docker/Dockerfile')) //todo
+            dockerfile.set(file('build/docker-context/timeServer/Dockerfile')) // relative to project; optional, defaults to 'build/docker-context/<task name>/Dockerfile'
             tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
                 "${version}",
                 "latest"
