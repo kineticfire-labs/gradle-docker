@@ -97,14 +97,14 @@ dependencies {
 docker {
     images {
         timeServer {
-            contextTask.set(tasks.register('prepareTimeServerContext', Copy) {
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')  // Include all files from Docker context including JAR
                 dependsOn tasks.named('copyAppJar')
                 dependsOn project(':app').tasks.jar
-            })
+            }
             // dockerfile defaults to Dockerfile within the context - no need to specify
             tags.set([
                 "1.0.0",
@@ -121,6 +121,47 @@ docker {
                     publishTags = ['latest']
                 }
             }
+        }
+        
+        // DOCKERFILENAME INTEGRATION TESTS: Custom dockerfile names
+        dockerfileNameProdTest {
+            context.set(file('src/test/docker'))
+            dockerfileName.set('Dockerfile.prod')
+            tags.set(['1.0.0'])
+            buildArgs = [
+                'JAR_FILE': "app-${version}.jar",
+                'BUILD_VERSION': version,
+                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
+        }
+        
+        dockerfileNameDevTest {
+            contextTask = tasks.register('prepareDockerfileNameDevContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for dockerfileName dev test'
+                into layout.buildDirectory.dir('docker-context/dockerfileNameDevTest')
+                from('src/test/docker')
+                dependsOn tasks.named('copyAppJar')
+                dependsOn project(':app').tasks.jar
+            }
+            dockerfileName.set('Dockerfile.dev')
+            tags.set(['1.0.0'])
+            buildArgs = [
+                'JAR_FILE': "app-${version}.jar",
+                'BUILD_VERSION': version,
+                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
+        }
+        
+        dockerfileNameCustomTest {
+            context.set(file('src/test/docker'))
+            dockerfileName.set('MyCustomDockerfile')
+            tags.set(['1.0.0'])
+            buildArgs = [
+                'JAR_FILE': "app-${version}.jar",
+                'BUILD_VERSION': version,
+                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
         }
     }
 }
@@ -266,6 +307,18 @@ tasks.register('integrationTestRegistry', Test) {
     shouldRunAfter 'integrationTestMethod'
 }
 
+tasks.register('integrationTestDockerfileName', Test) {
+    description = 'Integration tests for dockerfileName feature'
+    group = 'verification'
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    include '**/DockerfileNameIntegrationIT.class'
+    
+    dependsOn 'dockerBuildDockerfileNameProdTest', 'dockerBuildDockerfileNameDevTest', 'dockerBuildDockerfileNameCustomTest'
+    shouldRunAfter 'integrationTestRegistry'
+}
+
 // ENHANCED INTEGRATION TESTS: New comprehensive end-to-end tests
 
 tasks.register('integrationTestPluginTasks', Test) {
@@ -334,6 +387,7 @@ tasks.register('integrationTestComprehensive', Test) {
     // Include only the compatible integration tests that work with suite lifecycle
     include '**/AdvancedDockerComposeIntegrationIT.class'
     include '**/DockerOperationsIntegrationIT.class' 
+    include '**/DockerfileNameIntegrationIT.class'
     include '**/EnhancedComposeIntegrationIT.class'
     include '**/StateFileConsumptionIT.class'
     include '**/TimeServerSuiteLifecycleIT.class'
@@ -342,7 +396,7 @@ tasks.register('integrationTestComprehensive', Test) {
     usesCompose stack: "integrationSuite", lifecycle: "suite"
     systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("integrationSuite")
     
-    dependsOn 'dockerBuildTimeServer'
+    dependsOn 'dockerBuildTimeServer', 'dockerBuildDockerfileNameProdTest', 'dockerBuildDockerfileNameDevTest', 'dockerBuildDockerfileNameCustomTest'
 }
 
 tasks.register('integrationTestClassLifecycleOnly', Test) {

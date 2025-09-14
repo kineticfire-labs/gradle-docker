@@ -799,10 +799,10 @@ class GradleDockerPluginTest extends Specification {
         
         dockerExt.images {
             myApp {
-                contextTask.set(project.tasks.register('prepareContext', org.gradle.api.tasks.Copy) {
+                contextTask = project.tasks.register('prepareContext', org.gradle.api.tasks.Copy) {
                     from sourceDir
                     into project.layout.buildDirectory.dir('docker-context/myApp')
-                })
+                }
                 tags = ['latest']
                 // dockerfile property is NOT set - should default to prepared context/Dockerfile
             }
@@ -840,7 +840,172 @@ class GradleDockerPluginTest extends Specification {
         def actualMessage = findRootCauseMessage(ex)
         actualMessage.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
     }
-    
+
+    // ===== DOCKERFILE NAME TESTS =====
+
+    def "plugin uses dockerfileName with context directory"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create context directory with custom Dockerfile name
+        def contextDir = project.file('docker-build')
+        contextDir.mkdirs()
+        def customDockerfile = project.file('docker-build/Dockerfile.prod')
+        customDockerfile.text = "FROM openjdk:21"
+        
+        dockerExt.images {
+            prodApp {
+                context = contextDir
+                dockerfileName = 'Dockerfile.prod'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildProdApp')
+        buildTask.dockerfile.get().asFile == customDockerfile
+    }
+
+    def "plugin uses dockerfileName with contextTask"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create source directory with custom Dockerfile
+        def sourceDir = project.file('src/main/docker')
+        sourceDir.mkdirs()
+        def sourceDockerfile = project.file('src/main/docker/Dockerfile.dev')
+        sourceDockerfile.text = "FROM openjdk:21"
+        
+        dockerExt.images {
+            devApp {
+                contextTask = project.tasks.register('prepareDevContext', org.gradle.api.tasks.Copy) {
+                    from sourceDir
+                    into project.layout.buildDirectory.dir('docker-context/devApp')
+                }
+                dockerfileName = 'Dockerfile.dev'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildDevApp')
+        def expectedDockerfile = project.layout.buildDirectory.file('docker-context/devApp/Dockerfile.dev').get().asFile
+        buildTask.dockerfile.get().asFile == expectedDockerfile
+    }
+
+    def "plugin fails when both dockerfile and dockerfileName are set"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create files
+        def dockerfileFile = project.file('Dockerfile')
+        dockerfileFile.text = "FROM alpine"
+        def contextDir = project.file('.')
+        
+        dockerExt.images {
+            conflictingImage {
+                context = contextDir
+                dockerfile = dockerfileFile
+                dockerfileName = 'Dockerfile.custom'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        // Debug: check if both properties are actually set
+        def imageSpec = dockerExt.images.getByName('conflictingImage')
+        println "DEBUG: dockerfile.present = ${imageSpec.dockerfile.present}"
+        println "DEBUG: dockerfileName.present = ${imageSpec.dockerfileName.present}"
+        if (imageSpec.dockerfileName.present) {
+            println "DEBUG: dockerfileName.get() = ${imageSpec.dockerfileName.get()}"
+        }
+        
+        project.evaluate()
+
+        then:
+        def ex = thrown(Exception)
+        def actualMessage = findRootCauseMessage(ex)
+        actualMessage.contains("cannot specify both 'dockerfile' and 'dockerfileName'")
+    }
+
+    def "plugin uses default Dockerfile name when dockerfileName not set"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create context directory with default Dockerfile
+        def contextDir = project.file('docker-build')
+        contextDir.mkdirs()
+        def dockerfileDefault = project.file('docker-build/Dockerfile')
+        dockerfileDefault.text = "FROM openjdk:21"
+        
+        dockerExt.images {
+            defaultApp {
+                context = contextDir
+                tags = ['latest']
+                // Neither dockerfile nor dockerfileName set - should use default
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildDefaultApp')
+        buildTask.dockerfile.get().asFile == dockerfileDefault
+    }
+
+    def "plugin handles various dockerfileName formats"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create context directory
+        def contextDir = project.file('docker-build')
+        contextDir.mkdirs()
+        
+        // Create custom Dockerfile
+        def customDockerfile = project.file("docker-build/${dockerfileName}")
+        customDockerfile.text = "FROM alpine"
+        
+        def customDockerfileName = dockerfileName
+        dockerExt.images {
+            testApp {
+                context = contextDir
+                tags = ['latest']
+            }
+        }
+        
+        // Use direct assignment since DSL assignment doesn't work
+        def imageSpec = dockerExt.images.getByName('testApp')
+        imageSpec.dockerfileName.set(customDockerfileName)
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildTestApp')
+        buildTask.dockerfile.get().asFile == customDockerfile
+
+        where:
+        dockerfileName << [
+            'Dockerfile.prod',
+            'Dockerfile.dev', 
+            'MyDockerfile',
+            'app.dockerfile',
+            'Dockerfile-alpine'
+        ]
+    }
+
     private String findRootCauseMessage(Exception ex) {
         def current = ex
         while (current.cause != null) {

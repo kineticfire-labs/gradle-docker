@@ -51,11 +51,15 @@ abstract class ImageSpec {
     
     @Input
     @Optional
-    abstract Property<Task> getContextTask()
+    TaskProvider<Task> contextTask
     
     @Input
     @Optional
     abstract RegularFileProperty getDockerfile()
+    
+    @Input
+    @Optional
+    abstract Property<String> getDockerfileName()
     
     @Input
     abstract MapProperty<String, String> getBuildArgs()
@@ -118,7 +122,7 @@ abstract class ImageSpec {
             closure.delegate = task
             closure.call()
         }
-        contextTask.set(copyTask)
+        contextTask = copyTask
     }
     
     /**
@@ -132,6 +136,6 @@ abstract class ImageSpec {
             task.into(project.layout.buildDirectory.dir("docker-context/${name}"))
             action.execute(task)
         }
-        contextTask.set(copyTask)
+        contextTask = copyTask
     }
 }

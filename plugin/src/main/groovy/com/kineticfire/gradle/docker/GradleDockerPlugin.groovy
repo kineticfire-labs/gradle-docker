@@ -131,7 +131,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         project.afterEvaluate {
             registerDockerImageTasks(project, dockerExt, dockerService)
             registerComposeStackTasks(project, dockerOrchExt, composeService, jsonService)
+            
+
         }
+        
+
     }
     
     private void registerAggregateTasks(Project project) {
@@ -182,7 +186,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             
             // Build task
             project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-                configureDockerBuildTask(task, imageSpec, dockerService, project.layout)
+                configureDockerBuildTask(task, imageSpec, dockerService, project)
             }
             
             // Save task
@@ -292,7 +296,7 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     // Task configuration methods
-    private void configureDockerBuildTask(task, imageSpec, dockerService, projectLayout) {
+    private void configureDockerBuildTask(task, imageSpec, dockerService, project) {
         task.group = 'docker'
         task.description = "Build Docker image: ${imageSpec.name}"
         
@@ -301,22 +305,42 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.usesService(dockerService)
         
         // Configure build context - support multiple context types
-        configureContextPath(task, imageSpec, projectLayout)
+        configureContextPath(task, imageSpec, project)
         
-        // Configure dockerfile
+        // Configure dockerfile - support dockerfile, dockerfileName, or default
+        // Validation for mutual exclusivity happens at configuration time
+        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
+                "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
+            )
+        }
+        
+        // Capture project providers to avoid configuration cache issues
+        def providers = project.providers
+        def buildDirectory = project.layout.buildDirectory
+        
         if (imageSpec.dockerfile.present) {
             // When dockerfile is explicitly set, always use it regardless of contextTask
             task.dockerfile.set(imageSpec.dockerfile)
         } else {
-            // Default Dockerfile location - always relative to context
-            if (imageSpec.contextTask.present) {
-                // When using contextTask, expect Dockerfile in the prepared context
-                task.dockerfile.set(projectLayout.buildDirectory.file("docker-context/${imageSpec.name}/Dockerfile"))
+            // Handle dockerfileName or default dockerfile resolution using providers
+            if (imageSpec.contextTask != null) {
+                // Use contextTask directory with custom or default filename
+                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                    ? imageSpec.dockerfileName
+                    : providers.provider { "Dockerfile" }
+                def dockerfilePathProvider = dockerfileNameProvider.map { filename -> 
+                    "docker-context/${imageSpec.name}/${filename}" 
+                }
+                task.dockerfile.set(buildDirectory.file(dockerfilePathProvider))
             } else if (imageSpec.context.present) {
-                // When using direct context directory, look for Dockerfile within it
-                task.dockerfile.set(imageSpec.context.file("Dockerfile"))
+                // Use context directory with custom or default filename  
+                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                    ? imageSpec.dockerfileName
+                    : providers.provider { "Dockerfile" }
+                task.dockerfile.set(imageSpec.context.file(dockerfileNameProvider))
             } else {
-                // No context specified - this should be an error
                 throw new GradleException(
                     "Image '${imageSpec.name}' must specify either 'context' or 'contextTask'. " +
                     "A Dockerfile cannot exist without a build context."
@@ -335,21 +359,24 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.buildArgs.set(imageSpec.buildArgs)
         
         // Configure output image ID file
-        def outputDir = projectLayout.buildDirectory.dir("docker/${imageSpec.name}")
+        def outputDir = buildDirectory.dir("docker/${imageSpec.name}")
         task.imageId.set(outputDir.map { it.file('image-id.txt') })
     }
     
     /**
      * Configure the context path for Docker build task based on context type
      */
-    private void configureContextPath(DockerBuildTask task, ImageSpec imageSpec, ProjectLayout projectLayout) {
-        if (imageSpec.contextTask.present) {
+    private void configureContextPath(DockerBuildTask task, ImageSpec imageSpec, project) {
+        // Capture project layout to avoid configuration cache issues
+        def buildDirectory = project.layout.buildDirectory
+        
+        if (imageSpec.contextTask != null) {
             // Use Copy task output as context - configuration cache compatible
-            def copyTaskProvider = imageSpec.contextTask
-            task.dependsOn(copyTaskProvider)
+            // Use the TaskProvider directly for dependsOn to avoid Task serialization
+            task.dependsOn(imageSpec.contextTask)
             // Directly set the expected destination directory without accessing the Task object
             // This avoids configuration cache issues with Task serialization
-            task.contextPath.set(projectLayout.buildDirectory.dir("docker-context/${imageSpec.name}"))
+            task.contextPath.set(buildDirectory.dir("docker-context/${imageSpec.name}"))
         } else if (imageSpec.context.present) {
             // Use traditional context directory
             task.contextPath.set(imageSpec.context)
@@ -525,4 +552,6 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         project.logger.debug("Test integration extension methods configured")
     }
+
+
 }

@@ -836,7 +836,7 @@ class DockerExtensionTest extends Specification {
         
         extension.images {
             contextTaskImage {
-                contextTask.set(copyTask)
+                contextTask = copyTask
                 dockerfile.set(project.file('Dockerfile'))
                 tags.set(['latest'])
             }
@@ -857,7 +857,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             conflictingContext {
                 context.set(project.file('docker'))
-                contextTask.set(copyTask)
+                contextTask = copyTask
                 tags.set(['latest'])
             }
         }
@@ -925,5 +925,135 @@ class DockerExtensionTest extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    // ===== DOCKERFILE NAME VALIDATION TESTS =====
+
+    def "validate fails when both dockerfile and dockerfileName are set"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        project.file('docker/Dockerfile.custom').text = 'FROM alpine'
+        
+        extension.images {
+            conflictingDockerfile {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                dockerfileName.set('Dockerfile.custom')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot specify both 'dockerfile' and 'dockerfileName'")
+        ex.message.contains('conflictingDockerfile')
+        ex.message.contains("Use 'dockerfile' for custom paths or 'dockerfileName' for custom names")
+    }
+
+    def "validate passes when only dockerfileName is set"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile.prod').text = 'FROM alpine'
+        
+        extension.images {
+            dockerfileNameOnly {
+                context.set(project.file('docker'))
+                dockerfileName.set('Dockerfile.prod')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when only dockerfile is set"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile.custom').text = 'FROM alpine'
+        
+        extension.images {
+            dockerfileOnly {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile.custom'))
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when neither dockerfile nor dockerfileName are set"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            defaultDockerfile {
+                context.set(project.file('docker'))
+                tags.set(['latest'])
+                // Neither dockerfile nor dockerfileName set - should use default
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate handles dockerfileName with contextTask"() {
+        given:
+        def copyTask = project.tasks.register('testCopyTask', org.gradle.api.tasks.Copy)
+        project.file('Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            dockerfileNameWithContextTask {
+                contextTask = copyTask
+                dockerfileName.set('Dockerfile.dev')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate fails when both dockerfile and dockerfileName are set with contextTask"() {
+        given:
+        def copyTask = project.tasks.register('testCopyTask', org.gradle.api.tasks.Copy)
+        project.file('Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            conflictingWithContextTask {
+                contextTask = copyTask
+                dockerfile.set(project.file('Dockerfile'))
+                dockerfileName.set('Dockerfile.custom')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot specify both 'dockerfile' and 'dockerfileName'")
+        ex.message.contains('conflictingWithContextTask')
     }
 }

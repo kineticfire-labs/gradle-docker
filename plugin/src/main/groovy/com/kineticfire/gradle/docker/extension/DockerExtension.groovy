@@ -77,7 +77,7 @@ abstract class DockerExtension {
     }
     
     void validateImageSpec(ImageSpec imageSpec) {
-        def hasContextTask = imageSpec.contextTask.present
+        def hasContextTask = imageSpec.contextTask != null
         def hasSourceRef = imageSpec.sourceRef.present
         
         // Check if context was explicitly set (not just the convention)
@@ -100,6 +100,14 @@ abstract class DockerExtension {
         if (contextCount > 1) {
             throw new GradleException(
                 "Image '${imageSpec.name}' must specify only one of: 'context', 'contextTask', or inline 'context {}' block"
+            )
+        }
+        
+        // Validate mutually exclusive dockerfile configuration
+        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
+                "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
             )
         }
         

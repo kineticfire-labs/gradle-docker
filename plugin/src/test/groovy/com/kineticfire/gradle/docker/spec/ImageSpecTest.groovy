@@ -77,6 +77,36 @@ class ImageSpecTest extends Specification {
         imageSpec.dockerfile.get().asFile == dockerFile
     }
 
+    def "dockerfileName property works correctly"() {
+        when:
+        imageSpec.dockerfileName.set('Dockerfile.dev')
+
+        then:
+        imageSpec.dockerfileName.present
+        imageSpec.dockerfileName.get() == 'Dockerfile.dev'
+    }
+
+    def "dockerfileName property handles different name formats"() {
+        expect:
+        imageSpec.dockerfileName.set(name)
+        imageSpec.dockerfileName.get() == name
+
+        where:
+        name << [
+            'Dockerfile.prod',
+            'Dockerfile.test', 
+            'MyDockerfile',
+            'app.dockerfile',
+            'Dockerfile-alpine'
+        ]
+    }
+
+    def "dockerfileName property is optional"() {
+        expect:
+        !imageSpec.dockerfileName.present
+        imageSpec.dockerfileName.getOrElse('Dockerfile') == 'Dockerfile'
+    }
+
     def "buildArgs property works correctly"() {
         when:
         imageSpec.buildArgs.set(['VERSION': '1.0', 'ENVIRONMENT': 'production'])
@@ -355,11 +385,11 @@ class ImageSpecTest extends Specification {
         def copyTask = project.tasks.register('testContextTask', org.gradle.api.tasks.Copy)
 
         when:
-        imageSpec.contextTask.set(copyTask)
+        imageSpec.contextTask = copyTask
 
         then:
-        imageSpec.contextTask.present
-        imageSpec.contextTask.get() == copyTask.get()
+        imageSpec.contextTask != null
+        imageSpec.contextTask == copyTask
     }
 
     def "context(Closure) creates Copy task with correct configuration"() {
@@ -376,7 +406,7 @@ class ImageSpecTest extends Specification {
         }
 
         then:
-        imageSpec.contextTask.present
+        imageSpec.contextTask != null
         def copyTask = imageSpec.contextTask.get()
         copyTask.name == 'prepareTestImageContext'
         copyTask.group == 'docker'
@@ -397,7 +427,7 @@ class ImageSpecTest extends Specification {
         })
 
         then:
-        imageSpec.contextTask.present
+        imageSpec.contextTask != null
         def copyTask = imageSpec.contextTask.get()
         copyTask.name == 'prepareTestImageContext'
         copyTask.group == 'docker'
@@ -410,7 +440,7 @@ class ImageSpecTest extends Specification {
         def srcDir = project.file('src')
 
         when:
-        imageSpec.contextTask.set(manualTask)
+        imageSpec.contextTask = manualTask
 
         then:
         imageSpec.contextTask.get() == manualTask.get()
@@ -421,8 +451,8 @@ class ImageSpecTest extends Specification {
         }
 
         then:
-        imageSpec.contextTask.present
-        imageSpec.contextTask.get() != manualTask.get()
+        imageSpec.contextTask != null
+        imageSpec.contextTask != manualTask
         imageSpec.contextTask.get().name == 'prepareTestImageContext'
     }
 
@@ -437,8 +467,8 @@ class ImageSpecTest extends Specification {
         image2.context { from(srcDir) }
 
         then:
-        image1.contextTask.present
-        image2.contextTask.present
+        image1.contextTask != null
+        image2.contextTask != null
         image1.contextTask.get().name == 'prepareWebappContext'
         image2.contextTask.get().name == 'prepareApiContext'
         image1.contextTask.get() != image2.contextTask.get()
