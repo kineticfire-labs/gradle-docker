@@ -18,6 +18,7 @@
 9. "docker ps -a" should leave any containers after integration test code runs
 9. if i `./gradlw build` then functional tests should run
 10. tests that are *.disabled
+11. todo statements in CLAUDE.md
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
