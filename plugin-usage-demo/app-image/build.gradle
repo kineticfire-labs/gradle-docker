@@ -89,18 +89,19 @@ docker {
             // more files/directories may be included to create the build context.
             //
             // For debug purposes, inspect the Docker build context at 'build/docker-context/timeServer'.
-            contextTask.set(tasks.register('prepareTimeServerContext', Copy) {
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 dependsOn tasks.named('copyAppJar')
                 dependsOn project(':app').tasks.jar
-            })
+            }
             dockerfile.set(file('build/docker-context/timeServer/Dockerfile')) // relative to project; optional, defaults to 'build/docker-context/<task name>/Dockerfile'
+            //dockerfileName = 'Dockerfile'
             tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
-                "${version}",
-                "latest"
+                        "${version}",
+                        "latest"
             ])
             buildArgs = [
                 'JAR_FILE': "app-${version}.jar",
