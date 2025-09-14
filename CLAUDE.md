@@ -36,16 +36,23 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 
 ### Specify Locations
 - **Plugin**
-  - **Build file**: `plugin/build.gradle` 
+  - **Build file for 'plugin' subproject**: `plugin/build.gradle` 
   - **Source code**: `plugin/src/main`
   - **Unit tests**: `plugin/src/test/`
   - **Functional tests**: `plugin/src/functionalTest`
 - **Integration Tests**
-  - **Build file**: `plugin-integration-test/build.gradle`
+  - **Build file for 'plugin-integration-test' subproject**: `plugin-integration-test/build.gradle`
   - **Example executable (used in image under test)**: `plugin-integration-test/app/`
   - **Example image under test**: `plugin-integration-test/app-image/src/main/`
   - **Functional tests**: `plugin-integration-test/app-image/functionalTest/`
   - **Integration tests**: `plugin-integration-test/app-image/integrationTest/`
+- **Example usage demo**
+  - **Build file for 'plugin-usage-demo' subproject**: `plugin-usage-demo/build.gradle`
+  - **Example executable (used in image under test)**: `plugin-usage-demo/app/`
+  - **Build file for 'plugin-usage-demo/app' subproject**: `plugin-usage-demo/app/build.gradle`
+  - **Example image under test**: `plugin-usage-demo/app-image/src/main/`
+  - **Integration tests**: `plugin-usage-demo/app-image/integrationTest/`
+  - **Build file for 'plugin-usage-demo/app-image' subproject**: `plugin-usage-demo/app-image/build.gradle`
 
 ## USE DEVELOPMENT COMMANDS
 
@@ -83,6 +90,11 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ./gradlew integrationTestSuite
 ```
 
+### Run Usage Demo (from `plugin-demo-usage` directory)
+```bash
+#todo
+```
+
 ### Follow Development Workflow
 1. **Build the plugin**:
     - Run: `cd plugin && ./gradlew clean build publishToMavenLocal`.
@@ -91,6 +103,9 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
     - Run: `cd ../plugin-integration-test && ./gradlew clean testAll`.
     - Do not declare success until every test passes.
     - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
+3. **Run usage demo**:
+  - Run: `cd ../plugin-usage-demo && ./gradlew clean dockerBuild`. (todo: this project is still being finished, the target Gradle task will change.)
+  - Do not declare success until the build is successful.
 
 ## Use Gradle 9 Standards
 - **Ensure code is compatible with Gradle 9’s build cache**; see 
@@ -123,9 +138,13 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
       - Rebuild plugin to Maven local: `./gradlew build publishToMavenLocal` (from `plugin/` directory).
       - Run tests: `./gradlew clean testAll integrationTestComprehensive` (from `plugin-integration-test/` directory).
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
+- **The plugin usage demo must work successfully.**
+  - Do not declare success until the build completes without errors
+  - Run: `./gradlew clean dockerBuild` (from `plugin-usage-demo` directory) (todo: this project is still being finished, the target Gradle task will change.)
 - **No lingering containers may remain.**
   - Do not declare success until `docker ps -a` shows no containers.
   - Do not treat “some leftover containers are acceptable” as valid.
+
 
 ## ENFORCE PROJECT STANDARDS ENFORCEMENT
 
@@ -156,11 +175,29 @@ Write **real, end-to-end** integration tests that exercise the Gradle Docker/Com
 
 #### Follow Ground Rules
 1. **No mocks/stubs/fakes** for Docker, Compose, filesystem, or network. Use the real stack.
-2. Run tests against a **peer project** laid out like a normal user project (builds a JAR, applies the plugin, uses its 
+2. Run tests against a **peer project** laid out like a normal user project (builds a JAR, applies the plugin, uses its
    tasks).
-3. Each test must **create and clean up** all resources it uses (images, tags, containers, networks, temp files, temp 
+3. Each test must **create and clean up** all resources it uses (images, tags, containers, networks, temp files, temp
    registry).
 4. **Fail fast with clear messages** and leave **zero** residual containers, images, or networks on success.
+
+### Follow Usage Demo Requirements
+
+Write real demonstration code that uses the Gradle Docker/Compose plugin exactly like a user of the plugin would (not a
+developer of the plugin).  **Do not** test DSL or internals here.
+- Write demonstration build code (in the `plugin-usage-demo/app-image/build.gradle`) that use the plugin's Gradle tasks 
+  to build, tag, save, and publish a Docker image by actually calling the Docker engine
+- Write demonstration build code in (in the `plugin-usage-demo/app-image/build.gradle`) and integration test code (in 
+  `plugin-usage-demo/app-image/src/integrationTest`) to bring up actual containers with `composeUp` and removes 
+  containers with `composeDown` that actually calls Docker Compose.
+- **No mocks/stubs/fakes** for Docker, Compose, filesystem, or network. Use the real stack.
+- Do not write verification code here since this project is to demonstrate how a user would normally use the plugin;
+  verification code goes in `plugin-integration-test/`.
+
+Write concise, clear comments to explain the demonstration code to a user.
+- Explain non-obvious settings or configurations not fully shown, such as optional settings, default values, and
+  mutually exclusive parameters
+- Explain how to run the plugin's custom Gradle tasks
 
 ### Ensure Code Quality (`docs/project-standards/style/style.md`)
 - **Keep files ≤ 500 lines, functions ≤ 30–40 lines, and max 4 parameters per function.**

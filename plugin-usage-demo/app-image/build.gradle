@@ -119,6 +119,9 @@ docker {
     }
 }
 
+
+// timeout for waiting on a container state is 60 seconds with default poll of 2 seconds
+
 // DEMONSTRATING UC-7: Project Developer Compose Orchestration  
 //dockerOrch {
 //    composeStacks {
