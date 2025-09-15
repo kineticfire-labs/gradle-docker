@@ -33,7 +33,7 @@ include 'app'
 
 // Include Docker integration tests
 include 'docker'
-include 'docker:all-in-one-dockerfile-default'
+include 'docker:images-a'
 
 // Future: Include Compose integration tests
 // include 'compose'

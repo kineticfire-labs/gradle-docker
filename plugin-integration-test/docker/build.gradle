@@ -43,7 +43,7 @@ tasks.register('integrationTest') {
 afterEvaluate {
     tasks.named('integrationTest') {
         // Add dependencies on subproject integration test tasks
-        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('integrationTest')
+        dependsOn project(':docker:images-a').tasks.named('integrationTest')
         
         // Future subprojects can be added here:
         // dependsOn project(':multi-stage-dockerfile').tasks.named('integrationTest')
@@ -60,7 +60,7 @@ tasks.register('cleanAll') {
 // Configure cleanup dependencies after project evaluation
 afterEvaluate {
     tasks.named('cleanAll') {
-        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('clean')
+        dependsOn project(':docker:images-a').tasks.named('clean')
         
         // Future subprojects can be added here:
         // dependsOn project(':multi-stage-dockerfile').tasks.named('clean')
