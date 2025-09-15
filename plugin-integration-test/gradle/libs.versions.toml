@@ -13,6 +13,7 @@ jackson-databind = "2.16.0"
 slf4j-simple = "2.0.9"
 assertj-core = "3.24.2"
 gradle-docker = "1.0.0"
+docker-java = "3.3.4"
 
 [libraries]
 groovy = { module = "org.apache.groovy:groovy", version.ref = "groovy" }
@@ -30,3 +31,5 @@ jackson-databind = { module = "com.fasterxml.jackson.core:jackson-databind", ver
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j-simple" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj-core" }
 gradle-docker = { module = "com.kineticfire.gradle:gradle-docker", version.ref = "gradle-docker" }
+docker-java-core = { module = "com.github.docker-java:docker-java-core", version.ref = "docker-java" }
+docker-java-transport-httpclient5 = { module = "com.github.docker-java:docker-java-transport-httpclient5", version.ref = "docker-java" }
