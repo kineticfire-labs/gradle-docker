@@ -1,0 +1,127 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * App-Image subproject - builds Docker image and runs integration tests.
+ * 
+ * This demonstrates how developers would use the gradle-docker plugin to:
+ * - Build Docker images using the docker {} DSL (UC-6)  
+ * - Test images using Docker Compose orchestration with dockerOrch {} DSL (UC-7)
+ * - Use different lifecycle patterns (suite, class, method)
+ * 
+ * This subproject showcases realistic usage patterns developers would follow.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+}
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+// Configure source sets for testing
+sourceSets {
+    integrationTest {
+        java.srcDir 'src/integrationTest/java'
+        groovy.srcDir 'src/integrationTest/groovy'
+        resources.srcDir 'src/integrationTest/resources'  
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += output + compileClasspath
+    }
+}
+
+// Configure test configurations
+configurations {
+    integrationTestImplementation.extendsFrom implementation
+    integrationTestRuntimeOnly.extendsFrom runtimeOnly
+}
+
+// Handle duplicate resources
+tasks.withType(ProcessResources) {
+    duplicatesStrategy = DuplicatesStrategy.WARN
+}
+
+dependencies {
+    
+    // Integration Test dependencies (Java/JUnit)  
+    integrationTestImplementation platform(libs.junit.bom)
+    integrationTestImplementation libs.junit.jupiter
+    integrationTestImplementation libs.assertj.core
+    integrationTestImplementation libs.jackson.databind
+    integrationTestImplementation gradleTestKit()
+    integrationTestImplementation libs.gradle.docker
+    integrationTestRuntimeOnly libs.junit.platform.launcher
+    
+    // Integration Test dependencies (Groovy/Spock for registry tests)
+    integrationTestImplementation platform(libs.spock.bom)
+    integrationTestImplementation libs.spock.core
+    integrationTestImplementation libs.spock.junit4
+}
+
+// Setup all-in-one 'docker' tasks:  build, tag, save, and publish
+docker {
+    images {
+
+        // Define build, tag, save, and publish actions for the image 'timeServer'
+        timeServer {
+
+            // Define the Docker build context use to build the Docker image.  The build context is a directory whose
+            // contents are used in the image build process.  The 'contextTask' takes a Gradle 'Copy' task, so one or
+            // more files/directories may be included to create the build context.
+            //
+            // For debug purposes, inspect the Docker build context at 'build/docker-context/timeServer'.
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for time server image'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+                from(file('../../app/build/libs')) {
+                    include 'app-*.jar'
+                    def projectVersion = version // Capture version during configuration time
+                    rename { "app-${projectVersion}.jar" }
+                }
+                dependsOn ':app:jar'
+            }
+            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile' based on image name
+            //dockerfileName = 'Dockerfile'
+            tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
+                        "${version}",
+                        "latest"
+            ])
+            buildArgs = [
+                'JAR_FILE': "app-${version}.jar",
+                'BUILD_VERSION': version,
+                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
+            //publish {
+            //    to('basic') {
+            //        repository = 'localhost:25000/time-server-integration'
+            //        publishTags = ['latest'] // note different syntax to list tax vs docker/images/<name>/tags
+            //    }
+            //}
+        }
+
+        // Build additional images by repeating the 'timeServer' configuration block template here
+    }
+}
+
+

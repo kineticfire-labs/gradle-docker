@@ -1,0 +1,68 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Docker Integration Tests Parent Project
+ * 
+ * This project orchestrates all Docker-related integration tests that demonstrate
+ * real usage patterns of the gradle-docker plugin's Docker functionality including:
+ * - Building Docker images
+ * - Tagging images  
+ * - Saving images to tar files
+ * - Publishing images to registries
+ * 
+ * Each subproject represents a specific Docker integration test scenario.
+ */
+
+// No plugins needed at root level - subprojects handle their own builds
+
+group = 'com.kineticfire.gradle.docker.integration.docker'
+version = '1.0.0'
+
+// Aggregate task to run all Docker integration tests
+tasks.register('runAll') {
+    description = 'Run all Docker integration tests'
+    group = 'verification'
+}
+
+// Configure dependencies after project evaluation
+afterEvaluate {
+    tasks.named('runAll') {
+        // Add dependencies on subproject Docker build tasks
+        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('dockerBuild')
+        
+        // Future subprojects can be added here:
+        // dependsOn project(':multi-stage-dockerfile').tasks.named('dockerBuild')
+        // dependsOn project(':custom-registry-publish').tasks.named('dockerBuild')
+    }
+}
+
+// Aggregate cleanup task
+tasks.register('cleanAll') {
+    description = 'Clean all Docker integration test projects'
+    group = 'build'
+}
+
+// Configure cleanup dependencies after project evaluation
+afterEvaluate {
+    tasks.named('cleanAll') {
+        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('clean')
+        
+        // Future subprojects can be added here:
+        // dependsOn project(':multi-stage-dockerfile').tasks.named('clean')
+        // dependsOn project(':custom-registry-publish').tasks.named('clean')
+    }
+}

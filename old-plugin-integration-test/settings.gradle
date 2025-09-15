@@ -31,9 +31,5 @@ rootProject.name = 'plugin-integration-test'
 // Include the app subproject (builds the Java application)
 include 'app'
 
-// Include Docker integration tests
-include 'docker'
-include 'docker:all-in-one-dockerfile-default'
-
-// Future: Include Compose integration tests
-// include 'compose'
+// Include the app-image subproject (builds Docker image + runs tests)
+include 'app-image'

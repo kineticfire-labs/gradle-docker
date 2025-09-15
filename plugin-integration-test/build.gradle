@@ -15,13 +15,15 @@
  */
 
 /**
- * Top-level integration test project demonstrating gradle-docker plugin usage.
+ * Plugin Integration Tests Root Project
  * 
- * This project showcases realistic multi-project structure where:
- * - 'app' subproject builds the Java application 
- * - 'app-image' subproject creates Docker image and runs integration tests
+ * This project orchestrates all integration tests that demonstrate real usage patterns
+ * of the gradle-docker plugin including:
+ * - Docker operations (build, tag, save, publish) in docker/ subproject
+ * - Docker Compose orchestration in compose/ subproject (future)
+ * - Application JAR building in app/ subproject (shared dependency)
  * 
- * This mirrors how developers would actually structure projects using the gradle-docker plugin.
+ * Each major subproject represents a category of integration tests.
  */
 
 // No plugins needed at root level - subprojects handle their own builds
@@ -29,32 +31,28 @@
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
-// Ensure proper build order: app must be built before app-image
-project(':app-image') {
-    afterEvaluate {
-        tasks.findByName('dockerBuildTimeServer')?.dependsOn(':app:jar')
-    }
-}
-
-// Aggregate tasks for convenience
-tasks.register('buildAll') {
-    description = 'Build both app and Docker image'
-    group = 'build'
-    dependsOn ':app:build', ':app-image:dockerBuild'
-}
-
-tasks.register('testAll') {
-    description = 'Run all tests (unit, smoke, integration)'
-    group = 'verification' 
-    dependsOn ':app:test', ':app-image:smokeTest', ':app-image:integrationTestSuite'
-}
-
-tasks.register('fullTest') {
-    description = 'Run all tests including different lifecycle patterns'
+// Aggregate task to run all integration tests
+tasks.register('runAll') {
+    description = 'Run all integration tests (Docker and Compose)'
     group = 'verification'
-    dependsOn ':app:test', 
-              ':app-image:smokeTest',
-              ':app-image:integrationTestSuite',
-              ':app-image:integrationTestClass', 
-              ':app-image:integrationTestMethod'
+    
+    // Ensure app is built first, then run all integration test categories
+    dependsOn ':app:build'
+    dependsOn ':docker:runAll'
+    
+    // Future compose integration tests:
+    // dependsOn ':compose:runAll'
 }
+
+// Aggregate cleanup task  
+tasks.register('cleanAll') {
+    description = 'Clean all integration test projects'
+    group = 'build'
+    
+    dependsOn ':app:clean'
+    dependsOn ':docker:cleanAll'
+    
+    // Future compose integration tests:
+    // dependsOn ':compose:cleanAll'
+}
+
