@@ -15,14 +15,8 @@
  */
 
 /**
- * App-Image subproject - builds Docker image and runs integration tests.
- * 
- * This demonstrates how developers would use the gradle-docker plugin to:
- * - Build Docker images using the docker {} DSL (UC-6)  
- * - Test images using Docker Compose orchestration with dockerOrch {} DSL (UC-7)
- * - Use different lifecycle patterns (suite, class, method)
- * 
- * This subproject showcases realistic usage patterns developers would follow.
+ * Integration test for 'docker/images/<image name>':
+ *   - todo
  */
 
 plugins {
@@ -33,23 +27,7 @@ plugins {
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
-dependencies {
-    // Docker Java Client for image verification
-    implementation libs.docker.java.core
-    implementation libs.docker.java.transport.httpclient5
-}
-
-// Handle duplicate resources
-tasks.withType(ProcessResources) {
-    duplicatesStrategy = DuplicatesStrategy.WARN
-}
-
-// Setup all-in-one 'docker' tasks:  build, tag, save, and publish
+// todo: Setup all-in-one 'docker' tasks:  build, tag, save, and publish
 docker {
     images {
 
@@ -84,6 +62,7 @@ docker {
                 'BUILD_VERSION': version,
                 'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
             ]
+            // todo
             //publish {
             //    to('basic') {
             //        repository = 'localhost:25000/time-server-integration'
@@ -91,8 +70,6 @@ docker {
             //    }
             //}
         }
-
-        // Build additional images by repeating the 'timeServer' configuration block template here
     }
 }
 
