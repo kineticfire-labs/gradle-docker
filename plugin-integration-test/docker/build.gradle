@@ -33,20 +33,20 @@ group = 'com.kineticfire.gradle.docker.integration.docker'
 version = '1.0.0'
 
 // Aggregate task to run all Docker integration tests
-tasks.register('runAll') {
-    description = 'Run all Docker integration tests'
+tasks.register('integrationTest') {
+    description = 'Run integration tests for all Docker projects'
     group = 'verification'
 }
 
 // Configure dependencies after project evaluation
 afterEvaluate {
-    tasks.named('runAll') {
-        // Add dependencies on subproject Docker build tasks
-        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('dockerBuild')
+    tasks.named('integrationTest') {
+        // Add dependencies on subproject integration test tasks
+        dependsOn project(':docker:all-in-one-dockerfile-default').tasks.named('integrationTest')
         
         // Future subprojects can be added here:
-        // dependsOn project(':multi-stage-dockerfile').tasks.named('dockerBuild')
-        // dependsOn project(':custom-registry-publish').tasks.named('dockerBuild')
+        // dependsOn project(':multi-stage-dockerfile').tasks.named('integrationTest')
+        // dependsOn project(':custom-registry-publish').tasks.named('integrationTest')
     }
 }
 

@@ -32,16 +32,16 @@ group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
 // Aggregate task to run all integration tests
-tasks.register('runAll') {
+tasks.register('integrationTest') {
     description = 'Run all integration tests (Docker and Compose)'
     group = 'verification'
     
     // Ensure app is built first, then run all integration test categories
     dependsOn ':app:build'
-    dependsOn ':docker:runAll'
+    dependsOn ':docker:integrationTest'
     
     // Future compose integration tests:
-    // dependsOn ':compose:runAll'
+    // dependsOn ':compose:integrationTest'
 }
 
 // Aggregate cleanup task  

@@ -175,4 +175,17 @@ tasks.register('verifyDockerImages') {
     }
 }
 
+// Task that runs complete integration test workflow
+tasks.register('integrationTest') {
+    description = 'Run complete Docker integration test: clean → build → verify'
+    group = 'verification'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerBuildTimeServer'  
+    dependsOn 'verifyDockerImages'
+    
+    // Ensure proper task ordering
+    tasks.dockerBuildTimeServer.mustRunAfter tasks.cleanDockerImages
+    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuildTimeServer
+}
+
 
