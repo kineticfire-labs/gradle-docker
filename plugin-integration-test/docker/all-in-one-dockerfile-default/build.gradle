@@ -104,7 +104,7 @@ docker {
 apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
 // Register Docker image clean and verify tasks for this integration test
-registerDockerImageTasks(project, [
+registerBuildWorkflowTasks(project, [
     'time-server:1.0.0',
     'time-server:latest'
 ])

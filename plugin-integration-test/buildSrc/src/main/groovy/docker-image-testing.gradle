@@ -15,44 +15,127 @@
  */
 
 /**
- * Docker Image Testing Convention Plugin
+ * Docker Image Testing Library
  * 
- * Provides helper functions to register reusable Docker image clean and verify tasks
- * for integration tests. Use explicit image name configuration for clear test specification.
+ * Provides a composable library of functions to register Docker image testing tasks
+ * for integration tests. Use explicit configuration for clear test specification.
  * 
  * Usage:
  *   apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
  *   
- *   registerDockerImageTasks(project, [
- *       'time-server:1.0.0',
- *       'time-server:latest'
- *   ])
+ *   // Individual functions for maximum flexibility
+ *   registerCleanDockerImagesTask(project, ['time-server:1.0.0', 'time-server:latest'])
+ *   registerVerifyBuiltImagesTask(project, ['time-server:1.0.0', 'time-server:latest'])
+ *   registerVerifySavedImagesTask(project, ['build/saved/time-server-1.0.0.tar.gz'])
+ *   registerVerifyRegistryImagesTask(project, ['time-server:1.0.0'], 'localhost:5000')
+ *   
+ *   // Or convenience workflow function
+ *   registerBuildWorkflowTasks(project, ['time-server:1.0.0', 'time-server:latest'])
  */
 
 /**
- * Register Docker image clean and verify tasks for the specified images.
+ * Register Docker image clean task for removing images before building.
  * 
  * @param project The Gradle project to register tasks on
  * @param imageNames List of Docker image names in format "image-name:tag"
  */
-ext.registerDockerImageTasks = { Project project, List<String> imageNames ->
+ext.registerCleanDockerImagesTask = { Project project, List<String> imageNames ->
     if (imageNames == null || imageNames.isEmpty()) {
         throw new IllegalArgumentException("imageNames cannot be null or empty")
     }
     
-    // Register clean task
     project.tasks.register('cleanDockerImages', DockerImageCleanTask) {
         it.imageNames.set(imageNames)
         it.group = 'verification'
         it.description = 'Remove Docker images before building to ensure clean integration test'
     }
     
-    // Register verify task
+    project.logger.info("Registered clean Docker images task for images: ${imageNames}")
+}
+
+/**
+ * Register Docker image verification task for checking images exist after building.
+ * 
+ * @param project The Gradle project to register tasks on
+ * @param imageNames List of Docker image names in format "image-name:tag"
+ */
+ext.registerVerifyBuiltImagesTask = { Project project, List<String> imageNames ->
+    if (imageNames == null || imageNames.isEmpty()) {
+        throw new IllegalArgumentException("imageNames cannot be null or empty")
+    }
+    
     project.tasks.register('verifyDockerImages', DockerImageVerifyTask) {
         it.imageNames.set(imageNames)
         it.group = 'verification'
         it.description = 'Verify Docker images were created with expected tags'
     }
     
-    project.logger.info("Registered Docker image tasks for images: ${imageNames}")
+    project.logger.info("Registered verify built images task for images: ${imageNames}")
+}
+
+/**
+ * Register Docker saved image verification task for checking saved image files exist.
+ * 
+ * Supports multiple compression formats: .tar, .tar.gz, .tar.bz2, .tar.xz, .zip
+ * 
+ * @param project The Gradle project to register tasks on
+ * @param filePaths List of file paths to saved Docker images (full paths with extensions)
+ */
+ext.registerVerifySavedImagesTask = { Project project, List<String> filePaths ->
+    if (filePaths == null || filePaths.isEmpty()) {
+        throw new IllegalArgumentException("filePaths cannot be null or empty")
+    }
+    
+    project.tasks.register('verifySavedDockerImages', DockerSavedImageVerifyTask) {
+        it.filePaths.set(filePaths)
+        it.group = 'verification'
+        it.description = 'Verify Docker image files were saved to expected locations'
+    }
+    
+    project.logger.info("Registered verify saved images task for files: ${filePaths}")
+}
+
+/**
+ * Register Docker registry image verification task for checking images exist in registry.
+ * 
+ * Registry Support:
+ * - Can check image existence without authentication for public registries like Docker Hub
+ * - Will need authentication support for checking images in registries that require authentication
+ * - Will need authentication support for publishing to public registries like Docker Hub
+ * 
+ * @param project The Gradle project to register tasks on
+ * @param imageNames List of Docker image names in format "image-name:tag"
+ * @param registryUrl The registry URL (e.g., "localhost:5000", "docker.io")
+ */
+ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageNames, String registryUrl ->
+    if (imageNames == null || imageNames.isEmpty()) {
+        throw new IllegalArgumentException("imageNames cannot be null or empty")
+    }
+    if (registryUrl == null || registryUrl.trim().isEmpty()) {
+        throw new IllegalArgumentException("registryUrl cannot be null or empty")
+    }
+    
+    project.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
+        it.imageNames.set(imageNames)
+        it.registryUrl.set(registryUrl)
+        it.group = 'verification'
+        it.description = "Verify Docker images exist in registry: ${registryUrl}"
+    }
+    
+    project.logger.info("Registered verify registry images task for images: ${imageNames} in registry: ${registryUrl}")
+}
+
+/**
+ * Register build workflow tasks: clean → build → verify built images.
+ * 
+ * Convenience function for common Docker integration test workflow.
+ * 
+ * @param project The Gradle project to register tasks on
+ * @param imageNames List of Docker image names in format "image-name:tag"
+ */
+ext.registerBuildWorkflowTasks = { Project project, List<String> imageNames ->
+    registerCleanDockerImagesTask(project, imageNames)
+    registerVerifyBuiltImagesTask(project, imageNames)
+    
+    project.logger.info("Registered build workflow tasks for images: ${imageNames}")
 }

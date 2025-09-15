@@ -33,6 +33,7 @@ group = 'com.kineticfire.gradle.docker.integration.docker'
 version = '1.0.0'
 
 // Aggregate task to run all Docker integration tests
+//   - Probably want to run 'cleanAll' before invoking this task
 tasks.register('integrationTest') {
     description = 'Run integration tests for all Docker projects'
     group = 'verification'

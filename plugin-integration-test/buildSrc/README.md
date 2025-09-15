@@ -1,115 +1,44 @@
-# Docker Image Testing BuildSrc
+# Docker Image Testing Library
+
+A composable library of Gradle tasks for Docker image testing in integration test scenarios. This buildSrc module provides reusable functions for creating Docker image verification tasks with maximum flexibility.
 
 ## Overview
 
-- **Purpose**: Reusable Docker image clean/verify tasks for integration tests
-- **Scope**: Only for plugin-integration-test projects
-- **Compatibility**: Gradle 9 configuration cache compatible
+The Docker Image Testing Library provides individual functions for different aspects of Docker image testing:
 
-## Usage
+- **Clean Images**: Remove Docker images before building for clean integration tests
+- **Verify Built Images**: Check that Docker images exist after building
+- **Verify Saved Images**: Validate that Docker images have been saved to files
+- **Verify Registry Images**: Confirm that Docker images exist in Docker registries
+- **Build Workflow**: Convenience function combining clean and verify built operations
 
-### Basic Setup
+## Quick Start
 
-1. Apply the convention plugin in your integration test `build.gradle`:
-   ```groovy
-   apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
-   ```
+### Basic Usage
 
-2. Register tasks with your image list:
-   ```groovy
-   registerDockerImageTasks(project, [
-       'time-server:1.0.0',
-       'time-server:latest'
-   ])
-   ```
-
-3. Use in your `integrationTest` task:
-   ```groovy
-   tasks.register('integrationTest') {
-       dependsOn 'cleanDockerImages'
-       dependsOn 'dockerBuild'
-       dependsOn 'verifyDockerImages'
-       
-       // Ensure proper task ordering
-       tasks.dockerBuild.mustRunAfter tasks.cleanDockerImages
-       tasks.verifyDockerImages.mustRunAfter tasks.dockerBuild
-   }
-   ```
-
-### Image Name Format
-
-- **Format**: `"image-name:tag"`
-- **Examples**: 
-  - Single image: `["time-server:1.0.0", "time-server:latest"]`
-  - Multiple images: `["app:1.0", "db:latest", "cache:dev"]`
-- **Requirements**: Images must be valid Docker image names with tags
-
-### Task Registration
-
-- **Function**: `registerDockerImageTasks(project, imageList)`
-- **Automatic task creation**: 
-  - `cleanDockerImages` - Removes specified images
-  - `verifyDockerImages` - Verifies specified images exist
-- **Group**: `verification`
-
-### Integration with integrationTest
-
-- **Dependency order**: clean → build → verify
-- **Use `mustRunAfter`** for proper task ordering
-- **Build task**: Use `dockerBuild` (not specific image tasks)
-
-## Custom Tasks
-
-### DockerImageCleanTask
-
-- **Purpose**: Remove specified Docker images before building
-- **Input**: List of image names (`ListProperty<String>`)
-- **Behavior**: 
-  - Gracefully handles missing images (logs warning, continues)
-  - Uses `docker rmi -f` for forced removal
-  - Logs all actions for debugging
-
-### DockerImageVerifyTask
-
-- **Purpose**: Verify specified Docker images exist after building
-- **Input**: List of image names (`ListProperty<String>`)
-- **Behavior**: 
-  - Fails fast if any image is missing
-  - Reports exactly which images are missing
-  - Logs success/failure for each image
-
-## Configuration Cache Compatibility
-
-- **Uses ProcessBuilder** (not `project.exec`) for Docker commands
-- **Serializable inputs only** (`@Input ListProperty<String>`)
-- **No project references** in task actions
-- **Tested with** `--configuration-cache` flag
-
-## Testing
-
-- **Unit tests** for custom tasks (see `src/test/groovy/`)
-- **Integration tests** for full workflow
-- **Configuration cache validation** in test suite
-- **Mock ProcessBuilder** for unit tests (no actual Docker calls)
-
-## Examples
-
-### Basic Integration Test
+Apply the library in your integration test `build.gradle`:
 
 ```groovy
-// In docker/my-test/build.gradle
+// Apply the Docker image testing library
 apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
-registerDockerImageTasks(project, [
-    'my-app:1.0.0',
-    'my-app:latest'
-])
+// Use individual functions for maximum flexibility
+registerCleanDockerImagesTask(project, ['my-app:1.0.0', 'my-app:latest'])
+registerVerifyBuiltImagesTask(project, ['my-app:1.0.0', 'my-app:latest']) 
 
+// Or use convenience workflow function
+registerBuildWorkflowTasks(project, ['my-app:1.0.0', 'my-app:latest'])
+```
+
+### Integration Test Example
+
+```groovy
 tasks.register('integrationTest') {
-    description = 'Run complete Docker integration test: clean → build → verify'
+    description = 'Run complete Docker integration test workflow'
     group = 'verification'
+    
     dependsOn 'cleanDockerImages'
-    dependsOn 'dockerBuild'
+    dependsOn 'dockerBuild'  
     dependsOn 'verifyDockerImages'
     
     // Ensure proper task ordering
@@ -118,83 +47,286 @@ tasks.register('integrationTest') {
 }
 ```
 
-### Multi-Image Test
+## Available Functions
+
+### registerCleanDockerImagesTask
+
+Removes Docker images before building to ensure clean integration tests.
 
 ```groovy
-registerDockerImageTasks(project, [
-    'frontend:1.0.0',
-    'frontend:latest',
-    'backend:1.0.0', 
-    'backend:latest',
-    'database:5.7'
+registerCleanDockerImagesTask(project, imageNames)
+```
+
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `imageNames`: List of Docker image names in format `"image-name:tag"`
+
+**Creates Task:** `cleanDockerImages` in the `verification` group
+
+**Example:**
+```groovy
+registerCleanDockerImagesTask(project, [
+    'my-app:1.0.0',
+    'my-app:latest'
 ])
 ```
 
-### Running Tests
+### registerVerifyBuiltImagesTask
 
-```bash
-# Run specific integration test
-./gradlew :docker:my-test:integrationTest
+Verifies that Docker images exist after building.
 
-# Run with configuration cache
-./gradlew integrationTest --configuration-cache
-
-# Run all integration tests
-./gradlew integrationTest
+```groovy
+registerVerifyBuiltImagesTask(project, imageNames)
 ```
 
-## Error Handling
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `imageNames`: List of Docker image names in format `"image-name:tag"`
 
-### Clean Task Errors
-- **Missing images**: Logged as info, task continues
-- **Docker daemon unavailable**: Task fails with clear error
-- **Permission issues**: Task fails with Docker error details
+**Creates Task:** `verifyDockerImages` in the `verification` group
 
-### Verify Task Errors
-- **Missing images**: Task fails immediately with list of missing images
-- **Docker daemon unavailable**: Task fails with clear error
-- **Malformed image names**: Logged as warning, task continues
+**Example:**
+```groovy
+registerVerifyBuiltImagesTask(project, [
+    'my-app:1.0.0',
+    'my-app:latest',
+    'my-database:5.7'
+])
+```
 
-## Best Practices
+### registerVerifySavedImagesTask
 
-1. **Use explicit image lists** - Don't auto-detect from docker DSL
-2. **Include all expected tags** - Both versioned and latest tags
-3. **Test configuration cache** - Always test with `--configuration-cache`
-4. **Proper task ordering** - Use `mustRunAfter` for dependencies
-5. **Clear error messages** - Let tasks fail fast with specific errors
+Verifies that Docker image files have been saved to specified file paths.
 
-## Troubleshooting
+```groovy
+registerVerifySavedImagesTask(project, filePaths)
+```
 
-### Common Issues
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `filePaths`: List of file paths to saved Docker images (full paths with extensions)
 
-1. **"Docker command not found"**
-   - Ensure Docker is installed and on PATH
-   - Check Docker daemon is running
+**Supported Formats:**
+- `.tar` - Uncompressed tar archive
+- `.tar.gz` - Gzip compressed tar archive
+- `.tar.bz2` - Bzip2 compressed tar archive  
+- `.tar.xz` - XZ compressed tar archive
+- `.zip` - ZIP compressed archive
 
-2. **"Configuration cache problems"**
-   - Verify no `project.exec` usage in task actions
-   - Check task inputs are serializable
+**Creates Task:** `verifySavedDockerImages` in the `verification` group
 
-3. **"Images not found during verify"**
-   - Check image names match exactly what docker build creates
-   - Verify docker build actually succeeded
+**Example:**
+```groovy
+registerVerifySavedImagesTask(project, [
+    'build/saved/my-app-1.0.0.tar',
+    'build/saved/my-app-latest.tar.gz',
+    'build/saved/my-database-5.7.tar.bz2'
+])
+```
 
-4. **"Permission denied removing images"**
-   - Use `docker rmi -f` (already implemented)
-   - Check Docker daemon permissions
+### registerVerifyRegistryImagesTask
 
-### Debug Commands
+Verifies that Docker images exist in a specified Docker registry.
 
+```groovy
+registerVerifyRegistryImagesTask(project, imageNames, registryUrl)
+```
+
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `imageNames`: List of Docker image names in format `"image-name:tag"`
+- `registryUrl`: The registry URL (e.g., `"localhost:5000"`, `"docker.io"`)
+
+**Registry Support:**
+- ✅ Can check image existence without authentication for public registries like Docker Hub
+- 🚧 Will need authentication support for checking images in registries that require authentication
+- 🚧 Will need authentication support for publishing to public registries like Docker Hub
+
+**Creates Task:** `verifyRegistryDockerImages` in the `verification` group
+
+**Example:**
+```groovy
+// Local private registry for testing
+registerVerifyRegistryImagesTask(project, [
+    'my-app:1.0.0',
+    'my-app:latest'
+], 'localhost:5000')
+
+// Public Docker Hub registry
+registerVerifyRegistryImagesTask(project, [
+    'alpine:latest'
+], 'docker.io')
+```
+
+### registerBuildWorkflowTasks
+
+Convenience function that registers both clean and verify built image tasks for the common Docker build workflow.
+
+```groovy
+registerBuildWorkflowTasks(project, imageNames)
+```
+
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `imageNames`: List of Docker image names in format `"image-name:tag"`
+
+**Creates Tasks:**
+- `cleanDockerImages` - Remove images before building
+- `verifyDockerImages` - Verify images exist after building
+
+**Example:**
+```groovy
+registerBuildWorkflowTasks(project, [
+    'my-app:1.0.0',
+    'my-app:latest'
+])
+```
+
+## Task Composition Examples
+
+### Build → Save → Verify Saved Workflow
+
+```groovy
+// Register individual tasks for flexible composition
+registerCleanDockerImagesTask(project, ['my-app:1.0.0'])
+registerVerifyBuiltImagesTask(project, ['my-app:1.0.0'])
+registerVerifySavedImagesTask(project, ['build/saved/my-app-1.0.0.tar.gz'])
+
+tasks.register('buildSaveVerifyWorkflow') {
+    description = 'Build, save, and verify Docker image workflow'
+    group = 'verification'
+    
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerBuild'
+    dependsOn 'dockerSave'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    
+    // Task ordering
+    tasks.dockerBuild.mustRunAfter tasks.cleanDockerImages
+    tasks.dockerSave.mustRunAfter tasks.dockerBuild
+    tasks.verifyDockerImages.mustRunAfter tasks.dockerSave
+    tasks.verifySavedDockerImages.mustRunAfter tasks.dockerSave
+}
+```
+
+### Build → Tag → Publish → Verify Registry Workflow
+
+```groovy
+// Note: No clean task - we want to keep the built image for tagging/publishing
+registerVerifyBuiltImagesTask(project, ['my-app:1.0.0'])
+registerVerifyRegistryImagesTask(project, ['my-app:1.0.0'], 'localhost:5000')
+
+tasks.register('buildPublishVerifyWorkflow') {
+    description = 'Build, publish, and verify registry workflow'
+    group = 'verification'
+    
+    dependsOn 'dockerBuild'
+    dependsOn 'dockerTag' 
+    dependsOn 'dockerPublish'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+    
+    // Task ordering
+    tasks.dockerTag.mustRunAfter tasks.dockerBuild
+    tasks.dockerPublish.mustRunAfter tasks.dockerTag
+    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuild
+    tasks.verifyRegistryDockerImages.mustRunAfter tasks.dockerPublish
+}
+```
+
+### Multiple Image Formats and Registries
+
+```groovy
+def appImages = ['my-app:1.0.0', 'my-app:latest']
+def savedFiles = [
+    'build/saved/my-app-1.0.0.tar',
+    'build/saved/my-app-1.0.0.tar.gz', 
+    'build/saved/my-app-latest.tar.bz2'
+]
+
+// Register all verification types
+registerBuildWorkflowTasks(project, appImages)
+registerVerifySavedImagesTask(project, savedFiles)
+registerVerifyRegistryImagesTask(project, appImages, 'localhost:5000')
+registerVerifyRegistryImagesTask(project, ['my-app:1.0.0'], 'docker.io')
+
+tasks.register('comprehensiveImageTest') {
+    description = 'Comprehensive Docker image testing across formats and registries'
+    group = 'verification'
+    
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerBuild'
+    dependsOn 'dockerSave'
+    dependsOn 'dockerPublish'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+}
+```
+
+## Configuration Cache Compatibility
+
+All tasks are fully compatible with Gradle's configuration cache for optimal build performance:
+
+- Uses `ListProperty<String>` and `Property<String>` for lazy evaluation
+- Avoids capturing `Project` references in task actions
+- Uses `ProcessBuilder` for external command execution instead of `project.exec`
+
+## Testing
+
+The library includes comprehensive test coverage:
+
+### Unit Tests
+- **DockerImageCleanTaskTest** - Tests clean task behavior
+- **DockerImageVerifyTaskTest** - Tests built image verification
+- **DockerSavedImageVerifyTaskTest** - Tests saved file verification
+- **DockerRegistryImageVerifyTaskTest** - Tests registry verification
+- **DockerImageTestingLibraryTest** - Tests all registration functions
+
+### Integration Tests
+- **DockerImageTestingSimpleIntegrationTest** - Real Docker command integration tests
+
+Run tests:
 ```bash
-# Check what images exist
-docker images
+./gradlew :buildSrc:test
+```
 
-# Check specific image
-docker images -q time-server:1.0.0
+## Architecture
 
-# Debug with Gradle info logging
-./gradlew integrationTest --info
+The library follows these design principles:
 
-# Debug configuration cache
-./gradlew integrationTest --configuration-cache --info
+- **Single Responsibility**: Each function has one clear purpose
+- **Composable**: Mix and match functions for different test scenarios  
+- **Explicit**: Test intent is clear from function names
+- **Configuration Cache Compatible**: Uses Gradle 9 Provider API patterns
+- **Cross-Platform**: Uses ProcessBuilder for Docker command execution
+
+## Future Enhancements
+
+- **Registry Authentication**: Support for authenticated registry operations
+- **Multiple Compression Format Support**: Enhanced compression options for saved images
+- **Public Registry Publishing**: Full Docker Hub integration with authentication
+- **Advanced Image Verification**: Hash verification and metadata validation
+
+## Project Structure
+
+```
+buildSrc/
+├── build.gradle                    # BuildSrc configuration
+├── README.md                       # This documentation
+└── src/
+    ├── main/groovy/
+    │   ├── docker-image-testing.gradle    # Library functions
+    │   ├── DockerImageCleanTask.groovy     # Clean images task
+    │   ├── DockerImageVerifyTask.groovy    # Verify built images task
+    │   ├── DockerSavedImageVerifyTask.groovy    # Verify saved files task
+    │   └── DockerRegistryImageVerifyTask.groovy # Verify registry images task
+    └── test/groovy/
+        ├── DockerImageCleanTaskTest.groovy
+        ├── DockerImageVerifyTaskTest.groovy  
+        ├── DockerSavedImageVerifyTaskTest.groovy
+        ├── DockerRegistryImageVerifyTaskTest.groovy
+        ├── DockerImageTestingLibraryTest.groovy
+        └── DockerImageTestingSimpleIntegrationTest.groovy
 ```
