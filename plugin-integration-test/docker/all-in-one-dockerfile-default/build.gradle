@@ -100,92 +100,24 @@ docker {
 // INTEGRATION TEST VERIFICATION TASKS
 // ============================================================================
 
-// Task to clean up Docker images before building (ensures clean test state)
-tasks.register('cleanDockerImages') {
-    description = 'Remove Docker images before building to ensure clean integration test'
-    group = 'verification'
-    
-    doLast {
-        // Remove Docker images using Docker CLI (configuration cache compatible)
-        ['time-server:1.0.0', 'time-server:latest'].each { fullImageName ->
-            try {
-                // Check if image exists using ProcessBuilder
-                def checkProcess = new ProcessBuilder('docker', 'images', '-q', fullImageName)
-                    .redirectErrorStream(true)
-                    .start()
-                def checkOutput = checkProcess.inputStream.text.trim()
-                checkProcess.waitFor()
-                
-                if (checkProcess.exitValue() == 0 && checkOutput) {
-                    println "Removing existing image: ${fullImageName}"
-                    def removeProcess = new ProcessBuilder('docker', 'rmi', '-f', fullImageName)
-                        .redirectErrorStream(true)
-                        .start()
-                    removeProcess.waitFor()
-                    if (removeProcess.exitValue() == 0) {
-                        println "Successfully removed image: ${fullImageName}"
-                    } else {
-                        println "Warning: Could not remove image ${fullImageName}"
-                    }
-                } else {
-                    println "Image ${fullImageName} does not exist, skipping removal"
-                }
-            } catch (Exception e) {
-                println "Warning: Could not process image ${fullImageName}: ${e.message}"
-            }
-        }
-    }
-}
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
-// Task to verify Docker images were created after building
-tasks.register('verifyDockerImages') {
-    description = 'Verify Docker images were created with expected tags'
-    group = 'verification'
-    
-    doLast {
-        // Verify Docker images using Docker CLI (configuration cache compatible)
-        def failedImages = []
-        
-        ['time-server:1.0.0', 'time-server:latest'].each { fullImageName ->
-            try {
-                // Check if image exists using ProcessBuilder
-                def checkProcess = new ProcessBuilder('docker', 'images', '-q', fullImageName)
-                    .redirectErrorStream(true)
-                    .start()
-                def checkOutput = checkProcess.inputStream.text.trim()
-                checkProcess.waitFor()
-                
-                if (checkProcess.exitValue() == 0 && checkOutput) {
-                    println "✓ Verified image exists: ${fullImageName}"
-                } else {
-                    failedImages.add(fullImageName)
-                    println "✗ Expected image ${fullImageName} was not found!"
-                }
-            } catch (Exception e) {
-                failedImages.add(fullImageName)
-                println "✗ Error checking image ${fullImageName}: ${e.message}"
-            }
-        }
-        
-        if (!failedImages.isEmpty()) {
-            throw new RuntimeException("Expected images were not found: ${failedImages.join(', ')}")
-        }
-        
-        println "✓ All expected Docker images verified successfully!"
-    }
-}
+// Register Docker image clean and verify tasks for this integration test
+registerDockerImageTasks(project, [
+    'time-server:1.0.0',
+    'time-server:latest'
+])
 
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → verify'
     group = 'verification'
     dependsOn 'cleanDockerImages'
-    dependsOn 'dockerBuildTimeServer'  
+    dependsOn 'dockerBuild'  
     dependsOn 'verifyDockerImages'
     
     // Ensure proper task ordering
-    tasks.dockerBuildTimeServer.mustRunAfter tasks.cleanDockerImages
-    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuildTimeServer
+    tasks.dockerBuild.mustRunAfter tasks.cleanDockerImages
+    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuild
 }
-
-

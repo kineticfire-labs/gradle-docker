@@ -1,0 +1,58 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Docker Image Testing Convention Plugin
+ * 
+ * Provides helper functions to register reusable Docker image clean and verify tasks
+ * for integration tests. Use explicit image name configuration for clear test specification.
+ * 
+ * Usage:
+ *   apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+ *   
+ *   registerDockerImageTasks(project, [
+ *       'time-server:1.0.0',
+ *       'time-server:latest'
+ *   ])
+ */
+
+/**
+ * Register Docker image clean and verify tasks for the specified images.
+ * 
+ * @param project The Gradle project to register tasks on
+ * @param imageNames List of Docker image names in format "image-name:tag"
+ */
+ext.registerDockerImageTasks = { Project project, List<String> imageNames ->
+    if (imageNames == null || imageNames.isEmpty()) {
+        throw new IllegalArgumentException("imageNames cannot be null or empty")
+    }
+    
+    // Register clean task
+    project.tasks.register('cleanDockerImages', DockerImageCleanTask) {
+        it.imageNames.set(imageNames)
+        it.group = 'verification'
+        it.description = 'Remove Docker images before building to ensure clean integration test'
+    }
+    
+    // Register verify task
+    project.tasks.register('verifyDockerImages', DockerImageVerifyTask) {
+        it.imageNames.set(imageNames)
+        it.group = 'verification'
+        it.description = 'Verify Docker images were created with expected tags'
+    }
+    
+    project.logger.info("Registered Docker image tasks for images: ${imageNames}")
+}
