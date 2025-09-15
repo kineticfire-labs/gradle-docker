@@ -33,48 +33,9 @@ plugins {
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
-repositories {
-    mavenLocal()
-    mavenCentral()
-}
-
-// Configure source sets for testing
-sourceSets {
-    integrationTest {
-        java.srcDir 'src/integrationTest/java'
-        groovy.srcDir 'src/integrationTest/groovy'
-        resources.srcDir 'src/integrationTest/resources'  
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += output + compileClasspath
-    }
-}
-
-// Configure test configurations
-configurations {
-    integrationTestImplementation.extendsFrom implementation
-    integrationTestRuntimeOnly.extendsFrom runtimeOnly
-}
-
 // Handle duplicate resources
 tasks.withType(ProcessResources) {
     duplicatesStrategy = DuplicatesStrategy.WARN
-}
-
-dependencies {
-    
-    // Integration Test dependencies (Java/JUnit)  
-    integrationTestImplementation platform(libs.junit.bom)
-    integrationTestImplementation libs.junit.jupiter
-    integrationTestImplementation libs.assertj.core
-    integrationTestImplementation libs.jackson.databind
-    integrationTestImplementation gradleTestKit()
-    integrationTestImplementation libs.gradle.docker
-    integrationTestRuntimeOnly libs.junit.platform.launcher
-    
-    // Integration Test dependencies (Groovy/Spock for registry tests)
-    integrationTestImplementation platform(libs.spock.bom)
-    integrationTestImplementation libs.spock.core
-    integrationTestImplementation libs.spock.junit4
 }
 
 // Setup all-in-one 'docker' tasks:  build, tag, save, and publish
