@@ -15,8 +15,17 @@
  */
 
 /**
- * Integration test for 'docker/images/<image name>':
- *   - todo
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images = 1
+ *       - number of build args > 1
+ *       - dockerfile = default
+ *   - Tag Features
+ *       - number of tags > 1
+ *   - Save Features
+ *       - save = none
+ *   - Publish Features
+ *       - publish = none
  */
 
 plugins {
@@ -29,11 +38,11 @@ version = '1.0.0'
 
 docker {
     images {
-        scenario1TimeServer {
+        timeServer {
             contextTask = tasks.register('prepareScenario1TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
-                into layout.buildDirectory.dir('docker-context/scenario1TimeServer')
+                into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
@@ -42,16 +51,16 @@ docker {
                 }
                 dependsOn ':app:jar'
             }
+            buildArgs = [
+                    'JAR_FILE': "app-${version}.jar",
+                    'BUILD_VERSION': version,
+                    'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
             // dockerfile will default to 'build/docker-context/scenario1TimeServer/Dockerfile' based on image name
             tags.set([
-                        "${version}",
-                        "latest"
+                        "scenario1-time-server:${version}",
+                        "scenario1-time-server:latest"
             ])
-            buildArgs = [
-                'JAR_FILE': "app-${version}.jar",
-                'BUILD_VERSION': version,
-                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
-            ]
             // no save
             // no publish
         }

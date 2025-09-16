@@ -37,7 +37,6 @@ abstract class DockerSaveTask extends DefaultTask {
         description = 'Save Docker image to file'
         
         // Set defaults
-        compression.convention(CompressionType.GZIP)
         pullIfMissing.convention(false)
     }
     
@@ -70,6 +69,9 @@ abstract class DockerSaveTask extends DefaultTask {
         }
         if (!outputFile.present) {
             throw new IllegalStateException("outputFile property must be set")
+        }
+        if (!compression.present) {
+            throw new IllegalStateException("compression property must be set. Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'")
         }
         
         // Resolve image source (built vs sourceRef)

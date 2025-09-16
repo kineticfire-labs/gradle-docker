@@ -34,7 +34,6 @@ abstract class SaveSpec {
         this.project = project
         
         // Set defaults
-        compression.convention("gzip")
         pullIfMissing.convention(false)
     }
     

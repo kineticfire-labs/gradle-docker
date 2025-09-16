@@ -170,6 +170,11 @@ abstract class DockerExtension {
         if (imageSpec.publish.present) {
             validatePublishConfiguration(imageSpec.publish.get(), imageSpec.name)
         }
+
+        // Validate save configuration if present
+        if (imageSpec.save.present) {
+            validateSaveConfiguration(imageSpec.save.get(), imageSpec.name)
+        }
     }
     
     /**
@@ -263,7 +268,7 @@ abstract class DockerExtension {
      * Validates the image name part of an image reference (before the tag)
      * Handles registry:port/namespace/name format
      */
-    private boolean isValidDockerImageName(String imageName) {
+    protected boolean isValidDockerImageName(String imageName) {
         if (!imageName || imageName.length() > 255) {
             return false
         }
@@ -281,7 +286,7 @@ abstract class DockerExtension {
     /**
      * Validates a registry hostname (more permissive than regular name components)
      */
-    private boolean isValidDockerTag(String tag) {
+    protected boolean isValidDockerTag(String tag) {
         if (!tag || tag.length() > 128) {
             return false
         }
@@ -324,6 +329,28 @@ abstract class DockerExtension {
         // Valid examples: "myapp", "docker.io/myapp", "localhost:5000/namespace/app"
         // Basic validation - allow alphanumeric, dots, colons, slashes, dashes
         return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
+    }
+
+    /**
+     * Validates save configuration for an image
+     */
+    void validateSaveConfiguration(def saveSpec, String imageName) {
+        if (!saveSpec.compression.present) {
+            throw new GradleException(
+                "compression parameter is required for save configuration in image '${imageName}'. " +
+                "Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'"
+            )
+        }
+
+        // Validate compression type is supported
+        def compressionValue = saveSpec.compression.get()
+        def validCompressionTypes = ['none', 'gzip', 'bzip2', 'xz', 'zip']
+        if (!validCompressionTypes.contains(compressionValue.toLowerCase())) {
+            throw new GradleException(
+                "Invalid compression type: '${compressionValue}' in save configuration for image '${imageName}'. " +
+                "Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'"
+            )
+        }
     }
 
 }

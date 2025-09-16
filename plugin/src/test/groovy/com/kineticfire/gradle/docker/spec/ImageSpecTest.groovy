@@ -175,20 +175,16 @@ class ImageSpecTest extends Specification {
         imageSpec.save.get().pullIfMissing.get() == false
     }
 
-    def "save with defaults"() {
-        given:
-        def myOutputFile = project.file('default.tar')
-
+    def "save configuration requires compression parameter"() {
         when:
         imageSpec.save {
-            outputFile.set(myOutputFile)
+            outputFile.set(project.file('test.tar'))
+            // Missing compression parameter
         }
 
         then:
         imageSpec.save.present
-        imageSpec.save.get().outputFile.get().asFile == myOutputFile
-        imageSpec.save.get().compression.get() == 'gzip' // default
-        imageSpec.save.get().pullIfMissing.get() == false // default
+        !imageSpec.save.get().compression.present
     }
 
     // ===== PUBLISH CONFIGURATION TESTS =====

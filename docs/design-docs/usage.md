@@ -1,6 +1,8 @@
 # Docker Plugin Usage Guide
 
-This document provides examples of how to use the Gradle Docker plugin DSL for common scenarios involving existing Docker images.
+This document provides simple, informal examples of how to use the Gradle Docker plugin DSL.
+
+> **Breaking Change Note:** The `compression` parameter is now required for save configuration. This ensures explicit control over output format and prevents unexpected compressed files. Since this project is in early development with no external users, no backward compatibility is provided.
 
 ## Prerequisites
 
@@ -12,7 +14,68 @@ plugins {
 }
 ```
 
-## Scenario 1: Apply Two Tags to an Existing Image
+## Building a New Docker Image
+
+```groovy
+docker {
+    images {
+        timeServer {
+            contextTask = tasks.register('prepareTimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for time server image'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+                from(file('../../app/build/libs')) {
+                    include 'app-*.jar'
+                    def projectVersion = version // Capture version during configuration time
+                    rename { "app-${projectVersion}.jar" }
+                }
+                dependsOn ':app:jar'
+            }
+            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile' based on image name
+            //   - could set custom name as dockerfileName = 'MyDockerfile', then path will be 'build/docker-context/timeServer/MyDockerfile'
+            //   - could set custom path/name with dockerfile.set(file('build/docker-context/timeServer/custom/path/CustomDockerfile')) 
+            tags.set(["time-server:${version}",
+                      "time-server:latest"
+            ])
+            buildArgs = [
+                'JAR_FILE': "app-${version}.jar",
+                'BUILD_VERSION': version,
+                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
+            publish {
+                to('basic') {
+                    tags = ['localhost:5000/time-server:latest']
+                }
+            }
+        }
+    }
+}
+```
+
+### 
+
+
+```bash
+# For tagging only
+./gradlew dockerTagMyExistingImage
+
+# For saving only
+./gradlew dockerSaveMyExistingImage
+
+# For publishing only
+./gradlew dockerPublishMyExistingImage
+
+# For combined operations (runs all configured operations)
+./gradlew dockerBuildMyExistingImage
+
+# Or run all Docker operations for all images
+./gradlew dockerBuild
+```
+
+## Acting on a Docker Image That is Already Built
+
+### Scenario 1: Apply Two Tags to an Existing Image
 
 ```gradle
 docker {
@@ -28,7 +91,7 @@ docker {
 }
 ```
 
-## Scenario 2: Save an Existing Image to File
+### Scenario 2: Save an Existing Image to File
 
 ```gradle
 docker {
@@ -38,7 +101,7 @@ docker {
 
             save {
                 outputFile = file('build/docker-images/my-app.tar.gz')
-                compression = 'gzip'  // Options: 'none', 'gzip', 'bzip2', 'xz', 'zip'
+                compression = 'gzip'  // Required! Options: 'none', 'gzip', 'bzip2', 'xz', 'zip'
                 pullIfMissing = false  // Set to true if image might not be local
             }
         }
@@ -46,7 +109,7 @@ docker {
 }
 ```
 
-## Scenario 3: Publish an Existing Image to Local Registry
+### Scenario 3: Publish an Existing Image to Local Registry
 
 ```gradle
 docker {
@@ -56,14 +119,13 @@ docker {
 
             publish {
                 to('localRegistry') {
-                    repository = 'localhost:5000/my-app'
-                    publishTags = ['latest', 'v1.0.0']
+                    tags = ['localhost:5000/timeServer:1.0.0', 'localhost:5000/timeServer:stable']
 
                     // Optional authentication if required
                     auth {
-                        username = 'myuser'
-                        password = 'mypassword'
-                        // Or use registry = 'localhost:5000' for registry-specific auth
+                        username.set('myuser')
+                        password.set('mypassword')
+                        serverAddress.set('localhost:5000')
                     }
                 }
             }
@@ -72,7 +134,7 @@ docker {
 }
 ```
 
-## Scenario 4: Combined Actions - Tag, Save, and Publish
+### Scenario 4: Combined Actions - Tag, Save, and Publish
 
 ```gradle
 docker {
@@ -86,21 +148,19 @@ docker {
             // Save to file
             save {
                 outputFile = file('build/docker-images/my-app-v1.0.0.tar.gz')
-                compression = 'gzip'
+                compression = 'gzip'  // Required parameter
                 pullIfMissing = false
             }
 
             // Publish to local registry
             publish {
                 to('localRegistry') {
-                    repository = 'localhost:5000/my-app'
-                    publishTags = ['v1.0.0', 'stable', 'latest']
+                    tags = ['localhost:5000/timeServer:1.0.0', 'localhost:5000/timeServer:stable']
                 }
 
                 // You can have multiple publish targets
                 to('backup') {
-                    repository = 'localhost:6000/backup/my-app'
-                    publishTags = ['v1.0.0']
+                    tags = ['backup.registry.com/timeServer:1.0.0', 'backup.registry.com/timeServer:stable']
                 }
             }
         }
@@ -108,7 +168,7 @@ docker {
 }
 ```
 
-## Running the Tasks
+### Running the Tasks
 
 After configuring your `build.gradle`, you can run the generated tasks:
 
@@ -133,9 +193,9 @@ After configuring your `build.gradle`, you can run the generated tasks:
 
 1. **`sourceRef`** - This is the key property that tells the plugin you're working with an existing image rather than
    building from a Dockerfile
-2. **Tags vs PublishTags** - Use `tags.set([...])` for local tagging, and `publishTags = [...]` within publish targets
-   for registry-specific tags
-3. **Compression Options** - Available: `'none'`, `'gzip'`, `'bzip2'`, `'xz'`, `'zip'`
+2. **Image Tags vs Publish Tags** - Use `tags.set([...])` for local image tagging, and `tags = [...]` within publish targets
+   for full registry image references
+3. **Compression Options** - Required parameter. Available: `'none'`, `'gzip'`, `'bzip2'`, `'xz'`, `'zip'`
 4. **Task Generation** - The plugin automatically generates tasks based on your image name (e.g.,
    `dockerTagMyExistingImage`, `dockerSaveMyExistingImage`)
 5. **pullIfMissing** - Set to `true` if the source image might not be available locally and needs to be pulled

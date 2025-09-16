@@ -168,6 +168,7 @@ class GradleDockerPluginTest extends Specification {
                 tags = ['testApp:latest']
                 save {
                     outputFile = project.file('myapp.tar')
+                    compression = 'gzip'
                 }
                 // Skip publish config due to DSL complexity in tests
             }
@@ -268,7 +269,10 @@ class GradleDockerPluginTest extends Specification {
                 context = project.file('.')
                 dockerfile = dockerfile
                 tags = ['testApp:latest']
-                save { outputFile = project.file('app1.tar') }
+                save { 
+                    outputFile = project.file('app1.tar')
+                    compression = 'none'
+                }
                 // Skip publish config due to DSL complexity in tests
             }
             app2 {
@@ -309,7 +313,10 @@ class GradleDockerPluginTest extends Specification {
                 context = project.file('.')
                 dockerfile = dockerfile
                 tags = ['testApp:latest']
-                save { outputFile = project.file('myapp.tar') }
+                save { 
+                    outputFile = project.file('myapp.tar')
+                    compression = 'gzip'
+                }
                 // Skip publish config due to DSL complexity in tests
             }
         }
@@ -390,7 +397,10 @@ class GradleDockerPluginTest extends Specification {
                 context = project.file('backend')
                 dockerfile = project.file('backend/Dockerfile')
                 tags = ['testApp:latest']
-                save { outputFile = project.file('backend.tar') }
+                save { 
+                    outputFile = project.file('backend.tar')
+                    compression = 'bzip2'
+                }
             }
             worker {
                 context = project.file('worker')

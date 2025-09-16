@@ -15,8 +15,18 @@
  */
 
 /**
- * Integration test for 'docker/images/<image name>':
- *   - todo
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images = 1
+ *       - number of build args = 1
+ *       - dockerfile = specify by name
+ *   - Tag Features
+ *       - number of tags = 1
+ *   - Save Features (todo)
+ *       - save w/ compression type = none
+ *   - Publish Features (todo)
+ *       - publish = 1 tag
+ *       - publish to private registry without authentication
  */
 
 plugins {
@@ -29,11 +39,11 @@ version = '1.0.0'
 
 docker {
     images {
-        scenario2TimeServer {
+        timeServer {
             contextTask = tasks.register('prepareScenario2TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
-                into layout.buildDirectory.dir('docker-context/scenario2TimeServer')
+                into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
@@ -43,13 +53,10 @@ docker {
                 dependsOn ':app:jar'
             }
             dockerfileName = 'CustomDockerfile'
-            tags.set([
-                        "${version}",
-                        "latest"
-            ])
             buildArgs = ['JAR_FILE': "app-${version}.jar"]
+            tags.set(["scenario2-time-server:latest"])
             // todo: save
-            // no publish
+            // todo: publish
         }
     }
 }
@@ -62,10 +69,7 @@ docker {
 apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
 // Register Docker image clean and verify tasks for this integration test
-registerBuildWorkflowTasks(project, [
-    'scenario2-time-server:1.0.0',
-    'scenario2-time-server:latest'
-])
+registerBuildWorkflowTasks(project, ['scenario2-time-server:latest'])
 
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {

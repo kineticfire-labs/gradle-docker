@@ -67,7 +67,7 @@ class DockerSaveTaskTest extends Specification {
     
     def "task has default property values"() {
         expect:
-        task.compression.get() == CompressionType.GZIP
+        !task.compression.present  // No default compression anymore
         task.pullIfMissing.get() == false
     }
 
@@ -77,6 +77,7 @@ class DockerSaveTaskTest extends Specification {
         given:
         task.imageName.set('test-image:latest')
         task.outputFile.set(project.file('test.tar.gz'))
+        task.compression.set(CompressionType.GZIP)
         // Mock the service to avoid actual Docker calls in unit tests
         task.dockerService.set(mockDockerService)
         mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
@@ -96,6 +97,7 @@ class DockerSaveTaskTest extends Specification {
         given:
         task.sourceRef.set('registry.example.com/test:latest')
         task.outputFile.set(project.file('test.tar.gz'))
+        task.compression.set(CompressionType.NONE)
         task.pullIfMissing.set(true)
 
         when:
@@ -126,6 +128,7 @@ class DockerSaveTaskTest extends Specification {
     def "task fails when neither imageName nor sourceRef is set"() {
         given:
         task.outputFile.set(project.file('test.tar.gz'))
+        task.compression.set(CompressionType.GZIP)
 
         when:
         task.saveImage()
@@ -137,6 +140,19 @@ class DockerSaveTaskTest extends Specification {
     def "task fails when outputFile is not set"() {
         given:
         task.imageName.set('test-image:latest')
+        task.compression.set(CompressionType.GZIP)
+
+        when:
+        task.saveImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+    
+    def "task fails when compression is not set"() {
+        given:
+        task.imageName.set('test-image:latest')
+        task.outputFile.set(project.file('test.tar'))
 
         when:
         task.saveImage()
@@ -226,11 +242,13 @@ class DockerSaveTaskTest extends Specification {
         task.imageName.set('image-name:latest')
         task.sourceRef.set('registry.example.com/source:latest')
         task.outputFile.set(project.file('test.tar.gz'))
+        task.compression.set(CompressionType.XZ)
 
         then:
         task.imageName.get() == 'image-name:latest'
         task.sourceRef.get() == 'registry.example.com/source:latest'
         task.outputFile.get().asFile.name == 'test.tar.gz'
+        task.compression.get() == CompressionType.XZ
     }
     
     def "dockerService property can be configured"() {
@@ -252,7 +270,7 @@ class DockerSaveTaskTest extends Specification {
         task.sourceRef.set('registry.example.com/test:latest')
         task.sourceRef.get() == 'registry.example.com/test:latest'
         
-        task.compression.get() == CompressionType.GZIP  // default
+        !task.compression.present  // No default compression anymore
         task.pullIfMissing.get() == false  // default
     }
     

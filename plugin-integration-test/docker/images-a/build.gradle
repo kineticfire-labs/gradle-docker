@@ -30,11 +30,11 @@ version = '1.0.0'
 // todo: Setup all-in-one 'docker' tasks:  build, tag, save, and publish
 docker {
     images {
-        imagesATimeServer {
+        timeServer {
             contextTask = tasks.register('prepareImagesATimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
-                into layout.buildDirectory.dir('docker-context/imagesATimeServer')
+                into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
@@ -43,17 +43,17 @@ docker {
                 }
                 dependsOn ':app:jar'
             }
+            buildArgs = [
+                    'JAR_FILE': "app-${version}.jar",
+                    'BUILD_VERSION': version,
+                    'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
+            ]
             // dockerfile will default to 'build/docker-context/imagesATimeServer/Dockerfile' based on image name
             //dockerfileName = 'Dockerfile'
             tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
-                        "${version}",
-                        "latest"
+                        "images-a-time-server:${version}",
+                        "images-a-time-server:latest"
             ])
-            buildArgs = [
-                'JAR_FILE': "app-${version}.jar",
-                'BUILD_VERSION': version,
-                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
-            ]
             // todo
             //publish {
             //    to('basic') {

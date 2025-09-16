@@ -37,8 +37,8 @@ class SaveSpecTest extends Specification {
     def "constructor initializes with defaults"() {
         expect:
         saveSpec != null
-        saveSpec.compression.get() == 'gzip'
-        saveSpec.pullIfMissing.get() == false
+        !saveSpec.compression.present  // No default compression anymore
+        saveSpec.pullIfMissing.get() == false  // pullIfMissing still has default
     }
 
     // ===== PROPERTY TESTS =====
@@ -52,10 +52,9 @@ class SaveSpecTest extends Specification {
         saveSpec.compression.get() == 'bzip2'
     }
 
-    def "compression has default value"() {
+    def "compression has no default value"() {
         expect:
-        saveSpec.compression.present
-        saveSpec.compression.get() == 'gzip'
+        !saveSpec.compression.present
     }
 
     def "outputFile property works correctly"() {
@@ -105,7 +104,7 @@ class SaveSpecTest extends Specification {
     def "configuration with different compression types"() {
         expect:
         // Test different compression types
-        ['none', 'gzip', 'bzip2', 'xz'].each { compressionType ->
+        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compressionType ->
             saveSpec.compression.set(compressionType)
             assert saveSpec.compression.get() == compressionType
         }
@@ -139,32 +138,6 @@ class SaveSpecTest extends Specification {
         saveSpec.pullIfMissing.get() == true
     }
 
-    // ===== DEFAULT BEHAVIOR TESTS =====
-
-    def "defaults remain after property access"() {
-        given:
-        def initialCompression = saveSpec.compression.get()
-        def initialPullIfMissing = saveSpec.pullIfMissing.get()
-
-        expect:
-        initialCompression == 'gzip'
-        initialPullIfMissing == false
-        
-        // Verify defaults persist
-        saveSpec.compression.get() == 'gzip'
-        saveSpec.pullIfMissing.get() == false
-    }
-
-    def "convention values can be overridden"() {
-        when:
-        saveSpec.compression.set('bzip2')
-        saveSpec.pullIfMissing.set(true)
-
-        then:
-        saveSpec.compression.get() == 'bzip2'
-        saveSpec.pullIfMissing.get() == true
-    }
-
     // ===== EDGE CASES =====
 
     def "outputFile is initially not present"() {
@@ -185,11 +158,52 @@ class SaveSpecTest extends Specification {
         }
     }
 
-    def "compression property accepts various values"() {
+    def "compression property accepts various valid values"() {
         expect:
-        ['none', 'gzip', 'bzip2', 'xz', 'lz4'].each { compression ->
+        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compression ->
             saveSpec.compression.set(compression)
             assert saveSpec.compression.get() == compression
         }
+    }
+
+    // ===== NEW VALIDATION TESTS =====
+
+    def "compression property can be explicitly set to each valid type"() {
+        expect:
+        // Test all valid compression types
+        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compressionType ->
+            saveSpec.compression.set(compressionType)
+            assert saveSpec.compression.present
+            assert saveSpec.compression.get() == compressionType
+        }
+    }
+
+    def "compression property accepts mixed case values"() {
+        when:
+        saveSpec.compression.set('GZIP')
+
+        then:
+        saveSpec.compression.present
+        saveSpec.compression.get() == 'GZIP'
+    }
+
+    def "compression property can be set to empty string"() {
+        when:
+        saveSpec.compression.set('')
+
+        then:
+        saveSpec.compression.present
+        saveSpec.compression.get() == ''
+    }
+
+    def "compression property can be reset to not present"() {
+        given:
+        saveSpec.compression.set('gzip')
+
+        when:
+        saveSpec.compression.set(null)
+
+        then:
+        !saveSpec.compression.present
     }
 }
