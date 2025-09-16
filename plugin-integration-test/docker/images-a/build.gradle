@@ -30,15 +30,7 @@ version = '1.0.0'
 // todo: Setup all-in-one 'docker' tasks:  build, tag, save, and publish
 docker {
     images {
-
-        // Define build, tag, save, and publish actions for the image 'timeServer'
         timeServer {
-
-            // Define the Docker build context use to build the Docker image.  The build context is a directory whose
-            // contents are used in the image build process.  The 'contextTask' takes a Gradle 'Copy' task, so one or
-            // more files/directories may be included to create the build context.
-            //
-            // For debug purposes, inspect the Docker build context at 'build/docker-context/timeServer'.
             contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'

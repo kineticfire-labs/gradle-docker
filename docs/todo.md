@@ -33,6 +33,7 @@ Setting tags uses different syntax:
 1. 'dockerBuild' should assemble src to its own temp folder (added to .gitignore)
 4. docker publish to public registry (e.g., Docker Hub, GitHub Package Registry, etc.)
 5. use TestContainers
+6. might be nice to have a 'pullIfMissing' for 'tag' task
 
 
 ## Documentation
