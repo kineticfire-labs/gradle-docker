@@ -42,7 +42,7 @@ todo
 | 4 | save w/ compression type = bzip2                            | todo                         |
 | 5 | save w/ compression type = xz                               | todo                         |
 | 6 | save w/ compression type = zip                              | todo                         |
-| 7 | save w/ no pullIfMissing                                    | todo                         |
+| 7 | save w/ no pullIfMissing                                    | <ol><li>scenario-2</li></ol> |
 | 8 | save w/ pullIfMissing = false                               | todo                         |
 | 9 | save w/ pullIfMissing = true                                | todo                         |
 

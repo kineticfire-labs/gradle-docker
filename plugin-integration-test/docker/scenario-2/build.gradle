@@ -22,8 +22,9 @@
  *       - dockerfile = specify by name
  *   - Tag Features
  *       - number of tags = 1
- *   - Save Features (todo)
+ *   - Save Features
  *       - save w/ compression type = none
+ *       - save w/ no pullIfMissing
  *   - Publish Features (todo)
  *       - publish = 1 tag
  *       - publish to private registry without authentication
@@ -56,6 +57,11 @@ docker {
             buildArgs = ['JAR_FILE': "app-${version}.jar"]
             tags.set(["scenario2-time-server:latest"])
             // todo: save
+            save {
+                outputFile = file('build/docker-images/scenario2-time-server-latest.tar')
+                compression = 'none'
+                // 'pullIfMissing' will default to 'false'
+            }
             // todo: publish
         }
     }
