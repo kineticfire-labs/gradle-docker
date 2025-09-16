@@ -52,12 +52,12 @@ class DockerBuildTaskTest extends Specification {
         given:
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
 
         expect:
         task.dockerfile.get().asFile == project.file('Dockerfile')
         task.contextPath.get().asFile == project.file('.')
-        task.tags.get() == ['latest']
+        task.tags.get() == ['myapp:latest']
     }
 
     def "buildImage action executes docker service build"() {
@@ -66,7 +66,7 @@ class DockerBuildTaskTest extends Specification {
         project.file('Dockerfile').createNewFile()
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
         task.buildArgs.set([VERSION: '1.0.0'])
 
         and:
@@ -79,7 +79,7 @@ class DockerBuildTaskTest extends Specification {
         1 * mockDockerService.buildImage(_) >> { args ->
             def context = args[0]
             assert context.dockerfile.toString().endsWith('Dockerfile')
-            assert context.tags == ['latest']
+            assert context.tags == ['myapp:latest']
             assert context.buildArgs == [VERSION: '1.0.0']
             return CompletableFuture.completedFuture('sha256:abc123')
         }
@@ -88,7 +88,7 @@ class DockerBuildTaskTest extends Specification {
     def "task fails when dockerfile is not set"() {
         given:
         task.contextPath.set(project.file('.'))
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
 
         when:
         task.buildImage()
@@ -115,7 +115,7 @@ class DockerBuildTaskTest extends Specification {
         project.file('Dockerfile').createNewFile()
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
         mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
 
         when:

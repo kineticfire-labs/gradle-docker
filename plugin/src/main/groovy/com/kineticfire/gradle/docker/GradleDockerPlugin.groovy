@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
+import com.kineticfire.gradle.docker.model.CompressionType
 import com.kineticfire.gradle.docker.extension.DockerOrchExtension
 import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
@@ -348,12 +349,8 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
         }
         
-        // Configure tags - combine image name with tag to create full image references
-        // Convert camelCase to kebab-case for Docker image naming convention
-        def dockerImageName = imageSpec.name.replaceAll(/([A-Z])/, '-$1').toLowerCase().replaceFirst(/^-/, '')
-        task.tags.set(imageSpec.tags.map { tagList ->
-            tagList.collect { tag -> "${dockerImageName}:${tag}" }
-        })
+        // Configure tags - use full image references directly from imageSpec.tags
+        task.tags.set(imageSpec.tags)
         
         // Configure build arguments
         task.buildArgs.set(imageSpec.buildArgs)
@@ -390,6 +387,26 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Save Docker image to file: ${imageSpec.name}"
+        
+        // Configure service dependency
+        task.dockerService.set(dockerService)
+        task.usesService(dockerService)
+        
+        // Configure image name to save - use first tag from the tags list
+        // All tags reference the same underlying image, so any tag works for saving
+        task.imageName.set(imageSpec.tags.map { tagList ->
+            if (tagList.isEmpty()) {
+                throw new IllegalStateException("Image '${imageSpec.name}' must have at least one tag for saving")
+            }
+            return tagList.first()
+        })
+        
+        // Configure save specification if present
+        if (imageSpec.save.present) {
+            def saveSpec = imageSpec.save.get()
+            task.outputFile.set(saveSpec.outputFile)
+            task.compression.set(saveSpec.compression.map { CompressionType.fromString(it) })
+        }
     }
     
     private void configureDockerTagTask(task, imageSpec, dockerService) {

@@ -54,29 +54,29 @@ class DockerTagTaskTest extends Specification {
     def "tagImage action validates sourceImage property"() {
         when:
         task.sourceImage.set('sha256:abc123')
-        task.tags.set(['latest', '1.0.0'])
+        task.tags.set(['myapp:latest', 'myapp:1.0.0'])
 
         then:
         task.sourceImage.get() == 'sha256:abc123'
-        task.tags.get() == ['latest', '1.0.0']
+        task.tags.get() == ['myapp:latest', 'myapp:1.0.0']
     }
     
     def "tagImage action validates sourceRef property"() {
         when:
         task.sourceRef.set('registry.example.com/test:latest')
-        task.tags.set(['latest', '1.0.0'])
+        task.tags.set(['myapp:latest', 'myapp:1.0.0'])
         task.pullIfMissing.set(true)
 
         then:
         task.sourceRef.get() == 'registry.example.com/test:latest'
-        task.tags.get() == ['latest', '1.0.0']
+        task.tags.get() == ['myapp:latest', 'myapp:1.0.0']
         task.pullIfMissing.get() == true
     }
     
     def "task supports pullIfMissing configuration"() {
         when:
         task.sourceRef.set('registry.example.com/test:latest')
-        task.tags.set(['latest', '1.0.0'])
+        task.tags.set(['myapp:latest', 'myapp:1.0.0'])
         task.pullIfMissing.set(pullIfMissing)
 
         then:
@@ -88,7 +88,7 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when neither sourceImage nor sourceRef is set"() {
         given:
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
 
         when:
         task.tagImage()
@@ -130,9 +130,9 @@ class DockerTagTaskTest extends Specification {
         
         where:
         tagList << [
-            ['latest'],
-            ['latest', '1.0.0'], 
-            ['latest', '1.0.0', 'stable']
+            ['myapp:latest'],
+            ['myapp:latest', 'myapp:1.0.0'], 
+            ['myapp:latest', 'myapp:1.0.0', 'myapp:stable']
         ]
     }
     
@@ -140,12 +140,12 @@ class DockerTagTaskTest extends Specification {
         when:
         task.sourceImage.set('image-name:latest')
         task.sourceRef.set('registry.example.com/source:latest')
-        task.tags.set(['latest', '1.0.0'])
+        task.tags.set(['myapp:latest', 'myapp:1.0.0'])
 
         then:
         task.sourceImage.get() == 'image-name:latest'
         task.sourceRef.get() == 'registry.example.com/source:latest'
-        task.tags.get() == ['latest', '1.0.0']
+        task.tags.get() == ['myapp:latest', 'myapp:1.0.0']
     }
     
     def "dockerService property can be configured"() {
@@ -168,18 +168,18 @@ class DockerTagTaskTest extends Specification {
 
         where:
         tagList << [
-            ['v1.0.0'],
-            ['latest', 'stable'],
+            ['myapp:v1.0.0'],
+            ['myapp:latest', 'myapp:stable'],
             ['registry.example.com/app:v1.0.0'],
-            ['feature-branch-name', 'pr-123'],
-            ['alpha.1', 'beta.2', 'rc.3']
+            ['myapp:feature-branch-name', 'myapp:pr-123'],
+            ['myapp:alpha.1', 'myapp:beta.2', 'myapp:rc.3']
         ]
     }
 
     def "task supports complex image references"() {
         when:
         task.sourceImage.set(sourceImageRef)
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
 
         then:
         task.sourceImage.get() == sourceImageRef
@@ -196,7 +196,7 @@ class DockerTagTaskTest extends Specification {
     def "task handles sourceRef configurations"() {
         when:
         task.sourceRef.set(sourceRef)
-        task.tags.set(['latest'])
+        task.tags.set(['myapp:latest'])
         task.pullIfMissing.set(pullIfMissing)
 
         then:

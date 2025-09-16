@@ -46,7 +46,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             testImage {
                 dockerfile.set(project.file('Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
                 buildArgs.set([VERSION: '1.0.0'])
             }
         }
@@ -58,7 +58,7 @@ class DockerExtensionTest extends Specification {
         and:
         ImageSpec imageSpec = extension.images.getByName('testImage')
         imageSpec.dockerfile.get().asFile == project.file('Dockerfile')
-        imageSpec.tags.get() == ['latest']
+        imageSpec.tags.get() == ['testImage:latest']
         imageSpec.buildArgs.get() == [VERSION: '1.0.0']
     }
 
@@ -67,11 +67,11 @@ class DockerExtensionTest extends Specification {
         extension.images {
             webImage {
                 dockerfile.set(project.file('web/Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
             apiImage {
                 dockerfile.set(project.file('api/Dockerfile'))
-                tags.set(['latest', '1.0.0'])
+                tags.set(['apiImage:latest', 'apiImage:1.0.0'])
             }
         }
 
@@ -81,8 +81,8 @@ class DockerExtensionTest extends Specification {
         extension.images.getByName('apiImage') != null
 
         and:
-        extension.images.getByName('webImage').tags.get() == ['latest']
-        extension.images.getByName('apiImage').tags.get() == ['latest', '1.0.0']
+        extension.images.getByName('webImage').tags.get() == ['testImage:latest']
+        extension.images.getByName('apiImage').tags.get() == ['apiImage:latest', 'apiImage:1.0.0']
     }
 
     def "can configure image with context path"() {
@@ -91,7 +91,7 @@ class DockerExtensionTest extends Specification {
             contextImage {
                 dockerfile.set(project.file('docker/Dockerfile'))
                 context.set(project.file('docker'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -105,7 +105,7 @@ class DockerExtensionTest extends Specification {
         when:
         extension.images {
             defaultImage {
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -122,7 +122,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             argImage {
                 dockerfile.set(project.file('Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
                 buildArgs.set([
                     VERSION: '2.0.0',
                     BUILD_DATE: '2025-01-01',
@@ -143,16 +143,16 @@ class DockerExtensionTest extends Specification {
     def "can access configured images by name"() {
         given:
         extension.images {
-            image1 { tags.set(['latest']) }
-            image2 { tags.set(['latest']) }
-            image3 { tags.set(['latest']) }
+            image1 { tags.set(['testImage:latest']) }
+            image2 { tags.set(['testImage:latest']) }
+            image3 { tags.set(['testImage:latest']) }
         }
 
         expect:
         extension.images.getByName('image1') != null
         extension.images.getByName('image2') != null  
         extension.images.getByName('image3') != null
-        extension.images.getByName('image1').tags.get() == ['latest']
+        extension.images.getByName('image1').tags.get() == ['testImage:latest']
     }
 
     // ===== VALIDATION TESTS =====
@@ -166,7 +166,7 @@ class DockerExtensionTest extends Specification {
             validImage {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -182,7 +182,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             invalidImage {
                 context.set(project.file('non-existent-directory'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -204,7 +204,7 @@ class DockerExtensionTest extends Specification {
             missingDockerfile {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/NonExistentDockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -218,7 +218,7 @@ class DockerExtensionTest extends Specification {
         ex.message.contains("Create the Dockerfile or update the dockerfile path")
     }
 
-    def "validate fails when tag format is invalid"() {
+    def "validate fails when image reference format is invalid"() {
         given:
         project.file('docker').mkdirs()
         project.file('docker/Dockerfile').text = 'FROM alpine'
@@ -236,9 +236,9 @@ class DockerExtensionTest extends Specification {
 
         then:
         def ex = thrown(GradleException)
-        ex.message.contains("Invalid Docker tag name")
+        ex.message.contains("Invalid Docker image reference")
         ex.message.contains('invalidTags')
-        ex.message.contains("Image tags should be simple names")
+        ex.message.contains("Tags must be full image references")
     }
 
     def "validate accepts simple tag names like latest - bug fix verification"() {
@@ -250,7 +250,7 @@ class DockerExtensionTest extends Specification {
             timeServer {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['latest']) // This was the failing case that is now fixed!
+                tags.set(['testImage:latest']) // This was the failing case that is now fixed!
             }
         }
 
@@ -270,7 +270,7 @@ class DockerExtensionTest extends Specification {
             myApp {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['latest', 'v1.0.0', 'dev', 'stable']) // All of these should work now!
+                tags.set(['testApp:latest', 'testApp:v1.0.0', 'testApp:dev', 'testApp:stable']) // All of these should work now!
             }
         }
 
@@ -281,7 +281,7 @@ class DockerExtensionTest extends Specification {
         noExceptionThrown()
     }
 
-    def "validate handles empty tags list"() {
+    def "validate fails when tags list is empty for build context"() {
         given:
         project.file('docker').mkdirs()
         project.file('docker/Dockerfile').text = 'FROM alpine'
@@ -298,10 +298,12 @@ class DockerExtensionTest extends Specification {
         extension.validate()
 
         then:
-        noExceptionThrown()
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag when building")
+        ex.message.contains('emptyTags')
     }
 
-    def "validate passes when tags not specified"() {
+    def "validate fails when tags not specified for build context"() {
         given:
         project.file('docker').mkdirs()
         project.file('docker/Dockerfile').text = 'FROM alpine'
@@ -318,40 +320,14 @@ class DockerExtensionTest extends Specification {
         extension.validate()
 
         then:
-        noExceptionThrown()
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag when building")
+        ex.message.contains('noTags')
     }
 
     // ===== TAG VALIDATION TESTS =====
     
-    def "isValidTagName accepts valid Docker tag names"() {
-        expect:
-        extension.isValidTagName('latest')
-        extension.isValidTagName('v1.0.0')
-        extension.isValidTagName('dev')
-        extension.isValidTagName('stable')
-        extension.isValidTagName('1.2.3-alpha')
-        extension.isValidTagName('release-candidate-2')
-        extension.isValidTagName('build123')
-        extension.isValidTagName('v2.1.0-rc.1')
-        extension.isValidTagName('1tag') // starts with number
-        extension.isValidTagName('a') // minimal valid case
-        extension.isValidTagName('tag_with_underscore') // Docker allows underscores
-        extension.isValidTagName('UPPER') // Docker allows uppercase
-        extension.isValidTagName('Mixed_Case.tag-123') // complex valid case
-    }
-    
-    def "isValidTagName rejects invalid Docker tag names"() {
-        expect:
-        !extension.isValidTagName(null)
-        !extension.isValidTagName('')
-        !extension.isValidTagName('tag:with-colon') // should not contain colon
-        !extension.isValidTagName('tag with spaces')
-        !extension.isValidTagName('-starts-with-dash')
-        !extension.isValidTagName('.starts-with-dot')
-        !extension.isValidTagName('repo/tag') // should not contain slash
-        !extension.isValidTagName('registry.com/repo:tag') // full image reference, not tag name
-        !extension.isValidTagName('a' * 129) // over 128 character limit
-    }
+
     
     def "isValidImageReference accepts valid Docker image references"() {
         expect:
@@ -382,41 +358,75 @@ class DockerExtensionTest extends Specification {
         !extension.isValidImageReference(':') // empty repo and tag
         !extension.isValidImageReference('::') // double colon
     }
-
-    def "isValidDockerTag validates correct tag formats"() {
+    
+    def "extractImageName extracts image name from full reference"() {
         expect:
-        extension.isValidDockerTag('myapp:latest')
-        extension.isValidDockerTag('registry.example.com/myapp:1.0.0')
-        extension.isValidDockerTag('user/repo:tag-123')
-        extension.isValidDockerTag('my-app:1.2.3-alpha')
-        extension.isValidDockerTag('repo.domain.com/namespace/app:stable')
-        extension.isValidDockerTag('a:b') // minimal valid case
-        extension.isValidDockerTag('1app:1tag') // starts with number
+        extension.extractImageName('myapp:latest') == 'myapp'
+        extension.extractImageName('registry.com/myapp:1.0.0') == 'registry.com/myapp'
+        extension.extractImageName('localhost:5000/team/myapp:dev') == 'localhost:5000/team/myapp'
+        extension.extractImageName('gcr.io/project-id/app:latest') == 'gcr.io/project-id/app'
+    }
+    
+    def "extractImageName throws exception for invalid references"() {
+        when:
+        extension.extractImageName('no-colon')
+        
+        then:
+        thrown(IllegalArgumentException)
+        
+        when:
+        extension.extractImageName(null)
+        
+        then:
+        thrown(IllegalArgumentException)
+    }
+    
+    def "validate fails when tags reference different image names"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            inconsistentTags {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['myapp:latest', 'otherapp:1.0.0']) // Different image names
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("All tags must reference the same image name")
+        ex.message.contains("myapp")
+        ex.message.contains("otherapp")
+    }
+    
+    def "validate passes when tags reference same image name"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            consistentTags {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                tags.set(['myapp:latest', 'myapp:1.0.0', 'myapp:dev']) // Same image name
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
     }
 
-    def "isValidDockerTag rejects invalid tag formats"() {
-        expect:
-        !extension.isValidDockerTag(null)
-        !extension.isValidDockerTag('')
-        !extension.isValidDockerTag('no-colon-separator')
-        !extension.isValidDockerTag(':no-repository')
-        !extension.isValidDockerTag('repo:')
-        !extension.isValidDockerTag('invalid tag with spaces:latest')
-        !extension.isValidDockerTag('repo:tag with spaces')
-        !extension.isValidDockerTag('-starts-with-dash:latest')
-        !extension.isValidDockerTag('repo:-starts-with-dash')
-        !extension.isValidDockerTag('localhost:5000/myapp:dev') // port number conflicts with colon separator
-        !extension.isValidDockerTag('app') // no tag separator
-        !extension.isValidDockerTag(':') // empty repo and tag
-        !extension.isValidDockerTag('::') // double colon
-    }
 
-    def "supports registry authentication in tag validation"() {
-        expect:
-        extension.isValidDockerTag('private-registry.company.com/team/app:1.0.0')
-        extension.isValidDockerTag('gcr.io/project-id/app:latest')
-        extension.isValidDockerTag('docker.io/library/nginx:alpine')
-    }
+
+
 
     // ===== CONFIGURATION DSL TESTS =====
 
@@ -425,13 +435,13 @@ class DockerExtensionTest extends Specification {
         extension.images { container ->
             container.create('actionImage') { image ->
                 image.context.set(project.file('docker'))
-                image.tags.set(['test'])
+                image.tags.set(['actionImage:test'])
             }
         }
 
         then:
         extension.images.size() == 1
-        extension.images.getByName('actionImage').tags.get() == ['test']
+        extension.images.getByName('actionImage').tags.get() == ['actionImage:test']
     }
 
     def "can configure complex image with all properties"() {
@@ -445,9 +455,9 @@ class DockerExtensionTest extends Specification {
                 context.set(project.file('complex/docker'))
                 dockerfile.set(project.file('complex/docker/Dockerfile.prod'))
                 tags.set([
-                    'latest',
-                    '1.0.0',
-                    'prod'
+                    'complexImage:latest',
+                    'complexImage:1.0.0',
+                    'complexImage:prod'
                 ])
                 buildArgs.set([
                     VERSION: '1.0.0',
@@ -463,7 +473,7 @@ class DockerExtensionTest extends Specification {
         imageSpec.context.get().asFile == project.file('complex/docker')
         imageSpec.dockerfile.get().asFile == project.file('complex/docker/Dockerfile.prod')
         imageSpec.tags.get().size() == 3
-        imageSpec.tags.get().containsAll(['latest', '1.0.0', 'prod'])
+        imageSpec.tags.get().containsAll(['complexImage:latest', 'complexImage:1.0.0', 'complexImage:prod'])
         imageSpec.buildArgs.get().size() == 4
         imageSpec.buildArgs.get()['VERSION'] == '1.0.0'
         imageSpec.buildArgs.get()['ENVIRONMENT'] == 'production'
@@ -481,13 +491,13 @@ class DockerExtensionTest extends Specification {
             webImage {
                 context.set(project.file('web'))
                 dockerfile.set(project.file('web/Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
                 buildArgs.set([SERVICE: 'web'])
             }
             apiImage {
                 context.set(project.file('api'))
                 dockerfile.set(project.file('api/Dockerfile'))
-                tags.set(['latest', '1.0.0'])
+                tags.set(['apiImage:latest', 'apiImage:1.0.0'])
                 buildArgs.set([SERVICE: 'api', NODE_ENV: 'production'])
             }
         }
@@ -496,7 +506,7 @@ class DockerExtensionTest extends Specification {
         extension.images.size() == 2
         
         def webImage = extension.images.getByName('webImage')
-        webImage.tags.get() == ['latest']
+        webImage.tags.get() == ['testImage:latest']
         webImage.buildArgs.get()['SERVICE'] == 'web'
         
         def apiImage = extension.images.getByName('apiImage')
@@ -513,11 +523,11 @@ class DockerExtensionTest extends Specification {
             validImage {
                 context.set(project.file('valid'))
                 dockerfile.set(project.file('valid/Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
             invalidImage {
                 context.set(project.file('non-existent'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -535,11 +545,11 @@ class DockerExtensionTest extends Specification {
         extension.images {
             firstInvalid {
                 context.set(project.file('non-existent-first'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
             secondInvalid {
                 context.set(project.file('non-existent-second'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -565,7 +575,7 @@ class DockerExtensionTest extends Specification {
             spacePath {
                 context.set(project.file('path with spaces'))
                 dockerfile.set(project.file('path with spaces/Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
         extension.validate()
@@ -585,7 +595,7 @@ class DockerExtensionTest extends Specification {
             customDockerfile {
                 context.set(project.file('custom'))
                 dockerfile.set(project.file('custom/Dockerfile.custom'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
         extension.validate()
@@ -595,12 +605,7 @@ class DockerExtensionTest extends Specification {
         extension.images.getByName('customDockerfile').dockerfile.get().asFile.name == 'Dockerfile.custom'
     }
 
-    def "supports registry authentication in tag validation"() {
-        expect:
-        extension.isValidDockerTag('private-registry.company.com/team/app:1.0.0')
-        extension.isValidDockerTag('gcr.io/project-id/app:latest')
-        extension.isValidDockerTag('docker.io/library/nginx:alpine')
-    }
+
 
     def "validateImageSpec method can be called independently"() {
         given:
@@ -614,7 +619,7 @@ class DockerExtensionTest extends Specification {
         )
         imageSpec.context.set(project.file('test-context'))
         imageSpec.dockerfile.set(project.file('test-context/Dockerfile'))
-        imageSpec.tags.set(['validation'])
+        imageSpec.tags.set(['validationImage:validation'])
 
         when:
         extension.validateImageSpec(imageSpec)
@@ -627,7 +632,7 @@ class DockerExtensionTest extends Specification {
         when:
         extension.images {
             defaultTest {
-                tags.set(['test'])
+                tags.set(['testImage:test'])
             }
         }
 
@@ -649,7 +654,7 @@ class DockerExtensionTest extends Specification {
             publishableImage {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['latest', 'v1.0.0'])  // Simple tag names
+                tags.set(['publishableImage:latest', 'publishableImage:v1.0.0'])  // Simple tag names
                 publish {
                     to('registry') {
                         repository = 'localhost:5000/test-app'
@@ -757,7 +762,7 @@ class DockerExtensionTest extends Specification {
             mixedTagsImage {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['dev', 'latest'])  // Image tags - simple names
+                tags.set(['myapp:dev', 'myapp:latest'])  // Image tags - simple names
                 publish {
                     to('prod') {
                         repository = 'registry.company.com/team/app'
@@ -787,7 +792,7 @@ class DockerExtensionTest extends Specification {
             timeServer {  // Exact name from integration test
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
-                tags.set(['1.0.0', 'latest'])  // Version and latest tags
+                tags.set(['myapp:1.0.0', 'myapp:latest'])  // Version and latest tags
                 publish {
                     to('basic') {
                         repository = 'localhost:25000/time-server-integration'
@@ -838,7 +843,7 @@ class DockerExtensionTest extends Specification {
             contextTaskImage {
                 contextTask = copyTask
                 dockerfile.set(project.file('Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -858,7 +863,7 @@ class DockerExtensionTest extends Specification {
             conflictingContext {
                 context.set(project.file('docker'))
                 contextTask = copyTask
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -875,7 +880,7 @@ class DockerExtensionTest extends Specification {
         given:
         extension.images {
             noContextImage {
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -893,7 +898,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             sourceRefImage {
                 sourceRef.set('alpine:3.16')
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
                 // Don't set dockerfile for sourceRef images
             }
         }
@@ -918,7 +923,7 @@ class DockerExtensionTest extends Specification {
                     from(srcDir)
                 }
                 dockerfile.set(project.file('Dockerfile'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
         extension.validate()
@@ -940,7 +945,7 @@ class DockerExtensionTest extends Specification {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
                 dockerfileName.set('Dockerfile.custom')
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -963,7 +968,7 @@ class DockerExtensionTest extends Specification {
             dockerfileNameOnly {
                 context.set(project.file('docker'))
                 dockerfileName.set('Dockerfile.prod')
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -983,7 +988,7 @@ class DockerExtensionTest extends Specification {
             dockerfileOnly {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile.custom'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -1002,7 +1007,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             defaultDockerfile {
                 context.set(project.file('docker'))
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
                 // Neither dockerfile nor dockerfileName set - should use default
             }
         }
@@ -1023,7 +1028,7 @@ class DockerExtensionTest extends Specification {
             dockerfileNameWithContextTask {
                 contextTask = copyTask
                 dockerfileName.set('Dockerfile.dev')
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 
@@ -1044,7 +1049,7 @@ class DockerExtensionTest extends Specification {
                 contextTask = copyTask
                 dockerfile.set(project.file('Dockerfile'))
                 dockerfileName.set('Dockerfile.custom')
-                tags.set(['latest'])
+                tags.set(['testImage:latest'])
             }
         }
 

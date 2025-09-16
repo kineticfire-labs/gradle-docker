@@ -133,14 +133,34 @@ abstract class DockerExtension {
             }
         }
         
-        // Validate image tags format - ImageSpec tags are simple tag names only (not full image references)
+        // Validate image tags - must be required for build contexts and must be full image references
+        def hasBuildContext = hasExplicitContext || hasContextTask
+        if (hasBuildContext && (!imageSpec.tags.present || imageSpec.tags.get().isEmpty())) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' must specify at least one tag when building (context or contextTask specified)"
+            )
+        }
+        
+        // Validate full image reference format and consistent image names
         if (imageSpec.tags.present && !imageSpec.tags.get().empty) {
-            imageSpec.tags.get().each { tag ->
-                if (!isValidTagName(tag)) {
+            def tags = imageSpec.tags.get()
+            String firstImageName = null
+            
+            tags.each { tag ->
+                if (!isValidImageReference(tag)) {
                     throw new GradleException(
-                        "Invalid Docker tag name: '${tag}' in image '${imageSpec.name}'\n" +
-                        "Image tags should be simple names like 'latest', 'v1.0.0', 'dev'.\n" +
-                        "For registry publishing, specify the repository in publish configuration."
+                        "Invalid Docker image reference: '${tag}' in image '${imageSpec.name}'. " +
+                        "Tags must be full image references like 'myapp:latest', 'registry.com:5000/team/myapp:v1.0.0'"
+                    )
+                }
+                
+                // Extract and validate consistent image names
+                def imageName = extractImageName(tag)
+                if (firstImageName == null) {
+                    firstImageName = imageName
+                } else if (imageName != firstImageName) {
+                    throw new GradleException(
+                        "All tags must reference the same image name. Found: '${imageName}' vs '${firstImageName}' in image '${imageSpec.name}'"
                     )
                 }
             }
@@ -187,20 +207,96 @@ abstract class DockerExtension {
             )
         }
         
-        // Validate publish target tags - these should also be simple tag names
+        // Validate publish target tags - these should be simple tag names
         if (publishTarget.publishTags.present) {
             def tags = publishTarget.publishTags.get()
             if (!tags.isEmpty()) {
                 tags.each { tag ->
-                    if (!isValidTagName(tag)) {
+                    if (!isValidSimpleTag(tag)) {
                         throw new GradleException(
-                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'\n" +
+                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'. " +
                             "Publish target tags should be simple names like 'latest', 'v1.0.0', 'stable'."
                         )
                     }
                 }
             }
         }
+    }
+    
+    /**
+     * Validates full Docker image references supporting format: [registry[:port]/]namespace/name:tag
+     * Valid examples: "myapp:latest", "registry.com/team/app:v1.0.0", "localhost:5000/namespace/app:tag"
+     */
+    boolean isValidImageReference(String imageRef) {
+        if (!imageRef || !imageRef.contains(':')) {
+            return false
+        }
+        
+        // Split on last colon to separate image name from tag
+        def lastColon = imageRef.lastIndexOf(':')
+        if (lastColon <= 0 || lastColon >= imageRef.length() - 1) {
+            return false
+        }
+        
+        def imageName = imageRef.substring(0, lastColon)
+        def tag = imageRef.substring(lastColon + 1)
+        
+        // Validate image name part (can include registry/namespace)
+        // Allow single character names and handle hyphens properly
+        if (imageName.length() == 1) {
+            if (!imageName.matches(/^[a-zA-Z0-9]$/)) {
+                return false
+            }
+        } else {
+            // Allow hyphens in middle, start/end with alphanumeric
+            if (!imageName.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*[a-zA-Z0-9]$/) && !imageName.matches(/^[a-zA-Z0-9]$/)) {
+                return false
+            }
+        }
+        if (imageName.length() > 255) {
+            return false
+        }
+        
+        // Validate tag part - allow single character tags and hyphens
+        if (tag.length() == 1) {
+            if (!tag.matches(/^[a-zA-Z0-9]$/)) {
+                return false
+            }
+        } else {
+            if (!tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\-]*$/)) {
+                return false
+            }
+        }
+        if (tag.length() > 128) {
+            return false
+        }
+        
+        return true
+    }
+    
+    /**
+     * Extracts the image name portion from a full image reference
+     * Example: "registry.com:5000/team/myapp:v1.0.0" -> "registry.com:5000/team/myapp"
+     */
+    String extractImageName(String imageRef) {
+        if (!imageRef || !imageRef.contains(':')) {
+            throw new IllegalArgumentException("Invalid image reference: ${imageRef}")
+        }
+        
+        def lastColon = imageRef.lastIndexOf(':')
+        return imageRef.substring(0, lastColon)
+    }
+    
+    /**
+     * Validates simple tag names (tag portion only, no repository)
+     * Used for publish target tags which are simple names
+     */
+    boolean isValidSimpleTag(String tag) {
+        // Docker tag name validation (tag portion only, no repository)
+        // Valid examples: "latest", "v1.0.0", "dev-123", "1.0", "stable"
+        // Docker allows: letters, digits, underscores, periods, dashes
+        // Must not start with period or dash, max 128 characters
+        return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) && tag.length() <= 128 && !tag.contains(":")
     }
     
     /**
@@ -213,26 +309,4 @@ abstract class DockerExtension {
         return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
     }
 
-
-
-    boolean isValidTagName(String tag) {
-        // Docker tag name validation (tag portion only, no repository)
-        // Valid examples: "latest", "v1.0.0", "dev-123", "1.0", "stable"
-        // Docker allows: letters, digits, underscores, periods, dashes
-        // Must not start with period or dash, max 128 characters
-        return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) && tag.length() <= 128 && !tag.contains(":")
-    }
-    
-    boolean isValidImageReference(String imageRef) {
-        // Docker image reference validation (repository:tag format)
-        // Valid examples: "myapp:latest", "registry.com/team/app:v1.0.0"
-        return imageRef && imageRef.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\\/-]*:[a-zA-Z0-9][a-zA-Z0-9._-]*$/)
-    }
-    
-    @Deprecated
-    boolean isValidDockerTag(String tag) {
-        // Legacy method - kept for backward compatibility in tests
-        // This was the problematic method that required repository:tag format
-        return isValidImageReference(tag)
-    }
 }

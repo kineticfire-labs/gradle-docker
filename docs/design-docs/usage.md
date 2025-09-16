@@ -22,7 +22,7 @@ docker {
             sourceRef = 'my-app:1.0.0'  // or any other existing image reference
 
             // Apply two new tags
-            tags.set(['v1.0.0', 'stable'])
+            tags.set(['timeServer:1.0.0', 'timeServer:stable'])
         }
     }
 }
@@ -81,7 +81,7 @@ docker {
             sourceRef = 'my-app:1.0.0'
 
             // Apply tags first
-            tags.set(['v1.0.0', 'stable'])
+            tags.set(['timeServer:1.0.0', 'timeServer:stable'])
 
             // Save to file
             save {
