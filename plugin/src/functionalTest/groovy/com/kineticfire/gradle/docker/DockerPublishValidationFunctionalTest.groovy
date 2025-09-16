@@ -130,7 +130,7 @@ CMD ["echo", "functional test image"]
                     invalidApp {
                         context = file('src/main/docker')
                         dockerfile = file('src/main/docker/Dockerfile')
-                        tags = ['invalid tag with spaces']  // Invalid tag name
+                        tags = ['invalid app:with spaces']  // Invalid image reference
                     }
                 }
             }
@@ -144,10 +144,10 @@ CMD ["echo", "functional test image"]
             .buildAndFail()
 
         then: "Helpful error message is provided"
-        result.output.contains("Invalid Docker tag name")
-        result.output.contains("invalid tag with spaces")
+        result.output.contains("Invalid Docker image reference") || result.output.contains("Invalid image reference")
+        result.output.contains("invalid app:with spaces")
         result.output.contains("invalidApp")
-        result.output.contains("Image tags should be simple names")
+        result.output.contains("Image reference format is invalid") || result.output.contains("Invalid image reference")
     }
 
     def "validates repository name formats correctly"() {
@@ -162,7 +162,7 @@ CMD ["echo", "functional test image"]
                     repoTest {
                         context = file('src/main/docker')
                         dockerfile = file('src/main/docker/Dockerfile')
-                        tags = ['latest']
+                        tags = ['repoTest:latest']
                         publish {
                             to('docker-hub') {
                                 repository = 'myuser/myapp'
@@ -212,7 +212,7 @@ CMD ["echo", "functional test image"]
                     timeServer {
                         context = file('src/main/docker')
                         dockerfile = file('src/main/docker/Dockerfile')
-                        tags = ['1.0.0', 'latest']
+                        tags = ['timeServer:1.0.0', 'timeServer:latest']
                         buildArgs = [
                             'JAR_FILE': 'app.jar',
                             'BUILD_VERSION': '1.0.0'
