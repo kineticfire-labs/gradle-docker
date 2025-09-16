@@ -27,40 +27,29 @@ plugins {
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
-// todo: Setup all-in-one 'docker' tasks:  build, tag, save, and publish
 docker {
     images {
-        imagesATimeServer {
-            contextTask = tasks.register('prepareImagesATimeServerContext', Copy) {
+        scenario2TimeServer {
+            contextTask = tasks.register('prepareScenario2TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
-                into layout.buildDirectory.dir('docker-context/imagesATimeServer')
+                into layout.buildDirectory.dir('docker-context/scenario2TimeServer')
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    def projectVersion = version // Capture version during configuration time
+                    def projectVersion = version
                     rename { "app-${projectVersion}.jar" }
                 }
                 dependsOn ':app:jar'
             }
-            // dockerfile will default to 'build/docker-context/imagesATimeServer/Dockerfile' based on image name
-            //dockerfileName = 'Dockerfile'
-            tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
+            dockerfileName = 'CustomDockerfile'
+            tags.set([
                         "${version}",
                         "latest"
             ])
-            buildArgs = [
-                'JAR_FILE': "app-${version}.jar",
-                'BUILD_VERSION': version,
-                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
-            ]
-            // todo
-            //publish {
-            //    to('basic') {
-            //        repository = 'localhost:25000/time-server-integration'
-            //        publishTags = ['latest'] // note different syntax to list tax vs docker/images/<name>/tags
-            //    }
-            //}
+            buildArgs = ['JAR_FILE': "app-${version}.jar"]
+            // todo: save
+            // no publish
         }
     }
 }
@@ -74,8 +63,8 @@ apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
 // Register Docker image clean and verify tasks for this integration test
 registerBuildWorkflowTasks(project, [
-    'images-a-time-server:1.0.0',
-    'images-a-time-server:latest'
+    'scenario2-time-server:1.0.0',
+    'scenario2-time-server:latest'
 ])
 
 // Task that runs complete integration test workflow

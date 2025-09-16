@@ -34,6 +34,8 @@ include 'app'
 // Include Docker integration tests
 include 'docker'
 include 'docker:images-a'
+include 'docker:scenario-1'
+include 'docker:scenario-2'
 
 // Future: Include Compose integration tests
 // include 'compose'

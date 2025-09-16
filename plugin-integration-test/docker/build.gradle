@@ -44,6 +44,8 @@ afterEvaluate {
     tasks.named('integrationTest') {
         // Add dependencies on subproject integration test tasks
         dependsOn project(':docker:images-a').tasks.named('integrationTest')
+        dependsOn project(':docker:scenario-1').tasks.named('integrationTest')
+        dependsOn project(':docker:scenario-2').tasks.named('integrationTest')
         
         // Future subprojects can be added here:
         // dependsOn project(':multi-stage-dockerfile').tasks.named('integrationTest')
