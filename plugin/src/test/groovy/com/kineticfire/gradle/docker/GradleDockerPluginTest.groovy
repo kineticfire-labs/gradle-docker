@@ -496,7 +496,7 @@ class GradleDockerPluginTest extends Specification {
                 publish {
                     // Simple publish config that should trigger task creation
                     to {
-                        repository = 'docker.io/myapp'
+                        tags(['docker.io/myapp:latest'])
                     }
                 }
             }

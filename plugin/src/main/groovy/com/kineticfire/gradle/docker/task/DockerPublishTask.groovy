@@ -69,19 +69,18 @@ abstract class DockerPublishTask extends DefaultTask {
         def publishFutures = []
         
         targets.each { target ->
-            def repositoryName = target.repository.get()
-            def tags = target.publishTags.getOrElse([])
+            def tags = target.tags.getOrElse([])
             def authSpec = target.auth.orNull
             
             if (tags.empty) {
-                tags = ['latest']
+                logger.warn("No tags specified for publish target '${target.name}', skipping")
+                return
             }
             
             // Create auth config once per target (outside the inner loop)
             def authConfig = authSpec?.toAuthConfig()
             
-            tags.each { tag ->
-                def fullImageRef = "${repositoryName}:${tag}"
+            tags.each { fullImageRef ->
                 logger.info("Publishing {} as {}", imageName, fullImageRef)
                 
                 def publishFuture = service.pushImage(fullImageRef, authConfig)

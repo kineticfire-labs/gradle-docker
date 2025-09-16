@@ -90,12 +90,10 @@ CMD ["echo", "functional test image"]
                         tags = ['latest', 'v1.0.0']
                         publish {
                             to('staging') {
-                                repository = 'localhost:5000/test-app'
-                                tags = ['latest', 'staging']
+                                tags = ['localhost:5000/test-app:latest', 'localhost:5000/test-app:staging']
                             }
                             to('production') {
-                                repository = 'registry.company.com/prod/test-app'
-                                tags = ['v1.0.0', 'stable']
+                                tags = ['registry.company.com/prod/test-app:v1.0.0', 'registry.company.com/prod/test-app:stable']
                             }
                         }
                     }
@@ -165,16 +163,13 @@ CMD ["echo", "functional test image"]
                         tags = ['repoTest:latest']
                         publish {
                             to('docker-hub') {
-                                repository = 'myuser/myapp'
-                                tags = ['latest']
+                                tags = ['myuser/myapp:latest']
                             }
                             to('private') {
-                                repository = 'registry.company.com:8080/team/app'
-                                tags = ['v1.0']
+                                tags = ['registry.company.com:8080/team/app:v1.0']
                             }
                             to('gcr') {
-                                repository = 'gcr.io/project-id/app'
-                                tags = ['stable']
+                                tags = ['gcr.io/project-id/app:stable']
                             }
                         }
                     }
@@ -219,8 +214,7 @@ CMD ["echo", "functional test image"]
                         ]
                         publish {
                             to('basic') {
-                                repository = 'localhost:25000/time-server-integration'
-                                tags = ['latest']
+                                tags = ['localhost:25000/time-server-integration:latest']
                             }
                         }
                     }
@@ -289,16 +283,13 @@ CMD ["echo", "functional test image"]
                         ]
                         publish {
                             to('staging') {
-                                repository = 'staging-registry.company.com/team/complex-app'
-                                tags = ['latest', 'v2.1.0', 'staging-ready']
+                                tags = ['staging-registry.company.com/team/complex-app:latest', 'staging-registry.company.com/team/complex-app:v2.1.0', 'staging-registry.company.com/team/complex-app:staging-ready']
                             }
                             to('production') {
-                                repository = 'prod-registry.company.com:443/secure/complex-app'
-                                tags = ['v2.1.0', 'stable', 'prod-ready']
+                                tags = ['prod-registry.company.com:443/secure/complex-app:v2.1.0', 'prod-registry.company.com:443/secure/complex-app:stable', 'prod-registry.company.com:443/secure/complex-app:prod-ready']
                             }
                             to('backup') {
-                                repository = 'backup.registry.internal/archive/complex-app'
-                                tags = ['v2.1.0-archive']
+                                tags = ['backup.registry.internal/archive/complex-app:v2.1.0-archive']
                             }
                         }
                     }

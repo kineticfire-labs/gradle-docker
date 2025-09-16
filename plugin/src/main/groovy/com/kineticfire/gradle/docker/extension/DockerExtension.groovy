@@ -192,33 +192,21 @@ abstract class DockerExtension {
      * Validates a single publish target
      */
     void validatePublishTarget(def publishTarget, String imageName) {
-        // Validate repository format
-        if (!publishTarget.repository.present) {
+        // Validate that tags are specified
+        if (!publishTarget.tags.present || publishTarget.tags.get().isEmpty()) {
             throw new GradleException(
-                "Publish target '${publishTarget.name}' in image '${imageName}' must specify a repository"
+                "Publish target '${publishTarget.name}' in image '${imageName}' must specify at least one tag"
             )
         }
         
-        def repository = publishTarget.repository.get()
-        if (!isValidRepositoryName(repository)) {
-            throw new GradleException(
-                "Invalid repository name: '${repository}' in publish target '${publishTarget.name}' of image '${imageName}'\\n" +
-                "Repository should be in format: [registry/]namespace/name (e.g., 'docker.io/myapp', 'localhost:5000/test')"
-            )
-        }
-        
-        // Validate publish target tags - these should be simple tag names
-        if (publishTarget.publishTags.present) {
-            def tags = publishTarget.publishTags.get()
-            if (!tags.isEmpty()) {
-                tags.each { tag ->
-                    if (!isValidSimpleTag(tag)) {
-                        throw new GradleException(
-                            "Invalid tag name: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'. " +
-                            "Publish target tags should be simple names like 'latest', 'v1.0.0', 'stable'."
-                        )
-                    }
-                }
+        // Validate each tag as a full image reference
+        def tags = publishTarget.tags.get()
+        tags.each { tag ->
+            if (!isValidImageReference(tag)) {
+                throw new GradleException(
+                    "Invalid image reference: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'. " +
+                    "Tags must be full image references like 'myapp:latest', 'registry.com/team/myapp:v1.0.0', or 'localhost:5000/namespace/myapp:tag'."
+                )
             }
         }
     }
@@ -232,48 +220,77 @@ abstract class DockerExtension {
             return false
         }
         
-        // Split on last colon to separate image name from tag
-        def lastColon = imageRef.lastIndexOf(':')
+        // Find the last colon that separates image name from tag
+        // We need to be careful about registry:port format
+        int lastColon = imageRef.lastIndexOf(':')
+        
+        // Check if this might be a port number by looking for a slash after the colon
+        boolean isTag = true
+        for (int i = lastColon + 1; i < imageRef.length(); i++) {
+            char c = imageRef.charAt(i)
+            if (c == '/') {
+                // Found a slash after colon, this is a port number, not a tag
+                isTag = false
+                break
+            }
+            if (!Character.isDigit(c)) {
+                // Non-digit after colon, this is definitely a tag
+                break
+            }
+        }
+        
+        if (!isTag) {
+            // The last colon is part of a port, find the previous one
+            int prevColon = imageRef.lastIndexOf(':', lastColon - 1)
+            if (prevColon == -1) {
+                return false // No tag separator found
+            }
+            lastColon = prevColon
+        }
+        
         if (lastColon <= 0 || lastColon >= imageRef.length() - 1) {
             return false
         }
         
-        def imageName = imageRef.substring(0, lastColon)
-        def tag = imageRef.substring(lastColon + 1)
+        String imageName = imageRef.substring(0, lastColon)
+        String tag = imageRef.substring(lastColon + 1)
         
-        // Validate image name part (can include registry/namespace)
-        // Allow single character names and handle hyphens properly
-        if (imageName.length() == 1) {
-            if (!imageName.matches(/^[a-zA-Z0-9]$/)) {
-                return false
-            }
-        } else {
-            // Allow hyphens in middle, start/end with alphanumeric
-            if (!imageName.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\-\/]*[a-zA-Z0-9]$/) && !imageName.matches(/^[a-zA-Z0-9]$/)) {
-                return false
-            }
-        }
-        if (imageName.length() > 255) {
+        // Validate using simpler approach
+        return isValidDockerImageName(imageName) && isValidDockerTag(tag)
+    }
+
+    /**
+     * Validates the image name part of an image reference (before the tag)
+     * Handles registry:port/namespace/name format
+     */
+    private boolean isValidDockerImageName(String imageName) {
+        if (!imageName || imageName.length() > 255) {
             return false
         }
         
-        // Validate tag part - allow single character tags and hyphens
-        if (tag.length() == 1) {
-            if (!tag.matches(/^[a-zA-Z0-9]$/)) {
-                return false
-            }
-        } else {
-            if (!tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._\-]*$/)) {
-                return false
-            }
-        }
-        if (tag.length() > 128) {
-            return false
-        }
+        // Docker image names can contain:
+        // - lowercase letters, digits, periods, hyphens, underscores, slashes, colons (for registry:port)
+        // - Must not start or end with special characters (except for registry hostnames)
         
-        return true
+        // Simple regex that matches Docker's liberal approach
+        return imageName.matches(/^[a-zA-Z0-9._:-]+([\/][a-zA-Z0-9._-]+)*$/) && 
+               !imageName.startsWith('/') && !imageName.endsWith('/') &&
+               !imageName.startsWith('-') && !imageName.endsWith('-')
     }
     
+    /**
+     * Validates a registry hostname (more permissive than regular name components)
+     */
+    private boolean isValidDockerTag(String tag) {
+        if (!tag || tag.length() > 128) {
+            return false
+        }
+        
+        // Docker tags can contain letters, digits, periods, dashes, underscores
+        // Must not start with period or dash
+        return tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) || tag.matches(/^[a-zA-Z0-9]$/)
+    }
+
     /**
      * Extracts the image name portion from a full image reference
      * Example: "registry.com:5000/team/myapp:v1.0.0" -> "registry.com:5000/team/myapp"

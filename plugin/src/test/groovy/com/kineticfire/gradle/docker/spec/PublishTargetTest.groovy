@@ -53,31 +53,48 @@ class PublishTargetTest extends Specification {
 
     // ===== PROPERTY TESTS =====
 
-    def "repository property works correctly"() {
+    def "tags property works correctly with full image references"() {
         when:
-        publishTarget.repository.set('docker.io/myapp')
+        publishTarget.tags.set(['myapp:v1.0', 'registry.com/team/myapp:latest', 'localhost:5000/myapp:stable'])
 
         then:
-        publishTarget.repository.present
-        publishTarget.repository.get() == 'docker.io/myapp'
-    }
-
-    def "tags property works correctly"() {
-        when:
-        publishTarget.publishTags.set(['v1.0', 'latest', 'stable'])
-
-        then:
-        publishTarget.publishTags.present
-        publishTarget.publishTags.get() == ['v1.0', 'latest', 'stable']
+        publishTarget.tags.present
+        publishTarget.tags.get() == ['myapp:v1.0', 'registry.com/team/myapp:latest', 'localhost:5000/myapp:stable']
     }
 
     def "tags property with empty list"() {
         when:
-        publishTarget.publishTags.set([])
+        publishTarget.tags.set([])
 
         then:
-        publishTarget.publishTags.present
-        publishTarget.publishTags.get().isEmpty()
+        publishTarget.tags.present
+        publishTarget.tags.get().isEmpty()
+    }
+
+    def "tags property supports various registry formats"() {
+        when:
+        publishTarget.tags.set([
+            'myapp:latest',                                    // Simple format
+            'docker.io/user/myapp:v1.0',                      // Docker Hub
+            'gcr.io/project/myapp:stable',                     // Google Container Registry
+            'registry.company.com:8080/team/myapp:dev',        // Private registry with port
+            'localhost:5000/namespace/myapp:test'              // Local registry
+        ])
+
+        then:
+        publishTarget.tags.present
+        publishTarget.tags.get().size() == 5
+        publishTarget.tags.get().contains('myapp:latest')
+        publishTarget.tags.get().contains('docker.io/user/myapp:v1.0')
+        publishTarget.tags.get().contains('gcr.io/project/myapp:stable')
+        publishTarget.tags.get().contains('registry.company.com:8080/team/myapp:dev')
+        publishTarget.tags.get().contains('localhost:5000/namespace/myapp:test')
+    }
+
+    def "tags property is initially empty"() {
+        expect:
+        publishTarget.tags.present
+        publishTarget.tags.get().isEmpty()
     }
 
     def "auth property initially not present"() {
@@ -90,9 +107,9 @@ class PublishTargetTest extends Specification {
     def "auth(Closure) configures authentication"() {
         when:
         publishTarget.auth {
-            username = 'myuser'
-            password = 'mypassword'
-            serverAddress = 'docker.io'
+            username.set('myuser')
+            password.set('mypassword')
+            serverAddress.set('docker.io')
         }
 
         then:
@@ -105,8 +122,8 @@ class PublishTargetTest extends Specification {
     def "auth(Closure) with registry token"() {
         when:
         publishTarget.auth {
-            registryToken = 'ghp_abc123def456'
-            serverAddress = 'ghcr.io'
+            registryToken.set('ghp_abc123def456')
+            serverAddress.set('ghcr.io')
         }
 
         then:
@@ -120,8 +137,8 @@ class PublishTargetTest extends Specification {
     def "auth(Closure) with helper"() {
         when:
         publishTarget.auth {
-            helper = 'docker-credential-helper'
-            serverAddress = 'private.registry.com'
+            helper.set('docker-credential-helper')
+            serverAddress.set('private.registry.com')
         }
 
         then:
@@ -172,18 +189,16 @@ class PublishTargetTest extends Specification {
 
     def "complete configuration with all properties"() {
         when:
-        publishTarget.repository.set('private.registry.com/myproject/myapp')
-        publishTarget.publishTags.set(['v1.0.0', '1.0', 'latest'])
+        publishTarget.tags.set(['private.registry.com/myproject/myapp:v1.0.0', 'private.registry.com/myproject/myapp:latest'])
         publishTarget.auth {
-            username = 'deployuser'
-            password = 'deploypass'
-            serverAddress = 'private.registry.com'
+            username.set('deployuser')
+            password.set('deploypass')
+            serverAddress.set('private.registry.com')
         }
 
         then:
         publishTarget.name == 'testTarget'
-        publishTarget.repository.get() == 'private.registry.com/myproject/myapp'
-        publishTarget.publishTags.get() == ['v1.0.0', '1.0', 'latest']
+        publishTarget.tags.get() == ['private.registry.com/myproject/myapp:v1.0.0', 'private.registry.com/myproject/myapp:latest']
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'deployuser'
         publishTarget.auth.get().password.get() == 'deploypass'
@@ -195,8 +210,8 @@ class PublishTargetTest extends Specification {
     def "auth can be reconfigured"() {
         when:
         publishTarget.auth {
-            username = 'user1'
-            password = 'pass1'
+            username.set('user1')
+            password.set('pass1')
         }
         
         then:
@@ -205,8 +220,8 @@ class PublishTargetTest extends Specification {
         
         when:
         publishTarget.auth {
-            registryToken = 'token123'
-            serverAddress = 'new.registry.com'
+            registryToken.set('token123')
+            serverAddress.set('new.registry.com')
         }
         
         then:
@@ -216,15 +231,12 @@ class PublishTargetTest extends Specification {
 
     def "properties can be updated after initial configuration"() {
         given:
-        publishTarget.repository.set('initial.repo.com/app')
-        publishTarget.publishTags.set(['v1.0'])
+        publishTarget.tags.set(['myapp:v1.0'])
 
         when:
-        publishTarget.repository.set('updated.repo.com/app')
-        publishTarget.publishTags.set(['v2.0', 'latest'])
+        publishTarget.tags.set(['myapp:v2.0', 'registry.com/team/myapp:latest'])
 
         then:
-        publishTarget.repository.get() == 'updated.repo.com/app'
-        publishTarget.publishTags.get() == ['v2.0', 'latest']
+        publishTarget.tags.get() == ['myapp:v2.0', 'registry.com/team/myapp:latest']
     }
 }

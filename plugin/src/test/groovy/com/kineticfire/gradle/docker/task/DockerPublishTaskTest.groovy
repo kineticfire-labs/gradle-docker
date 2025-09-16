@@ -91,7 +91,7 @@ class DockerPublishTaskTest extends Specification {
     def "should publish single target with image name"() {
         given:
         task.imageName.set('test:latest')
-        def target = createPublishTarget('localhost:5000/myapp', ['v1.0', 'latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:v1.0', 'localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         and:
@@ -108,7 +108,7 @@ class DockerPublishTaskTest extends Specification {
     def "should publish single target with default latest tag"() {
         given:
         task.imageName.set('test:latest')
-        def target = createPublishTarget('localhost:5000/myapp', [])
+        def target = createPublishTarget([])
         task.publishTargets.set([target])
         
         and:
@@ -127,7 +127,7 @@ class DockerPublishTaskTest extends Specification {
         imageIdFile.parentFile.mkdirs()
         imageIdFile.text = 'sha256:abcd1234'
         task.imageIdFile.set(project.layout.buildDirectory.file('image-id.txt'))
-        def target = createPublishTarget('localhost:5000/myapp', ['latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         and:
@@ -145,8 +145,8 @@ class DockerPublishTaskTest extends Specification {
     def "should handle multiple publish targets"() {
         given:
         task.imageName.set('test:latest')
-        def target1 = createPublishTarget('localhost:5000/myapp', ['v1.0'])
-        def target2 = createPublishTarget('docker.io/myapp', ['latest'])
+        def target1 = createPublishTarget(['localhost:5000/myapp:v1.0'])
+        def target2 = createPublishTarget(['docker.io/myapp:latest'])
         task.publishTargets.set([target1, target2])
         
         and:
@@ -163,7 +163,7 @@ class DockerPublishTaskTest extends Specification {
     def "should handle multiple tags per target"() {
         given:
         task.imageName.set('test:latest')
-        def target = createPublishTarget('localhost:5000/myapp', ['v1.0', 'v1.0.1', 'latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:v1.0', 'localhost:5000/myapp:v1.0.1', 'localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         and:
@@ -184,7 +184,7 @@ class DockerPublishTaskTest extends Specification {
         given:
         task.imageName.set('test:latest')
         def authSpec = createAuthSpec('testuser', 'testpass', null)
-        def target = createPublishTargetWithAuth('localhost:5000/myapp', ['latest'], authSpec)
+        def target = createPublishTargetWithAuth(['localhost:5000/myapp:latest'], authSpec)
         task.publishTargets.set([target])
         
         and:
@@ -203,7 +203,7 @@ class DockerPublishTaskTest extends Specification {
         given:
         task.imageName.set('test:latest')
         def authSpec = createAuthSpec(null, null, 'test-token')
-        def target = createPublishTargetWithAuth('localhost:5000/myapp', ['latest'], authSpec)
+        def target = createPublishTargetWithAuth(['localhost:5000/myapp:latest'], authSpec)
         task.publishTargets.set([target])
         
         and:
@@ -222,7 +222,7 @@ class DockerPublishTaskTest extends Specification {
 
     def "should fail when no image name and no image ID file"() {
         given:
-        def target = createPublishTarget('localhost:5000/myapp', ['latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         when:
@@ -236,7 +236,7 @@ class DockerPublishTaskTest extends Specification {
     def "should fail when image ID file does not exist"() {
         given:
         task.imageIdFile.set(project.layout.buildDirectory.file('nonexistent.txt'))
-        def target = createPublishTarget('localhost:5000/myapp', ['latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         when:
@@ -250,7 +250,7 @@ class DockerPublishTaskTest extends Specification {
     def "should handle Docker service exception"() {
         given:
         task.imageName.set('test:latest')
-        def target = createPublishTarget('localhost:5000/myapp', ['latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         def serviceException = new DockerServiceException(
             DockerServiceException.ErrorType.PUSH_FAILED,
@@ -274,7 +274,7 @@ class DockerPublishTaskTest extends Specification {
     def "should handle generic push exception"() {
         given:
         task.imageName.set('test:latest')
-        def target = createPublishTarget('localhost:5000/myapp', ['latest'])
+        def target = createPublishTarget(['localhost:5000/myapp:latest'])
         task.publishTargets.set([target])
         
         and:
@@ -290,17 +290,15 @@ class DockerPublishTaskTest extends Specification {
 
     // ===== HELPER METHODS =====
 
-    private PublishTarget createPublishTarget(String repository, List<String> tags) {
+    private PublishTarget createPublishTarget(List<String> fullImageReferences) {
         def target = project.objects.newInstance(PublishTarget, "test", project)
-        target.repository.set(repository)
-        target.publishTags.set(tags)
+        target.tags.set(fullImageReferences)
         return target
     }
     
-    private PublishTarget createPublishTargetWithAuth(String repository, List<String> tags, AuthSpec authSpec) {
+    private PublishTarget createPublishTargetWithAuth(List<String> fullImageReferences, AuthSpec authSpec) {
         def target = project.objects.newInstance(PublishTarget, "test", project)
-        target.repository.set(repository)
-        target.publishTags.set(tags)
+        target.tags.set(fullImageReferences)
         target.auth.set(authSpec)
         return target
     }

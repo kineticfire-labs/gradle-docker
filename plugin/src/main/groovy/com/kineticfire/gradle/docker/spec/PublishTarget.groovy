@@ -41,9 +41,13 @@ abstract class PublishTarget {
         return name 
     }
     
-    abstract Property<String> getRepository()
-    abstract ListProperty<String> getPublishTags()
+    // Changed: removed repository property, renamed publishTags to tags for full image references
+    abstract ListProperty<String> getTags()
     abstract Property<AuthSpec> getAuth()
+    
+    void tags(List<String> tags) {
+        getTags().set(tags)
+    }
     
     void auth(@DelegatesTo(AuthSpec) Closure closure) {
         def authSpec = project.objects.newInstance(AuthSpec, project)

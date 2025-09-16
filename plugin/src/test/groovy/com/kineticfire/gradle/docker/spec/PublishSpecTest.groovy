@@ -46,35 +46,30 @@ class PublishSpecTest extends Specification {
     def "to(Closure) creates target with automatic naming"() {
         when:
         publishSpec.to {
-            repository.set('docker.io/myrepo')
-            publishTags.set(['v1.0', 'latest'])
+            tags.set(['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest'])
         }
 
         then:
         publishSpec.to.size() == 1
-        publishSpec.to.getByName('target0').repository.get() == 'docker.io/myrepo'
-        publishSpec.to.getByName('target0').publishTags.get() == ['v1.0', 'latest']
+        publishSpec.to.getByName('target0').tags.get() == ['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest']
     }
 
     def "to(String, Closure) creates named target"() {
         when:
         publishSpec.to('production') {
-            repository.set('registry.company.com/app')
-            publishTags.set(['prod', 'v1.0.0'])
+            tags.set(['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0'])
         }
 
         then:
         publishSpec.to.size() == 1
         publishSpec.to.getByName('production').name == 'production'
-        publishSpec.to.getByName('production').repository.get() == 'registry.company.com/app'
-        publishSpec.to.getByName('production').publishTags.get() == ['prod', 'v1.0.0']
+        publishSpec.to.getByName('production').tags.get() == ['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0']
     }
 
     def "to(Closure) with auth configuration"() {
         when:
         publishSpec.to {
-            repository.set('private.registry.com/app')
-            publishTags.set(['latest'])
+            tags.set(['private.registry.com/app:latest'])
             auth {
                 username.set('myuser')
                 password.set('mypass')
@@ -96,15 +91,13 @@ class PublishSpecTest extends Specification {
         publishSpec.to(new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.repository.set('docker.io/myapp')
-                target.publishTags.set(['v2.0', 'stable'])
+                target.tags.set(['docker.io/myapp:v2.0', 'docker.io/myapp:stable'])
             }
         })
 
         then:
         publishSpec.to.size() == 1
-        publishSpec.to.getByName('target0').repository.get() == 'docker.io/myapp'
-        publishSpec.to.getByName('target0').publishTags.get() == ['v2.0', 'stable']
+        publishSpec.to.getByName('target0').tags.get() == ['docker.io/myapp:v2.0', 'docker.io/myapp:stable']
     }
 
     def "to(String, Action) creates named target"() {
@@ -112,8 +105,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to('staging', new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.repository.set('staging.registry.com/app')
-                target.publishTags.set(['staging'])
+                target.tags.set(['staging.registry.com/app:staging'])
             }
         })
 
@@ -121,8 +113,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to.size() == 1
         def target = publishSpec.to.getByName('staging')
         target.name == 'staging'
-        target.repository.get() == 'staging.registry.com/app'
-        target.publishTags.get() == ['staging']
+        target.tags.get() == ['staging.registry.com/app:staging']
     }
 
     def "to(Action) with auth configuration"() {
@@ -130,8 +121,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to(new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.repository.set('secure.registry.com/app')
-                target.publishTags.set(['secure'])
+                target.tags.set(['secure.registry.com/app:secure'])
                 target.auth(new Action<AuthSpec>() {
                     @Override
                     void execute(AuthSpec auth) {
@@ -155,40 +145,35 @@ class PublishSpecTest extends Specification {
     def "multiple to calls create multiple targets with auto-naming"() {
         when:
         publishSpec.to {
-            repository.set('docker.io/app')
-            publishTags.set(['latest'])
+            tags.set(['docker.io/app:latest'])
         }
         publishSpec.to {
-            repository.set('quay.io/app')
-            publishTags.set(['v1.0'])
+            tags.set(['quay.io/app:v1.0'])
         }
 
         then:
         publishSpec.to.size() == 2
-        publishSpec.to.getByName('target0').repository.get() == 'docker.io/app'
-        publishSpec.to.getByName('target1').repository.get() == 'quay.io/app'
+        publishSpec.to.getByName('target0').tags.get() == ['docker.io/app:latest']
+        publishSpec.to.getByName('target1').tags.get() == ['quay.io/app:v1.0']
     }
 
     def "mixed named and auto-named targets"() {
         when:
         publishSpec.to('dockerhub') {
-            repository.set('docker.io/myapp')
-            publishTags.set(['latest'])
+            tags.set(['docker.io/myapp:latest'])
         }
         publishSpec.to {
-            repository.set('ghcr.io/myapp')
-            publishTags.set(['dev'])
+            tags.set(['ghcr.io/myapp:dev'])
         }
         publishSpec.to('quay') {
-            repository.set('quay.io/myapp')
-            publishTags.set(['stable'])
+            tags.set(['quay.io/myapp:stable'])
         }
 
         then:
         publishSpec.to.size() == 3
-        publishSpec.to.getByName('dockerhub').repository.get() == 'docker.io/myapp'
-        publishSpec.to.getByName('target1').repository.get() == 'ghcr.io/myapp'
-        publishSpec.to.getByName('quay').repository.get() == 'quay.io/myapp'
+        publishSpec.to.getByName('dockerhub').tags.get() == ['docker.io/myapp:latest']
+        publishSpec.to.getByName('target1').tags.get() == ['ghcr.io/myapp:dev']
+        publishSpec.to.getByName('quay').tags.get() == ['quay.io/myapp:stable']
     }
 
     // ===== GETTER TESTS =====
@@ -196,14 +181,14 @@ class PublishSpecTest extends Specification {
     def "getTo returns the targets container"() {
         when:
         publishSpec.to('test') {
-            repository.set('test.registry.com/app')
+            tags.set(['test.registry.com/app:latest'])
         }
 
         then:
         publishSpec.to != null
         publishSpec.getTo() == publishSpec.to
         publishSpec.getTo().size() == 1
-        publishSpec.getTo().getByName('test').repository.get() == 'test.registry.com/app'
+        publishSpec.getTo().getByName('test').tags.get() == ['test.registry.com/app:latest']
     }
 
     // ===== EDGE CASES =====
@@ -217,10 +202,10 @@ class PublishSpecTest extends Specification {
     def "targets can be accessed by name after creation"() {
         when:
         publishSpec.to('registry1') {
-            repository.set('reg1.com/app')
+            tags.set(['reg1.com/app:latest'])
         }
         publishSpec.to('registry2') {
-            repository.set('reg2.com/app')
+            tags.set(['reg2.com/app:latest'])
         }
 
         then:
