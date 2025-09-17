@@ -1,0 +1,108 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Example usage of the registry management infrastructure.
+ * 
+ * This file demonstrates how to configure and use Docker registries
+ * in integration tests with authentication support.
+ */
+
+// Apply the registry management plugin
+apply plugin: RegistryManagementPlugin
+
+// Configure test registries using the DSL
+registryManagement {
+    // Simple unauthenticated registry
+    registry('local-registry', 5000)
+    
+    // Authenticated registry
+    authenticatedRegistry('auth-registry', 5001, 'testuser', 'testpass')
+    
+    // Custom configured registry
+    registry('custom-registry', 5002) {
+        withAuth('admin', 'secret')
+        withLabels([
+            'test-type': 'integration',
+            'project': 'gradle-docker'
+        ])
+    }
+}
+
+// Alternative: Use convenience methods
+project.withTestRegistry('simple', 5003) {
+    // Registry will be configured with default settings
+}
+
+project.withAuthenticatedRegistry('secure', 5004, 'user', 'pass') {
+    withLabels(['env': 'test'])
+}
+
+// Register complete workflow for registry testing
+project.ext.setupRegistryIntegrationTests = {
+    def registryConfigs = [
+        new RegistryTestFixture.RegistryConfig('main', 5005),
+        new RegistryTestFixture.RegistryConfig('backup', 5006).withAuth('test', 'test')
+    ]
+    
+    def imageReferences = [
+        'localhost:5005/my-app:latest',
+        'localhost:5005/my-service:1.0',
+        'localhost:5006/secure-app:latest'
+    ]
+    
+    registerRegistryTestWorkflow(project, registryConfigs, imageReferences)
+}
+
+// Example task that uses registries
+task exampleRegistryTest {
+    group = 'verification'
+    description = 'Example integration test that uses Docker registries'
+    
+    dependsOn 'startTestRegistries'
+    finalizedBy 'stopTestRegistries'
+    
+    doLast {
+        // Access registry information
+        if (project.extensions.findByName('testRegistries')) {
+            def registries = project.extensions.testRegistries
+            registries.each { name, info ->
+                println "Registry ${name} available at ${info.url}"
+                if (info.requiresAuth) {
+                    println "  - Username: ${info.username}"
+                    println "  - Authentication required"
+                }
+            }
+        }
+        
+        // Your integration test logic here
+        println "Running integration tests against registries..."
+    }
+}
+
+// Task to demonstrate registry health verification
+task verifyRegistryHealth {
+    group = 'verification'
+    description = 'Verify all test registries are healthy'
+    
+    dependsOn 'startTestRegistries'
+    
+    doLast {
+        def fixture = new RegistryTestFixture()
+        fixture.verifyRegistryHealth()
+        println "All registries are healthy"
+    }
+}

@@ -104,25 +104,20 @@ ext.registerVerifySavedImagesTask = { Project project, List<String> filePaths ->
  * - Will need authentication support for publishing to public registries like Docker Hub
  * 
  * @param project The Gradle project to register tasks on
- * @param imageNames List of Docker image names in format "image-name:tag"
- * @param registryUrl The registry URL (e.g., "localhost:5000", "docker.io")
+ * @param imageReferences List of full Docker image references in format "registry/image-name:tag"
  */
-ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageNames, String registryUrl ->
-    if (imageNames == null || imageNames.isEmpty()) {
-        throw new IllegalArgumentException("imageNames cannot be null or empty")
-    }
-    if (registryUrl == null || registryUrl.trim().isEmpty()) {
-        throw new IllegalArgumentException("registryUrl cannot be null or empty")
+ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageReferences ->
+    if (imageReferences == null || imageReferences.isEmpty()) {
+        throw new IllegalArgumentException("imageReferences cannot be null or empty")
     }
     
     project.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
-        it.imageNames.set(imageNames)
-        it.registryUrl.set(registryUrl)
+        it.imageReferences.set(imageReferences)
         it.group = 'verification'
-        it.description = "Verify Docker images exist in registry: ${registryUrl}"
+        it.description = "Verify Docker images exist in registry"
     }
     
-    project.logger.info("Registered verify registry images task for images: ${imageNames} in registry: ${registryUrl}")
+    project.logger.info("Registered verify registry images task for image references: ${imageReferences}")
 }
 
 /**
@@ -139,3 +134,8 @@ ext.registerBuildWorkflowTasks = { Project project, List<String> imageNames ->
     
     project.logger.info("Registered build workflow tasks for images: ${imageNames}")
 }
+
+/**
+ * Note: Advanced registry testing workflow is available via RegistryManagementPlugin.
+ * See registry-integration-example.gradle in test resources for usage patterns.
+ */

@@ -16,8 +16,10 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.model.AuthConfig
 import com.kineticfire.gradle.docker.model.CompressionType
 import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.spec.AuthSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -60,7 +62,11 @@ abstract class DockerSaveTask extends DefaultTask {
     @Input
     @Optional
     abstract Property<Boolean> getPullIfMissing()
-    
+
+    @Input
+    @Optional
+    abstract Property<AuthSpec> getAuth()
+
     @TaskAction
     void saveImage() {
         // Validate required properties
@@ -94,12 +100,30 @@ abstract class DockerSaveTask extends DefaultTask {
             String ref = sourceRef.get()
             if (pullIfMissing.get() && !dockerService.get().imageExists(ref).get()) {
                 logger.lifecycle("Pulling missing image: {}", ref)
-                dockerService.get().pullImage(ref, null).get()
+
+                // NEW: Pass authentication if configured
+                AuthConfig authConfig = getAuthConfigFromSaveSpec()
+                if (authConfig != null) {
+                    logger.lifecycle("Using authentication for pulling image from registry")
+                }
+
+                dockerService.get().pullImage(ref, authConfig).get()
             }
             return ref
         }
-        
+
         // Use imageName if sourceRef is not present
         return imageName.get()
+    }
+
+    /**
+     * Convert AuthSpec to AuthConfig for DockerService
+     */
+    private AuthConfig getAuthConfigFromSaveSpec() {
+        if (!auth.present) {
+            return null
+        }
+
+        return auth.get().toAuthConfig()
     }
 }

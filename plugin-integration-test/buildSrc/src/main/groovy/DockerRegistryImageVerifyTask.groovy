@@ -35,31 +35,25 @@ import org.gradle.api.tasks.TaskAction
 abstract class DockerRegistryImageVerifyTask extends DefaultTask {
 
     @Input
-    abstract ListProperty<String> getImageNames()
-    
-    @Input
-    abstract Property<String> getRegistryUrl()
+    abstract ListProperty<String> getImageReferences()
 
     @TaskAction
     void verifyRegistryImages() {
-        def imageNames = getImageNames().get()
-        def registryUrl = getRegistryUrl().get()
+        def imageReferences = getImageReferences().get()
         
-        if (imageNames.isEmpty()) {
-            logger.info('No registry image names to verify')
+        if (imageReferences.isEmpty()) {
+            logger.info('No registry image references to verify')
             return
         }
 
         def missingImages = []
         def verifiedImages = []
 
-        for (String imageName : imageNames) {
-            def fullImageName = "${registryUrl}/${imageName}".toString()
-            
+        for (String imageRef : imageReferences) {
             try {
                 // Use docker manifest inspect to check if image exists in registry
                 // This is a lightweight operation that doesn't pull the image
-                def process = new ProcessBuilder(['docker', 'manifest', 'inspect', fullImageName])
+                def process = new ProcessBuilder(['docker', 'manifest', 'inspect', imageRef])
                     .redirectErrorStream(true)
                     .start()
 
@@ -67,23 +61,23 @@ abstract class DockerRegistryImageVerifyTask extends DefaultTask {
                 def output = process.inputStream.text.trim()
 
                 if (exitCode == 0) {
-                    logger.info("✓ Verified registry image exists: ${fullImageName}")
-                    verifiedImages.add(imageName)
+                    logger.info("✓ Verified registry image exists: ${imageRef}")
+                    verifiedImages.add(imageRef)
                 } else {
-                    logger.error("✗ Registry image not found: ${fullImageName}")
+                    logger.error("✗ Registry image not found: ${imageRef}")
                     logger.debug("Docker output: ${output}")
-                    missingImages.add(imageName)
+                    missingImages.add(imageRef)
                 }
             } catch (Exception e) {
-                logger.error("✗ Failed to verify registry image: ${fullImageName}", e)
-                missingImages.add(imageName)
+                logger.error("✗ Failed to verify registry image: ${imageRef}", e)
+                missingImages.add(imageRef)
             }
         }
 
         if (!missingImages.isEmpty()) {
-            throw new RuntimeException("Failed to verify ${missingImages.size()} registry image(s): ${missingImages}")
+            throw new RuntimeException("Expected images were not found: ${missingImages}")
         }
 
-        logger.lifecycle("Successfully verified ${verifiedImages.size()} Docker image(s) in registry: ${registryUrl}")
+        logger.lifecycle("Successfully verified ${verifiedImages.size()} Docker image(s) in registry")
     }
 }

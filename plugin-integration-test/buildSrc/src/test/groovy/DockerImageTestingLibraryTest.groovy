@@ -72,18 +72,14 @@ class DockerImageTestingLibraryTest extends Specification {
         }
 
         // Register verify registry images task function
-        project.ext.registerVerifyRegistryImagesTask = { Project proj, List<String> imageNames, String registryUrl ->
-            if (imageNames == null || imageNames.isEmpty()) {
-                throw new IllegalArgumentException("imageNames cannot be null or empty")
-            }
-            if (registryUrl == null || registryUrl.trim().isEmpty()) {
-                throw new IllegalArgumentException("registryUrl cannot be null or empty")
+        project.ext.registerVerifyRegistryImagesTask = { Project proj, List<String> imageReferences ->
+            if (imageReferences == null || imageReferences.isEmpty()) {
+                throw new IllegalArgumentException("imageReferences cannot be null or empty")
             }
             proj.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
-                it.imageNames.set(imageNames)
-                it.registryUrl.set(registryUrl)
+                it.imageReferences.set(imageReferences)
                 it.group = 'verification'
-                it.description = "Verify Docker images exist in registry: ${registryUrl}"
+                it.description = "Verify Docker images exist in registry"
             }
         }
 

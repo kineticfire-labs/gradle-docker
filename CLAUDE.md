@@ -46,6 +46,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - **Example image under test**: `plugin-integration-test/app-image/src/main/`
   - **Functional tests**: `plugin-integration-test/app-image/functionalTest/`
   - **Integration tests**: `plugin-integration-test/app-image/integrationTest/`
+- **Re-usable Integration Test Verification Functionality**
+  - **buildSrc**: `plugin-integration-test/buildSrc/`
 - **Example usage demo**
   - **Build file for 'plugin-usage-demo' subproject**: `plugin-usage-demo/build.gradle`
   - **Example executable (used in image under test)**: `plugin-usage-demo/app/`

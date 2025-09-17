@@ -36,128 +36,129 @@ class DockerRegistryImageVerifyTaskTest extends Specification {
 
     def "task has correct inputs"() {
         when:
-        task.imageNames.set(['test-image:1.0'])
-        task.registryUrl.set('localhost:5000')
+        task.imageReferences.set(['localhost:5000/test-image:1.0'])
         
         then:
-        task.imageNames.get() == ['test-image:1.0']
-        task.registryUrl.get() == 'localhost:5000'
+        task.imageReferences.get() == ['localhost:5000/test-image:1.0']
     }
 
-    def "task accepts multiple image names"() {
+    def "task accepts multiple image references"() {
         when:
-        def images = ['image1:1.0', 'image2:latest', 'image3:dev']
-        task.imageNames.set(images)
-        task.registryUrl.set('localhost:5000')
+        def imageRefs = ['localhost:5000/image1:1.0', 'localhost:5000/image2:latest', 'localhost:5000/image3:dev']
+        task.imageReferences.set(imageRefs)
         
         then:
-        task.imageNames.get() == images
-        task.imageNames.get().size() == 3
-        task.registryUrl.get() == 'localhost:5000'
+        task.imageReferences.get() == imageRefs
+        task.imageReferences.get().size() == 3
     }
 
     def "task accepts empty image list"() {
         when:
-        task.imageNames.set([])
-        task.registryUrl.set('localhost:5000')
+        task.imageReferences.set([])
         
         then:
-        task.imageNames.get().isEmpty()
-        task.registryUrl.get() == 'localhost:5000'
+        task.imageReferences.get().isEmpty()
         noExceptionThrown()
     }
 
     def "task inputs are serializable for configuration cache"() {
         when:
-        task.imageNames.set(['test:1.0'])
-        task.registryUrl.set('localhost:5000')
-        def imageNamesValue = task.imageNames.get()
-        def registryValue = task.registryUrl.get()
+        task.imageReferences.set(['localhost:5000/test:1.0'])
+        def imageRefsValue = task.imageReferences.get()
         
         then:
-        imageNamesValue instanceof List
-        imageNamesValue.every { it instanceof String }
-        registryValue instanceof String
+        imageRefsValue instanceof List
+        imageRefsValue.every { it instanceof String }
     }
 
     def "task configuration is lazy"() {
         given:
-        def imageProvider = project.provider { ['lazy-image:1.0'] }
-        def registryProvider = project.provider { 'lazy-registry:5000' }
+        def imageProvider = project.provider { ['localhost:5000/lazy-image:1.0'] }
         
         when:
-        task.imageNames.set(imageProvider)
-        task.registryUrl.set(registryProvider)
+        task.imageReferences.set(imageProvider)
         
         then:
-        task.imageNames.get() == ['lazy-image:1.0']
-        task.registryUrl.get() == 'lazy-registry:5000'
+        task.imageReferences.get() == ['localhost:5000/lazy-image:1.0']
+    }
     }
 
-    def "task accepts different registry URLs"() {
+    def "task accepts different registry formats"() {
         when:
-        task.imageNames.set(['test:1.0'])
-        task.registryUrl.set(registryUrl)
+        task.imageReferences.set([imageRef])
         
         then:
-        task.registryUrl.get() == registryUrl
+        task.imageReferences.get().first() == imageRef
         
         where:
-        registryUrl << [
-            'localhost:5000',
-            'docker.io',
-            'registry.example.com:443',
-            '127.0.0.1:5000'
+        imageRef << [
+            'localhost:5000/test:1.0',
+            'docker.io/library/alpine:latest',
+            'registry.example.com:443/app:1.0',
+            '127.0.0.1:5000/myapp:latest'
         ]
     }
 
-    def "task validates image name format"() {
+    def "task validates image reference format"() {
         when:
-        task.imageNames.set(['valid-image:1.0', 'another:latest'])
-        task.registryUrl.set('localhost:5000')
+        task.imageReferences.set(['localhost:5000/valid-image:1.0', 'localhost:5000/another:latest'])
         
         then:
-        task.imageNames.get().every { it.contains(':') }
+        task.imageReferences.get().every { it.contains(':') && it.contains('/') }
     }
 
-    def "task handles various image tag formats"() {
+    def "task handles various image reference formats"() {
         when:
-        def images = [
-            'simple:latest',
-            'namespace/image:1.0.0',
+        def imageRefs = [
+            'localhost:5000/simple:latest',
+            'localhost:5000/namespace/image:1.0.0',
             'registry.com/namespace/image:sha256-abc123',
-            'image:v1.2.3-alpha'
+            'localhost:5000/image:v1.2.3-alpha'
         ]
-        task.imageNames.set(images)
-        task.registryUrl.set('localhost:5000')
+        task.imageReferences.set(imageRefs)
         
         then:
-        task.imageNames.get() == images
-        task.imageNames.get().size() == 4
+        task.imageReferences.get() == imageRefs
+        task.imageReferences.get().size() == 4
     }
 
     def "task supports different registry protocols"() {
         when:
-        task.imageNames.set(['test:1.0'])
-        task.registryUrl.set(registryUrl)
+        task.imageReferences.set([imageRef])
         
         then:
-        task.registryUrl.get() == registryUrl
+        task.imageReferences.get().first() == imageRef
         
         where:
-        registryUrl << [
-            'localhost:5000',           // HTTP local registry
-            'registry.example.com',     // HTTPS registry
-            '192.168.1.100:5000',      // IP address registry
-            'docker.io'                 // Docker Hub
+        imageRef << [
+            'localhost:5000/test:1.0',           // HTTP local registry
+            'registry.example.com/test:1.0',     // HTTPS registry
+            '192.168.1.100:5000/test:1.0',      // IP address registry
+            'docker.io/library/test:1.0'        // Docker Hub
         ]
     }
 
     def "task provider configuration works with complex scenarios"() {
         given:
-        def dynamicImages = project.provider {
-            ['app:1.0', 'db:5.7', 'cache:redis']
+        def dynamicImageRefs = project.provider {
+            ['localhost:5000/app:1.0', 'localhost:5000/db:5.7', 'localhost:5000/cache:redis']
         }
+        
+        when:
+        task.imageReferences.set(dynamicImageRefs)
+        
+        then:
+        task.imageReferences.get().size() == 3
+        task.imageReferences.get().size() > 0
+    }
+        
+        when:
+        task.imageReferences.set(dynamicImageRefs)
+        
+        then:
+        task.imageReferences.get().size() == 3
+        task.imageReferences.get().size() > 0
+    }
         def dynamicRegistry = project.provider {
             project.findProperty('registry.url') ?: 'localhost:5000'
         }
@@ -167,7 +168,7 @@ class DockerRegistryImageVerifyTaskTest extends Specification {
         task.registryUrl.set(dynamicRegistry)
         
         then:
-        task.imageNames.get().size() == 3
-        task.registryUrl.get() == 'localhost:5000'
+        task.imageReferences.get().size() == 3
+        task.imageReferences.get().size() > 0
     }
 }

@@ -170,13 +170,11 @@ class DockerImageTestingSimpleIntegrationTest extends Specification {
         
         // Test with a known public image from Docker Hub
         // Note: This tests registry verification without authentication
-        def publicImage = 'alpine:latest'
-        def registryUrl = 'docker.io'
+        def publicImageRef = 'docker.io/library/alpine:latest'
         
         // Create and configure registry verify task
         def registryTask = project.tasks.register('testVerifyRegistryDockerImages', DockerRegistryImageVerifyTask).get()
-        registryTask.imageNames.set([publicImage])
-        registryTask.registryUrl.set(registryUrl)
+        registryTask.imageReferences.set([publicImageRef])
         
         when:
         registryTask.verifyRegistryImages()

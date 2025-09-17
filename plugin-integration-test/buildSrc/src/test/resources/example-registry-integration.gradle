@@ -1,0 +1,225 @@
+/*
+ * Example integration test build script demonstrating Docker registry testing
+ * with authentication support.
+ * 
+ * This example shows how to:
+ * - Configure multiple test registries (authenticated and unauthenticated)
+ * - Set up integration test workflow with proper task dependencies
+ * - Use registry management for clean test isolation
+ * - Handle authentication in registry operations
+ */
+
+// Apply the registry management plugin
+apply plugin: RegistryManagementPlugin
+
+// Apply docker image testing functions
+apply from: 'docker-image-testing.gradle'
+
+// Configure test registries using the DSL
+registryManagement {
+    // Simple unauthenticated registry for basic testing
+    registry('local-registry', 5100)
+    
+    // Authenticated registry for security testing
+    authenticatedRegistry('secure-registry', 5101, 'integrationtest', 'testpass')
+    
+    // Custom configured registry with labels
+    registry('monitoring-registry', 5102) {
+        withAuth('monitor', 'monitorpass')
+        withLabels([
+            'environment': 'test',
+            'purpose': 'monitoring',
+            'team': 'integration'
+        ])
+    }
+}
+
+// Define the images we'll be testing
+def testImages = [
+    'my-app:latest',
+    'my-service:1.0.0',
+    'monitoring-agent:stable'
+]
+
+// Define full image references for registry verification
+def registryImageReferences = [
+    'localhost:5100/my-app:latest',          // Public registry
+    'localhost:5101/my-service:1.0.0',       // Secure registry
+    'localhost:5102/monitoring-agent:stable' // Monitoring registry
+]
+
+// Register image testing tasks
+registerBuildWorkflowTasks(project, testImages)
+registerVerifyRegistryImagesTask(project, registryImageReferences)
+
+// Create comprehensive integration test task
+tasks.register('registryIntegrationTest') {
+    group = 'verification'
+    description = 'Complete Docker registry integration test with authentication'
+    
+    // Dependencies
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerBuild'           // Assumes this task exists in real project
+    dependsOn 'dockerTag'             // Assumes this task exists in real project  
+    dependsOn 'dockerPublish'         // Assumes this task exists in real project
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+    
+    // Cleanup
+    finalizedBy 'stopTestRegistries'
+    
+    // Task ordering
+    tasks.cleanDockerImages.mustRunAfter tasks.startTestRegistries
+    tasks.dockerBuild.mustRunAfter tasks.cleanDockerImages
+    tasks.dockerTag.mustRunAfter tasks.dockerBuild
+    tasks.dockerPublish.mustRunAfter tasks.dockerTag
+    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuild
+    tasks.verifyRegistryDockerImages.mustRunAfter tasks.dockerPublish
+    
+    doLast {
+        logger.lifecycle('Registry integration test completed successfully!')
+        
+        // Access registry information for reporting
+        if (project.extensions.findByName('testRegistries')) {
+            def registries = project.extensions.testRegistries
+            logger.lifecycle('Test registries used:')
+            registries.each { name, info ->
+                def authStatus = info.requiresAuth ? 'authenticated' : 'public'
+                logger.lifecycle("  - ${name}: ${info.url} (${authStatus})")
+            }
+        }
+    }
+}
+
+// Task to demonstrate authenticated operations
+tasks.register('testAuthenticatedOperations') {
+    group = 'verification'
+    description = 'Test authenticated registry operations'
+    
+    dependsOn 'startTestRegistries'
+    finalizedBy 'stopTestRegistries'
+    
+    doLast {
+        def registries = project.extensions.testRegistries
+        
+        // Test public registry access
+        def publicRegistry = registries['local-registry']
+        logger.lifecycle("Testing public registry: ${publicRegistry.url}")
+        // In real scenario: docker pull/push operations without auth
+        
+        // Test authenticated registry access
+        def secureRegistry = registries['secure-registry']
+        logger.lifecycle("Testing secure registry: ${secureRegistry.url}")
+        logger.lifecycle("Using credentials: ${secureRegistry.username}")
+        // In real scenario: docker login, then docker pull/push operations
+        
+        // Test monitoring registry
+        def monitorRegistry = registries['monitoring-registry']
+        logger.lifecycle("Testing monitoring registry: ${monitorRegistry.url}")
+        // In real scenario: specific monitoring image operations
+    }
+}
+
+// Task to demonstrate error handling
+tasks.register('testRegistryErrorHandling') {
+    group = 'verification'
+    description = 'Test error handling in registry operations'
+    
+    dependsOn 'startTestRegistries'
+    finalizedBy 'stopTestRegistries'
+    
+    doLast {
+        // Test 1: Verify missing images (should fail gracefully)
+        try {
+            def missingImageTask = tasks.register('verifyMissingImage', DockerRegistryImageVerifyTask) {
+                it.imageReferences.set(['localhost:5100/non-existent:missing'])
+            }.get()
+            missingImageTask.verifyRegistryImages()
+            throw new AssertionError('Expected verification to fail for missing image')
+        } catch (RuntimeException e) {
+            logger.lifecycle("✓ Missing image verification failed as expected: ${e.message}")
+        }
+        
+        // Test 2: Verify authentication required (simulation)
+        def secureRegistry = project.extensions.testRegistries['secure-registry']
+        logger.lifecycle("✓ Authenticated registry ${secureRegistry.url} requires: ${secureRegistry.username}")
+    }
+}
+
+// Task for stress testing registry management
+tasks.register('stressTestRegistries') {
+    group = 'verification'
+    description = 'Stress test registry container management'
+    
+    doLast {
+        logger.lifecycle('Starting stress test of registry management...')
+        
+        // Create multiple registry fixtures to test concurrency
+        def fixtures = (1..3).collect { new RegistryTestFixture() }
+        
+        try {
+            // Start registries concurrently
+            def allRegistries = []
+            fixtures.eachWithIndex { fixture, index ->
+                def config = new RegistryTestFixture.RegistryConfig("stress-${index}", 5200 + index)
+                def registries = fixture.startTestRegistries([config])
+                allRegistries.addAll(registries.values())
+            }
+            
+            logger.lifecycle("✓ Started ${allRegistries.size()} registries successfully")
+            
+            // Verify all are healthy
+            fixtures.each { fixture ->
+                fixture.verifyRegistryHealth()
+            }
+            
+            logger.lifecycle('✓ All registries are healthy')
+            
+        } finally {
+            // Cleanup all fixtures
+            fixtures.each { fixture ->
+                try {
+                    fixture.stopAllRegistries()
+                } catch (Exception e) {
+                    fixture.emergencyCleanup()
+                }
+            }
+        }
+        
+        logger.lifecycle('✓ Stress test completed')
+    }
+}
+
+// Emergency cleanup task for development/debugging
+tasks.register('emergencyRegistryCleanup') {
+    group = 'cleanup'
+    description = 'Emergency cleanup of all test registries (for development/debugging)'
+    
+    doLast {
+        def fixture = new RegistryTestFixture()
+        fixture.emergencyCleanup()
+        logger.lifecycle('Emergency registry cleanup completed')
+    }
+}
+
+// Health check task
+tasks.register('checkRegistryHealth') {
+    group = 'verification'
+    description = 'Check health of running test registries'
+    
+    dependsOn 'startTestRegistries'
+    
+    doLast {
+        def fixture = new RegistryTestFixture()
+        fixture.verifyRegistryHealth()
+        
+        if (project.extensions.findByName('testRegistries')) {
+            def registries = project.extensions.testRegistries
+            logger.lifecycle('Registry health check results:')
+            registries.each { name, info ->
+                logger.lifecycle("  ✓ ${name} (${info.url}) - healthy")
+            }
+        }
+    }
+}

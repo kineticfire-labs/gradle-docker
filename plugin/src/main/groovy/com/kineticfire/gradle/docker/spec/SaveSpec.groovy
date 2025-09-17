@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec
 
+import org.gradle.api.Action
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.Property
@@ -40,4 +41,20 @@ abstract class SaveSpec {
     abstract Property<String> getCompression()
     abstract RegularFileProperty getOutputFile()
     abstract Property<Boolean> getPullIfMissing()
+
+    // NEW: Authentication for pullIfMissing - SAME as PublishSpec.auth
+    abstract Property<AuthSpec> getAuth()
+
+    void auth(@DelegatesTo(AuthSpec) Closure closure) {
+        def authSpec = project.objects.newInstance(AuthSpec, project)
+        closure.delegate = authSpec
+        closure.call()
+        auth.set(authSpec)
+    }
+
+    void auth(Action<AuthSpec> action) {
+        def authSpec = project.objects.newInstance(AuthSpec, project)
+        action.execute(authSpec)
+        auth.set(authSpec)
+    }
 }

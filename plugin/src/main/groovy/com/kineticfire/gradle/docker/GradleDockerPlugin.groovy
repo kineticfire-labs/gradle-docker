@@ -438,6 +438,17 @@ class GradleDockerPlugin implements Plugin<Project> {
             def saveSpec = imageSpec.save.get()
             task.outputFile.set(saveSpec.outputFile)
             task.compression.set(saveSpec.compression.map { CompressionType.fromString(it) })
+            task.pullIfMissing.set(saveSpec.pullIfMissing)
+
+            // NEW: Configure authentication for pullIfMissing
+            if (saveSpec.auth.present) {
+                task.auth.set(saveSpec.auth)
+            }
+
+            // Configure sourceRef if image has one (for save from registry scenario)
+            if (imageSpec.sourceRef.present) {
+                task.sourceRef.set(imageSpec.sourceRef)
+            }
         }
     }
     
