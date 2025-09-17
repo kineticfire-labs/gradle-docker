@@ -51,6 +51,8 @@ Setting tags uses different syntax:
 
 - opinionated with Docker image build and tests in a subproject peer to the one that builds the application to be put 
   into a Docker container.  separation of concerns.
+- Java 21
+- Gradle 9 (esp. build cache configuration compliant)
 
 ### docker stuff
 

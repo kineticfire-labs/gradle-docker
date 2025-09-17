@@ -1,6 +1,6 @@
-# Docker Plugin Usage Guide
+# 'docker' DSL Usage Guide
 
-This document provides simple, informal examples of how to use the Gradle Docker plugin DSL.
+This document provides simple, informal examples of how to use the 'docker' DSL for the 'gradle-docker' plugin.
 
 
 ## Prerequisites

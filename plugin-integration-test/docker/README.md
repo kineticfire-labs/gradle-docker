@@ -66,3 +66,10 @@ todo
 | 13 | publish to public registry: GitHub Container Registry               | todo                         |
 | 14 | publish to public registry: GitLab Container Registry               | todo                         |
 
+
+4.1: Multi-Registry Test Scenarios
+// New integration test scenarios:
+- scenario-3-multi-registry-publish    // Publish to 2+ registries
+- scenario-4-authenticated-publish     // Authenticated registry publish
+- scenario-5-save-with-pull-auth      // Save with pullIfMissing + auth
+- scenario-6-mixed-auth-workflow      // Mixed authenticated/unauthenticated

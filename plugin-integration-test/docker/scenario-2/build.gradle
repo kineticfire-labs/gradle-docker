@@ -56,7 +56,6 @@ docker {
             dockerfileName = 'CustomDockerfile'
             buildArgs = ['JAR_FILE': "app-${version}.jar"]
             tags.set(["scenario2-time-server:latest"])
-            // todo: save
             save {
                 outputFile = file('build/docker-images/scenario2-time-server-latest.tar')
                 compression = 'none'
