@@ -23,6 +23,7 @@ import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Plugin
 import org.gradle.api.plugins.JavaPlugin
+import org.gradle.api.tasks.Copy
 import org.gradle.api.tasks.testing.Test
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -1022,5 +1023,181 @@ class GradleDockerPluginTest extends Specification {
             current = current.cause
         }
         return current.message
+    }
+
+    // ===== CONTEXT TASK DEPENDENCY TESTS =====
+
+    def "plugin configures save task dependencies for contextTask scenarios"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create dummy JAR file for contextTask
+        def jarFile = project.file('app.jar')
+        jarFile.parentFile.mkdirs()
+        jarFile.text = 'dummy jar content'
+        
+        dockerExt.images {
+            timeServer {
+                contextTask = project.tasks.register('prepareTimeServerContext', Copy) {
+                    from('src/main/docker')
+                    from(jarFile)
+                    into(project.layout.buildDirectory.dir('docker-context/timeServer'))
+                }
+                tags.set(['time-server:latest'])
+                save {
+                    outputFile = project.file('timeserver.tar')
+                    compression = 'gzip'
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildTimeServer')
+        def saveTask = project.tasks.findByName('dockerSaveTimeServer')
+        
+        buildTask != null
+        saveTask != null
+        
+        // Check that save task depends on build task (by name or task object)
+        def dependsOnBuild = saveTask.dependsOn.contains(buildTask) || 
+                           saveTask.dependsOn.contains("dockerBuildTimeServer") ||
+                           saveTask.dependsOn.any { it.toString().contains("dockerBuildTimeServer") }
+        dependsOnBuild
+    }
+
+    def "plugin configures publish task dependencies for contextTask scenarios"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        dockerExt.images {
+            webapp {
+                contextTask = project.tasks.register('prepareWebappContext', Copy) {
+                    from('src/main/docker')
+                    into(project.layout.buildDirectory.dir('docker-context/webapp'))
+                }
+                tags.set(['webapp:latest'])
+                publish {
+                    to {
+                        tags(['localhost:5000/webapp:latest'])
+                    }
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildWebapp')
+        def publishTask = project.tasks.findByName('dockerPublishWebapp')
+        
+        buildTask != null
+        publishTask != null
+        
+        // Check that publish task depends on build task (by name or task object)
+        def dependsOnBuild = publishTask.dependsOn.contains(buildTask) || 
+                           publishTask.dependsOn.contains("dockerBuildWebapp") ||
+                           publishTask.dependsOn.any { it.toString().contains("dockerBuildWebapp") }
+        dependsOnBuild
+    }
+
+    def "plugin configures task dependencies for mixed context and contextTask scenarios"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        // Create dummy directories
+        ['frontend', 'backend'].each { dir ->
+            def dockerfile = project.file("${dir}/Dockerfile")
+            dockerfile.parentFile.mkdirs()
+            dockerfile.text = "FROM alpine"
+        }
+        
+        dockerExt.images {
+            frontend {
+                // Traditional context
+                context = project.file('frontend')
+                tags.set(['frontend:latest'])
+                save {
+                    outputFile = project.file('frontend.tar')
+                    compression = 'none'
+                }
+            }
+            backend {
+                // contextTask
+                contextTask = project.tasks.register('prepareBackendContext', Copy) {
+                    from('backend')
+                    into(project.layout.buildDirectory.dir('docker-context/backend'))
+                }
+                tags.set(['backend:latest'])
+                save {
+                    outputFile = project.file('backend.tar')
+                    compression = 'gzip'
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Both traditional context and contextTask should get dependencies
+        def frontendBuildTask = project.tasks.findByName('dockerBuildFrontend')
+        def frontendSaveTask = project.tasks.findByName('dockerSaveFrontend')
+        def backendBuildTask = project.tasks.findByName('dockerBuildBackend')
+        def backendSaveTask = project.tasks.findByName('dockerSaveBackend')
+        
+        frontendBuildTask != null
+        frontendSaveTask != null
+        backendBuildTask != null
+        backendSaveTask != null
+        
+        // Check that save tasks depend on build tasks
+        def frontendDependsOnBuild = frontendSaveTask.dependsOn.contains(frontendBuildTask) || 
+                                   frontendSaveTask.dependsOn.contains("dockerBuildFrontend") ||
+                                   frontendSaveTask.dependsOn.any { it.toString().contains("dockerBuildFrontend") }
+        def backendDependsOnBuild = backendSaveTask.dependsOn.contains(backendBuildTask) || 
+                                  backendSaveTask.dependsOn.contains("dockerBuildBackend") ||
+                                  backendSaveTask.dependsOn.any { it.toString().contains("dockerBuildBackend") }
+        
+        frontendDependsOnBuild
+        backendDependsOnBuild
+    }
+
+    def "plugin handles contextTask without save or publish configurations"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+        
+        dockerExt.images {
+            simple {
+                contextTask = project.tasks.register('prepareSimpleContext', Copy) {
+                    from('src/main/docker')
+                    into(project.layout.buildDirectory.dir('docker-context/simple'))
+                }
+                tags.set(['simple:latest'])
+                // No save or publish configuration
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildSimple')
+        def saveTask = project.tasks.findByName('dockerSaveSimple')
+        def publishTask = project.tasks.findByName('dockerPublishSimple')
+        
+        buildTask != null
+        saveTask == null  // No save task created
+        publishTask == null  // No publish task created
+        
+        // Should not throw exceptions during evaluation
+        noExceptionThrown()
     }
 }

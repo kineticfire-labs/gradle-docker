@@ -161,6 +161,11 @@ class GradleDockerPlugin implements Plugin<Project> {
             description = 'Publish all configured Docker images to registries'
         }
         
+        project.tasks.register('dockerImages') {
+            group = 'docker'
+            description = 'Run all configured Docker operations for all images'
+        }
+        
         project.tasks.register('composeUp') {
             group = 'docker compose'
             description = 'Start all configured Docker Compose stacks'
@@ -206,6 +211,24 @@ class GradleDockerPlugin implements Plugin<Project> {
             if (imageSpec.publish.present) {
                 project.tasks.register("dockerPublish${capitalizedName}", DockerPublishTask) { task ->
                     configureDockerPublishTask(task, imageSpec, dockerService)
+                }
+            }
+            
+            // Per-image aggregate task - runs all configured operations for this image
+            project.tasks.register("dockerImage${capitalizedName}") { task ->
+                task.group = 'docker'
+                task.description = "Run all configured Docker operations for image: ${imageSpec.name}"
+                
+                // Always depend on build and tag
+                task.dependsOn("dockerBuild${capitalizedName}")
+                task.dependsOn("dockerTag${capitalizedName}")
+                
+                // Conditionally depend on save and publish
+                if (imageSpec.save.present) {
+                    task.dependsOn("dockerSave${capitalizedName}")
+                }
+                if (imageSpec.publish.present) {
+                    task.dependsOn("dockerPublish${capitalizedName}")
                 }
             }
         }
@@ -255,7 +278,8 @@ class GradleDockerPlugin implements Plugin<Project> {
             def buildTaskName = "dockerBuild${capitalizedName}"
             
             // If image has build context, save/publish depend on build
-            if (imageSpec.context.present) {
+            def hasBuildContext = imageSpec.context.present || imageSpec.contextTask != null
+            if (hasBuildContext) {
                 project.tasks.findByName("dockerSave${capitalizedName}")?.dependsOn(buildTaskName)
                 project.tasks.findByName("dockerPublish${capitalizedName}")?.dependsOn(buildTaskName)
             }
@@ -287,6 +311,14 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         project.tasks.named('composeDown') {
             dependsOn dockerOrchExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
+        }
+        
+        // Configure global dockerImages aggregate task dependencies
+        project.tasks.named('dockerImages') {
+            def imageTaskNames = dockerExt.images.names.collect { "dockerImage${it.capitalize()}" }
+            if (imageTaskNames) {
+                dependsOn imageTaskNames
+            }
         }
     }
     

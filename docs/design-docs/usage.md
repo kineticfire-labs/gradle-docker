@@ -2,7 +2,6 @@
 
 This document provides simple, informal examples of how to use the Gradle Docker plugin DSL.
 
-> **Breaking Change Note:** The `compression` parameter is now required for save configuration. This ensures explicit control over output format and prevents unexpected compressed files. Since this project is in early development with no external users, no backward compatibility is provided.
 
 ## Prerequisites
 
@@ -43,6 +42,11 @@ docker {
                 'BUILD_VERSION': version,
                 'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
             ]
+            save {
+               outputFile = file('time-server-latest.tar.gz')
+               compression = 'gzip'
+               // 'pullIfMissing' will default to 'false'
+            }
             publish {
                 to('basic') {
                     tags = ['localhost:5000/time-server:latest']
@@ -201,3 +205,101 @@ After configuring your `build.gradle`, you can run the generated tasks:
 5. **pullIfMissing** - Set to `true` if the source image might not be available locally and needs to be pulled
 
 The plugin will execute these operations in the correct order automatically when you run the generated tasks.
+
+# Available Gradle Tasks
+
+## Complete Operation Aggregate Tasks
+These tasks run ALL configured operations for images:
+
+- `dockerImages` - Run all configured operations for all images
+- `dockerImageTimeServer` - Run all configured operations for timeServer image
+- `dockerImageMyApp` - Run all configured operations for myApp image
+
+## Operation-Specific Aggregate Tasks
+These tasks run specific operations across all images:
+
+- `dockerBuild` - Build all configured images
+- `dockerSave` - Save all configured images to files
+- `dockerTag` - Tag all configured images
+- `dockerPublish` - Publish all configured images to registries
+
+## Per-Image Operation Tasks
+These tasks run specific operations for specific images:
+
+- `dockerBuildTimeServer` - Build timeServer image
+- `dockerSaveTimeServer` - Save timeServer image to file
+- `dockerTagTimeServer` - Tag timeServer image
+- `dockerPublishTimeServer` - Publish timeServer image to registries
+
+## Task Execution Examples
+
+```bash
+# Run ALL operations for ALL images (build + tag + save + publish)
+./gradlew dockerImages
+
+# Run ALL operations for specific image
+./gradlew dockerImageTimeServer
+
+# Run specific operation for ALL images
+./gradlew dockerSave
+./gradlew dockerBuild
+
+# Run specific operation for specific image
+./gradlew dockerSaveTimeServer
+./gradlew dockerBuildTimeServer
+```
+
+## Integration Test Best Practices
+
+For integration tests, use complete operation tasks:
+
+```groovy
+tasks.register('integrationTest') {
+    dependsOn 'dockerImages'  // Runs all configured operations
+    dependsOn 'verifyDockerImages'
+    // ...
+}
+```
+
+This ensures all configured operations (build, tag, save, publish) are executed before verification.
+
+## Task Dependencies
+
+### Automatic Dependencies
+The plugin automatically configures these dependencies:
+
+- `dockerSaveTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
+- `dockerPublishTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
+- `dockerImageTimeServer` depends on all configured operations for that image
+- `dockerImages` depends on all `dockerImage*` tasks
+
+### Build Context Types
+Both traditional `context` and `contextTask` scenarios get proper dependencies:
+
+```groovy
+// Traditional context
+docker {
+    images {
+        myApp {
+            context = file('src/main/docker')
+            save {
+                outputFile = file('myapp.tar')
+                compression = 'gzip'  // Required parameter
+            }  // ← dockerSaveMyApp depends on dockerBuildMyApp
+        }
+    }
+}
+
+// Copy task context
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            save {
+                outputFile = file('myapp.tar')
+                compression = 'none'  // Required parameter
+            }  // ← dockerSaveMyApp depends on dockerBuildMyApp
+        }
+    }
+}
+```

@@ -89,7 +89,7 @@ ext.registerVerifySavedImagesTask = { Project project, List<String> filePaths ->
     project.tasks.register('verifySavedDockerImages', DockerSavedImageVerifyTask) {
         it.filePaths.set(filePaths)
         it.group = 'verification'
-        it.description = 'Verify Docker image files were saved to expected locations'
+        it.description = 'Verify Docker image files exist and can be loaded by Docker'
     }
     
     project.logger.info("Registered verify saved images task for files: ${filePaths}")

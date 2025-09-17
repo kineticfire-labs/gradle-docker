@@ -53,6 +53,7 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
         def missingFiles = []
         def verifiedFiles = []
 
+        // Phase 1: File existence verification
         for (String filePath : filePaths) {
             Path path = Paths.get(filePath)
             
@@ -63,10 +64,10 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
 
             if (Files.exists(path) && Files.isRegularFile(path)) {
                 long fileSize = Files.size(path)
-                logger.info("✓ Verified saved image file: ${path} (${fileSize} bytes)")
-                verifiedFiles.add(filePath)
+                logger.info("✓ File exists: ${path} (${fileSize} bytes)")
+                verifiedFiles.add(path.toString())
             } else {
-                logger.error("✗ Missing saved image file: ${path}")
+                logger.error("✗ Missing file: ${path}")
                 missingFiles.add(filePath)
             }
         }
@@ -75,6 +76,40 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
             throw new RuntimeException("Failed to verify ${missingFiles.size()} saved image file(s): ${missingFiles}")
         }
 
+        // Phase 2: Docker load verification
+        verifyDockerLoadCapability(verifiedFiles)
+        
         logger.lifecycle("Successfully verified ${verifiedFiles.size()} saved Docker image file(s)")
+    }
+
+    private void verifyDockerLoadCapability(List<String> verifiedFiles) {
+        def loadFailures = []
+        
+        for (String filePath : verifiedFiles) {
+            try {
+                def process = ['docker', 'load', '-i', filePath].execute()
+                def exitCode = process.waitFor()
+                def stdout = process.inputStream.text.trim()
+                def stderr = process.errorStream.text.trim()
+                
+                if (exitCode == 0) {
+                    logger.info("✓ Docker load verified: ${filePath} → ${stdout}")
+                } else {
+                    logger.error("✗ Docker load failed: ${filePath} → ${stderr}")
+                    loadFailures.add("${filePath}: ${stderr}")
+                }
+            } catch (Exception e) {
+                logger.error("✗ Docker load exception: ${filePath} → ${e.message}")
+                loadFailures.add("${filePath}: ${e.message}")
+            }
+        }
+        
+        if (!loadFailures.isEmpty()) {
+            throw new RuntimeException("Docker load verification failed for ${loadFailures.size()} file(s):
+${loadFailures.join('
+')}")
+        }
+        
+        logger.lifecycle("Docker load verification passed for ${verifiedFiles.size()} image file(s)")
     }
 }

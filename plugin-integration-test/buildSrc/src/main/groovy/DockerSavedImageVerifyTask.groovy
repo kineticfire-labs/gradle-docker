@@ -76,5 +76,47 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
         }
 
         logger.lifecycle("Successfully verified ${verifiedFiles.size()} saved Docker image file(s)")
+
+        // Verify that Docker can successfully load the saved image files
+        verifyDockerLoadCapability(verifiedFiles)
+    }
+
+    /**
+     * Verify that saved image files can be successfully loaded back to Docker.
+     * This ensures image integrity and Docker compatibility.
+     */
+    private void verifyDockerLoadCapability(List<String> verifiedFiles) {
+        def loadFailures = []
+
+        for (String filePath : verifiedFiles) {
+            try {
+                // Resolve relative paths
+                Path path = Paths.get(filePath)
+                if (!path.isAbsolute()) {
+                    path = layout.projectDirectory.asFile.toPath().resolve(path)
+                }
+
+                def process = ['docker', 'load', '-i', path.toString()].execute()
+                def exitCode = process.waitFor()
+                def stdout = process.inputStream.text.trim()
+                def stderr = process.errorStream.text.trim()
+
+                if (exitCode == 0) {
+                    logger.info("✓ Docker load verified: ${filePath} → ${stdout}")
+                } else {
+                    logger.error("✗ Docker load failed: ${filePath} → ${stderr}")
+                    loadFailures.add("${filePath}: ${stderr}")
+                }
+            } catch (Exception e) {
+                logger.error("✗ Docker load exception: ${filePath} → ${e.message}")
+                loadFailures.add("${filePath}: ${e.message}")
+            }
+        }
+
+        if (!loadFailures.isEmpty()) {
+            throw new RuntimeException("Docker load verification failed for ${loadFailures.size()} file(s):\n${loadFailures.join('\n')}")
+        }
+
+        logger.lifecycle("Docker load verification passed for ${verifiedFiles.size()} image file(s)")
     }
 }
