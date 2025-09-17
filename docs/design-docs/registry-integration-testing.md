@@ -2,9 +2,18 @@
 
 ## Overview
 
-This document outlines the comprehensive implementation plan for Docker registry integration testing, including authentication support for the save task and robust multi-registry testing infrastructure.
+This document outlines the comprehensive implementation plan for Docker registry integration testing, including authentication support for the save task and robust multi-registry testing infrastructure. This plan consolidates buildSrc directories and implements all registry infrastructure in the mature plugin-integration-test buildSrc.
 
 ## Current State Analysis
+
+### BuildSrc Directory Duplication Issue
+
+❌ **BUILDSCR DUPLICATION IDENTIFIED:**
+
+- **Root buildSrc** (`/gradle-docker/buildSrc/`): Contains only 2 files, appears abandoned
+- **Plugin Integration Test buildSrc** (`/gradle-docker/plugin-integration-test/buildSrc/`): Comprehensive, mature implementation with full Docker testing library
+
+**Decision:** Delete root buildSrc and implement all registry infrastructure in `/plugin-integration-test/buildSrc/` (the active, working implementation).
 
 ### DockerRegistryImageVerifyTask Issues
 
@@ -36,28 +45,51 @@ The `DockerSaveTask` supports `pullIfMissing` but has **NO authentication suppor
 
 ## Implementation Plan
 
-### Phase 1: Create Real Docker Registry Infrastructure
+### Phase 1: Consolidate BuildSrc Directories
 
-#### 1.1: Docker Registry Management Tasks
-```groovy
-// New buildSrc tasks needed:
-- DockerRegistryStartTask      // Start test registry containers
-- DockerRegistryStopTask       // Stop and clean up registries
-- DockerRegistryConfigTask     // Configure authentication
-- DockerRegistryCleanupTask    // Emergency cleanup for failed tests
+#### 1.1: Clean Up Duplication
+```bash
+# Delete redundant root buildSrc
+rm -rf /gradle-docker/buildSrc/
+
+# Verify no projects reference root buildSrc
+grep -r "buildSrc" --exclude-dir=plugin-integration-test .
 ```
 
-**Features:**
-- Start multiple registry containers (authenticated/unauthenticated)
-- Dynamic port allocation to avoid conflicts
-- SSL/TLS support for realistic testing
-- Credential configuration and testing
-- Full lifecycle management (start/stop/cleanup)
-- **Robust cleanup mechanisms for test failures**
+**Actions:**
+- Delete `/gradle-docker/buildSrc/` directory entirely
+- Verify no projects have dependencies on root buildSrc
+- Confirm all integration tests continue to work with plugin-integration-test buildSrc
 
-#### 1.2: Enhanced Registry Functions
+#### 1.2: Target BuildSrc Location
+**Primary Location:** `/gradle-docker/plugin-integration-test/buildSrc/`
+
+**Rationale:**
+- Mature, comprehensive Docker testing infrastructure already exists
+- Integration tests already depend on this buildSrc
+- Registry testing is logically part of integration testing
+- Has proper build.gradle, README.md, and full project structure
+
+### Phase 2: Enhance Existing BuildSrc with Registry Infrastructure
+
+#### 2.1: New Registry Management Tasks
+```
+plugin-integration-test/buildSrc/src/main/groovy/
+├── docker-image-testing.gradle              # EXISTING - enhance with registry functions
+├── DockerRegistryStartTask.groovy           # NEW - Start registry containers
+├── DockerRegistryStopTask.groovy            # NEW - Stop registry containers
+├── DockerRegistryConfigTask.groovy          # NEW - Configure authentication
+├── DockerRegistryCleanupTask.groovy         # NEW - Emergency cleanup
+├── RegistryTestFixture.groovy               # NEW - Registry management utility
+├── DockerRegistryImageVerifyTask.groovy     # EXISTING - enhance for full image names
+├── DockerImageCleanTask.groovy              # EXISTING - keep as-is
+├── DockerImageVerifyTask.groovy             # EXISTING - keep as-is
+└── DockerSavedImageVerifyTask.groovy        # EXISTING - keep as-is
+```
+
+#### 2.2: Enhanced Registry Functions in docker-image-testing.gradle
 ```groovy
-// Enhanced docker-image-testing.gradle functions:
+// NEW registry functions to add:
 ext.registerMultiRegistryWorkflow = { Project project, Map<String, RegistryConfig> registries ->
     // Support multiple registries with different auth configs
 }
@@ -71,15 +103,39 @@ ext.registerRegistryCleanupHooks = { Project project ->
     // Emergency cleanup for orphaned containers
     // Cleanup on test failure or interruption
 }
+
+ext.registerAuthenticatedRegistryVerification = { Project project, String registry, AuthConfig auth, List<String> images ->
+    // Verify images in authenticated registry
+}
+
+ext.registerSaveWithPullVerification = { Project project, SaveConfig config ->
+    // Test save with pullIfMissing + authentication
+    // Verify pulled image can be saved and loaded back
+}
+
+ext.registerMultiRegistryVerification = { Project project, Map<String, List<String>> imagesByRegistry ->
+    // Verify images across multiple registries
+}
 ```
 
-#### 1.3: Robust Cleanup Infrastructure
+**Features:**
+- Start multiple registry containers (authenticated/unauthenticated)
+- Dynamic port allocation to avoid conflicts
+- SSL/TLS support for realistic testing
+- Credential configuration and testing
+- Full lifecycle management (start/stop/cleanup)
+- **Robust cleanup mechanisms for test failures**
+
+#### 2.3: Robust Cleanup Infrastructure
 
 **Container Lifecycle Management:**
 ```groovy
 class RegistryTestFixture {
+    private static final String REGISTRY_LABEL = "gradle-docker-test-registry"
     private Map<String, String> runningContainers = [:]
     private Map<String, Integer> allocatedPorts = [:]
+    private Set<String> createdVolumes = []
+    private Set<String> createdNetworks = []
 
     // Startup with cleanup registration
     Map<String, DockerRegistry> startTestRegistries() {
@@ -118,42 +174,132 @@ class RegistryTestFixture {
 6. **Volume Cleanup**: Remove test volumes and networks created for registries
 7. **Emergency Cleanup Task**: Dedicated Gradle task to clean up orphaned containers
 
-**Cleanup Implementation:**
+#### 2.4: Update BuildSrc README.md
+
+**Add Registry Integration Section to plugin-integration-test/buildSrc/README.md:**
+
+```markdown
+## Registry Integration Testing
+
+The Docker Image Testing Library now includes comprehensive registry integration testing support with authentication and multi-registry scenarios.
+
+### Registry Management Functions
+
+#### registerRegistryLifecycleManagement
+
+Manages Docker registry containers for integration testing with robust cleanup.
+
 ```groovy
-// Test finalizers in integration tests
-tasks.register('integrationTest') {
-    dependsOn 'startTestRegistries'
-    dependsOn 'dockerImages'
-    dependsOn 'verifyDockerImages'
+registerRegistryLifecycleManagement(project)
+```
 
-    // CRITICAL: Always clean up, even on failure
-    finalizedBy 'stopTestRegistries'
+**Creates Tasks:**
+- `startTestRegistries` - Start authenticated and unauthenticated registry containers
+- `stopTestRegistries` - Stop and clean up all test registries
+- `emergencyRegistryCleanup` - Emergency cleanup for orphaned containers
 
-    doFirst {
-        // Register JVM shutdown hook as backup
-        Runtime.runtime.addShutdownHook(new Thread({
-            logger.warn("Emergency cleanup triggered by JVM shutdown")
-            project.extensions.findByType(RegistryTestFixture)?.emergencyCleanup()
-        }))
-    }
-}
+#### registerMultiRegistryWorkflow
 
-// Emergency cleanup task
-tasks.register('emergencyRegistryCleanup') {
-    description = 'Emergency cleanup of orphaned registry containers'
+Sets up multiple registries with different authentication configurations.
+
+```groovy
+def registryConfig = [
+    'public': new RegistryConfig(port: 5000, auth: false),
+    'private': new RegistryConfig(port: 5001, auth: true, username: 'testuser', password: 'testpass')
+]
+registerMultiRegistryWorkflow(project, registryConfig)
+```
+
+#### registerAuthenticatedRegistryVerification
+
+Verifies images exist in authenticated registries.
+
+```groovy
+registerAuthenticatedRegistryVerification(project, 'localhost:5001', authConfig, [
+    'localhost:5001/myapp:latest',
+    'localhost:5001/myapp:v1.0.0'
+])
+```
+
+#### registerSaveWithPullVerification
+
+Tests save operations with pullIfMissing and authentication.
+
+```groovy
+registerSaveWithPullVerification(project, saveConfig)
+```
+
+### Registry Integration Test Example
+
+```groovy
+// Apply the Docker image testing library
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Register registry lifecycle management
+registerRegistryLifecycleManagement(project)
+
+// Register multi-registry workflow
+def registries = [
+    'public': new RegistryConfig(port: 5000, auth: false),
+    'private': new RegistryConfig(port: 5001, auth: true, username: 'testuser', password: 'testpass')
+]
+registerMultiRegistryWorkflow(project, registries)
+
+// Register verification tasks
+registerAuthenticatedRegistryVerification(project, 'localhost:5001', authConfig, [
+    'localhost:5001/myapp:latest'
+])
+
+// Integration test with registry support
+tasks.register('registryIntegrationTest') {
+    description = 'Run complete Docker registry integration test'
     group = 'verification'
 
-    doLast {
-        // Find and stop all containers with our test labels
-        // Clean up volumes, networks, and allocated ports
-        // Reset port allocation tracking
-    }
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerImages'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+
+    // CRITICAL: Always clean up registries, even on failure
+    finalizedBy 'stopTestRegistries'
+    finalizedBy 'emergencyRegistryCleanup'
+
+    // Ensure proper task ordering
+    tasks.dockerImages.mustRunAfter tasks.startTestRegistries
+    tasks.verifyRegistryDockerImages.mustRunAfter tasks.dockerImages
 }
 ```
 
-### Phase 2: Fix and Enhance DockerRegistryImageVerifyTask
+### Authentication Support
 
-#### 2.1: Support Full Image Names
+Registry integration testing supports multiple authentication methods:
+
+- **Username/Password**: Traditional registry authentication
+- **Token-based**: GitHub Container Registry, etc.
+- **Credential Helper**: AWS ECR, GCP, etc.
+- **Unauthenticated**: Public registries
+
+### Cleanup Mechanisms
+
+Multiple layers of cleanup ensure no registry containers are left running:
+
+1. **Gradle Finalizers**: `finalizedBy 'stopTestRegistries'`
+2. **JVM Shutdown Hooks**: Backup cleanup on process termination
+3. **Emergency Tasks**: `emergencyRegistryCleanup` for orphaned containers
+4. **Health Monitoring**: Automatic cleanup of unhealthy containers
+
+### Testing Scope
+
+- **Local Registries Only**: All tests use local Docker registry containers
+- **No Public Registry Testing**: No testing against DockerHub, GHCR (no test accounts)
+- **Multi-Registry Support**: Test scenarios with 2-3 local registries
+- **Authentication Testing**: Full auth workflow testing with local registries
+```
+
+### Phase 3: Fix and Enhance DockerRegistryImageVerifyTask
+
+#### 3.1: Support Full Image Names
 ```groovy
 abstract class DockerRegistryImageVerifyTask extends DefaultTask {
     @Input
@@ -166,7 +312,7 @@ abstract class DockerRegistryImageVerifyTask extends DefaultTask {
 }
 ```
 
-#### 2.2: Multi-Registry Support
+#### 3.2: Multi-Registry Support
 ```groovy
 // Support verification across multiple registries in single task
 Map<String, List<String>> parseImagesByRegistry(List<String> fullImageReferences) {
@@ -174,7 +320,7 @@ Map<String, List<String>> parseImagesByRegistry(List<String> fullImageReferences
 }
 ```
 
-#### 2.3: Authentication Integration
+#### 3.3: Authentication Integration
 ```groovy
 // Add authentication support for private registry verification
 private void verifyWithAuth(String fullImageRef, AuthConfig auth) {
@@ -182,9 +328,9 @@ private void verifyWithAuth(String fullImageRef, AuthConfig auth) {
 }
 ```
 
-### Phase 3: Add Authentication to DockerSaveTask
+### Phase 4: Add Authentication to DockerSaveTask
 
-#### 3.1: Extend SaveSpec with Authentication (Consistent with PublishSpec)
+#### 4.1: Extend SaveSpec with Authentication (Consistent with PublishSpec)
 ```groovy
 abstract class SaveSpec {
     abstract Property<String> getCompression()
@@ -201,7 +347,7 @@ abstract class SaveSpec {
 }
 ```
 
-#### 3.2: Enhance DockerSaveTask
+#### 4.2: Enhance DockerSaveTask
 ```groovy
 private String resolveImageSource() {
     if (sourceRef.present) {
@@ -218,7 +364,7 @@ private String resolveImageSource() {
 }
 ```
 
-#### 3.3: Save Task Authentication DSL Examples
+#### 4.3: Save Task Authentication DSL Examples
 
 **Design Decision: No `serverAddress` in auth block**
 - Registry address is **automatically extracted** from `sourceRef`
@@ -332,9 +478,9 @@ docker {
 4. **`pullIfMissing = true` + no `auth`**: Attempts unauthenticated pull (will fail for private registries)
 5. **Registry extraction**: Always extracted from `sourceRef` - no redundant configuration
 
-### Phase 4: Comprehensive Integration Test Framework with Robust Cleanup
+### Phase 5: Comprehensive Integration Test Framework with Robust Cleanup
 
-#### 4.1: Multi-Registry Test Scenarios with Cleanup
+#### 5.1: Multi-Registry Test Scenarios with Cleanup
 ```groovy
 // New integration test scenarios:
 - scenario-3-multi-registry-publish    // Publish to 2+ registries
@@ -353,6 +499,7 @@ tasks.register('integrationTest') {
 
     // CRITICAL: Always clean up registries, even on failure
     finalizedBy 'stopTestRegistries'
+    finalizedBy 'emergencyRegistryCleanup'
 
     // Ensure proper task ordering
     tasks.dockerImages.mustRunAfter tasks.startTestRegistries
@@ -361,105 +508,7 @@ tasks.register('integrationTest') {
 }
 ```
 
-#### 4.2: Registry Test Infrastructure with Cleanup
-```groovy
-// buildSrc registry management with robust cleanup:
-class RegistryTestFixture {
-    private static final String REGISTRY_LABEL = "gradle-docker-test-registry"
-    private Map<String, String> runningContainers = [:]
-    private Map<String, Integer> allocatedPorts = [:]
-    private Set<String> createdVolumes = []
-    private Set<String> createdNetworks = []
-
-    Map<String, DockerRegistry> startTestRegistries() {
-        try {
-            // Start registries with proper labeling for cleanup
-            // Register immediate cleanup hooks
-            // Track all resources for cleanup
-        } catch (Exception e) {
-            // Emergency cleanup on startup failure
-            emergencyCleanup()
-            throw e
-        }
-    }
-
-    void configureAuthentication(String registryName, AuthConfig auth) {
-        // Configure auth with failure cleanup
-    }
-
-    void stopAllRegistries() {
-        // Graceful shutdown with proper order
-        runningContainers.each { name, containerId ->
-            stopContainer(containerId)
-            removeContainer(containerId)
-        }
-        cleanupVolumes()
-        cleanupNetworks()
-        releaseAllocatedPorts()
-    }
-
-    void emergencyCleanup() {
-        logger.warn("Performing emergency cleanup of test registries")
-
-        // Find and stop ALL containers with our test label
-        def orphanedContainers = findContainersByLabel(REGISTRY_LABEL)
-        orphanedContainers.each { containerId ->
-            forceStopContainer(containerId)
-            forceRemoveContainer(containerId)
-        }
-
-        // Clean up volumes created by test registries
-        def orphanedVolumes = findVolumesByLabel(REGISTRY_LABEL)
-        orphanedVolumes.each { volumeName ->
-            forceRemoveVolume(volumeName)
-        }
-
-        // Clean up networks created by test registries
-        def orphanedNetworks = findNetworksByLabel(REGISTRY_LABEL)
-        orphanedNetworks.each { networkName ->
-            forceRemoveNetwork(networkName)
-        }
-
-        // Release allocated ports
-        releaseAllocatedPorts()
-
-        logger.lifecycle("Emergency cleanup completed")
-    }
-
-    void verifyRegistryHealth() {
-        // Health check all running registries
-        // Clean up unhealthy containers
-        runningContainers.each { name, containerId ->
-            if (!isContainerHealthy(containerId)) {
-                logger.warn("Unhealthy registry container detected: ${name}, cleaning up")
-                stopContainer(containerId)
-                removeContainer(containerId)
-                runningContainers.remove(name)
-            }
-        }
-    }
-
-    // Port management with cleanup
-    private int allocatePort() {
-        // Find available port and track for cleanup
-    }
-
-    private void releaseAllocatedPorts() {
-        allocatedPorts.clear()
-    }
-
-    // Container management with labeling for cleanup
-    private String startContainer(String image, Map<String, String> config) {
-        def labels = [
-            (REGISTRY_LABEL): "true",
-            "gradle-docker-test-session": UUID.randomUUID().toString()
-        ]
-        // Start container with labels for cleanup identification
-    }
-}
-```
-
-#### 4.3: Save with Authentication Integration Tests with Cleanup
+#### 5.2: Save with Authentication Integration Tests with Cleanup
 ```groovy
 // scenario-5-save-with-pull-auth example with robust cleanup:
 apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
@@ -540,7 +589,7 @@ tasks.register('integrationTest') {
 - **REASON**: No test accounts configured for public registries
 - **FUTURE ITEM**: Public registry integration testing requires account setup and credentials management
 
-#### 4.4: Emergency Cleanup Tasks
+#### 5.3: Emergency Cleanup Tasks
 ```groovy
 // Emergency cleanup tasks for CI/CD environments
 tasks.register('emergencyRegistryCleanup') {
@@ -578,35 +627,6 @@ tasks.register('cleanupAllTestResources') {
 
     dependsOn 'emergencyRegistryCleanup'
     dependsOn 'cleanDockerImages'
-}
-```
-
-### Phase 5: Enhanced Verification Functions
-
-#### 5.1: New Registry Verification Functions
-```groovy
-ext.registerMultiRegistryVerification = { Project project, Map<String, List<String>> imagesByRegistry ->
-    // Verify images across multiple registries
-}
-
-ext.registerPublishWorkflowVerification = { Project project, PublishConfig config ->
-    // End-to-end publish + verify workflow
-}
-
-ext.registerAuthenticatedRegistryVerification = { Project project, String registry, AuthConfig auth, List<String> images ->
-    // Verify images in authenticated registry
-}
-```
-
-#### 5.2: Save + Pull Integration Testing
-```groovy
-ext.registerSaveWithPullVerification = { Project project, SaveConfig config ->
-    // Test save with pullIfMissing + authentication
-    // Verify pulled image can be saved and loaded back
-}
-
-ext.registerAuthenticatedPullVerification = { Project project, AuthConfig auth, String sourceRef ->
-    // Verify authentication works for pullIfMissing scenarios
 }
 ```
 
@@ -686,26 +706,29 @@ class RegistryTestFixtureTest extends Specification {
 
 ## Implementation Priority
 
-1. **HIGH**: Add authentication to DockerSaveTask for pullIfMissing (consistent with publish auth DSL)
-2. **HIGH**: Implement robust cleanup infrastructure for registry containers
-3. **HIGH**: Fix DockerRegistryImageVerifyTask API (supports full image names)
-4. **MEDIUM**: Create registry container management infrastructure
-5. **MEDIUM**: Multi-registry verification support
-6. **MEDIUM**: Comprehensive save + pull authentication integration tests
-7. **LOW**: Enhanced integration test scenarios
+1. **HIGH**: Consolidate buildSrc directories (delete root buildSrc)
+2. **HIGH**: Add authentication to DockerSaveTask for pullIfMissing (consistent with publish auth DSL)
+3. **HIGH**: Implement robust cleanup infrastructure for registry containers in plugin-integration-test buildSrc
+4. **HIGH**: Fix DockerRegistryImageVerifyTask API (supports full image names)
+5. **MEDIUM**: Create registry container management infrastructure
+6. **MEDIUM**: Update plugin-integration-test/buildSrc/README.md with registry documentation
+7. **MEDIUM**: Multi-registry verification support
+8. **MEDIUM**: Comprehensive save + pull authentication integration tests
+9. **LOW**: Enhanced integration test scenarios
 
 ## Key Design Decisions
 
-1. **No `serverAddress` in auth blocks**: Registry address always extracted from image references (sourceRef or publish tags)
-2. **DSL consistency**: Save auth DSL is IDENTICAL to publish auth DSL for user consistency
-3. **No authentication = public registry**: When no `auth` block is provided, assume public registry access
-4. **Explicit authentication**: Require explicit `auth` configuration for private registries
-5. **Fail-fast validation**: Validate authentication configuration completeness at task execution time
-6. **Local testing only**: Integration tests use local registry containers, NOT public registries
-7. **Future public registry support**: Requires account setup and credential management (separate initiative)
-8. **Robust cleanup**: Multiple layers of cleanup (finalizers, shutdown hooks, emergency tasks)
-9. **Container labeling**: All test containers labeled for emergency cleanup identification
-10. **Resource tracking**: Track all allocated resources (containers, volumes, networks, ports) for cleanup
+1. **BuildSrc Consolidation**: Use plugin-integration-test/buildSrc as single source of truth
+2. **No `serverAddress` in auth blocks**: Registry address always extracted from image references (sourceRef or publish tags)
+3. **DSL consistency**: Save auth DSL is IDENTICAL to publish auth DSL for user consistency
+4. **No authentication = public registry**: When no `auth` block is provided, assume public registry access
+5. **Explicit authentication**: Require explicit `auth` configuration for private registries
+6. **Fail-fast validation**: Validate authentication configuration completeness at task execution time
+7. **Local testing only**: Integration tests use local registry containers, NOT public registries
+8. **Future public registry support**: Requires account setup and credential management (separate initiative)
+9. **Robust cleanup**: Multiple layers of cleanup (finalizers, shutdown hooks, emergency tasks)
+10. **Container labeling**: All test containers labeled for emergency cleanup identification
+11. **Resource tracking**: Track all allocated resources (containers, volumes, networks, ports) for cleanup
 
 ## Cleanup Strategy Details
 
@@ -729,4 +752,33 @@ class RegistryTestFixtureTest extends Specification {
 - **Port Conflicts**: Dynamic port allocation with conflict resolution
 - **CI/CD Environment**: Comprehensive cleanup for shared build agents
 
-This comprehensive plan ensures robust integration testing with proper cleanup mechanisms to prevent test resource leakage in any failure scenario.
+## Migration Steps
+
+### Step 1: BuildSrc Consolidation
+1. Verify all integration tests use plugin-integration-test buildSrc
+2. Check for any references to root buildSrc in project files
+3. Delete `/gradle-docker/buildSrc/` directory
+4. Run integration tests to confirm no breakage
+
+### Step 2: Enhance BuildSrc Infrastructure
+1. Add new registry management tasks to plugin-integration-test buildSrc
+2. Enhance docker-image-testing.gradle with registry functions
+3. Update DockerRegistryImageVerifyTask for full image name support
+4. Add RegistryTestFixture utility class
+
+### Step 3: Documentation Update
+1. Update plugin-integration-test/buildSrc/README.md with registry sections
+2. Document all new registry functions and cleanup mechanisms
+3. Provide comprehensive examples for multi-registry testing
+
+### Step 4: Authentication Implementation
+1. Add authentication support to DockerSaveTask
+2. Ensure DSL consistency between save and publish auth
+3. Implement registry address extraction from sourceRef
+
+### Step 5: Testing and Validation
+1. Implement comprehensive unit tests for all new functionality
+2. Create integration test scenarios with registry authentication
+3. Validate cleanup mechanisms under failure conditions
+
+This comprehensive plan consolidates the buildSrc infrastructure, implements robust registry testing capabilities, and ensures no test resources are left orphaned in any failure scenario.
