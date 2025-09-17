@@ -68,6 +68,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         println "DockerService initialized successfully"
     }
     
+    @org.gradle.api.tasks.Internal
     protected DockerClient getDockerClient() {
         return dockerClient
     }

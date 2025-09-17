@@ -479,6 +479,14 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure image name - prefer source reference over build task output
         if (imageSpec.sourceRef.present) {
             task.imageName.set(imageSpec.sourceRef)
+        } else {
+            // Use first tag as image name for locally built images
+            task.imageName.set(imageSpec.tags.map { tagList ->
+                if (tagList.isEmpty()) {
+                    throw new IllegalStateException("Image '${imageSpec.name}' must have at least one tag for publishing")
+                }
+                return tagList.first()
+            })
         }
         // Note: Build task wiring and dependencies are handled in configureTaskDependencies method
         

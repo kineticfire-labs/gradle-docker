@@ -84,14 +84,14 @@ abstract class ImageSpec {
     
     // DSL methods for nested configuration
     void save(@DelegatesTo(SaveSpec) Closure closure) {
-        def saveSpec = project.objects.newInstance(SaveSpec, project)
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects)
         closure.delegate = saveSpec
         closure.call()
         save.set(saveSpec)
     }
     
     void save(Action<SaveSpec> action) {
-        def saveSpec = project.objects.newInstance(SaveSpec, project)
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects)
         action.execute(saveSpec)
         save.set(saveSpec)
     }

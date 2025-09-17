@@ -27,7 +27,7 @@ class ImageRefParts {
     final String registry
     
     // Docker image reference pattern: [registry/]repository[:tag]
-    private static final Pattern IMAGE_REF_PATTERN = ~/^(?:([^\/]+(?:\.[^\/]+)+(?::\d+)?)\/)?([^:]+)(?::(.+))?$/
+    private static final Pattern IMAGE_REF_PATTERN = ~/^(?:((?:[^\/]+\.[^\/]+(?::\d+)?|[^\/]+:\d+))\/)?([^:]+)(?::(.+))?$/
     
     ImageRefParts(String repository, String tag, String registry = null) {
         this.repository = Objects.requireNonNull(repository, "Repository cannot be null")

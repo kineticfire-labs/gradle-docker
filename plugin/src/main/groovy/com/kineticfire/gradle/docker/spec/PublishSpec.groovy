@@ -34,7 +34,7 @@ abstract class PublishSpec {
         this.objectFactory = project.objects
         def factory = this.objectFactory
         this.targets = objectFactory.domainObjectContainer(PublishTarget) { name ->
-            factory.newInstance(PublishTarget, name, project)
+            factory.newInstance(PublishTarget, name, factory)
         }
     }
     

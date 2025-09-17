@@ -30,7 +30,7 @@ class PublishTargetTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project)
+        publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -43,8 +43,8 @@ class PublishTargetTest extends Specification {
 
     def "constructor with different names"() {
         given:
-        def target1 = project.objects.newInstance(PublishTarget, 'production', project)
-        def target2 = project.objects.newInstance(PublishTarget, 'staging', project)
+        def target1 = project.objects.newInstance(PublishTarget, 'production', project.objects)
+        def target2 = project.objects.newInstance(PublishTarget, 'staging', project.objects)
 
         expect:
         target1.name == 'production'

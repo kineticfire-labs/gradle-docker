@@ -70,6 +70,18 @@ Setting tags uses different syntax:
    - show source folder
   - invoke task to do all or to do one by name
 
+- 'publish' block takes a 'tags' block, which can re-tag the image to publish to the correct registry
+```groovy
+Publish Tags vs Build Tags
+
+  Analysis: Yes, the publish tags block can re-tag images during publish. Here's how it works:
+
+  - Line 58: tags.set(["scenario2-time-server:latest"]) - Creates local image with this tag
+  - Line 66: tags(['localhost:5200/scenario2-time-server:latest']) - Re-tags for registry push
+
+  Behavior: The DockerPublishTask takes the locally built image scenario2-time-server:latest and tags it as localhost:5200/scenario2-time-server:latest
+```
+
 ### test (compose) stuff
 
 - single vs. multi compose files (they have different syntax)

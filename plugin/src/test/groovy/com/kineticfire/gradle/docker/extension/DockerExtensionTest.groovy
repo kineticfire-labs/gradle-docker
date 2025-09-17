@@ -675,7 +675,7 @@ class DockerExtensionTest extends Specification {
         def publishTarget = project.objects.newInstance(
             com.kineticfire.gradle.docker.spec.PublishTarget, 
             'testTarget', 
-            project
+            project.objects
         )
         // Don't set any tags
 
@@ -694,7 +694,7 @@ class DockerExtensionTest extends Specification {
         def publishTarget = project.objects.newInstance(
             com.kineticfire.gradle.docker.spec.PublishTarget, 
             'testTarget', 
-            project
+            project.objects
         )
         publishTarget.tags.set(['invalid-reference-without-tag'])  // Invalid image reference
 
@@ -731,7 +731,7 @@ class DockerExtensionTest extends Specification {
         def publishTarget = project.objects.newInstance(
             com.kineticfire.gradle.docker.spec.PublishTarget, 
             'testTarget', 
-            project
+            project.objects
         )
         publishTarget.tags.set([
             'myapp:latest',
@@ -751,7 +751,7 @@ class DockerExtensionTest extends Specification {
         def publishTarget = project.objects.newInstance(
             com.kineticfire.gradle.docker.spec.PublishTarget, 
             'testTarget', 
-            project
+            project.objects
         )
         publishTarget.tags.set([])  // Empty list
 

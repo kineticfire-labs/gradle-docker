@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.Action
-import org.gradle.api.Project
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 
@@ -29,12 +29,12 @@ import javax.inject.Inject
 abstract class PublishTarget {
     
     private final String name
-    private final Project project
+    private final ObjectFactory objectFactory
     
     @Inject
-    PublishTarget(String name, Project project) {
+    PublishTarget(String name, ObjectFactory objectFactory) {
         this.name = name
-        this.project = project
+        this.objectFactory = objectFactory
     }
     
     String getName() { 
@@ -50,14 +50,14 @@ abstract class PublishTarget {
     }
     
     void auth(@DelegatesTo(AuthSpec) Closure closure) {
-        def authSpec = project.objects.newInstance(AuthSpec, project)
+        def authSpec = objectFactory.newInstance(AuthSpec)
         closure.delegate = authSpec
         closure.call()
         auth.set(authSpec)
     }
     
     void auth(Action<AuthSpec> action) {
-        def authSpec = project.objects.newInstance(AuthSpec, project)
+        def authSpec = objectFactory.newInstance(AuthSpec)
         action.execute(authSpec)
         auth.set(authSpec)
     }

@@ -30,7 +30,7 @@ class AuthSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        authSpec = project.objects.newInstance(AuthSpec, project)
+        authSpec = project.objects.newInstance(AuthSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

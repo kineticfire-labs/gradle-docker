@@ -25,7 +25,7 @@
  *   - Save Features
  *       - save w/ compression type = none
  *       - save w/ no pullIfMissing
- *   - Publish Features (todo)
+ *   - Publish Features
  *       - publish = 1 tag
  *       - publish to private registry without authentication
  */
@@ -61,7 +61,11 @@ docker {
                 compression = 'none'
                 // 'pullIfMissing' will default to 'false'
             }
-            // todo: publish
+            publish {
+                to('testRegistry') {
+                    tags(['localhost:5200/scenario2-time-server:latest'])
+                }
+            }
         }
     }
 }
@@ -73,23 +77,75 @@ docker {
 // Apply the reusable Docker image testing plugin from buildSrc
 apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
+// Manual registry management for demonstration
+def registryPort = 5200
+def registryContainer = "test-registry-scenario2"
+
 // Register Docker image clean and verify tasks for this integration test
 registerBuildWorkflowTasks(project, ['scenario2-time-server:latest'])
 
 // Register saved image verification task since this scenario tests save functionality
 registerVerifySavedImagesTask(project, ['build/docker-images/scenario2-time-server-latest.tar'])
 
-// Task that runs complete integration test workflow
+// Register registry image verification task since this scenario tests publish functionality
+registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2-time-server:latest'])
+
+// Create manual registry tasks for demonstration
+tasks.register('startTestRegistry') {
+    group = 'docker registry'
+    description = 'Start test Docker registry'
+    doLast {
+        // Simple approach using bash commands
+        "docker rm -f ${registryContainer}".execute().waitFor()
+        def startResult = "docker run -d --name ${registryContainer} -p ${registryPort}:5000 registry:2".execute()
+        startResult.waitFor()
+        if (startResult.exitValue() != 0) {
+            throw new RuntimeException("Failed to start registry")
+        }
+        
+        // Wait for registry to be ready
+        println "Waiting for registry to be ready..."
+        for (int i = 0; i < 30; i++) {
+            def healthCheck = "curl -f -s http://localhost:${registryPort}/v2/".execute()
+            healthCheck.waitFor()
+            if (healthCheck.exitValue() == 0) {
+                println "✓ Registry is ready at localhost:${registryPort}"
+                return
+            }
+            Thread.sleep(1000)
+        }
+        throw new RuntimeException("Registry failed to become ready")
+    }
+}
+
+tasks.register('stopTestRegistry') {
+    group = 'docker registry'
+    description = 'Stop test Docker registry'
+    doLast {
+        "docker rm -f ${registryContainer}".execute().waitFor()
+        println "✓ Registry stopped and removed"
+    }
+}
+
+// Task that runs complete integration test workflow  
 tasks.register('integrationTest') {
-    description = 'Run complete Docker integration test: clean → build → verify'
+    description = 'Run complete Docker integration test: clean → build → save → publish → verify'
     group = 'verification'
+    
+    // Dependencies
+    dependsOn 'startTestRegistry'
     dependsOn 'cleanDockerImages'
     dependsOn 'dockerImages'
     dependsOn 'verifyDockerImages'
     dependsOn 'verifySavedDockerImages'
-
+    dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'stopTestRegistry'
+    
     // Ensure proper task ordering
+    tasks.cleanDockerImages.mustRunAfter tasks.startTestRegistry
     tasks.dockerImages.mustRunAfter tasks.cleanDockerImages
     tasks.verifyDockerImages.mustRunAfter tasks.dockerImages
     tasks.verifySavedDockerImages.mustRunAfter tasks.dockerImages
+    tasks.verifyRegistryDockerImages.mustRunAfter tasks.dockerImages
+    tasks.stopTestRegistry.mustRunAfter tasks.verifyRegistryDockerImages
 }

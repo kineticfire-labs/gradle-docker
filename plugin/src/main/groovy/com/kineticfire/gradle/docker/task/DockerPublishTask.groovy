@@ -83,14 +83,26 @@ abstract class DockerPublishTask extends DefaultTask {
             tags.each { fullImageRef ->
                 logger.info("Publishing {} as {}", imageName, fullImageRef)
                 
-                def publishFuture = service.pushImage(fullImageRef, authConfig)
+                // First tag the local image with the target registry tag
+                def tagFuture = service.tagImage(imageName, [fullImageRef])
                     .whenComplete { result, throwable ->
                         if (throwable) {
-                            logger.error("Failed to push {}: {}", fullImageRef, throwable.message)
+                            logger.error("Failed to tag {} as {}: {}", imageName, fullImageRef, throwable.message)
                         } else {
-                            logger.lifecycle("Successfully pushed: {}", fullImageRef)
+                            logger.debug("Successfully tagged {} as {}", imageName, fullImageRef)
                         }
                     }
+                
+                // Then push the registry tag
+                def publishFuture = tagFuture.thenCompose { 
+                    service.pushImage(fullImageRef, authConfig) 
+                }.whenComplete { result, throwable ->
+                    if (throwable) {
+                        logger.error("Failed to push {}: {}", fullImageRef, throwable.message)
+                    } else {
+                        logger.lifecycle("Successfully pushed: {}", fullImageRef)
+                    }
+                }
                 publishFutures << publishFuture
             }
         }

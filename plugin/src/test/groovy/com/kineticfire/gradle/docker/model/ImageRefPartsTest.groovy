@@ -71,17 +71,16 @@ class ImageRefPartsTest extends Specification {
         parts.fullReference == 'registry.company.com/team/service:2.1.0'
     }
 
-    def "parse localhost with port gets parsed incorrectly"() {
+    def "parse localhost with port"() {
         when:
         def parts = ImageRefParts.parse('localhost:5000/myapp:dev')
 
         then:
-        // Due to regex limitations, localhost:5000/myapp:dev gets parsed as:
-        // repository=localhost, tag=5000/myapp:dev
-        parts.registry == null
-        parts.repository == 'localhost'
-        parts.fullRepository == 'localhost'
-        parts.tag == '5000/myapp:dev'
+        // Now correctly parses localhost:5000 as registry
+        parts.registry == 'localhost:5000'
+        parts.repository == 'myapp'
+        parts.fullRepository == 'localhost:5000/myapp'
+        parts.tag == 'dev'
         parts.fullReference == 'localhost:5000/myapp:dev'
     }
 

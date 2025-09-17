@@ -95,6 +95,8 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
@@ -110,8 +112,9 @@ class DockerPublishTaskTest extends Specification {
         task.imageName.set('test:latest')
         def target = createPublishTarget([])
         task.publishTargets.set([target])
-        
+
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
         when:
@@ -131,6 +134,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('sha256:abcd1234', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
         when:
@@ -150,6 +154,8 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target1, target2])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('test:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('docker.io/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
@@ -167,6 +173,9 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0.1']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0.1', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
@@ -188,6 +197,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.username == 'testuser' && auth.password == 'testpass'
         }) >> CompletableFuture.completedFuture(null)
@@ -207,6 +217,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.registryToken == 'test-token'
         }) >> CompletableFuture.completedFuture(null)
@@ -259,6 +270,7 @@ class DockerPublishTaskTest extends Specification {
         )
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(serviceException)
         
         when:
@@ -278,6 +290,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(new RuntimeException('Network error'))
         
         when:
@@ -291,20 +304,20 @@ class DockerPublishTaskTest extends Specification {
     // ===== HELPER METHODS =====
 
     private PublishTarget createPublishTarget(List<String> fullImageReferences) {
-        def target = project.objects.newInstance(PublishTarget, "test", project)
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
         target.tags.set(fullImageReferences)
         return target
     }
     
     private PublishTarget createPublishTargetWithAuth(List<String> fullImageReferences, AuthSpec authSpec) {
-        def target = project.objects.newInstance(PublishTarget, "test", project)
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
         target.tags.set(fullImageReferences)
         target.auth.set(authSpec)
         return target
     }
     
     private AuthSpec createAuthSpec(String username, String password, String token) {
-        def authSpec = project.objects.newInstance(AuthSpec, project)
+        def authSpec = project.objects.newInstance(AuthSpec)
         if (username) authSpec.username.set(username)
         if (password) authSpec.password.set(password)
         if (token) authSpec.registryToken.set(token)

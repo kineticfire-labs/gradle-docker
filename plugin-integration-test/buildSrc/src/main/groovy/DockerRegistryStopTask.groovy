@@ -42,8 +42,8 @@ abstract class DockerRegistryStopTask extends DefaultTask {
             fixture.stopAllRegistries()
             
             // Clean up the test registries extension
-            if (project.extensions.findByName('testRegistries')) {
-                project.extensions.remove('testRegistries')
+            if (project.ext.hasProperty('testRegistries')) {
+                project.ext.testRegistries = null
             }
             
             logger.lifecycle("✓ All test registries stopped and cleaned up")

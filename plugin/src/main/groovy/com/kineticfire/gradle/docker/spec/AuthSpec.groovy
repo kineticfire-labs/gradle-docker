@@ -27,11 +27,8 @@ import javax.inject.Inject
  */
 abstract class AuthSpec {
     
-    private final Project project
-    
     @Inject
-    AuthSpec(Project project) {
-        this.project = project
+    AuthSpec() {
     }
     
     abstract Property<String> getUsername()

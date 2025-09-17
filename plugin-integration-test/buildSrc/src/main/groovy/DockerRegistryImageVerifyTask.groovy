@@ -51,9 +51,9 @@ abstract class DockerRegistryImageVerifyTask extends DefaultTask {
 
         for (String imageRef : imageReferences) {
             try {
-                // Use docker manifest inspect to check if image exists in registry
-                // This is a lightweight operation that doesn't pull the image
-                def process = new ProcessBuilder(['docker', 'manifest', 'inspect', imageRef])
+                // Use docker pull to check if image exists in registry
+                // This actually pulls the image but is more reliable than manifest inspect
+                def process = new ProcessBuilder(['docker', 'pull', imageRef])
                     .redirectErrorStream(true)
                     .start()
 
