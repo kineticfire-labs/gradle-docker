@@ -233,7 +233,9 @@ class RegistryTestFixture {
         logger.lifecycle("Stopping all test registries")
 
         // Stop containers in reverse order
-        runningContainers.reverse().each { name, containerId ->
+        runningContainers.entrySet().toList().reverse().each { entry ->
+            def name = entry.key
+            def containerId = entry.value
             try {
                 logger.debug("Stopping registry container: ${name} (${containerId})")
                 stopContainer(containerId)

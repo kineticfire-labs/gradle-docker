@@ -60,17 +60,23 @@ class RegistryManagementPlugin implements Plugin<Project> {
         
         // Configure task dependencies
         project.afterEvaluate {
-            // Ensure stop task runs after any test tasks
-            project.tasks.matching { it.name.contains('test') || it.name.contains('Test') }.all { testTask ->
-                stopTask.configure {
-                    it.mustRunAfter(testTask)
+            // Ensure stop task runs after Gradle's built-in test tasks only
+            project.tasks.matching {
+                it.name == 'test' || it.name == 'functionalTest' || it.name == 'integrationTest'
+            }.all { testTask ->
+                // Only add mustRunAfter if the test task doesn't depend on stop task
+                if (!testTask.taskDependencies.getDependencies().any { it.name == 'stopTestRegistries' }) {
+                    stopTask.configure {
+                        it.mustRunAfter(testTask)
+                    }
                 }
             }
             
             // Ensure cleanup runs if stop fails
-            stopTask.configure {
-                it.finalizedBy(cleanupTask)
-            }
+            // Note: Commented out to avoid circular dependency
+            // stopTask.configure {
+            //     it.finalizedBy(cleanupTask)
+            // }
         }
         
         // Add convenience methods to project

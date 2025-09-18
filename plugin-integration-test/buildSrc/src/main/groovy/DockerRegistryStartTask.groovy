@@ -47,8 +47,7 @@ abstract class DockerRegistryStartTask extends DefaultTask {
         try {
             def registries = fixture.startTestRegistries(configs)
             
-            // Store registry information for use by other tasks
-            project.ext.testRegistries = registries
+            // Note: Not storing registry information in project.ext to maintain configuration cache compatibility
             
             logger.lifecycle("✓ All test registries started successfully")
             registries.each { name, info ->
