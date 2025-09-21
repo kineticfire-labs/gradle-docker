@@ -1,140 +1,98 @@
-# Gradle 9.0.0 Configuration Cache Compatibility Guide
+# Gradle 9 Configuration & Build Cache Guide (for AI Coding Agents)
 
-## Overview
+## Goal
 
-Gradle 9.0.0 introduces stricter configuration cache requirements that prevent tasks from accessing the Project object during execution time. This document provides guidance for maintaining compatibility with configuration caching.
+Write Gradle builds/plugins that reuse the configuration cache and benefit from the build cache. Keep configuration pure 
+& lazy; make tasks declarative & deterministic.
 
-## Key Principle
+## Core Rules (do these every time)
 
-**Configuration vs Execution Separation**: All project-dependent values must be captured during configuration phase and stored in serializable forms (Providers, Properties) for use during execution.
+- Model values with Properties/Providers: use `Property<T>`, `ListProperty<T>`, `MapProperty<K,V>`,
+  `RegularFileProperty`, `DirectoryProperty`.
+- Be lazy: compose values via `map/flatMap/zip`; do not call `.get()` during configuration.
+- Register tasks: `tasks.register("X", Type)`; configure via `.configure {};` avoid `tasks.create`.
+- No side effects in configuration: no I/O, no network, no system time, no environment reads. Use `ProviderFactory` 
+  instead.
+- No Project access during execution: don’t call `task.project/project.*` inside `@TaskAction`.
+- Defaults via `convention(...)`, overrides via `set(...)`.
+- Lock when ready: `finalizeValueOnRead()` or `disallowChanges()` after configuration.
 
-## Common Issues & Solutions
+## Task Design (make caching work)
 
-### 1. Provider Resolution During Configuration
+- Declare inputs/outputs precisely:
+   - `@Input`, `@Optional`, `@Nested`, `@Internal`
+   - `@InputFile/@InputFiles` with `@PathSensitive(PathSensitivity.RELATIVE)`
+   - `@OutputFile/@OutputDirectory`
+- Cacheability:
+   - Pure, deterministic tasks → `@CacheableTask` 
+   - External/mutable side effects (network/daemons/CLIs) → `@DisableCachingByDefault("…reason…")`
+- Evaluate lazily: only read Properties/Providers inside `@TaskAction`.
 
-**❌ Anti-pattern:**
+## Provider Patterns (copy/paste)
+
+Derive a file under build dir (lazy):
 ```groovy
-String composeStateFileFor(String stackName) {
-    def buildDirProvider = project.layout.buildDirectory
-    def stateDirProvider = buildDirProvider.dir("compose-state")
-    def stateFile = stateDirProvider.get().asFile.toPath().resolve("${stackName}-state.json").toString()
-    return stateFile  // .get() resolves provider during configuration
-}
+def rel = name.map { n -> "out/${n}.txt" }
+def output = layout.buildDirectory.file(rel) // Provider<RegularFile>
 ```
 
-**✅ Pattern:**
+Combine two values (lazy):
 ```groovy
-Provider<String> composeStateFileFor(String stackName) {
-    def buildDirProvider = project.layout.buildDirectory
-    def stateDirProvider = buildDirProvider.dir("compose-state")
-    return stateDirProvider.map { dir ->
-        dir.asFile.toPath().resolve("${stackName}-state.json").toString()
-    }  // Deferred resolution using .map()
-}
+def path = providers.zip(name, version) { n, v -> "dist/${n}-${v}.tar" }
 ```
 
-### 2. Project Access in Task Actions
-
-**❌ Anti-pattern:**
+Consume another task’s output (lazy):
 ```groovy
-task.doFirst {
-    task.logger.lifecycle("Starting process")  // task.logger may access project
-}
-
-task.doLast {
-    project.logger.info("Process completed")   // Direct project access
-}
+def jarTask = tasks.named("jar", Jar)
+from(jarTask.flatMap { it.archiveFile })
 ```
 
-**✅ Pattern:**
+Environment & properties (lazy):
 ```groovy
-// Capture values during configuration
-def taskName = task.name
-def stackName = "myStack"
-
-// Avoid doFirst/doLast blocks that access project
-// Use task dependencies and external logging instead
-task.dependsOn 'composeUpMyStack'
-task.finalizedBy 'composeDownMyStack'
+def token = providers.gradleProperty("TOKEN").orElse("")
+def epochIso = providers.environmentVariable("SOURCE_DATE_EPOCH")
+  .map { java.time.Instant.ofEpochSecond(it.toLong()).toString() }
 ```
 
-### 3. System Properties with Providers
+## File & Path Hygiene
+- Compute paths with `ProjectLayout` (`layout.buildDirectory.file/dir`).
+- Never hardcode `build/...` strings directly when a Provider is available.
+- Avoid filesystem probing in configuration; wire via task outputs/providers.
 
-**❌ Anti-pattern:**
-```groovy
-systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("stack").get()
-```
+Avoid These (they break config cache)
+- Calling `.get()` on Providers during configuration.
+- `new Date()/UUID.random()` or reading env/system props in configuration.
+- `doFirst/doLast` that touch `project` or do I/O.
+- Accessing `task.project/project.*` inside `@TaskAction`.
 
-**✅ Pattern:**
-```groovy
-systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("stack")
-// Gradle's systemProperty method handles Provider<String> automatically
-```
+## Build Services & External Data
+- Use **Build Services** for shared, mutable state across tasks (thread-safe).
+- Use **ValueSource** for reproducible, cacheable external lookups.
 
-## Configuration Cache Best Practices
-
-### Do's
-- Use `Provider<T>` and `Property<T>` for all dynamic values
-- Capture project properties during configuration phase
-- Use `.map()`, `.flatMap()`, and `.zip()` for provider transformations
-- Test with `--configuration-cache` flag enabled
-- Prefer task dependencies over doFirst/doLast blocks
-
-### Don'ts
-- Never call `.get()` on providers during configuration
-- Avoid accessing `task.project` in doFirst/doLast blocks
-- Don't use `project.*` references in task actions
-- Avoid task.logger calls in execution blocks
-
-## Testing Configuration Cache Compatibility
+## Testing & Verification
 
 ```bash
-# Test with configuration cache enabled
-./gradlew clean build --configuration-cache
+# Store config cache
+./gradlew <tasks> --configuration-cache
 
-# Verify cache storage
-# Look for: "Configuration cache entry stored."
+# Reuse config cache
+./gradlew <tasks> --configuration-cache
 
-# Test cache reuse
-./gradlew clean build --configuration-cache
-# Look for: "Reusing configuration cache."
+# Inspect problems
+./gradlew <tasks> --configuration-cache --configuration-cache-problems=warn
 ```
 
-## Project-Specific Learnings
+**Expect**: “Configuration cache entry stored.” then “Reusing configuration cache.”
 
-### TestIntegrationExtension Issues Found
-- **Problem**: `composeStateFileFor` method resolved providers during configuration
-- **Solution**: Return `Provider<String>` and use `.map()` for deferred resolution
-- **Impact**: Fixed "invocation of 'Task.project' at execution time" error
+**Common errors to fix:**
+- `invocation of 'Task.project' at execution time is unsupported`
+- Providers resolved at configuration (look for `.get()` in config code)
 
-### Task Action Logging Issues
-- **Problem**: `doFirst`/`doLast` blocks with logger calls accessed project during execution
-- **Solution**: Removed execution-time logging, rely on compose task logging
-- **Impact**: Eliminated project access during task execution
+## Mini Checklist (before you ship)
 
-### Test Updates Required
-- **Problem**: Unit tests expected `String` return type from `composeStateFileFor`
-- **Solution**: Updated tests to call `.get()` on returned provider
-- **Pattern**: `extension.composeStateFileFor('stack').get()` in tests
-
-## Resources
-
-- [Gradle Configuration Cache Requirements](https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution)
-- [Gradle Provider API Documentation](https://docs.gradle.org/current/javadoc/org/gradle/api/provider/Provider.html)
-- [Configuration Cache User Guide](https://docs.gradle.org/9.0.0/userguide/configuration_cache.html)
-
-## Error Messages to Watch For
-
-- `"invocation of 'Task.project' at execution time is unsupported with the configuration cache"`
-- `"Build file 'build.gradle': invocation of 'Task.project' at execution time"`
-- Configuration cache entries being discarded instead of stored
-
-## Verification Commands
-
-```bash
-# Check configuration cache compatibility
-./gradlew clean build --configuration-cache
-
-# Generate detailed configuration cache report
-./gradlew clean build --configuration-cache --configuration-cache-problems=warn
-```
+- [ ] All dynamic values are Properties/Providers (no eager .get()).
+- [ ] Tasks registered, not created; no side effects in configuration.
+- [ ] Inputs/outputs annotated; cacheability annotated correctly.
+- [ ] Paths via layout.*; other task outputs via tasks.named(...).flatMap.
+- [ ] Defaults via convention; user overrides via set.
+- [ ] Runs clean with --configuration-cache and reuses on second run.
