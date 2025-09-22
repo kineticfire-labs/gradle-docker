@@ -23,13 +23,7 @@ import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.provider.Provider
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.InputDirectory
-import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
-import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.*
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -38,25 +32,50 @@ import org.gradle.api.tasks.TaskAction
 abstract class DockerBuildTask extends DefaultTask {
     
     DockerBuildTask() {
-        // Avoid setting group/description in constructor to prevent configuration cache issues
-        // These will be set during task configuration in the plugin
-        
-        // Set up default values
+        // Set up default values for Provider API compatibility
         buildArgs.convention([:])
+        labels.convention([:])
         tags.convention([])
+        registry.convention("")
+        namespace.convention("")
+        repository.convention("")
     }
     
     @Internal
     abstract Property<DockerService> getDockerService()
     
+    // Docker Image Nomenclature Properties
+    @Input
+    @Optional
+    abstract Property<String> getRegistry()
+    
+    @Input
+    @Optional
+    abstract Property<String> getNamespace()
+    
+    @Input
+    @Optional
+    abstract Property<String> getImageName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getRepository()
+    
+    @Input
+    abstract Property<String> getVersion()
+    
+    @Input
+    abstract ListProperty<String> getTags()
+    
+    @Input
+    abstract MapProperty<String, String> getLabels()
+    
+    // Build Configuration
     @InputFile
     abstract RegularFileProperty getDockerfile()
     
     @InputDirectory
     abstract DirectoryProperty getContextPath()
-    
-    @Input
-    abstract ListProperty<String> getTags()
     
     @Input
     @Optional
@@ -72,17 +91,21 @@ abstract class DockerBuildTask extends DefaultTask {
         if (!dockerfile.present) {
             throw new IllegalStateException("dockerfile property must be set")
         }
-        if (!tags.present || tags.get().isEmpty()) {
-            throw new IllegalStateException("tags property must be set and not empty")
+        
+        // Build full image references using new nomenclature
+        def imageReferences = buildImageReferences()
+        if (imageReferences.isEmpty()) {
+            throw new IllegalStateException("No image references could be built from nomenclature")
         }
 
-        // Build Docker image using service - use usesService to ensure proper configuration cache handling
+        // Build Docker image using service
         def service = dockerService.get()
         def context = new com.kineticfire.gradle.docker.model.BuildContext(
             contextPath.get().asFile.toPath(),
             dockerfile.get().asFile.toPath(),
             buildArgs.get(),
-            tags.get()
+            imageReferences,
+            labels.get()
         )
         
         def future = service.buildImage(context)
@@ -92,5 +115,43 @@ abstract class DockerBuildTask extends DefaultTask {
         def imageIdFile = imageId.get().asFile
         imageIdFile.parentFile.mkdirs()
         imageIdFile.text = actualImageId
+    }
+    
+    /**
+     * Build full image references from nomenclature properties
+     */
+    List<String> buildImageReferences() {
+        def references = []
+        
+        def registryValue = registry.getOrElse("")
+        def namespaceValue = namespace.getOrElse("")
+        def repositoryValue = repository.getOrElse("")
+        def imageNameValue = imageName.getOrElse("")
+        def versionValue = version.get()
+        def tagsValue = tags.get()
+        
+        if (!repositoryValue.isEmpty()) {
+            // Using repository format
+            def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
+            tagsValue.each { tag ->
+                references.add("${baseRef}:${tag}")
+            }
+        } else if (!imageNameValue.isEmpty()) {
+            // Using namespace + imageName format
+            def baseRef = ""
+            if (!registryValue.isEmpty()) {
+                baseRef += "${registryValue}/"
+            }
+            if (!namespaceValue.isEmpty()) {
+                baseRef += "${namespaceValue}/"
+            }
+            baseRef += imageNameValue
+            
+            tagsValue.each { tag ->
+                references.add("${baseRef}:${tag}")
+            }
+        }
+        
+        return references
     }
 }

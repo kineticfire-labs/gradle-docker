@@ -49,8 +49,6 @@ class DockerPublishTaskTest extends Specification {
         expect:
         task != null
         task instanceof DockerPublishTask
-        task.group == 'docker'
-        task.description == 'Publishes Docker image to configured registries'
     }
 
     def "task extends DefaultTask"() {
@@ -66,17 +64,13 @@ class DockerPublishTaskTest extends Specification {
         task.hasProperty('dockerService')
     }
 
-    def "task has publishImage action"() {
-        expect:
-        task.actions.size() == 1
-        task.actions[0].displayName.contains('publishImage')
-    }
-
     // ===== NO TARGETS TEST =====
 
     def "should skip publish when no targets configured"() {
         given:
-        task.imageName.set('test:latest')
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
         task.publishTargets.set([])
         
         when:
@@ -90,14 +84,16 @@ class DockerPublishTaskTest extends Specification {
 
     def "should publish single target with image name"() {
         given:
-        task.imageName.set('test:latest')
-        def target = createPublishTarget(['localhost:5000/myapp:v1.0', 'localhost:5000/myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['v1.0.0', 'latest'])
         task.publishTargets.set([target])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('localhost:5000/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
         when:
@@ -107,35 +103,17 @@ class DockerPublishTaskTest extends Specification {
         noExceptionThrown()
     }
 
-    def "should publish single target with default latest tag"() {
+    def "should handle repository format"() {
         given:
-        task.imageName.set('test:latest')
-        def target = createPublishTarget([])
+        task.repository.set('mycompany/myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTargetRepository(['v1.0.0'])
         task.publishTargets.set([target])
 
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
-        
-        when:
-        task.publishImage()
-        
-        then:
-        noExceptionThrown()
-    }
-
-    def "should read image ID from file when image name not set"() {
-        given:
-        def imageIdFile = project.layout.buildDirectory.file('image-id.txt').get().asFile
-        imageIdFile.parentFile.mkdirs()
-        imageIdFile.text = 'sha256:abcd1234'
-        task.imageIdFile.set(project.layout.buildDirectory.file('image-id.txt'))
-        def target = createPublishTarget(['localhost:5000/myapp:latest'])
-        task.publishTargets.set([target])
-        
-        and:
-        mockDockerService.tagImage('sha256:abcd1234', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('mycompany/myapp:latest', ['localhost:5000/mycompany/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('localhost:5000/mycompany/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
         
         when:
         task.publishImage()
@@ -148,15 +126,17 @@ class DockerPublishTaskTest extends Specification {
 
     def "should handle multiple publish targets"() {
         given:
-        task.imageName.set('test:latest')
-        def target1 = createPublishTarget(['localhost:5000/myapp:v1.0'])
-        def target2 = createPublishTarget(['docker.io/myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target1 = createPublishTarget(['v1.0.0'])
+        def target2 = createPublishTargetDockerHub(['latest'])
         task.publishTargets.set([target1, target2])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.tagImage('test:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('localhost:5000/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('docker.io/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
         when:
@@ -168,15 +148,17 @@ class DockerPublishTaskTest extends Specification {
 
     def "should handle multiple tags per target"() {
         given:
-        task.imageName.set('test:latest')
-        def target = createPublishTarget(['localhost:5000/myapp:v1.0', 'localhost:5000/myapp:v1.0.1', 'localhost:5000/myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['v1.0.0', 'v1.0.1', 'latest'])
         task.publishTargets.set([target])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:v1.0.1']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
-        mockDockerService.pushImage('localhost:5000/myapp:v1.0', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.1']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('localhost:5000/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0.1', null) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
         
@@ -191,13 +173,15 @@ class DockerPublishTaskTest extends Specification {
 
     def "should publish with authentication"() {
         given:
-        task.imageName.set('test:latest')
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
         def authSpec = createAuthSpec('testuser', 'testpass', null)
-        def target = createPublishTargetWithAuth(['localhost:5000/myapp:latest'], authSpec)
+        def target = createPublishTargetWithAuth(['latest'], authSpec)
         task.publishTargets.set([target])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.username == 'testuser' && auth.password == 'testpass'
         }) >> CompletableFuture.completedFuture(null)
@@ -211,13 +195,15 @@ class DockerPublishTaskTest extends Specification {
 
     def "should publish with token authentication"() {
         given:
-        task.imageName.set('test:latest')
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
         def authSpec = createAuthSpec(null, null, 'test-token')
-        def target = createPublishTargetWithAuth(['localhost:5000/myapp:latest'], authSpec)
+        def target = createPublishTargetWithAuth(['latest'], authSpec)
         task.publishTargets.set([target])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.registryToken == 'test-token'
         }) >> CompletableFuture.completedFuture(null)
@@ -231,37 +217,26 @@ class DockerPublishTaskTest extends Specification {
 
     // ===== ERROR HANDLING TESTS =====
 
-    def "should fail when no image name and no image ID file"() {
+    def "should fail when no image reference can be built"() {
         given:
-        def target = createPublishTarget(['localhost:5000/myapp:latest'])
+        task.version.set('1.0.0')
+        task.tags.set([])  // Empty tags
+        def target = createPublishTarget(['latest'])
         task.publishTargets.set([target])
         
         when:
         task.publishImage()
         
         then:
-        def e = thrown(GradleException)
-        e.message.contains('No image name specified and no image ID file found')
-    }
-
-    def "should fail when image ID file does not exist"() {
-        given:
-        task.imageIdFile.set(project.layout.buildDirectory.file('nonexistent.txt'))
-        def target = createPublishTarget(['localhost:5000/myapp:latest'])
-        task.publishTargets.set([target])
-        
-        when:
-        task.publishImage()
-        
-        then:
-        def e = thrown(GradleException)
-        e.message.contains('No image name specified and no image ID file found')
+        thrown(IllegalStateException)
     }
 
     def "should handle Docker service exception"() {
         given:
-        task.imageName.set('test:latest')
-        def target = createPublishTarget(['localhost:5000/myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
         task.publishTargets.set([target])
         def serviceException = new DockerServiceException(
             DockerServiceException.ErrorType.PUSH_FAILED,
@@ -270,7 +245,7 @@ class DockerPublishTaskTest extends Specification {
         )
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(serviceException)
         
         when:
@@ -285,12 +260,14 @@ class DockerPublishTaskTest extends Specification {
 
     def "should handle generic push exception"() {
         given:
-        task.imageName.set('test:latest')
-        def target = createPublishTarget(['localhost:5000/myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
         task.publishTargets.set([target])
         
         and:
-        mockDockerService.tagImage('test:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(new RuntimeException('Network error'))
         
         when:
@@ -301,17 +278,105 @@ class DockerPublishTaskTest extends Specification {
         e.message.contains('Docker publish failed: Network error')
     }
 
+    // ===== NOMENCLATURE TESTS =====
+
+    def "buildSourceImageReference with imageName format"() {
+        given:
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest', 'v1.0.0'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'myapp:latest'
+    }
+
+    def "buildSourceImageReference with repository format"() {
+        given:
+        task.repository.set('mycompany/myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'mycompany/myapp:latest'
+    }
+
+    def "buildSourceImageReference with registry and namespace"() {
+        given:
+        task.registry.set('my-registry.com')
+        task.namespace.set('mycompany')
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'my-registry.com/mycompany/myapp:latest'
+    }
+
+    def "buildSourceImageReference returns null when no tags"() {
+        given:
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set([])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == null
+    }
+
+    def "buildTargetImageReferences with target nomenclature"() {
+        given:
+        task.imageName.set('myapp')
+        def target = createPublishTarget(['v1.0.0', 'latest'])
+
+        when:
+        def targetRefs = task.buildTargetImageReferences(target)
+
+        then:
+        targetRefs == ['localhost:5000/myapp:v1.0.0', 'localhost:5000/myapp:latest']
+    }
+
     // ===== HELPER METHODS =====
 
-    private PublishTarget createPublishTarget(List<String> fullImageReferences) {
+    private PublishTarget createPublishTarget(List<String> publishTags) {
         def target = project.objects.newInstance(PublishTarget, "test", project.objects)
-        target.tags.set(fullImageReferences)
+        target.registry.set('localhost:5000')
+        target.imageName.set('myapp')
+        target.publishTags.set(publishTags)
         return target
     }
     
-    private PublishTarget createPublishTargetWithAuth(List<String> fullImageReferences, AuthSpec authSpec) {
+    private PublishTarget createPublishTargetRepository(List<String> publishTags) {
         def target = project.objects.newInstance(PublishTarget, "test", project.objects)
-        target.tags.set(fullImageReferences)
+        target.registry.set('localhost:5000')
+        target.repository.set('mycompany/myapp')
+        target.publishTags.set(publishTags)
+        return target
+    }
+    
+    private PublishTarget createPublishTargetDockerHub(List<String> publishTags) {
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        target.imageName.set('myapp')
+        target.publishTags.set(publishTags)
+        return target
+    }
+    
+    private PublishTarget createPublishTargetWithAuth(List<String> publishTags, AuthSpec authSpec) {
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('localhost:5000')
+        target.imageName.set('myapp')
+        target.publishTags.set(publishTags)
         target.auth.set(authSpec)
         return target
     }

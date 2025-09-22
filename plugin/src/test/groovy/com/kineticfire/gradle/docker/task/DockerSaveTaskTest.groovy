@@ -16,7 +16,7 @@
 
 package com.kineticfire.gradle.docker.task
 
-import com.kineticfire.gradle.docker.model.CompressionType
+import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.service.DockerService
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
@@ -53,10 +53,10 @@ class DockerSaveTaskTest extends Specification {
         task instanceof org.gradle.api.DefaultTask
     }
 
-    def "task has correct group and description"() {
+    def "task can be created"() {
         expect:
-        task.group == 'docker'
-        task.description == 'Save Docker image to file'
+        task != null
+        task instanceof DockerSaveTask
     }
 
     def "task has saveImage action"() {
@@ -67,8 +67,10 @@ class DockerSaveTaskTest extends Specification {
     
     def "task has default property values"() {
         expect:
-        !task.compression.present  // No default compression anymore
+        task.compression.present
+        task.compression.get() == SaveCompression.NONE
         task.pullIfMissing.get() == false
+        task.sourceRef.get() == ""
     }
 
     // ===== TASK EXECUTION TESTS =====
@@ -77,7 +79,7 @@ class DockerSaveTaskTest extends Specification {
         given:
         task.imageName.set('test-image:latest')
         task.outputFile.set(project.file('test.tar.gz'))
-        task.compression.set(CompressionType.GZIP)
+        task.compression.set(SaveCompression.GZIP)
         // Mock the service to avoid actual Docker calls in unit tests
         task.dockerService.set(mockDockerService)
         mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
@@ -90,14 +92,14 @@ class DockerSaveTaskTest extends Specification {
         then:
         imageName == 'test-image:latest'
         outputFile.asFile.name == 'test.tar.gz'
-        compression == CompressionType.GZIP
+        compression == SaveCompression.GZIP
     }
     
     def "saveImage action validates sourceRef property"() {
         given:
         task.sourceRef.set('registry.example.com/test:latest')
         task.outputFile.set(project.file('test.tar.gz'))
-        task.compression.set(CompressionType.NONE)
+        task.compression.set(SaveCompression.NONE)
         task.pullIfMissing.set(true)
 
         when:
@@ -114,21 +116,21 @@ class DockerSaveTaskTest extends Specification {
         task.sourceRef.set('registry.example.com/test:latest')
         task.imageName.set('local-image:latest')
         task.outputFile.set(project.file('test.tar.gz'))
-        task.compression.set(CompressionType.BZIP2)
+        task.compression.set(SaveCompression.BZIP2)
         task.pullIfMissing.set(true)
 
         then:
         task.sourceRef.get() == 'registry.example.com/test:latest'
         task.imageName.get() == 'local-image:latest'
         task.outputFile.get().asFile.name == 'test.tar.gz'
-        task.compression.get() == CompressionType.BZIP2
+        task.compression.get() == SaveCompression.BZIP2
         task.pullIfMissing.get() == true
     }
     
     def "task fails when neither imageName nor sourceRef is set"() {
         given:
         task.outputFile.set(project.file('test.tar.gz'))
-        task.compression.set(CompressionType.GZIP)
+        task.compression.set(SaveCompression.GZIP)
 
         when:
         task.saveImage()
@@ -140,7 +142,7 @@ class DockerSaveTaskTest extends Specification {
     def "task fails when outputFile is not set"() {
         given:
         task.imageName.set('test-image:latest')
-        task.compression.set(CompressionType.GZIP)
+        task.compression.set(SaveCompression.GZIP)
 
         when:
         task.saveImage()
@@ -165,10 +167,10 @@ class DockerSaveTaskTest extends Specification {
 
     def "task can be configured with different compression types"() {
         given:
-        task.compression.set(CompressionType.NONE)
+        task.compression.set(SaveCompression.NONE)
         
         expect:
-        task.compression.get() == CompressionType.NONE
+        task.compression.get() == SaveCompression.NONE
     }
     
     def "task can be configured with different names"() {
@@ -232,7 +234,7 @@ class DockerSaveTaskTest extends Specification {
         task.compression.get() == compressionType
         
         where:
-        compressionType << [CompressionType.NONE, CompressionType.GZIP, CompressionType.BZIP2, CompressionType.XZ, CompressionType.ZIP]
+        compressionType << [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP]
     }
     
     // ===== EDGE CASES =====
@@ -242,13 +244,13 @@ class DockerSaveTaskTest extends Specification {
         task.imageName.set('image-name:latest')
         task.sourceRef.set('registry.example.com/source:latest')
         task.outputFile.set(project.file('test.tar.gz'))
-        task.compression.set(CompressionType.XZ)
+        task.compression.set(SaveCompression.XZ)
 
         then:
         task.imageName.get() == 'image-name:latest'
         task.sourceRef.get() == 'registry.example.com/source:latest'
         task.outputFile.get().asFile.name == 'test.tar.gz'
-        task.compression.get() == CompressionType.XZ
+        task.compression.get() == SaveCompression.XZ
     }
     
     def "dockerService property can be configured"() {
@@ -270,7 +272,8 @@ class DockerSaveTaskTest extends Specification {
         task.sourceRef.set('registry.example.com/test:latest')
         task.sourceRef.get() == 'registry.example.com/test:latest'
         
-        !task.compression.present  // No default compression anymore
+        task.compression.present  // Has default compression
+        task.compression.get() == SaveCompression.NONE
         task.pullIfMissing.get() == false  // default
     }
     
@@ -282,7 +285,7 @@ class DockerSaveTaskTest extends Specification {
         task.compression.get() == compressionType
         
         where:
-        compressionType << [CompressionType.NONE, CompressionType.GZIP, CompressionType.BZIP2, CompressionType.XZ, CompressionType.ZIP]
+        compressionType << [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP]
     }
     
     def "task supports pullIfMissing configurations"() {

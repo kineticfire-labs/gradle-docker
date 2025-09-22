@@ -16,34 +16,55 @@
 
 package com.kineticfire.gradle.docker.task
 
-import com.kineticfire.gradle.docker.model.AuthConfig
-import com.kineticfire.gradle.docker.model.CompressionType
+import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.AuthSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
-import org.gradle.api.tasks.Input
-import org.gradle.api.tasks.Internal
-import org.gradle.api.tasks.Optional
-import org.gradle.api.tasks.OutputFile
+import org.gradle.api.tasks.*
 import org.gradle.api.tasks.TaskAction
 
 /**
- * Task for saving Docker images to files with optional compression
+ * Task for saving Docker images to files
  */
 abstract class DockerSaveTask extends DefaultTask {
     
     DockerSaveTask() {
-        group = 'docker'
-        description = 'Save Docker image to file'
-        
-        // Set defaults
+        // Set up default values for Provider API compatibility
+        compression.convention(SaveCompression.NONE)
+        registry.convention("")
+        namespace.convention("")
+        repository.convention("")
+        sourceRef.convention("")
         pullIfMissing.convention(false)
     }
     
     @Internal
     abstract Property<DockerService> getDockerService()
+    
+    // SourceRef Mode Properties (for existing images)
+    @Input
+    @Optional
+    abstract Property<String> getSourceRef()
+    
+    @Input
+    @Optional
+    abstract Property<Boolean> getPullIfMissing()
+    
+    @Nested
+    @Optional
+    abstract Property<AuthSpec> getAuth()
+    
+    // Docker Image Nomenclature Properties (for building new images)
+    @Input
+    @Optional
+    abstract Property<String> getRegistry()
+    
+    @Input
+    @Optional
+    abstract Property<String> getNamespace()
     
     @Input
     @Optional
@@ -51,79 +72,107 @@ abstract class DockerSaveTask extends DefaultTask {
     
     @Input
     @Optional
-    abstract Property<String> getSourceRef()
+    abstract Property<String> getRepository()
     
     @Input
-    abstract Property<CompressionType> getCompression()
+    abstract Property<String> getVersion()
+    
+    @Input
+    abstract ListProperty<String> getTags()
+    
+    @Input
+    abstract Property<SaveCompression> getCompression()
     
     @OutputFile
     abstract RegularFileProperty getOutputFile()
-    
-    @Input
-    @Optional
-    abstract Property<Boolean> getPullIfMissing()
-
-    @Input
-    @Optional
-    abstract Property<AuthSpec> getAuth()
 
     @TaskAction
     void saveImage() {
-        // Validate required properties
-        if (!imageName.present && !sourceRef.present) {
-            throw new IllegalStateException("Either imageName or sourceRef property must be set")
-        }
+        // Configuration cache compatible implementation
         if (!outputFile.present) {
             throw new IllegalStateException("outputFile property must be set")
         }
-        if (!compression.present) {
-            throw new IllegalStateException("compression property must be set. Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'")
+        
+        // Build the primary image reference for saving
+        def imageRef = buildPrimaryImageReference()
+        if (!imageRef) {
+            throw new IllegalStateException("Unable to build image reference")
         }
+
+        // Handle pullIfMissing for sourceRef mode
+        def sourceRefValue = sourceRef.getOrElse("")
+        if (!sourceRefValue.isEmpty() && pullIfMissing.get()) {
+            def service = dockerService.get()
+            def exists = service.imageExists(imageRef).get()
+            if (!exists) {
+                // Pull with authentication if configured
+                def authConfig = null
+                if (auth.present) {
+                    def authSpec = auth.get()
+                    authConfig = new com.kineticfire.gradle.docker.model.AuthConfig(
+                        authSpec.username.getOrElse(""),
+                        authSpec.password.getOrElse(""),
+                        authSpec.registryToken.getOrElse(""),
+                        null // serverAddress extracted from imageRef automatically
+                    )
+                }
+                def future = service.pullImage(imageRef, authConfig)
+                future.get()
+            }
+        }
+
+        // Save Docker image using service
+        def service = dockerService.get()
+        def compressionType = compression.get()
+        def outputPath = outputFile.get().asFile.toPath()
         
-        // Resolve image source (built vs sourceRef)
-        String imageToSave = resolveImageSource()
-        
-        logger.lifecycle("Saving image {} to {} with compression: {}", imageToSave, outputFile.get().asFile, compression.get())
-        
-        // Call existing service method
-        dockerService.get().saveImage(
-            imageToSave, 
-            outputFile.get().asFile.toPath(),
-            compression.get()
-        ).get()
-        
-        logger.lifecycle("Successfully saved image {} to {}", imageToSave, outputFile.get().asFile)
+        def future = service.saveImage(imageRef, outputPath, compressionType)
+        future.get()
     }
     
-    private String resolveImageSource() {
-        if (sourceRef.present) {
-            String ref = sourceRef.get()
-            if (pullIfMissing.get() && !dockerService.get().imageExists(ref).get()) {
-                logger.lifecycle("Pulling missing image: {}", ref)
-
-                // NEW: Pass authentication if configured
-                AuthConfig authConfig = getAuthConfigFromSaveSpec()
-                if (authConfig != null) {
-                    logger.lifecycle("Using authentication for pulling image from registry")
-                }
-
-                dockerService.get().pullImage(ref, authConfig).get()
-            }
-            return ref
-        }
-
-        // Use imageName if sourceRef is not present
-        return imageName.get()
-    }
-
     /**
-     * Convert AuthSpec to AuthConfig for DockerService
+     * Build primary image reference from dual-mode properties (SourceRef vs Build Mode)
      */
-    private AuthConfig getAuthConfigFromSaveSpec() {
-        if (!auth.present) {
+    String buildPrimaryImageReference() {
+        def sourceRefValue = sourceRef.getOrElse("")
+        
+        if (!sourceRefValue.isEmpty()) {
+            // SourceRef Mode: Use sourceRef directly
+            return sourceRefValue
+        } else {
+            // Build Mode: Use nomenclature to build image reference
+            def registryValue = registry.getOrElse("")
+            def namespaceValue = namespace.getOrElse("")
+            def repositoryValue = repository.getOrElse("")
+            def imageNameValue = imageName.getOrElse("")
+            def versionValue = version.getOrElse("")
+            def tagsValue = tags.get()
+            
+            if (tagsValue.isEmpty()) {
+                return null
+            }
+            
+            def primaryTag = tagsValue[0]
+            
+            if (!repositoryValue.isEmpty()) {
+                // Using repository format
+                def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
+                return "${baseRef}:${primaryTag}"
+            } else if (!imageNameValue.isEmpty()) {
+                // Using namespace + imageName format
+                def baseRef = ""
+                if (!registryValue.isEmpty()) {
+                    baseRef += "${registryValue}/"
+                }
+                if (!namespaceValue.isEmpty()) {
+                    baseRef += "${namespaceValue}/"
+                }
+                baseRef += imageNameValue
+                
+                return "${baseRef}:${primaryTag}"
+            }
+            
             return null
         }
-
-        return auth.get().toAuthConfig()
     }
 }

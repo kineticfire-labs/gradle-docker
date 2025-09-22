@@ -19,6 +19,8 @@ package com.kineticfire.gradle.docker.spec
 import com.kineticfire.gradle.docker.model.AuthConfig
 import org.gradle.api.Project
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Optional
 
 import javax.inject.Inject
 
@@ -31,10 +33,24 @@ abstract class AuthSpec {
     AuthSpec() {
     }
     
+    @Input
+    @Optional
     abstract Property<String> getUsername()
+    
+    @Input
+    @Optional
     abstract Property<String> getPassword()
+    
+    @Input
+    @Optional
     abstract Property<String> getRegistryToken()
+    
+    @Input
+    @Optional
     abstract Property<String> getServerAddress()
+    
+    @Input
+    @Optional
     abstract Property<String> getHelper()
     
     /**

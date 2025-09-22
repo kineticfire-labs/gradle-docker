@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.task.*
 import org.gradle.api.GradleException
 import org.gradle.api.Project
@@ -131,7 +132,9 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['myApp:latest', 'myApp:1.0']
+                imageName = 'myapp'
+                version = '1.0.0'
+                tags = ['latest', '1.0']
             }
         }
 
@@ -166,10 +169,12 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'testapp'
+                version = '1.0.0'
+                tags = ['latest']
                 save {
                     outputFile = project.file('myapp.tar')
-                    compression = 'gzip'
+                    compression = SaveCompression.GZIP
                 }
                 // Skip publish config due to DSL complexity in tests
             }
@@ -200,7 +205,9 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'testapp'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -269,17 +276,21 @@ class GradleDockerPluginTest extends Specification {
             app1 {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'app1'
+                version = '1.0.0'
+                tags = ['latest']
                 save { 
                     outputFile = project.file('app1.tar')
-                    compression = 'none'
+                    compression = SaveCompression.NONE
                 }
                 // Skip publish config due to DSL complexity in tests
             }
             app2 {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'app2'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
         
@@ -313,10 +324,12 @@ class GradleDockerPluginTest extends Specification {
             myApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'testapp'
+                version = '1.0.0'
+                tags = ['latest']
                 save { 
                     outputFile = project.file('myapp.tar')
-                    compression = 'gzip'
+                    compression = SaveCompression.GZIP
                 }
                 // Skip publish config due to DSL complexity in tests
             }
@@ -351,6 +364,8 @@ class GradleDockerPluginTest extends Specification {
         dockerExt.images {
             invalidImage {
                 context = project.file('.')
+                imageName = 'invalidimage'
+                version = '1.0.0'
                 // Missing required tags
             }
         }
@@ -392,21 +407,27 @@ class GradleDockerPluginTest extends Specification {
             frontend {
                 context = project.file('frontend')
                 dockerfile = project.file('frontend/Dockerfile')
-                tags = ['testApp:latest']
+                imageName = 'frontend'
+                version = '1.0.0'
+                tags = ['latest']
             }
             backend {
                 context = project.file('backend')
                 dockerfile = project.file('backend/Dockerfile')
-                tags = ['testApp:latest']
+                imageName = 'backend'
+                version = '1.0.0'
+                tags = ['latest']
                 save { 
                     outputFile = project.file('backend.tar')
-                    compression = 'bzip2'
+                    compression = SaveCompression.BZIP2
                 }
             }
             worker {
                 context = project.file('worker')
                 dockerfile = project.file('worker/Dockerfile')
-                tags = ['testApp:latest']
+                imageName = 'worker'
+                version = '1.0.0'
+                tags = ['latest']
                 // Skip publish config due to DSL complexity in tests
             }
         }
@@ -503,11 +524,13 @@ class GradleDockerPluginTest extends Specification {
             testApp {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'testapp'
+                version = '1.0.0'
+                tags = ['latest']
                 publish {
                     // Simple publish config that should trigger task creation
                     to {
-                        tags(['docker.io/myapp:latest'])
+                        publishTags(['docker.io/myapp:latest'])
                     }
                 }
             }
@@ -562,7 +585,9 @@ class GradleDockerPluginTest extends Specification {
             missingDockerfile {
                 context = project.file('.')
                 dockerfile = project.file('NonExistentDockerfile')  // File doesn't exist
-                tags = ['testApp:latest']
+                imageName = 'missingdockerfile'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -587,7 +612,9 @@ class GradleDockerPluginTest extends Specification {
             missingContext {
                 context = project.file('nonexistent-dir')  // Directory doesn't exist
                 dockerfile = dockerfile
-                tags = ['testApp:latest']
+                imageName = 'missingcontext'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -612,7 +639,9 @@ class GradleDockerPluginTest extends Specification {
             edgeCaseTags {
                 context = project.file('.')
                 dockerfile = dockerfile
-                tags = ['testApp:latest']  // Valid tags to avoid validation issues
+                imageName = 'edgecasetags'
+                version = '1.0.0'
+                tags = ['latest']  // Valid tags to avoid validation issues
             }
         }
 
@@ -781,7 +810,9 @@ class GradleDockerPluginTest extends Specification {
         dockerExt.images {
             myService {
                 context = contextDir
-                tags = ['testApp:latest', 'testApp:v1.0']
+                imageName = 'myservice'
+                version = '1.0.0'
+                tags = ['latest', 'v1.0']
                 // dockerfile property is NOT set - should default to context/Dockerfile
             }
         }
@@ -814,7 +845,9 @@ class GradleDockerPluginTest extends Specification {
                     from sourceDir
                     into project.layout.buildDirectory.dir('docker-context/myApp')
                 }
-                tags = ['testApp:latest']
+                imageName = 'myapp'
+                version = '1.0.0'
+                tags = ['latest']
                 // dockerfile property is NOT set - should default to prepared context/Dockerfile
             }
         }
@@ -836,7 +869,9 @@ class GradleDockerPluginTest extends Specification {
         
         dockerExt.images {
             badImage {
-                tags = ['testApp:latest']
+                imageName = 'badimage'
+                version = '1.0.0'
+                tags = ['latest']
                 // No context and no dockerfile - should fail
             }
         }
@@ -869,7 +904,9 @@ class GradleDockerPluginTest extends Specification {
             prodApp {
                 context = contextDir
                 dockerfileName = 'Dockerfile.prod'
-                tags = ['testApp:latest']
+                imageName = 'prodapp'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -899,7 +936,9 @@ class GradleDockerPluginTest extends Specification {
                     into project.layout.buildDirectory.dir('docker-context/devApp')
                 }
                 dockerfileName = 'Dockerfile.dev'
-                tags = ['testApp:latest']
+                imageName = 'devapp'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -927,7 +966,9 @@ class GradleDockerPluginTest extends Specification {
                 context = contextDir
                 dockerfile = dockerfileFile
                 dockerfileName = 'Dockerfile.custom'
-                tags = ['testApp:latest']
+                imageName = 'conflictingimage'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
 
@@ -962,7 +1003,9 @@ class GradleDockerPluginTest extends Specification {
         dockerExt.images {
             defaultApp {
                 context = contextDir
-                tags = ['testApp:latest']
+                imageName = 'defaultapp'
+                version = '1.0.0'
+                tags = ['latest']
                 // Neither dockerfile nor dockerfileName set - should use default
             }
         }
@@ -992,7 +1035,9 @@ class GradleDockerPluginTest extends Specification {
         dockerExt.images {
             testApp {
                 context = contextDir
-                tags = ['testApp:latest']
+                imageName = 'testapp'
+                version = '1.0.0'
+                tags = ['latest']
             }
         }
         
@@ -1044,10 +1089,12 @@ class GradleDockerPluginTest extends Specification {
                     from(jarFile)
                     into(project.layout.buildDirectory.dir('docker-context/timeServer'))
                 }
-                tags.set(['time-server:latest'])
+                imageName = 'time-server'
+                version = '1.0.0'
+                tags.set(['latest'])
                 save {
                     outputFile = project.file('timeserver.tar')
-                    compression = 'gzip'
+                    compression = SaveCompression.GZIP
                 }
             }
         }
@@ -1080,10 +1127,12 @@ class GradleDockerPluginTest extends Specification {
                     from('src/main/docker')
                     into(project.layout.buildDirectory.dir('docker-context/webapp'))
                 }
-                tags.set(['webapp:latest'])
+                imageName = 'webapp'
+                version = '1.0.0'
+                tags.set(['latest'])
                 publish {
                     to {
-                        tags(['localhost:5000/webapp:latest'])
+                        publishTags(['localhost:5000/webapp:latest'])
                     }
                 }
             }
@@ -1122,10 +1171,12 @@ class GradleDockerPluginTest extends Specification {
             frontend {
                 // Traditional context
                 context = project.file('frontend')
-                tags.set(['frontend:latest'])
+                imageName = 'frontend'
+                version = '1.0.0'
+                tags.set(['latest'])
                 save {
                     outputFile = project.file('frontend.tar')
-                    compression = 'none'
+                    compression = SaveCompression.NONE
                 }
             }
             backend {
@@ -1134,10 +1185,12 @@ class GradleDockerPluginTest extends Specification {
                     from('backend')
                     into(project.layout.buildDirectory.dir('docker-context/backend'))
                 }
-                tags.set(['backend:latest'])
+                imageName = 'backend'
+                version = '1.0.0'
+                tags.set(['latest'])
                 save {
                     outputFile = project.file('backend.tar')
-                    compression = 'gzip'
+                    compression = SaveCompression.GZIP
                 }
             }
         }
@@ -1180,7 +1233,9 @@ class GradleDockerPluginTest extends Specification {
                     from('src/main/docker')
                     into(project.layout.buildDirectory.dir('docker-context/simple'))
                 }
-                tags.set(['simple:latest'])
+                imageName = 'simple'
+                version = '1.0.0'
+                tags.set(['latest'])
                 // No save or publish configuration
             }
         }

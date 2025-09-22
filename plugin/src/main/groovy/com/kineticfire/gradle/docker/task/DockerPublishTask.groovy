@@ -30,12 +30,46 @@ import javax.inject.Inject
 import java.util.concurrent.CompletableFuture
 
 /**
- * Task for publishing Docker images to registries
+ * Task for publishing Docker images to registries using new nomenclature
  */
 abstract class DockerPublishTask extends DefaultTask {
     
+    DockerPublishTask() {
+        // Set up default values for Provider API compatibility
+        group = 'docker'
+        description = 'Publishes Docker image to configured registries'
+        
+        registry.convention("")
+        namespace.convention("")
+        repository.convention("")
+    }
+    
+    @Internal
+    abstract Property<DockerService> getDockerService()
+    
+    // Docker Image Nomenclature Properties
     @Input
+    @Optional
+    abstract Property<String> getRegistry()
+    
+    @Input
+    @Optional
+    abstract Property<String> getNamespace()
+    
+    @Input
+    @Optional
     abstract Property<String> getImageName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getRepository()
+    
+    @Input
+    @Optional
+    abstract Property<String> getVersion()
+    
+    @Input
+    abstract ListProperty<String> getTags()
     
     @Input
     abstract ListProperty<PublishTarget> getPublishTargets()
@@ -44,63 +78,58 @@ abstract class DockerPublishTask extends DefaultTask {
     @Optional
     abstract RegularFileProperty getImageIdFile()
     
-    @Nested
-    abstract Property<DockerService> getDockerService()
-    
-    @Inject
-    DockerPublishTask() {
-        group = 'docker'
-        description = 'Publishes Docker image to configured registries'
-    }
-    
     @TaskAction
     void publishImage() {
         def service = dockerService.get()
-        def imageName = getImageNameToPublish()
+        def sourceImageRef = buildSourceImageReference()
         def targets = publishTargets.get()
+        
+        if (!sourceImageRef) {
+            throw new IllegalStateException("Unable to build source image reference from nomenclature")
+        }
         
         if (targets.empty) {
             logger.lifecycle("No publish targets configured, skipping publish")
             return
         }
         
-        logger.lifecycle("Publishing image '{}' to {} targets", imageName, targets.size())
+        logger.lifecycle("Publishing image '{}' to {} targets", sourceImageRef, targets.size())
         
         def publishFutures = []
         
         targets.each { target ->
-            def tags = target.tags.getOrElse([])
+            def targetRefs = buildTargetImageReferences(target)
             def authSpec = target.auth.orNull
             
-            if (tags.empty) {
-                logger.warn("No tags specified for publish target '${target.name}', skipping")
+            if (targetRefs.empty) {
+                logger.warn("No target references for publish target '${target.name}', skipping")
                 return
             }
             
-            // Create auth config once per target (outside the inner loop)
+            // Create auth config once per target
             def authConfig = authSpec?.toAuthConfig()
             
-            tags.each { fullImageRef ->
-                logger.info("Publishing {} as {}", imageName, fullImageRef)
+            targetRefs.each { targetRef ->
+                logger.info("Publishing {} as {}", sourceImageRef, targetRef)
                 
                 // First tag the local image with the target registry tag
-                def tagFuture = service.tagImage(imageName, [fullImageRef])
+                def tagFuture = service.tagImage(sourceImageRef, [targetRef])
                     .whenComplete { result, throwable ->
                         if (throwable) {
-                            logger.error("Failed to tag {} as {}: {}", imageName, fullImageRef, throwable.message)
+                            logger.error("Failed to tag {} as {}: {}", sourceImageRef, targetRef, throwable.message)
                         } else {
-                            logger.debug("Successfully tagged {} as {}", imageName, fullImageRef)
+                            logger.debug("Successfully tagged {} as {}", sourceImageRef, targetRef)
                         }
                     }
                 
                 // Then push the registry tag
                 def publishFuture = tagFuture.thenCompose { 
-                    service.pushImage(fullImageRef, authConfig) 
+                    service.pushImage(targetRef, authConfig) 
                 }.whenComplete { result, throwable ->
                     if (throwable) {
-                        logger.error("Failed to push {}: {}", fullImageRef, throwable.message)
+                        logger.error("Failed to push {}: {}", targetRef, throwable.message)
                     } else {
-                        logger.lifecycle("Successfully pushed: {}", fullImageRef)
+                        logger.lifecycle("Successfully pushed: {}", targetRef)
                     }
                 }
                 publishFutures << publishFuture
@@ -124,22 +153,88 @@ abstract class DockerPublishTask extends DefaultTask {
         }
     }
     
-    private String getImageNameToPublish() {
-        def name = imageName.getOrNull()
-        if (name) {
-            return name
+    /**
+     * Build source image reference from nomenclature properties (use first tag)
+     */
+    String buildSourceImageReference() {
+        def registryValue = registry.getOrElse("")
+        def namespaceValue = namespace.getOrElse("")
+        def repositoryValue = repository.getOrElse("")
+        def imageNameValue = imageName.getOrElse("")
+        def versionValue = version.getOrElse("")
+        def tagsValue = tags.get()
+        
+        if (tagsValue.isEmpty()) {
+            return null
         }
         
-        def imageIdFile = this.imageIdFile.orNull
-        if (imageIdFile && imageIdFile.asFile.exists()) {
-            def imageId = imageIdFile.asFile.text.trim()
-            logger.debug("Read image ID from file: {}", imageId)
-            return imageId
+        def primaryTag = tagsValue[0]
+        
+        if (!repositoryValue.isEmpty()) {
+            // Using repository format
+            def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
+            return "${baseRef}:${primaryTag}"
+        } else if (!imageNameValue.isEmpty()) {
+            // Using namespace + imageName format
+            def baseRef = ""
+            if (!registryValue.isEmpty()) {
+                baseRef += "${registryValue}/"
+            }
+            if (!namespaceValue.isEmpty()) {
+                baseRef += "${namespaceValue}/"
+            }
+            baseRef += imageNameValue
+            
+            return "${baseRef}:${primaryTag}"
         }
         
-        throw new org.gradle.api.GradleException(
-            "No image name specified and no image ID file found. Set imageName property or ensure imageIdFile exists."
-        )
+        return null
     }
     
+    /**
+     * Build target image references for a publish target
+     */
+    List<String> buildTargetImageReferences(PublishTarget target) {
+        def targetRefs = []
+        
+        def targetRegistryValue = target.registry.getOrElse("")
+        def targetNamespaceValue = target.namespace.getOrElse("")
+        def targetRepositoryValue = target.repository.getOrElse("")
+        def targetImageNameValue = target.imageName.getOrElse("")
+        def targetPublishTags = target.publishTags.get()
+        
+        if (targetPublishTags.isEmpty()) {
+            return targetRefs
+        }
+        
+        if (!targetRepositoryValue.isEmpty()) {
+            // Using repository format
+            def baseRef = targetRegistryValue.isEmpty() ? targetRepositoryValue : "${targetRegistryValue}/${targetRepositoryValue}"
+            targetPublishTags.each { tag ->
+                targetRefs.add("${baseRef}:${tag}")
+            }
+        } else {
+            // Using namespace + imageName format
+            def baseRef = ""
+            if (!targetRegistryValue.isEmpty()) {
+                baseRef += "${targetRegistryValue}/"
+            }
+            if (!targetNamespaceValue.isEmpty()) {
+                baseRef += "${targetNamespaceValue}/"
+            }
+            
+            // Use target imageName if provided, otherwise fall back to source imageName
+            def targetImageName = targetImageNameValue.isEmpty() ? imageName.getOrElse("") : targetImageNameValue
+            if (targetImageName.isEmpty()) {
+                return targetRefs
+            }
+            baseRef += targetImageName
+            
+            targetPublishTags.each { tag ->
+                targetRefs.add("${baseRef}:${tag}")
+            }
+        }
+        
+        return targetRefs
+    }
 }

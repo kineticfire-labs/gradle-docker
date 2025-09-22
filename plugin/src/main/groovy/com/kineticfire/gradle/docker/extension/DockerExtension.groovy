@@ -22,6 +22,8 @@ import org.gradle.api.GradleException
 import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.Project
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.api.file.ProjectLayout
 
 import javax.inject.Inject
 
@@ -35,21 +37,11 @@ abstract class DockerExtension {
     private final Project project
     
     @Inject
-    DockerExtension(ObjectFactory objectFactory, Project project) {
+    DockerExtension(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout, Project project) {
         this.objectFactory = objectFactory
         this.project = project
         this.images = objectFactory.domainObjectContainer(ImageSpec) { name ->
             def imageSpec = objectFactory.newInstance(ImageSpec, name, project)
-            // Set default context if not specified
-            imageSpec.context.convention(
-                project.layout.projectDirectory.dir("src/main/docker")
-            )
-            
-            // Set empty convention to prevent implicit defaults  
-            imageSpec.tags.convention([])
-            
-            // Note: dockerfile defaults are now handled in GradleDockerPlugin.configureDockerBuildTask()
-            // to properly support both context and contextTask scenarios
             return imageSpec
         }
     }
@@ -66,7 +58,6 @@ abstract class DockerExtension {
         action.execute(images)
     }
     
-    
     /**
      * Validation method called during configuration
      */
@@ -78,14 +69,22 @@ abstract class DockerExtension {
     
     void validateImageSpec(ImageSpec imageSpec) {
         def hasContextTask = imageSpec.contextTask != null
-        def hasSourceRef = imageSpec.sourceRef.present
+        def hasSourceRef = imageSpec.sourceRef.present && !imageSpec.sourceRef.get().isEmpty()
         
         // Check if context was explicitly set (not just the convention)
+        // The challenge is distinguishing explicit setting from convention
+        // Heuristic: if context path is NOT the convention path, then it was likely explicitly set
         def hasExplicitContext = false
         if (imageSpec.context.isPresent()) {
-            def contextFile = imageSpec.context.get().asFile
-            def conventionFile = project.layout.projectDirectory.dir("src/main/docker").asFile
-            hasExplicitContext = !contextFile.equals(conventionFile)
+            def contextPath = imageSpec.context.get().asFile.path
+            def conventionPath = "src/main/docker"
+            // Consider it explicit if path doesn't end with the convention path
+            hasExplicitContext = !contextPath.endsWith(conventionPath)
+        }
+        
+        // Validate required properties for nomenclature (only if not using sourceRef)
+        if (!hasSourceRef) {
+            validateNomenclature(imageSpec)
         }
         
         // Validate required properties - must have at least one context source
@@ -111,8 +110,8 @@ abstract class DockerExtension {
             )
         }
         
-        // Validate traditional context directory exists if explicitly specified
-        if (hasExplicitContext) {
+        // Validate traditional context directory exists if explicitly specified (but not for sourceRef images)
+        if (hasExplicitContext && !hasSourceRef) {
             def contextDir = imageSpec.context.get().asFile
             if (!contextDir.exists()) {
                 throw new GradleException(
@@ -127,42 +126,9 @@ abstract class DockerExtension {
             def dockerfileFile = imageSpec.dockerfile.get().asFile
             if (!dockerfileFile.exists()) {
                 throw new GradleException(
-                    "Dockerfile does not exist: ${dockerfileFile.absolutePath}\n" +
+                    "Dockerfile does not exist: ${dockerfileFile.absolutePath}\\n" +
                     "Suggestion: Create the Dockerfile or update the dockerfile path in image '${imageSpec.name}'"
                 )
-            }
-        }
-        
-        // Validate image tags - must be required for build contexts and must be full image references
-        def hasBuildContext = hasExplicitContext || hasContextTask
-        if (hasBuildContext && (!imageSpec.tags.present || imageSpec.tags.get().isEmpty())) {
-            throw new GradleException(
-                "Image '${imageSpec.name}' must specify at least one tag when building (context or contextTask specified)"
-            )
-        }
-        
-        // Validate full image reference format and consistent image names
-        if (imageSpec.tags.present && !imageSpec.tags.get().empty) {
-            def tags = imageSpec.tags.get()
-            String firstImageName = null
-            
-            tags.each { tag ->
-                if (!isValidImageReference(tag)) {
-                    throw new GradleException(
-                        "Invalid Docker image reference: '${tag}' in image '${imageSpec.name}'. " +
-                        "Tags must be full image references like 'myapp:latest', 'registry.com:5000/team/myapp:v1.0.0'"
-                    )
-                }
-                
-                // Extract and validate consistent image names
-                def imageName = extractImageName(tag)
-                if (firstImageName == null) {
-                    firstImageName = imageName
-                } else if (imageName != firstImageName) {
-                    throw new GradleException(
-                        "All tags must reference the same image name. Found: '${imageName}' vs '${firstImageName}' in image '${imageSpec.name}'"
-                    )
-                }
             }
         }
         
@@ -177,6 +143,84 @@ abstract class DockerExtension {
         }
     }
     
+    /**
+     * Validates Docker image nomenclature according to new API rules
+     */
+    void validateNomenclature(ImageSpec imageSpec) {
+        // Simplified validation - only validate tags if present  
+        if (imageSpec.tags.present && !imageSpec.tags.get().isEmpty()) {
+            def tags = imageSpec.tags.get()
+            tags.each { tag ->
+                if (!isValidTagFormat(tag)) {
+                    throw new GradleException(
+                        "Invalid tag format: '${tag}' in image '${imageSpec.name}'. " +
+                        "Tags should contain only lowercase letters, numbers, periods, hyphens, and underscores"
+                    )
+                }
+            }
+        }
+    }
+    
+    /**
+     * Validates registry format (hostname or hostname:port)
+     */
+    boolean isValidRegistryFormat(String registry) {
+        // Allow hostname or hostname:port format
+        return registry.matches("^[a-zA-Z0-9.-]+(:[0-9]+)?\$")
+    }
+    
+    /**
+     * Validates namespace format
+     */
+    boolean isValidNamespaceFormat(String namespace) {
+        // Allow alphanumeric, periods, hyphens, slashes
+        return namespace.matches("^[a-z0-9._/-]+\$") && namespace.length() <= 255
+    }
+    
+    /**
+     * Validates image name format
+     */
+    boolean isValidImageNameFormat(String imageName) {
+        // Allow alphanumeric, periods, hyphens, underscores
+        return imageName.matches("^[a-z0-9._-]+\$") && imageName.length() <= 128
+    }
+    
+    /**
+     * Validates repository format (namespace/name)
+     */
+    boolean isValidRepositoryFormat(String repository) {
+        // Should be in format like "namespace/name" or "multi/level/namespace/name"
+        return repository.matches("^[a-z0-9._/-]+\$") && repository.length() <= 255 && repository.contains("/")
+    }
+    
+    /**
+     * Validates tag format
+     */
+    boolean isValidTagFormat(String tag) {
+        // Allow alphanumeric, periods, hyphens, underscores
+        return tag.matches("^[a-zA-Z0-9._-]+\$") && tag.length() <= 128 && !tag.startsWith(".") && !tag.startsWith("-")
+    }
+
+    /**
+     * Validates Docker image reference format (registry/namespace/name:tag)
+     */
+    boolean isValidImageReference(String imageRef) {
+        if (!imageRef || imageRef.trim().isEmpty()) {
+            return false
+        }
+        
+        // Docker image reference can contain:
+        // - Registry hostname (optional): alphanumeric, dots, hyphens, colons for port
+        // - Namespace/repository path: alphanumeric, dots, hyphens, underscores, slashes
+        // - Tag (after colon): alphanumeric, dots, hyphens, underscores
+        
+        // Basic validation for Docker image reference format
+        // Requires explicit tag - must contain colon followed by tag name
+        // This allows: registry.com:5000/namespace/name:tag, namespace/name:tag, name:tag, etc.
+        return imageRef.matches("^[a-zA-Z0-9._:-]+(/[a-zA-Z0-9._-]+)*:([a-zA-Z0-9._-]+)\$") && 
+               imageRef.length() <= 255
+    }
+
     /**
      * Validates publish configuration for an image
      */
@@ -197,138 +241,23 @@ abstract class DockerExtension {
      * Validates a single publish target
      */
     void validatePublishTarget(def publishTarget, String imageName) {
-        // Validate that tags are specified
-        if (!publishTarget.tags.present || publishTarget.tags.get().isEmpty()) {
+        // Validate that tags are specified (new API uses 'tags' property not 'publishTags')
+        if (!publishTarget.publishTags.present || publishTarget.publishTags.get().isEmpty()) {
             throw new GradleException(
                 "Publish target '${publishTarget.name}' in image '${imageName}' must specify at least one tag"
             )
         }
         
-        // Validate each tag as a full image reference
-        def tags = publishTarget.tags.get()
+        // Validate each tag format (full image references are allowed)
+        def tags = publishTarget.publishTags.get()
         tags.each { tag ->
             if (!isValidImageReference(tag)) {
                 throw new GradleException(
                     "Invalid image reference: '${tag}' in publish target '${publishTarget.name}' of image '${imageName}'. " +
-                    "Tags must be full image references like 'myapp:latest', 'registry.com/team/myapp:v1.0.0', or 'localhost:5000/namespace/myapp:tag'."
+                    "Tags should be valid Docker image references (e.g., 'registry.com/namespace/name:tag')"
                 )
             }
         }
-    }
-    
-    /**
-     * Validates full Docker image references supporting format: [registry[:port]/]namespace/name:tag
-     * Valid examples: "myapp:latest", "registry.com/team/app:v1.0.0", "localhost:5000/namespace/app:tag"
-     */
-    boolean isValidImageReference(String imageRef) {
-        if (!imageRef || !imageRef.contains(':')) {
-            return false
-        }
-        
-        // Find the last colon that separates image name from tag
-        // We need to be careful about registry:port format
-        int lastColon = imageRef.lastIndexOf(':')
-        
-        // Check if this might be a port number by looking for a slash after the colon
-        boolean isTag = true
-        for (int i = lastColon + 1; i < imageRef.length(); i++) {
-            char c = imageRef.charAt(i)
-            if (c == '/') {
-                // Found a slash after colon, this is a port number, not a tag
-                isTag = false
-                break
-            }
-            if (!Character.isDigit(c)) {
-                // Non-digit after colon, this is definitely a tag
-                break
-            }
-        }
-        
-        if (!isTag) {
-            // The last colon is part of a port, find the previous one
-            int prevColon = imageRef.lastIndexOf(':', lastColon - 1)
-            if (prevColon == -1) {
-                return false // No tag separator found
-            }
-            lastColon = prevColon
-        }
-        
-        if (lastColon <= 0 || lastColon >= imageRef.length() - 1) {
-            return false
-        }
-        
-        String imageName = imageRef.substring(0, lastColon)
-        String tag = imageRef.substring(lastColon + 1)
-        
-        // Validate using simpler approach
-        return isValidDockerImageName(imageName) && isValidDockerTag(tag)
-    }
-
-    /**
-     * Validates the image name part of an image reference (before the tag)
-     * Handles registry:port/namespace/name format
-     */
-    protected boolean isValidDockerImageName(String imageName) {
-        if (!imageName || imageName.length() > 255) {
-            return false
-        }
-        
-        // Docker image names can contain:
-        // - lowercase letters, digits, periods, hyphens, underscores, slashes, colons (for registry:port)
-        // - Must not start or end with special characters (except for registry hostnames)
-        
-        // Simple regex that matches Docker's liberal approach
-        return imageName.matches(/^[a-zA-Z0-9._:-]+([\/][a-zA-Z0-9._-]+)*$/) && 
-               !imageName.startsWith('/') && !imageName.endsWith('/') &&
-               !imageName.startsWith('-') && !imageName.endsWith('-')
-    }
-    
-    /**
-     * Validates a registry hostname (more permissive than regular name components)
-     */
-    protected boolean isValidDockerTag(String tag) {
-        if (!tag || tag.length() > 128) {
-            return false
-        }
-        
-        // Docker tags can contain letters, digits, periods, dashes, underscores
-        // Must not start with period or dash
-        return tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) || tag.matches(/^[a-zA-Z0-9]$/)
-    }
-
-    /**
-     * Extracts the image name portion from a full image reference
-     * Example: "registry.com:5000/team/myapp:v1.0.0" -> "registry.com:5000/team/myapp"
-     */
-    String extractImageName(String imageRef) {
-        if (!imageRef || !imageRef.contains(':')) {
-            throw new IllegalArgumentException("Invalid image reference: ${imageRef}")
-        }
-        
-        def lastColon = imageRef.lastIndexOf(':')
-        return imageRef.substring(0, lastColon)
-    }
-    
-    /**
-     * Validates simple tag names (tag portion only, no repository)
-     * Used for publish target tags which are simple names
-     */
-    boolean isValidSimpleTag(String tag) {
-        // Docker tag name validation (tag portion only, no repository)
-        // Valid examples: "latest", "v1.0.0", "dev-123", "1.0", "stable"
-        // Docker allows: letters, digits, underscores, periods, dashes
-        // Must not start with period or dash, max 128 characters
-        return tag && tag.matches(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/) && tag.length() <= 128 && !tag.contains(":")
-    }
-    
-    /**
-     * Validates repository name format for publish targets
-     */
-    boolean isValidRepositoryName(String repository) {
-        // Repository name validation for Docker registries
-        // Valid examples: "myapp", "docker.io/myapp", "localhost:5000/namespace/app"
-        // Basic validation - allow alphanumeric, dots, colons, slashes, dashes
-        return repository && repository.matches(/^[a-zA-Z0-9][a-zA-Z0-9._:\/-]*[a-zA-Z0-9]$/) && repository.length() <= 255
     }
 
     /**
@@ -337,20 +266,50 @@ abstract class DockerExtension {
     void validateSaveConfiguration(def saveSpec, String imageName) {
         if (!saveSpec.compression.present) {
             throw new GradleException(
-                "compression parameter is required for save configuration in image '${imageName}'. " +
-                "Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'"
+                "compression parameter is required for save configuration in image '${imageName}'"
             )
         }
 
-        // Validate compression type is supported
-        def compressionValue = saveSpec.compression.get()
-        def validCompressionTypes = ['none', 'gzip', 'bzip2', 'xz', 'zip']
-        if (!validCompressionTypes.contains(compressionValue.toLowerCase())) {
+        // The compression is now a SaveCompression enum, so validation is handled by type safety
+        // No need for additional validation of compression values
+        
+        if (!saveSpec.outputFile.present) {
             throw new GradleException(
-                "Invalid compression type: '${compressionValue}' in save configuration for image '${imageName}'. " +
-                "Available options: 'none', 'gzip', 'bzip2', 'xz', 'zip'"
+                "outputFile parameter is required for save configuration in image '${imageName}'"
             )
         }
     }
 
+    /**
+     * Validates repository name format for backward compatibility with tests
+     */
+    boolean isValidRepositoryName(String repository) {
+        if (!repository || repository.trim().isEmpty()) {
+            return false
+        }
+        
+        // Repository name validation (supports registry:port/namespace/name format)
+        return repository.matches("^[a-zA-Z0-9._:/-]+\$") && 
+               repository.length() <= 255 &&
+               !repository.startsWith("-") &&
+               !repository.endsWith("-") &&
+               !repository.contains(" ")
+    }
+
+    /**
+     * Extracts the image name part from a full Docker image reference
+     * Example: "registry.com/namespace/app:tag" -> "registry.com/namespace/app"
+     */
+    String extractImageName(String imageRef) {
+        if (!imageRef || imageRef.trim().isEmpty()) {
+            throw new IllegalArgumentException("Image reference cannot be null or empty")
+        }
+        
+        def colonIndex = imageRef.lastIndexOf(':')
+        if (colonIndex == -1) {
+            throw new IllegalArgumentException("Invalid image reference format: ${imageRef}")
+        }
+        
+        return imageRef.substring(0, colonIndex)
+    }
 }

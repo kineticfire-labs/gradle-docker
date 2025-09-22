@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec
 
+import com.kineticfire.gradle.docker.model.SaveCompression
 import org.gradle.api.Action
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -150,7 +151,7 @@ class ImageSpecTest extends Specification {
         then:
         imageSpec.save.present
         imageSpec.save.get().outputFile.get().asFile == myOutputFile
-        imageSpec.save.get().compression.get() == 'gzip'
+        imageSpec.save.get().compression.get() == SaveCompression.GZIP
         imageSpec.save.get().pullIfMissing.get() == true
     }
 
@@ -171,7 +172,7 @@ class ImageSpecTest extends Specification {
         then:
         imageSpec.save.present
         imageSpec.save.get().outputFile.get().asFile == outputFile
-        imageSpec.save.get().compression.get() == 'bzip2'
+        imageSpec.save.get().compression.get() == SaveCompression.BZIP2
         imageSpec.save.get().pullIfMissing.get() == false
     }
 
@@ -184,7 +185,8 @@ class ImageSpecTest extends Specification {
 
         then:
         imageSpec.save.present
-        !imageSpec.save.get().compression.present
+        imageSpec.save.get().compression.present  // Has convention value
+        imageSpec.save.get().compression.get() == SaveCompression.NONE  // Default value
     }
 
     // ===== PUBLISH CONFIGURATION TESTS =====
@@ -293,9 +295,9 @@ class ImageSpecTest extends Specification {
 
     def "optional properties can be unset"() {
         expect:
-        !imageSpec.context.present
+        imageSpec.context.present  // Has convention value
         !imageSpec.dockerfile.present
-        !imageSpec.sourceRef.present
+        imageSpec.sourceRef.present  // Has convention value (empty string)
         !imageSpec.save.present
         !imageSpec.publish.present
     }
@@ -322,7 +324,7 @@ class ImageSpecTest extends Specification {
 
         then:
         imageSpec.save.get().outputFile.get().asFile == file1
-        imageSpec.save.get().compression.get() == 'gzip'
+        imageSpec.save.get().compression.get() == SaveCompression.GZIP
 
         when:
         imageSpec.save {
@@ -332,7 +334,7 @@ class ImageSpecTest extends Specification {
 
         then:
         imageSpec.save.get().outputFile.get().asFile == file2
-        imageSpec.save.get().compression.get() == 'none'
+        imageSpec.save.get().compression.get() == SaveCompression.NONE
     }
 
     def "empty collections are supported"() {

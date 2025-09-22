@@ -82,7 +82,7 @@ class DockerServiceImplTest extends Specification {
 
     def "saveImage throws exception for null image ID"() {
         when:
-        service.saveImage(null, tempDir.resolve("image.tar"), CompressionType.NONE)
+        service.saveImage(null, tempDir.resolve("image.tar"), SaveCompression.NONE)
         
         then:
         thrown(NullPointerException)
@@ -90,7 +90,7 @@ class DockerServiceImplTest extends Specification {
 
     def "saveImage throws exception for null output file"() {
         when:
-        service.saveImage("image:latest", null, CompressionType.NONE)
+        service.saveImage("image:latest", null, SaveCompression.NONE)
         
         then:
         thrown(NullPointerException)
@@ -164,7 +164,7 @@ class DockerServiceImplTest extends Specification {
         given:
         def imageRef = "test:latest"
         def outputFile = tempDir.resolve("output.tar")
-        def compression = CompressionType.NONE
+        def compression = SaveCompression.NONE
         
         when:
         def result = service.saveImage(imageRef, outputFile, compression)
@@ -177,7 +177,7 @@ class DockerServiceImplTest extends Specification {
         given:
         def imageRef = "test:latest"  
         def outputFile = tempDir.resolve("output.tar.gz")
-        def compression = CompressionType.GZIP
+        def compression = SaveCompression.GZIP
         
         when:
         def result = service.saveImage(imageRef, outputFile, compression)
@@ -285,7 +285,7 @@ class DockerServiceImplTest extends Specification {
         }
         
         @Override
-        CompletableFuture<Void> saveImage(String imageRef, Path outputFile, CompressionType compression) {
+        CompletableFuture<Void> saveImage(String imageRef, Path outputFile, SaveCompression compression) {
             Objects.requireNonNull(imageRef, "Image reference cannot be null")
             Objects.requireNonNull(outputFile, "Output file cannot be null")
             return CompletableFuture.completedFuture(null)

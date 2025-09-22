@@ -16,10 +16,16 @@
 
 package com.kineticfire.gradle.docker.spec
 
+import com.kineticfire.gradle.docker.model.SaveCompression
 import org.gradle.api.Action
+import org.gradle.api.file.ProjectLayout
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Nested
+import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputFile
 
 import javax.inject.Inject
 
@@ -29,20 +35,31 @@ import javax.inject.Inject
 abstract class SaveSpec {
     
     private final ObjectFactory objectFactory
+    private final ProjectLayout layout
     
     @Inject
-    SaveSpec(ObjectFactory objectFactory) {
+    SaveSpec(ObjectFactory objectFactory, ProjectLayout layout) {
         this.objectFactory = objectFactory
+        this.layout = layout
         
         // Set defaults
+        compression.convention(SaveCompression.NONE)
         pullIfMissing.convention(false)
+        outputFile.convention(layout.buildDirectory.file("docker-images/image.tar"))
     }
     
-    abstract Property<String> getCompression()
+    @Input
+    abstract Property<SaveCompression> getCompression()
+    
+    @OutputFile
     abstract RegularFileProperty getOutputFile()
+    
+    @Input
+    @Optional
     abstract Property<Boolean> getPullIfMissing()
 
-    // NEW: Authentication for pullIfMissing - SAME as PublishSpec.auth
+    @Nested
+    @Optional
     abstract Property<AuthSpec> getAuth()
 
     void auth(@DelegatesTo(AuthSpec) Closure closure) {

@@ -20,6 +20,9 @@ import org.gradle.api.Action
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Nested
+import org.gradle.api.tasks.Optional
 
 import javax.inject.Inject
 
@@ -35,18 +38,49 @@ abstract class PublishTarget {
     PublishTarget(String name, ObjectFactory objectFactory) {
         this.name = name
         this.objectFactory = objectFactory
+        
+        // Set default values
+        registry.convention("")
+        namespace.convention("")
+        imageName.convention("")
+        repository.convention("")
+        publishTags.convention([])
     }
     
     String getName() { 
         return name 
     }
     
-    // Changed: removed repository property, renamed publishTags to tags for full image references
-    abstract ListProperty<String> getTags()
+    @Input
+    @Optional
+    abstract Property<String> getRegistry()
+    
+    @Input
+    @Optional
+    abstract Property<String> getNamespace()
+    
+    @Input
+    @Optional
+    abstract Property<String> getImageName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getRepository()
+    
+    @Input
+    abstract ListProperty<String> getPublishTags()
+    
+    // Alias for publishTags to match test expectations
+    ListProperty<String> getTags() {
+        return getPublishTags()
+    }
+    
+    @Nested
+    @Optional
     abstract Property<AuthSpec> getAuth()
     
-    void tags(List<String> tags) {
-        getTags().set(tags)
+    void publishTags(List<String> tags) {
+        getPublishTags().set(tags)
     }
     
     void auth(@DelegatesTo(AuthSpec) Closure closure) {
@@ -60,5 +94,10 @@ abstract class PublishTarget {
         def authSpec = objectFactory.newInstance(AuthSpec)
         action.execute(authSpec)
         auth.set(authSpec)
+    }
+    
+    // DSL method for setting tags
+    void tags(List<String> tagList) {
+        tags.set(tagList)
     }
 }

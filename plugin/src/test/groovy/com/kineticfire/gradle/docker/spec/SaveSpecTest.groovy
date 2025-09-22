@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec
 
+import com.kineticfire.gradle.docker.model.SaveCompression
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -37,7 +38,8 @@ class SaveSpecTest extends Specification {
     def "constructor initializes with defaults"() {
         expect:
         saveSpec != null
-        !saveSpec.compression.present  // No default compression anymore
+        saveSpec.compression.present  // Has default compression
+        saveSpec.compression.get() == SaveCompression.NONE
         saveSpec.pullIfMissing.get() == false  // pullIfMissing still has default
     }
 
@@ -45,16 +47,17 @@ class SaveSpecTest extends Specification {
 
     def "compression property works correctly"() {
         when:
-        saveSpec.compression.set('bzip2')
+        saveSpec.compression.set(SaveCompression.BZIP2)
 
         then:
         saveSpec.compression.present
-        saveSpec.compression.get() == 'bzip2'
+        saveSpec.compression.get() == SaveCompression.BZIP2
     }
 
-    def "compression has no default value"() {
+    def "compression has default value"() {
         expect:
-        !saveSpec.compression.present
+        saveSpec.compression.present
+        saveSpec.compression.get() == SaveCompression.NONE
     }
 
     def "outputFile property works correctly"() {
@@ -91,12 +94,12 @@ class SaveSpecTest extends Specification {
         def outputFile = project.file('complete-image.tar.gz')
 
         when:
-        saveSpec.compression.set('gzip')
+        saveSpec.compression.set(SaveCompression.GZIP)
         saveSpec.outputFile.set(outputFile)
         saveSpec.pullIfMissing.set(true)
 
         then:
-        saveSpec.compression.get() == 'gzip'
+        saveSpec.compression.get() == SaveCompression.GZIP
         saveSpec.outputFile.get().asFile == outputFile
         saveSpec.pullIfMissing.get() == true
     }
@@ -104,7 +107,7 @@ class SaveSpecTest extends Specification {
     def "configuration with different compression types"() {
         expect:
         // Test different compression types
-        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compressionType ->
+        [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP].each { compressionType ->
             saveSpec.compression.set(compressionType)
             assert saveSpec.compression.get() == compressionType
         }
@@ -119,30 +122,31 @@ class SaveSpecTest extends Specification {
 
         when:
         saveSpec.outputFile.set(initialFile)
-        saveSpec.compression.set('none')
+        saveSpec.compression.set(SaveCompression.NONE)
         saveSpec.pullIfMissing.set(false)
 
         then:
         saveSpec.outputFile.get().asFile == initialFile
-        saveSpec.compression.get() == 'none'
+        saveSpec.compression.get() == SaveCompression.NONE
         saveSpec.pullIfMissing.get() == false
 
         when:
         saveSpec.outputFile.set(updatedFile)
-        saveSpec.compression.set('gzip')
+        saveSpec.compression.set(SaveCompression.GZIP)
         saveSpec.pullIfMissing.set(true)
 
         then:
         saveSpec.outputFile.get().asFile == updatedFile
-        saveSpec.compression.get() == 'gzip'
+        saveSpec.compression.get() == SaveCompression.GZIP
         saveSpec.pullIfMissing.get() == true
     }
 
     // ===== EDGE CASES =====
 
-    def "outputFile is initially not present"() {
+    def "outputFile has default value"() {
         expect:
-        !saveSpec.outputFile.present
+        saveSpec.outputFile.present
+        saveSpec.outputFile.get().asFile.name == "image.tar"
     }
 
     def "various file types can be set"() {
@@ -160,7 +164,7 @@ class SaveSpecTest extends Specification {
 
     def "compression property accepts various valid values"() {
         expect:
-        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compression ->
+        [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP].each { compression ->
             saveSpec.compression.set(compression)
             assert saveSpec.compression.get() == compression
         }
@@ -171,39 +175,40 @@ class SaveSpecTest extends Specification {
     def "compression property can be explicitly set to each valid type"() {
         expect:
         // Test all valid compression types
-        ['none', 'gzip', 'bzip2', 'xz', 'zip'].each { compressionType ->
+        [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP].each { compressionType ->
             saveSpec.compression.set(compressionType)
             assert saveSpec.compression.present
             assert saveSpec.compression.get() == compressionType
         }
     }
 
-    def "compression property accepts mixed case values"() {
+    def "compression property accepts all enum values"() {
         when:
-        saveSpec.compression.set('GZIP')
+        saveSpec.compression.set(SaveCompression.GZIP)
 
         then:
         saveSpec.compression.present
-        saveSpec.compression.get() == 'GZIP'
+        saveSpec.compression.get() == SaveCompression.GZIP
     }
 
-    def "compression property can be set to empty string"() {
+    def "compression property can be set to any enum value"() {
         when:
-        saveSpec.compression.set('')
+        saveSpec.compression.set(SaveCompression.XZ)
 
         then:
         saveSpec.compression.present
-        saveSpec.compression.get() == ''
+        saveSpec.compression.get() == SaveCompression.XZ
     }
 
-    def "compression property can be reset to not present"() {
+    def "compression property can be overridden"() {
         given:
-        saveSpec.compression.set('gzip')
+        saveSpec.compression.set(SaveCompression.GZIP)
 
         when:
-        saveSpec.compression.set(null)
+        saveSpec.compression.set(SaveCompression.ZIP)
 
         then:
-        !saveSpec.compression.present
+        saveSpec.compression.present
+        saveSpec.compression.get() == SaveCompression.ZIP
     }
 }

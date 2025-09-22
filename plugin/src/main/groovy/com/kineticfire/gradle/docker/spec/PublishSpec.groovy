@@ -18,6 +18,9 @@ package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.*
 import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Nested
 
 import javax.inject.Inject
 
@@ -30,14 +33,21 @@ abstract class PublishSpec {
     private final ObjectFactory objectFactory
     
     @Inject
-    PublishSpec(Project project) {
-        this.objectFactory = project.objects
+    PublishSpec(ObjectFactory objectFactory) {
+        this.objectFactory = objectFactory
         def factory = this.objectFactory
         this.targets = objectFactory.domainObjectContainer(PublishTarget) { name ->
             factory.newInstance(PublishTarget, name, factory)
         }
+        
+        // Set default values
+        publishTags.convention([])
     }
     
+    @Input
+    abstract ListProperty<String> getPublishTags()
+    
+    @Nested
     NamedDomainObjectContainer<PublishTarget> getTo() {
         return targets
     }

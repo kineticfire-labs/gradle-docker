@@ -27,12 +27,18 @@ class BuildContext {
     final Path dockerfile
     final Map<String, String> buildArgs
     final List<String> tags
+    final Map<String, String> labels
     
     BuildContext(Path contextPath, Path dockerfile, Map<String, String> buildArgs, List<String> tags) {
+        this(contextPath, dockerfile, buildArgs, tags, [:])
+    }
+    
+    BuildContext(Path contextPath, Path dockerfile, Map<String, String> buildArgs, List<String> tags, Map<String, String> labels) {
         this.contextPath = Objects.requireNonNull(contextPath, "Context path cannot be null")
         this.dockerfile = Objects.requireNonNull(dockerfile, "Dockerfile path cannot be null") 
         this.buildArgs = buildArgs ?: [:]
         this.tags = tags ?: []
+        this.labels = labels ?: [:]
         validate()
     }
     
@@ -50,6 +56,6 @@ class BuildContext {
     
     @Override
     String toString() {
-        return "BuildContext{contextPath=${contextPath}, dockerfile=${dockerfile}, tags=${tags}, buildArgs=${buildArgs.size()} args}"
+        return "BuildContext{contextPath=${contextPath}, dockerfile=${dockerfile}, tags=${tags}, buildArgs=${buildArgs.size()} args, labels=${labels.size()} labels}"
     }
 }

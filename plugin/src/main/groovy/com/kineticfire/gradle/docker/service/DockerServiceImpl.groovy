@@ -225,7 +225,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     }
     
     @Override
-    CompletableFuture<Void> saveImage(String imageId, Path outputFile, CompressionType compression) {
+    CompletableFuture<Void> saveImage(String imageId, Path outputFile, SaveCompression compression) {
         return CompletableFuture.runAsync({
             try {
                 println "Saving image ${imageId} to ${outputFile} with compression: ${compression}"
@@ -237,29 +237,29 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 outputFile.withOutputStream { fileOut ->
                     switch (compression) {
-                        case CompressionType.GZIP:
+                        case SaveCompression.GZIP:
                             new GZIPOutputStream(fileOut).withStream { gzipOut ->
                                 gzipOut << inputStream
                             }
                             break
-                        case CompressionType.BZIP2:
+                        case SaveCompression.BZIP2:
                             new BZip2CompressorOutputStream(fileOut).withStream { bz2Out ->
                                 bz2Out << inputStream
                             }
                             break
-                        case CompressionType.XZ:
+                        case SaveCompression.XZ:
                             new XZCompressorOutputStream(fileOut).withStream { xzOut ->
                                 xzOut << inputStream
                             }
                             break
-                        case CompressionType.ZIP:
+                        case SaveCompression.ZIP:
                             new ZipOutputStream(fileOut).withStream { zipOut ->
                                 zipOut.putNextEntry(new ZipEntry("image.tar"))
                                 zipOut << inputStream
                                 zipOut.closeEntry()
                             }
                             break
-                        case CompressionType.NONE:
+                        case SaveCompression.NONE:
                         default:
                             fileOut << inputStream
                             break

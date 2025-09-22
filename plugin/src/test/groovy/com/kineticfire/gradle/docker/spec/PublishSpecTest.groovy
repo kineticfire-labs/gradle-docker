@@ -30,7 +30,7 @@ class PublishSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        publishSpec = project.objects.newInstance(PublishSpec, project)
+        publishSpec = project.objects.newInstance(PublishSpec, project.objects)
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -46,30 +46,30 @@ class PublishSpecTest extends Specification {
     def "to(Closure) creates target with automatic naming"() {
         when:
         publishSpec.to {
-            tags.set(['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest'])
+            publishTags.set(['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest'])
         }
 
         then:
         publishSpec.to.size() == 1
-        publishSpec.to.getByName('target0').tags.get() == ['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest']
+        publishSpec.to.getByName('target0').publishTags.get() == ['docker.io/myrepo:v1.0', 'docker.io/myrepo:latest']
     }
 
     def "to(String, Closure) creates named target"() {
         when:
         publishSpec.to('production') {
-            tags.set(['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0'])
+            publishTags.set(['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0'])
         }
 
         then:
         publishSpec.to.size() == 1
         publishSpec.to.getByName('production').name == 'production'
-        publishSpec.to.getByName('production').tags.get() == ['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0']
+        publishSpec.to.getByName('production').publishTags.get() == ['registry.company.com/app:prod', 'registry.company.com/app:v1.0.0']
     }
 
     def "to(Closure) with auth configuration"() {
         when:
         publishSpec.to {
-            tags.set(['private.registry.com/app:latest'])
+            publishTags.set(['private.registry.com/app:latest'])
             auth {
                 username.set('myuser')
                 password.set('mypass')
@@ -91,13 +91,13 @@ class PublishSpecTest extends Specification {
         publishSpec.to(new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.tags.set(['docker.io/myapp:v2.0', 'docker.io/myapp:stable'])
+                target.publishTags.set(['docker.io/myapp:v2.0', 'docker.io/myapp:stable'])
             }
         })
 
         then:
         publishSpec.to.size() == 1
-        publishSpec.to.getByName('target0').tags.get() == ['docker.io/myapp:v2.0', 'docker.io/myapp:stable']
+        publishSpec.to.getByName('target0').publishTags.get() == ['docker.io/myapp:v2.0', 'docker.io/myapp:stable']
     }
 
     def "to(String, Action) creates named target"() {
@@ -105,7 +105,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to('staging', new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.tags.set(['staging.registry.com/app:staging'])
+                target.publishTags.set(['staging.registry.com/app:staging'])
             }
         })
 
@@ -113,7 +113,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to.size() == 1
         def target = publishSpec.to.getByName('staging')
         target.name == 'staging'
-        target.tags.get() == ['staging.registry.com/app:staging']
+        target.publishTags.get() == ['staging.registry.com/app:staging']
     }
 
     def "to(Action) with auth configuration"() {
@@ -121,7 +121,7 @@ class PublishSpecTest extends Specification {
         publishSpec.to(new Action<PublishTarget>() {
             @Override
             void execute(PublishTarget target) {
-                target.tags.set(['secure.registry.com/app:secure'])
+                target.publishTags.set(['secure.registry.com/app:secure'])
                 target.auth(new Action<AuthSpec>() {
                     @Override
                     void execute(AuthSpec auth) {
@@ -145,35 +145,35 @@ class PublishSpecTest extends Specification {
     def "multiple to calls create multiple targets with auto-naming"() {
         when:
         publishSpec.to {
-            tags.set(['docker.io/app:latest'])
+            publishTags.set(['docker.io/app:latest'])
         }
         publishSpec.to {
-            tags.set(['quay.io/app:v1.0'])
+            publishTags.set(['quay.io/app:v1.0'])
         }
 
         then:
         publishSpec.to.size() == 2
-        publishSpec.to.getByName('target0').tags.get() == ['docker.io/app:latest']
-        publishSpec.to.getByName('target1').tags.get() == ['quay.io/app:v1.0']
+        publishSpec.to.getByName('target0').publishTags.get() == ['docker.io/app:latest']
+        publishSpec.to.getByName('target1').publishTags.get() == ['quay.io/app:v1.0']
     }
 
     def "mixed named and auto-named targets"() {
         when:
         publishSpec.to('dockerhub') {
-            tags.set(['docker.io/myapp:latest'])
+            publishTags.set(['docker.io/myapp:latest'])
         }
         publishSpec.to {
-            tags.set(['ghcr.io/myapp:dev'])
+            publishTags.set(['ghcr.io/myapp:dev'])
         }
         publishSpec.to('quay') {
-            tags.set(['quay.io/myapp:stable'])
+            publishTags.set(['quay.io/myapp:stable'])
         }
 
         then:
         publishSpec.to.size() == 3
-        publishSpec.to.getByName('dockerhub').tags.get() == ['docker.io/myapp:latest']
-        publishSpec.to.getByName('target1').tags.get() == ['ghcr.io/myapp:dev']
-        publishSpec.to.getByName('quay').tags.get() == ['quay.io/myapp:stable']
+        publishSpec.to.getByName('dockerhub').publishTags.get() == ['docker.io/myapp:latest']
+        publishSpec.to.getByName('target1').publishTags.get() == ['ghcr.io/myapp:dev']
+        publishSpec.to.getByName('quay').publishTags.get() == ['quay.io/myapp:stable']
     }
 
     // ===== GETTER TESTS =====
@@ -181,14 +181,14 @@ class PublishSpecTest extends Specification {
     def "getTo returns the targets container"() {
         when:
         publishSpec.to('test') {
-            tags.set(['test.registry.com/app:latest'])
+            publishTags.set(['test.registry.com/app:latest'])
         }
 
         then:
         publishSpec.to != null
         publishSpec.getTo() == publishSpec.to
         publishSpec.getTo().size() == 1
-        publishSpec.getTo().getByName('test').tags.get() == ['test.registry.com/app:latest']
+        publishSpec.getTo().getByName('test').publishTags.get() == ['test.registry.com/app:latest']
     }
 
     // ===== EDGE CASES =====
@@ -202,10 +202,10 @@ class PublishSpecTest extends Specification {
     def "targets can be accessed by name after creation"() {
         when:
         publishSpec.to('registry1') {
-            tags.set(['reg1.com/app:latest'])
+            publishTags.set(['reg1.com/app:latest'])
         }
         publishSpec.to('registry2') {
-            tags.set(['reg2.com/app:latest'])
+            publishTags.set(['reg2.com/app:latest'])
         }
 
         then:

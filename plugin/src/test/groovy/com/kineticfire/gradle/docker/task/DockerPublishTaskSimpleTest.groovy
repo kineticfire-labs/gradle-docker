@@ -54,17 +54,20 @@ class DockerPublishTaskSimpleTest extends Specification {
     def "task properties can be configured"() {
         when:
         task.dockerService.set(mockDockerService)
-        task.imageName.set('test:latest')
+        task.imageName.set('test')
+        task.tags.set(['latest'])
         
         then:
         task.dockerService.get() == mockDockerService
-        task.imageName.get() == 'test:latest'
+        task.imageName.get() == 'test'
+        task.tags.get() == ['latest']
     }
 
     def "task executes with no targets configured"() {
         given:
         task.dockerService.set(mockDockerService)
-        task.imageName.set('test:latest')
+        task.imageName.set('test')
+        task.tags.set(['latest'])
         task.publishTargets.set([])
         
         when:

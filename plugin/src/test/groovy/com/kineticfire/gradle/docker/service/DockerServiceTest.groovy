@@ -18,7 +18,7 @@ package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.model.AuthConfig
 import com.kineticfire.gradle.docker.model.BuildContext
-import com.kineticfire.gradle.docker.model.CompressionType
+import com.kineticfire.gradle.docker.model.SaveCompression
 import spock.lang.Specification
 import spock.lang.TempDir
 
@@ -71,7 +71,7 @@ class DockerServiceTest extends Specification {
         given:
         def imageRef = "test:latest"
         def outputFile = tempDir.resolve("output.tar")
-        def compression = CompressionType.NONE
+        def compression = SaveCompression.NONE
 
         when:
         def result = service.saveImage(imageRef, outputFile, compression)
@@ -143,7 +143,7 @@ class DockerServiceTest extends Specification {
         }
 
         @Override
-        CompletableFuture<Void> saveImage(String imageId, Path outputFile, CompressionType compression) {
+        CompletableFuture<Void> saveImage(String imageId, Path outputFile, SaveCompression compression) {
             return CompletableFuture.completedFuture(null)
         }
 

@@ -50,7 +50,7 @@ interface DockerService {
      * @return CompletableFuture that completes when save is done
      * @throws DockerServiceException if save fails
      */
-    CompletableFuture<Void> saveImage(String imageId, Path outputFile, CompressionType compression)
+    CompletableFuture<Void> saveImage(String imageId, Path outputFile, SaveCompression compression)
     
     /**
      * Push an image to a registry

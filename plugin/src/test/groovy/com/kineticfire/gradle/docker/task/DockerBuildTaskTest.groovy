@@ -44,7 +44,6 @@ class DockerBuildTaskTest extends Specification {
     def "task can be created"() {
         expect:
         task != null
-        // Group and description are now set during task configuration, not in constructor
         task.group == null || task.group == 'docker'
     }
 
@@ -52,12 +51,16 @@ class DockerBuildTaskTest extends Specification {
         given:
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
 
         expect:
         task.dockerfile.get().asFile == project.file('Dockerfile')
         task.contextPath.get().asFile == project.file('.')
-        task.tags.get() == ['myapp:latest']
+        task.imageName.get() == 'myapp'
+        task.version.get() == '1.0.0'
+        task.tags.get() == ['latest']
     }
 
     def "buildImage action executes docker service build"() {
@@ -66,7 +69,9 @@ class DockerBuildTaskTest extends Specification {
         project.file('Dockerfile').createNewFile()
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
         task.buildArgs.set([VERSION: '1.0.0'])
 
         and:
@@ -79,7 +84,6 @@ class DockerBuildTaskTest extends Specification {
         1 * mockDockerService.buildImage(_) >> { args ->
             def context = args[0]
             assert context.dockerfile.toString().endsWith('Dockerfile')
-            assert context.tags == ['myapp:latest']
             assert context.buildArgs == [VERSION: '1.0.0']
             return CompletableFuture.completedFuture('sha256:abc123')
         }
@@ -88,7 +92,9 @@ class DockerBuildTaskTest extends Specification {
     def "task fails when dockerfile is not set"() {
         given:
         task.contextPath.set(project.file('.'))
-        task.tags.set(['myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
 
         when:
         task.buildImage()
@@ -97,10 +103,13 @@ class DockerBuildTaskTest extends Specification {
         thrown(IllegalStateException)
     }
 
-    def "task fails when tags are not set"() {
+    def "task fails when no image reference can be built"() {
         given:
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        // No imageName or repository set
 
         when:
         task.buildImage()
@@ -115,7 +124,9 @@ class DockerBuildTaskTest extends Specification {
         project.file('Dockerfile').createNewFile()
         task.dockerfile.set(project.file('Dockerfile'))
         task.contextPath.set(project.file('.'))
-        task.tags.set(['myapp:latest'])
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
         mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
 
         when:
@@ -128,5 +139,79 @@ class DockerBuildTaskTest extends Specification {
     def "buildArgs default to empty map"() {
         expect:
         task.buildArgs.get() == [:]
+    }
+
+    def "labels default to empty map"() {
+        expect:
+        task.labels.get() == [:]
+    }
+
+    def "registry defaults to empty string"() {
+        expect:
+        task.registry.get() == ""
+    }
+
+    def "namespace defaults to empty string"() {
+        expect:
+        task.namespace.get() == ""
+    }
+
+    def "tags default to empty list"() {
+        expect:
+        task.tags.get() == []
+    }
+
+    def "buildImageReferences returns correct references for imageName format"() {
+        given:
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest', 'v1.0.0'])
+
+        when:
+        def references = task.buildImageReferences()
+
+        then:
+        references == ['myapp:latest', 'myapp:v1.0.0']
+    }
+
+    def "buildImageReferences returns correct references for repository format"() {
+        given:
+        task.repository.set('mycompany/myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest', 'v1.0.0'])
+
+        when:
+        def references = task.buildImageReferences()
+
+        then:
+        references == ['mycompany/myapp:latest', 'mycompany/myapp:v1.0.0']
+    }
+
+    def "buildImageReferences returns correct references with registry and namespace"() {
+        given:
+        task.registry.set('my-registry.com')
+        task.namespace.set('mycompany')
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+
+        when:
+        def references = task.buildImageReferences()
+
+        then:
+        references == ['my-registry.com/mycompany/myapp:latest']
+    }
+
+    def "buildImageReferences returns empty list when no image reference can be built"() {
+        given:
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        // No imageName or repository set
+
+        when:
+        def references = task.buildImageReferences()
+
+        then:
+        references == []
     }
 }

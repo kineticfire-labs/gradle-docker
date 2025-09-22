@@ -337,58 +337,26 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
         
+        // Configure Docker nomenclature properties
+        task.registry.set(imageSpec.registry)
+        task.namespace.set(imageSpec.namespace)
+        task.imageName.set(imageSpec.imageName)
+        task.repository.set(imageSpec.repository)
+        task.version.set(imageSpec.version)
+        task.tags.set(imageSpec.tags)
+        task.labels.set(imageSpec.labels)
+        
         // Configure build context - support multiple context types
         configureContextPath(task, imageSpec, project)
         
         // Configure dockerfile - support dockerfile, dockerfileName, or default
-        // Validation for mutual exclusivity happens at configuration time
-        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
-            throw new GradleException(
-                "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
-                "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
-            )
-        }
-        
-        // Capture project providers to avoid configuration cache issues
-        def providers = project.providers
-        def buildDirectory = project.layout.buildDirectory
-        
-        if (imageSpec.dockerfile.present) {
-            // When dockerfile is explicitly set, always use it regardless of contextTask
-            task.dockerfile.set(imageSpec.dockerfile)
-        } else {
-            // Handle dockerfileName or default dockerfile resolution using providers
-            if (imageSpec.contextTask != null) {
-                // Use contextTask directory with custom or default filename
-                def dockerfileNameProvider = imageSpec.dockerfileName.present 
-                    ? imageSpec.dockerfileName
-                    : providers.provider { "Dockerfile" }
-                def dockerfilePathProvider = dockerfileNameProvider.map { filename -> 
-                    "docker-context/${imageSpec.name}/${filename}" 
-                }
-                task.dockerfile.set(buildDirectory.file(dockerfilePathProvider))
-            } else if (imageSpec.context.present) {
-                // Use context directory with custom or default filename  
-                def dockerfileNameProvider = imageSpec.dockerfileName.present 
-                    ? imageSpec.dockerfileName
-                    : providers.provider { "Dockerfile" }
-                task.dockerfile.set(imageSpec.context.file(dockerfileNameProvider))
-            } else {
-                throw new GradleException(
-                    "Image '${imageSpec.name}' must specify either 'context' or 'contextTask'. " +
-                    "A Dockerfile cannot exist without a build context."
-                )
-            }
-        }
-        
-        // Configure tags - use full image references directly from imageSpec.tags
-        task.tags.set(imageSpec.tags)
+        configureDockerfile(task, imageSpec, project)
         
         // Configure build arguments
         task.buildArgs.set(imageSpec.buildArgs)
         
         // Configure output image ID file
-        def outputDir = buildDirectory.dir("docker/${imageSpec.name}")
+        def outputDir = project.layout.buildDirectory.dir("docker/${imageSpec.name}")
         task.imageId.set(outputDir.map { it.file('image-id.txt') })
     }
     
@@ -416,6 +384,48 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
+    /**
+     * Configure dockerfile path for Docker build task
+     */
+    private void configureDockerfile(DockerBuildTask task, ImageSpec imageSpec, project) {
+        // Validate mutually exclusive dockerfile configuration
+        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
+                "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
+            )
+        }
+        
+        // Capture project providers to avoid configuration cache issues
+        def providers = project.providers
+        def buildDirectory = project.layout.buildDirectory
+        
+        if (imageSpec.dockerfile.present) {
+            // When dockerfile is explicitly set, always use it regardless of contextTask
+            task.dockerfile.set(imageSpec.dockerfile)
+        } else {
+            // Handle dockerfileName or default dockerfile resolution using providers
+            if (imageSpec.contextTask != null) {
+                // Use contextTask directory with custom or default filename
+                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                    ? imageSpec.dockerfileName
+                    : providers.provider { "Dockerfile" }
+                task.dockerfile.set(buildDirectory.dir("docker-context/${imageSpec.name}")
+                    .map { contextDir -> contextDir.file(dockerfileNameProvider.get()) })
+            } else if (imageSpec.context.present) {
+                // Use traditional context directory with custom or default filename
+                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                    ? imageSpec.dockerfileName
+                    : providers.provider { "Dockerfile" }
+                task.dockerfile.set(imageSpec.context.file(dockerfileNameProvider))
+            } else {
+                throw new GradleException(
+                    "Image '${imageSpec.name}' must specify either 'context' or 'contextTask'"
+                )
+            }
+        }
+    }
+    
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Save Docker image to file: ${imageSpec.name}"
@@ -424,31 +434,19 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
         
-        // Configure image name to save - use first tag from the tags list
-        // All tags reference the same underlying image, so any tag works for saving
-        task.imageName.set(imageSpec.tags.map { tagList ->
-            if (tagList.isEmpty()) {
-                throw new IllegalStateException("Image '${imageSpec.name}' must have at least one tag for saving")
-            }
-            return tagList.first()
-        })
+        // Configure Docker nomenclature properties
+        task.registry.set(imageSpec.registry)
+        task.namespace.set(imageSpec.namespace)
+        task.imageName.set(imageSpec.imageName)
+        task.repository.set(imageSpec.repository)
+        task.version.set(imageSpec.version)
+        task.tags.set(imageSpec.tags)
         
         // Configure save specification if present
         if (imageSpec.save.present) {
             def saveSpec = imageSpec.save.get()
             task.outputFile.set(saveSpec.outputFile)
-            task.compression.set(saveSpec.compression.map { CompressionType.fromString(it) })
-            task.pullIfMissing.set(saveSpec.pullIfMissing)
-
-            // NEW: Configure authentication for pullIfMissing
-            if (saveSpec.auth.present) {
-                task.auth.set(saveSpec.auth)
-            }
-
-            // Configure sourceRef if image has one (for save from registry scenario)
-            if (imageSpec.sourceRef.present) {
-                task.sourceRef.set(imageSpec.sourceRef)
-            }
+            task.compression.set(saveSpec.compression)  // Now using SaveCompression enum directly
         }
     }
     
@@ -458,14 +456,14 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure service dependency
         task.dockerService.set(dockerService)
+        task.usesService(dockerService)
         
-        // Configure source image (this needs to come from the build task's output)
-        // For now, use first tag as source - this will be refined when build->tag dependency is established
-        if (!imageSpec.tags.get().isEmpty()) {
-            task.sourceImage.set(imageSpec.tags.get().first())
-        }
-        
-        // Configure target tags
+        // Configure Docker nomenclature properties
+        task.registry.set(imageSpec.registry)
+        task.namespace.set(imageSpec.namespace)
+        task.imageName.set(imageSpec.imageName)
+        task.repository.set(imageSpec.repository)
+        task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
     }
     
@@ -475,28 +473,21 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure service dependency
         task.dockerService.set(dockerService)
+        task.usesService(dockerService)
         
-        // Configure image name - prefer source reference over build task output
-        if (imageSpec.sourceRef.present) {
-            task.imageName.set(imageSpec.sourceRef)
-        } else {
-            // Use first tag as image name for locally built images
-            task.imageName.set(imageSpec.tags.map { tagList ->
-                if (tagList.isEmpty()) {
-                    throw new IllegalStateException("Image '${imageSpec.name}' must have at least one tag for publishing")
-                }
-                return tagList.first()
-            })
-        }
-        // Note: Build task wiring and dependencies are handled in configureTaskDependencies method
+        // Configure Docker nomenclature properties
+        task.registry.set(imageSpec.registry)
+        task.namespace.set(imageSpec.namespace)
+        task.imageName.set(imageSpec.imageName)
+        task.repository.set(imageSpec.repository)
+        task.version.set(imageSpec.version)
+        task.tags.set(imageSpec.tags)
         
         // Configure publish targets from DSL
         if (imageSpec.publish.present) {
             def publishSpec = imageSpec.publish.get()
             task.publishTargets.set(publishSpec.to)
         }
-        
-        // Note: Task dependencies are configured in configureTaskDependencies method
     }
     
     private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {
