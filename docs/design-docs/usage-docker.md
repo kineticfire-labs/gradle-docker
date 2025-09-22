@@ -2,7 +2,6 @@
 
 This document provides simple, informal examples of how to use the 'docker' DSL for the 'gradle-docker' plugin.
 
-
 ## Prerequisites
 
 First, add the plugin to your `build.gradle`:
@@ -13,12 +12,26 @@ plugins {
 }
 ```
 
-## Building a New Docker Image
+## Two Usage Modes
+
+The plugin supports two distinct usage modes:
+
+1. **Build Mode** - Building new Docker images using nomenclature options
+   1. registry, namespace, imageName, tags
+   2. registry, repository, tags
+2. **SourceRef Mode** - Working with existing/pre-built images using `sourceRef`
+
+## Build Mode: Building New Docker Images
+
+Use Docker nomenclature properties for building new images. Choose one of two naming approaches:
+
+### Approach 1: Registry + Namespace + ImageName
 
 ```groovy
 docker {
     images {
         timeServer {
+            // Build configuration
             contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -26,111 +39,40 @@ docker {
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    def projectVersion = version // Capture version during configuration time
+                    def projectVersion = version
                     rename { "app-${projectVersion}.jar" }
                 }
                 dependsOn ':app:jar'
             }
-            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile' based on image name
-            //   - could set custom name as dockerfileName = 'MyDockerfile', then path will be 'build/docker-context/timeServer/MyDockerfile'
-            //   - could set custom path/name with dockerfile.set(file('build/docker-context/timeServer/custom/path/CustomDockerfile')) 
-            tags.set(["time-server:${version}",
-                      "time-server:latest"
-            ])
-            buildArgs = [
-                'JAR_FILE': "app-${version}.jar",
-                'BUILD_VERSION': version,
-                'BUILD_TIME': new Date().format('yyyy-MM-dd HH:mm:ss')
-            ]
+            
+            // Docker nomenclature (Approach 1)
+            registry.set("ghcr.io")                     // Optional registry
+            namespace.set("kineticfire/stuff")          // Optional namespace
+            imageName.set("time-server")                // Required: image name
+            version.set(project.version.toString())     // Defaults to project.version
+            tags.set(["latest", "1.0.0"])              // Tag names only (no registry/namespace)
+            
+            // Build arguments
+            buildArgs.put("JAR_FILE", "app-${version}.jar")
+            buildArgs.put("BUILD_VERSION", version)
+            buildArgs.put("BUILD_TIME", new Date().format('yyyy-MM-dd HH:mm:ss'))
+            
+            // Custom labels
+            labels.put("org.opencontainers.image.revision", gitSha)
+            labels.put("org.opencontainers.image.version", version)
+            labels.put("maintainer", "team@kineticfire.com")
+            
             save {
-               outputFile = file('time-server-latest.tar.gz')
-               compression = 'gzip'
-               // 'pullIfMissing' will default to 'false'
+                compression.set(SaveCompression.GZIP)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
+                outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
+                // defaults to pullIfMissing.set(false)
             }
-            publish {
-                to('basic') {
-                    tags = ['localhost:5000/time-server:latest']
-                }
-            }
-        }
-    }
-}
-```
-
-### 
-
-
-```bash
-# For tagging only
-./gradlew dockerTagMyExistingImage
-
-# For saving only
-./gradlew dockerSaveMyExistingImage
-
-# For publishing only
-./gradlew dockerPublishMyExistingImage
-
-# For combined operations (runs all configured operations)
-./gradlew dockerBuildMyExistingImage
-
-# Or run all Docker operations for all images
-./gradlew dockerBuild
-```
-
-## Acting on a Docker Image That is Already Built
-
-### Scenario 1: Apply Two Tags to an Existing Image
-
-```gradle
-docker {
-    images {
-        myExistingImage {
-            // Specify the existing image reference
-            sourceRef = 'my-app:1.0.0'  // or any other existing image reference
-
-            // Apply two new tags
-            tags.set(['timeServer:1.0.0', 'timeServer:stable'])
-        }
-    }
-}
-```
-
-### Scenario 2: Save an Existing Image to File
-
-```gradle
-docker {
-    images {
-        myExistingImage {
-            sourceRef = 'my-app:1.0.0'
-
-            save {
-                outputFile = file('build/docker-images/my-app.tar.gz')
-                compression = 'gzip'  // Required! Options: 'none', 'gzip', 'bzip2', 'xz', 'zip'
-                pullIfMissing = false  // Set to true if image might not be local
-            }
-        }
-    }
-}
-```
-
-### Scenario 3: Publish an Existing Image to Local Registry
-
-```gradle
-docker {
-    images {
-        myExistingImage {
-            sourceRef = 'my-app:1.0.0'
-
+            
             publish {
                 to('localRegistry') {
-                    tags = ['localhost:5000/timeServer:1.0.0', 'localhost:5000/timeServer:stable']
-
-                    // Optional authentication if required
-                    auth {
-                        username.set('myuser')
-                        password.set('mypassword')
-                        serverAddress.set('localhost:5000')
-                    }
+                    registry.set("localhost:5000")
+                    namespace.set("test")
+                    publishTags.set(["edge", "test"])   // Published tag names
                 }
             }
         }
@@ -138,33 +80,113 @@ docker {
 }
 ```
 
-### Scenario 4: Combined Actions - Tag, Save, and Publish
+### Approach 2: Registry + Repository
 
-```gradle
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareMyAppContext', Copy) { /* ... */ }
+            
+            // Docker nomenclature (Approach 2) - mutually exclusive with namespace+imageName
+            registry.set("docker.io")                   // Optional registry  
+            repository.set("acme/my-awesome-app")       // Full repository path
+            version.set("1.2.3")
+            tags.set(["latest", "stable"])
+            
+            labels.put("description", "My awesome application")
+            
+            save {
+                compression.set(SaveCompression.ZIP)
+                outputFile.set(file("build/my-app.zip"))
+                // defaults to pullIfMissing.set(false)
+            }
+        }
+    }
+}
+```
+
+## SourceRef Mode: Working with Existing Images
+
+Use `sourceRef` for working with existing/pre-built images. No build properties allowed.
+
+### Scenario 1: Apply Tags to Existing Image
+
+```groovy
+docker {
+    images {
+        existingApp {
+            // Use existing image - NO build properties allowed
+            sourceRef.set("ghcr.io/acme/myapp:1.2.3")
+            
+            // Apply new local tags to the sourceRef
+            tags.set(["local:latest", "local:stable"])
+        }
+    }
+}
+```
+
+### Scenario 2: Save Existing Image with Pull Support
+
+```groovy
+docker {
+    images {
+        remoteImage {
+            sourceRef.set("ghcr.io/acme/private-app:1.0.0")
+            
+            save {
+                compression.set(SaveCompression.GZIP)
+                outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
+                pullIfMissing.set(true)  // Pull if not available locally
+                
+                // Authentication for private registries (NEW FEATURE!)
+                auth {
+                    username.set("myuser")
+                    password.set("mypass") 
+                    // serverAddress extracted automatically from sourceRef
+                }
+            }
+        }
+    }
+}
+```
+
+### Scenario 3: Tag, Save, and Publish Existing Image
+
+```groovy
 docker {
     images {
         myExistingImage {
-            sourceRef = 'my-app:1.0.0'
-
+            sourceRef.set("my-app:1.0.0")
+            
             // Apply tags first
-            tags.set(['timeServer:1.0.0', 'timeServer:stable'])
-
+            tags.set(["timeServer:1.0.0", "timeServer:stable"])
+            
             // Save to file
             save {
-                outputFile = file('build/docker-images/my-app-v1.0.0.tar.gz')
-                compression = 'gzip'  // Required parameter
-                pullIfMissing = false
+                compression.set(SaveCompression.BZIP2)  // Enum value required
+                outputFile.set(file("build/docker-images/my-app-v1.0.0.tar.bz2"))
+                // defaults to pullIfMissing.set(false)
             }
-
-            // Publish to local registry
+            
+            // Publish to registries
             publish {
-                to('localRegistry') {
-                    tags = ['localhost:5000/timeServer:1.0.0', 'localhost:5000/timeServer:stable']
+                to('dockerhub') {
+                    registry.set("docker.io")
+                    repository.set("acme/myapp")
+                    publishTags.set(["published-latest"])
+                    
+                    auth {
+                        username.set("dockeruser")
+                        password.set("dockerpass")
+                    }
                 }
-
-                // You can have multiple publish targets
+                
                 to('backup') {
-                    tags = ['backup.registry.com/timeServer:1.0.0', 'backup.registry.com/timeServer:stable']
+                    registry.set("backup.registry.com")
+                    namespace.set("acme")
+                    imageName.set("myapp")
+                    publishTags.set(["backup-latest"])
                 }
             }
         }
@@ -172,39 +194,88 @@ docker {
 }
 ```
 
-### Running the Tasks
+## Key API Properties
 
-After configuring your `build.gradle`, you can run the generated tasks:
+### Docker Nomenclature Properties
+- `registry.set(String)` - Registry hostname (e.g., "ghcr.io", "localhost:5000")
+- `namespace.set(String)` - Namespace/organization (e.g., "kineticfire/stuff")  
+- `imageName.set(String)` - Image name (e.g., "my-app")
+- `repository.set(String)` - Alternative to namespace+imageName (e.g., "acme/my-app")
+- `version.set(String)` - Image version (defaults to project.version)
+- `tags.set(List<String>)` - Tag names only (e.g., ["latest", "1.0.0"])
+- `labels.put(String, String)` - Custom Docker labels for build (**NEW!**)
 
-```bash
-# For tagging only
-./gradlew dockerTagMyExistingImage
+### SaveCompression Enum
+Use enum values instead of strings:
+- `SaveCompression.NONE` - No compression
+- `SaveCompression.GZIP` - Gzip compression (.tar.gz)
+- `SaveCompression.BZIP2` - Bzip2 compression (.tar.bz2)  
+- `SaveCompression.XZ` - XZ compression (.tar.xz)
+- `SaveCompression.ZIP` - ZIP compression (.zip)
 
-# For saving only
-./gradlew dockerSaveMyExistingImage
-
-# For publishing only
-./gradlew dockerPublishMyExistingImage
-
-# For combined operations (runs all configured operations)
-./gradlew dockerBuildMyExistingImage
-
-# Or run all Docker operations for all images
-./gradlew dockerBuild
+### Authentication for Save Operations
+Save operations support authentication when `pullIfMissing=true`:
+```groovy
+save {
+    pullIfMissing.set(true)
+    auth {
+        username.set("user")
+        password.set("pass")
+        // serverAddress automatically extracted from sourceRef
+    }
+}
 ```
 
-## Key Points
+### Provider API Properties
+All properties use Gradle's Provider API for configuration cache compatibility:
+- `.set(value)` - Set property value
+- `.convention(defaultValue)` - Set default value
+- `.get()` - Get property value (only in task actions)
 
-1. **`sourceRef`** - This is the key property that tells the plugin you're working with an existing image rather than
-   building from a Dockerfile
-2. **Image Tags vs Publish Tags** - Use `tags.set([...])` for local image tagging, and `tags = [...]` within publish targets
-   for full registry image references
-3. **Compression Options** - Required parameter. Available: `'none'`, `'gzip'`, `'bzip2'`, `'xz'`, `'zip'`
-4. **Task Generation** - The plugin automatically generates tasks based on your image name (e.g.,
-   `dockerTagMyExistingImage`, `dockerSaveMyExistingImage`)
-5. **pullIfMissing** - Set to `true` if the source image might not be available locally and needs to be pulled
+## Running Generated Tasks
 
-The plugin will execute these operations in the correct order automatically when you run the generated tasks.
+The plugin automatically generates tasks based on your image names:
+
+```bash
+# For a specific image named 'timeServer'
+./gradlew dockerBuildTimeServer    # Build only
+./gradlew dockerTagTimeServer      # Tag only  
+./gradlew dockerSaveTimeServer     # Save only
+./gradlew dockerPublishTimeServer  # Publish only
+
+# Run ALL configured operations for specific image
+./gradlew dockerImageTimeServer
+
+# Run specific operation across ALL images
+./gradlew dockerBuild     # Build all images
+./gradlew dockerSave      # Save all images
+./gradlew dockerTag       # Tag all images  
+./gradlew dockerPublish   # Publish all images
+
+# Run ALL operations for ALL images
+./gradlew dockerImages
+```
+
+## Validation Rules
+
+### Build Mode Rules
+- **Mutually exclusive**: Cannot use both `repository` and `namespace`+`imageName`
+- **Required**: Either `repository` OR `imageName` must be specified
+- **No sourceRef**: Cannot use `sourceRef` with build properties (contextTask, buildArgs, labels, etc.)
+
+### SourceRef Mode Rules  
+- **Required sourceRef**: Must specify valid `sourceRef` image reference
+- **No build properties**: Cannot use contextTask, buildArgs, labels, dockerfile when using `sourceRef`
+- **Authentication**: Required for private registries when `pullIfMissing=true`
+
+## Key Benefits
+
+1. **Gradle 9 Compatibility** - Full configuration cache and Provider API support
+2. **Proper Docker Nomenclature** - Separate registry, namespace, imageName, tags
+3. **Custom Labels** - Add metadata to built images
+4. **Enhanced Authentication** - Support for private registries in save operations
+5. **Dual Mode Support** - Build new images OR work with existing images
+6. **Type Safety** - Enum-based compression options prevent typos
 
 # Available Gradle Tasks
 
