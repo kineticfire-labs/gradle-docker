@@ -32,7 +32,10 @@ abstract class DockerTagTask extends DefaultTask {
         // Set up default values for Provider API compatibility
         registry.convention("")
         namespace.convention("")
+        imageName.convention("")
         repository.convention("")
+        version.convention("")
+        tags.convention([])
         sourceRef.convention("")
     }
     
@@ -70,19 +73,35 @@ abstract class DockerTagTask extends DefaultTask {
 
     @TaskAction
     void tagImage() {
-        // Configuration cache compatible implementation
-        def imageReferences = buildImageReferences()
-        if (imageReferences.size() < 2) {
-            throw new IllegalStateException("At least 2 image references needed for tagging (source + target tags)")
-        }
-        
-        def sourceImageRef = imageReferences[0]
-        def targetRefs = imageReferences.drop(1)
+        def sourceRefValue = sourceRef.getOrElse("")
+        def tagsValue = tags.getOrElse([])
 
-        // Tag Docker images using service
+        if (tagsValue.isEmpty()) {
+            throw new IllegalStateException("At least one tag must be specified")
+        }
+
         def service = dockerService.get()
-        targetRefs.each { targetRef ->
-            def future = service.tagImage(sourceImageRef, [targetRef])
+        if (!service) {
+            throw new IllegalStateException("dockerService must be provided")
+        }
+
+        if (!sourceRefValue.isEmpty()) {
+            // SourceRef Mode: Tag existing image with new tags
+            if (!tagsValue.isEmpty()) {
+                def future = service.tagImage(sourceRefValue, tagsValue)
+                future.get()
+            }
+            // If no tags provided in sourceRef mode, it's a no-op
+        } else {
+            // Build Mode: Tag the built image with additional tags
+            def imageReferences = buildImageReferences()
+            if (imageReferences.size() < 2) {
+                throw new IllegalStateException("At least 2 image references needed for tagging (source + target tags)")
+            }
+
+            def sourceImageRef = imageReferences[0]
+            def targetRefs = imageReferences.drop(1)
+            def future = service.tagImage(sourceImageRef, targetRefs)
             future.get()
         }
     }
@@ -93,12 +112,8 @@ abstract class DockerTagTask extends DefaultTask {
     List<String> buildImageReferences() {
         def references = []
         def sourceRefValue = sourceRef.getOrElse("")
-        def tagsValue = tags.get()
-        
-        if (tagsValue.isEmpty()) {
-            throw new IllegalStateException("At least one tag must be specified")
-        }
-        
+        def tagsValue = tags.getOrElse([])
+
         if (!sourceRefValue.isEmpty()) {
             // SourceRef Mode: Use sourceRef as source, apply tags as targets
             references.add(sourceRefValue)
@@ -107,6 +122,10 @@ abstract class DockerTagTask extends DefaultTask {
             }
         } else {
             // Build Mode: Use nomenclature to build image references
+            if (tagsValue.isEmpty()) {
+                throw new IllegalStateException("At least one tag must be specified")
+            }
+
             def registryValue = registry.getOrElse("")
             def namespaceValue = namespace.getOrElse("")
             def repositoryValue = repository.getOrElse("")

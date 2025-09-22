@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.model
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.Objects
 
 /**
  * Represents the build context for a Docker image build operation
@@ -57,5 +58,23 @@ class BuildContext {
     @Override
     String toString() {
         return "BuildContext{contextPath=${contextPath}, dockerfile=${dockerfile}, tags=${tags}, buildArgs=${buildArgs.size()} args, labels=${labels.size()} labels}"
+    }
+
+    @Override
+    boolean equals(Object obj) {
+        if (this.is(obj)) return true
+        if (!(obj instanceof BuildContext)) return false
+
+        BuildContext other = (BuildContext) obj
+        return Objects.equals(contextPath, other.contextPath) &&
+               Objects.equals(dockerfile, other.dockerfile) &&
+               Objects.equals(buildArgs, other.buildArgs) &&
+               Objects.equals(tags, other.tags) &&
+               Objects.equals(labels, other.labels)
+    }
+
+    @Override
+    int hashCode() {
+        return Objects.hash(contextPath, dockerfile, buildArgs, tags, labels)
     }
 }

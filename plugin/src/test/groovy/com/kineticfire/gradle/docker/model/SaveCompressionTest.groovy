@@ -41,7 +41,7 @@ class SaveCompressionTest extends Specification {
         SaveCompression.NONE.type == "none"
         SaveCompression.NONE.extension == "tar"
         SaveCompression.NONE.fileExtension == "tar"
-        SaveCompression.NONE.toString() == "none"
+        SaveCompression.NONE.toString() == "NONE"
     }
 
     def "GZIP compression type has correct properties"() {
@@ -49,7 +49,7 @@ class SaveCompressionTest extends Specification {
         SaveCompression.GZIP.type == "gzip"
         SaveCompression.GZIP.extension == "tar.gz"
         SaveCompression.GZIP.fileExtension == "tar.gz"
-        SaveCompression.GZIP.toString() == "gzip"
+        SaveCompression.GZIP.toString() == "GZIP"
     }
 
     def "BZIP2 compression type has correct properties"() {
@@ -57,7 +57,7 @@ class SaveCompressionTest extends Specification {
         SaveCompression.BZIP2.type == "bzip2"
         SaveCompression.BZIP2.extension == "tar.bz2"
         SaveCompression.BZIP2.fileExtension == "tar.bz2"
-        SaveCompression.BZIP2.toString() == "bzip2"
+        SaveCompression.BZIP2.toString() == "BZIP2"
     }
 
     def "XZ compression type has correct properties"() {
@@ -65,7 +65,7 @@ class SaveCompressionTest extends Specification {
         SaveCompression.XZ.type == "xz"
         SaveCompression.XZ.extension == "tar.xz"
         SaveCompression.XZ.fileExtension == "tar.xz"
-        SaveCompression.XZ.toString() == "xz"
+        SaveCompression.XZ.toString() == "XZ"
     }
 
     def "ZIP compression type has correct properties"() {
@@ -73,7 +73,7 @@ class SaveCompressionTest extends Specification {
         SaveCompression.ZIP.type == "zip"
         SaveCompression.ZIP.extension == "zip"
         SaveCompression.ZIP.fileExtension == "zip"
-        SaveCompression.ZIP.toString() == "zip"
+        SaveCompression.ZIP.toString() == "ZIP"
     }
 
     def "fromString parses GZIP variants correctly"() {

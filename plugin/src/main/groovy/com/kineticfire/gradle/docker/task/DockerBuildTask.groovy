@@ -38,7 +38,9 @@ abstract class DockerBuildTask extends DefaultTask {
         tags.convention([])
         registry.convention("")
         namespace.convention("")
+        imageName.convention("")
         repository.convention("")
+        version.convention("")
     }
     
     @Internal
@@ -88,8 +90,17 @@ abstract class DockerBuildTask extends DefaultTask {
     void buildImage() {
         // Configuration cache compatible implementation
         // Validate required properties
-        if (!dockerfile.present) {
+        if (!dockerfile.isPresent()) {
             throw new IllegalStateException("dockerfile property must be set")
+        }
+
+        // Validate mutual exclusivity between repository and namespace+imageName
+        def repositoryValue = repository.getOrElse("")
+        def namespaceValue = namespace.getOrElse("")
+        def imageNameValue = imageName.getOrElse("")
+
+        if (!repositoryValue.isEmpty() && (!namespaceValue.isEmpty() || !imageNameValue.isEmpty())) {
+            throw new IllegalStateException("Cannot use both 'repository' and 'namespace/imageName' nomenclature simultaneously")
         }
         
         // Build full image references using new nomenclature
@@ -100,19 +111,32 @@ abstract class DockerBuildTask extends DefaultTask {
 
         // Build Docker image using service
         def service = dockerService.get()
+        if (!service) {
+            throw new IllegalStateException("dockerService must be provided")
+        }
+        def contextFile = contextPath.get()?.asFile
+        def dockerfileFile = dockerfile.get()?.asFile
+        if (!contextFile || !dockerfileFile) {
+            throw new IllegalStateException("contextPath and dockerfile must be provided")
+        }
+
         def context = new com.kineticfire.gradle.docker.model.BuildContext(
-            contextPath.get().asFile.toPath(),
-            dockerfile.get().asFile.toPath(),
-            buildArgs.get(),
+            contextFile.toPath(),
+            dockerfileFile.toPath(),
+            buildArgs.getOrElse([:]),
             imageReferences,
-            labels.get()
+            labels.getOrElse([:])
         )
         
         def future = service.buildImage(context)
         def actualImageId = future.get()
         
         // Write the image ID to the output file
-        def imageIdFile = imageId.get().asFile
+        def imageIdRegularFile = imageId.get()
+        if (!imageIdRegularFile) {
+            throw new IllegalStateException("imageId must be provided")
+        }
+        def imageIdFile = imageIdRegularFile.asFile
         imageIdFile.parentFile.mkdirs()
         imageIdFile.text = actualImageId
     }
@@ -127,8 +151,8 @@ abstract class DockerBuildTask extends DefaultTask {
         def namespaceValue = namespace.getOrElse("")
         def repositoryValue = repository.getOrElse("")
         def imageNameValue = imageName.getOrElse("")
-        def versionValue = version.get()
-        def tagsValue = tags.get()
+        def versionValue = version.getOrElse("")
+        def tagsValue = tags.getOrElse([])
         
         if (!repositoryValue.isEmpty()) {
             // Using repository format

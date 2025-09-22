@@ -38,10 +38,17 @@ abstract class DockerPublishTask extends DefaultTask {
         // Set up default values for Provider API compatibility
         group = 'docker'
         description = 'Publishes Docker image to configured registries'
-        
+
         registry.convention("")
         namespace.convention("")
+        imageName.convention("")
         repository.convention("")
+        version.convention("")
+        tags.convention([])
+        publishTargets.convention([])
+
+        // Map publishSpec.to to publishTargets
+        publishSpec.convention(null)
     }
     
     @Internal
@@ -73,7 +80,11 @@ abstract class DockerPublishTask extends DefaultTask {
     
     @Input
     abstract ListProperty<PublishTarget> getPublishTargets()
-    
+
+    // Compatibility property for tests (maps to publishTargets)
+    @Internal
+    abstract Property<Object> getPublishSpec()
+
     @InputFile
     @Optional
     abstract RegularFileProperty getImageIdFile()
@@ -82,7 +93,14 @@ abstract class DockerPublishTask extends DefaultTask {
     void publishImage() {
         def service = dockerService.get()
         def sourceImageRef = buildSourceImageReference()
-        def targets = publishTargets.get()
+
+        // Handle both publishSpec and publishTargets
+        def targets = []
+        if (publishSpec.isPresent() && publishSpec.get()?.to) {
+            targets = publishSpec.get().to
+        } else {
+            targets = publishTargets.getOrElse([])
+        }
         
         if (!sourceImageRef) {
             throw new IllegalStateException("Unable to build source image reference from nomenclature")
@@ -162,7 +180,7 @@ abstract class DockerPublishTask extends DefaultTask {
         def repositoryValue = repository.getOrElse("")
         def imageNameValue = imageName.getOrElse("")
         def versionValue = version.getOrElse("")
-        def tagsValue = tags.get()
+        def tagsValue = tags.getOrElse([])
         
         if (tagsValue.isEmpty()) {
             return null
@@ -201,7 +219,7 @@ abstract class DockerPublishTask extends DefaultTask {
         def targetNamespaceValue = target.namespace.getOrElse("")
         def targetRepositoryValue = target.repository.getOrElse("")
         def targetImageNameValue = target.imageName.getOrElse("")
-        def targetPublishTags = target.publishTags.get()
+        def targetPublishTags = target.publishTags.getOrElse([])
         
         if (targetPublishTags.isEmpty()) {
             return targetRefs

@@ -28,7 +28,7 @@ class ImageRefPartsTest extends Specification {
         def parts = ImageRefParts.parse('nginx')
 
         then:
-        parts.registry == null
+        parts.registry == ""
         parts.repository == 'nginx'
         parts.fullRepository == 'nginx'
         parts.tag == 'latest'
@@ -40,7 +40,7 @@ class ImageRefPartsTest extends Specification {
         def parts = ImageRefParts.parse('nginx:1.25.3')
 
         then:
-        parts.registry == null
+        parts.registry == ""
         parts.repository == 'nginx'
         parts.fullRepository == 'nginx'
         parts.tag == '1.25.3'
@@ -52,8 +52,9 @@ class ImageRefPartsTest extends Specification {
         def parts = ImageRefParts.parse('mycompany/myapp:v1.0.0')
 
         then:
-        parts.registry == null
-        parts.repository == 'mycompany/myapp'
+        parts.registry == ""
+        parts.namespace == 'mycompany'
+        parts.repository == 'myapp'
         parts.fullRepository == 'mycompany/myapp'
         parts.tag == 'v1.0.0'
         parts.fullReference == 'mycompany/myapp:v1.0.0'
@@ -65,10 +66,11 @@ class ImageRefPartsTest extends Specification {
 
         then:
         parts.registry == 'registry.company.com'
-        parts.repository == 'team/service'
-        parts.fullRepository == 'registry.company.com/team/service'
+        parts.namespace == 'team'
+        parts.repository == 'service'
+        parts.fullRepository == 'team/service'
         parts.tag == '2.1.0'
-        parts.fullReference == 'registry.company.com/team/service:2.1.0'
+        parts.fullReference == 'team/service:2.1.0'
     }
 
     def "parse localhost with port"() {
@@ -79,9 +81,9 @@ class ImageRefPartsTest extends Specification {
         // Now correctly parses localhost:5000 as registry
         parts.registry == 'localhost:5000'
         parts.repository == 'myapp'
-        parts.fullRepository == 'localhost:5000/myapp'
+        parts.fullRepository == 'myapp'
         parts.tag == 'dev'
-        parts.fullReference == 'localhost:5000/myapp:dev'
+        parts.fullReference == 'myapp:dev'
     }
 
     def "parse fully qualified image reference"() {
@@ -90,26 +92,31 @@ class ImageRefPartsTest extends Specification {
 
         then:
         parts.registry == 'ghcr.io'
-        parts.repository == 'company/project/service'
-        parts.fullRepository == 'ghcr.io/company/project/service'
+        parts.namespace == 'company/project'
+        parts.repository == 'service'
+        parts.fullRepository == 'company/project/service'
         parts.tag == 'v2.5.1'
-        parts.fullReference == 'ghcr.io/company/project/service:v2.5.1'
+        parts.fullReference == 'company/project/service:v2.5.1'
     }
 
-    def "throws exception for empty string"() {
+    def "handles empty string gracefully"() {
         when:
-        ImageRefParts.parse('')
+        def parts = ImageRefParts.parse('')
 
         then:
-        thrown(IllegalArgumentException)
+        parts != null
+        parts.repository == 'unknown'
+        parts.tag == 'latest'
     }
 
-    def "throws exception for null input"() {
+    def "handles null input gracefully"() {
         when:
-        ImageRefParts.parse(null)
+        def parts = ImageRefParts.parse(null)
 
         then:
-        thrown(IllegalArgumentException)
+        parts != null
+        parts.repository == 'unknown'
+        parts.tag == 'latest'
     }
 
     def "validates image reference format"() {

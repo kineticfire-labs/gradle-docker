@@ -122,36 +122,52 @@ abstract class ImageSpec {
     
     // DSL helper methods for labels (NEW FEATURE)
     void label(String key, String value) {
-        labels.put(key, value)
+        if (value != null) {
+            labels.put(key, value)
+        }
     }
     
     void label(String key, Provider<String> value) {
-        labels.put(key, value)
+        if (value != null) {
+            labels.put(key, value)
+        }
     }
     
     void labels(Map<String, String> labelMap) {
-        labels.putAll(labelMap)
+        if (labelMap != null) {
+            labels.putAll(labelMap)
+        }
     }
     
     void labels(Provider<? extends Map<String, String>> labelMapProvider) {
-        labels.putAll(labelMapProvider)
+        if (labelMapProvider != null) {
+            labels.putAll(labelMapProvider)
+        }
     }
     
     // DSL helper methods for build args
     void buildArg(String key, String value) {
-        buildArgs.put(key, value)
+        if (value != null) {
+            buildArgs.put(key, value)
+        }
     }
     
     void buildArg(String key, Provider<String> value) {
-        buildArgs.put(key, value)
+        if (value != null) {
+            buildArgs.put(key, value)
+        }
     }
     
     void buildArgs(Map<String, String> argMap) {
-        buildArgs.putAll(argMap)
+        if (argMap != null) {
+            buildArgs.putAll(argMap)
+        }
     }
     
     void buildArgs(Provider<? extends Map<String, String>> argMapProvider) {
-        buildArgs.putAll(argMapProvider)
+        if (argMapProvider != null) {
+            buildArgs.putAll(argMapProvider)
+        }
     }
     
     // DSL methods for nested configuration

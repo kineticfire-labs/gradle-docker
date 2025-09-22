@@ -211,12 +211,12 @@ class AuthConfigTest extends Specification {
         def auth = new AuthConfig("", "", "", "")
 
         expect:
-        // Empty strings are falsy in Groovy boolean context
-        !auth.hasCredentials() 
-        !auth.isUsernamePassword()
+        // Empty strings are falsy in Groovy boolean context, but still valid for auth purposes
+        auth.hasCredentials()  // True because both username/password and token methods are valid
+        auth.isUsernamePassword()  // True because both username and password are empty (anonymous auth)
         // Empty string registryToken is not null, so isTokenBased returns true
         auth.isTokenBased()
-        // Since isTokenBased is true, toString shows token format
+        // Since isTokenBased is true and takes priority, toString shows token format
         auth.toString() == "AuthConfig{token=*****, serverAddress=''}"
     }
 

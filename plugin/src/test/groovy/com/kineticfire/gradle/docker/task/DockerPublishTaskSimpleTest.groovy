@@ -33,6 +33,7 @@ class DockerPublishTaskSimpleTest extends Specification {
     def setup() {
         project = ProjectBuilder.builder().build()
         task = project.tasks.register('testPublish', DockerPublishTask).get()
+        task.dockerService.set(mockDockerService)
     }
 
     def "task can be created"() {

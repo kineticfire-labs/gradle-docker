@@ -22,9 +22,9 @@ package com.kineticfire.gradle.docker.model
 enum SaveCompression {
     NONE("none", "tar"),
     GZIP("gzip", "tar.gz"),
+    ZIP("zip", "zip"),
     BZIP2("bzip2", "tar.bz2"),
-    XZ("xz", "tar.xz"),
-    ZIP("zip", "zip")
+    XZ("xz", "tar.xz")
     
     final String type
     final String extension
@@ -68,6 +68,6 @@ enum SaveCompression {
     
     @Override
     String toString() {
-        return type
+        return name()
     }
 }

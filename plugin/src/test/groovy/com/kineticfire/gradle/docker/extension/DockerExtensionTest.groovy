@@ -170,6 +170,7 @@ class DockerExtensionTest extends Specification {
             spacePath {
                 context.set(project.file('path with spaces'))
                 dockerfile.set(project.file('path with spaces/Dockerfile'))
+                imageName.set('test-image')
                 tags.set(['latest'])
             }
         }
@@ -190,6 +191,7 @@ class DockerExtensionTest extends Specification {
             customDockerfile {
                 context.set(project.file('custom'))
                 dockerfile.set(project.file('custom/Dockerfile.custom'))
+                imageName.set('test-image')
                 tags.set(['latest'])
             }
         }
@@ -214,6 +216,7 @@ class DockerExtensionTest extends Specification {
         )
         imageSpec.context.set(project.file('test-context'))
         imageSpec.dockerfile.set(project.file('test-context/Dockerfile'))
+        imageSpec.imageName.set('test-image')
         imageSpec.tags.set(['validation'])
 
         when:
@@ -249,6 +252,7 @@ class DockerExtensionTest extends Specification {
             publishableImage {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
+                imageName.set('test-app')
                 tags.set(['latest', 'v1.0.0'])  // Simple tag names
                 publish {
                     to('registry') {
@@ -369,6 +373,7 @@ class DockerExtensionTest extends Specification {
             mixedTagsImage {
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
+                imageName.set('test-app')
                 tags.set(['dev', 'latest'])  // Image tags - full references
                 publish {
                     to('prod') {
@@ -397,6 +402,7 @@ class DockerExtensionTest extends Specification {
             timeServer {  // Exact name from integration test
                 context.set(project.file('docker'))
                 dockerfile.set(project.file('docker/Dockerfile'))
+                imageName.set('time-server')
                 tags.set(['1.0.0', 'latest'])  // Version and latest tags
                 publish {
                     to('basic') {
@@ -619,6 +625,7 @@ class DockerExtensionTest extends Specification {
         extension.images {
             defaultDockerfile {
                 context.set(project.file('docker'))
+                imageName.set('test-image')
                 tags.set(['latest'])
                 // Neither dockerfile nor dockerfileName set - should use default
             }
@@ -640,6 +647,7 @@ class DockerExtensionTest extends Specification {
             dockerfileNameWithContextTask {
                 contextTask = copyTask
                 dockerfileName.set('Dockerfile.dev')
+                imageName.set('test-image')
                 tags.set(['latest'])
             }
         }
@@ -661,6 +669,7 @@ class DockerExtensionTest extends Specification {
                 contextTask = copyTask
                 dockerfile.set(project.file('Dockerfile'))
                 dockerfileName.set('Dockerfile.custom')
+                repository.set('test/image')  // Add required nomenclature
                 tags.set(['latest'])
             }
         }

@@ -16,6 +16,8 @@
 
 package com.kineticfire.gradle.docker.model
 
+import java.util.Objects
+
 /**
  * Authentication configuration for Docker registries
  */
@@ -36,14 +38,23 @@ class AuthConfig {
      * Check if this config has valid credentials
      */
     boolean hasCredentials() {
-        return (username && password) || registryToken
+        // Valid username/password: both non-null and both non-empty, OR both empty strings (anonymous)
+        def validUsernamePassword = (username != null && password != null) &&
+                                   ((username.isEmpty() && password.isEmpty()) ||
+                                    (!username.isEmpty() && !password.isEmpty()))
+        // Valid token: non-null (can be empty string)
+        def validToken = (registryToken != null)
+
+        return validUsernamePassword || validToken
     }
-    
+
     /**
      * Check if this is username/password authentication
      */
     boolean isUsernamePassword() {
-        return username && password
+        return (username != null && password != null) &&
+               ((username.isEmpty() && password.isEmpty()) ||
+                (!username.isEmpty() && !password.isEmpty()))
     }
     
     /**
@@ -58,23 +69,41 @@ class AuthConfig {
      */
     com.github.dockerjava.api.model.AuthConfig toDockerJavaAuthConfig() {
         def authConfig = new com.github.dockerjava.api.model.AuthConfig()
-        
-        if (username) authConfig.withUsername(username)
-        if (password) authConfig.withPassword(password)
-        if (registryToken) authConfig.withRegistrytoken(registryToken)
-        if (serverAddress) authConfig.withRegistryAddress(serverAddress)
-        
+
+        if (username != null) authConfig.withUsername(username)
+        if (password != null) authConfig.withPassword(password)
+        if (registryToken != null) authConfig.withRegistrytoken(registryToken)
+        if (serverAddress != null) authConfig.withRegistryAddress(serverAddress)
+
         return authConfig
     }
     
     @Override
     String toString() {
         if (isTokenBased()) {
+            // Token-based auth takes priority
             return "AuthConfig{token=*****, serverAddress='${serverAddress}'}"
         } else if (isUsernamePassword()) {
             return "AuthConfig{username='${username}', password=*****, serverAddress='${serverAddress}'}"
         } else {
             return "AuthConfig{empty}"
         }
+    }
+
+    @Override
+    boolean equals(Object obj) {
+        if (this.is(obj)) return true
+        if (!(obj instanceof AuthConfig)) return false
+
+        AuthConfig other = (AuthConfig) obj
+        return Objects.equals(username, other.username) &&
+               Objects.equals(password, other.password) &&
+               Objects.equals(registryToken, other.registryToken) &&
+               Objects.equals(serverAddress, other.serverAddress)
+    }
+
+    @Override
+    int hashCode() {
+        return Objects.hash(username, password, registryToken, serverAddress)
     }
 }

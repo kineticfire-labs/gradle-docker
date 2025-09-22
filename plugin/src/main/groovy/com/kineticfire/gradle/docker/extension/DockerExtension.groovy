@@ -69,7 +69,7 @@ abstract class DockerExtension {
     
     void validateImageSpec(ImageSpec imageSpec) {
         def hasContextTask = imageSpec.contextTask != null
-        def hasSourceRef = imageSpec.sourceRef.present && !imageSpec.sourceRef.get().isEmpty()
+        def hasSourceRef = imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()
         
         // Check if context was explicitly set (not just the convention)
         // The challenge is distinguishing explicit setting from convention
@@ -103,7 +103,7 @@ abstract class DockerExtension {
         }
         
         // Validate mutually exclusive dockerfile configuration
-        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
+        if (imageSpec.dockerfile.isPresent() && imageSpec.dockerfileName.isPresent()) {
             throw new GradleException(
                 "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
                 "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
@@ -122,7 +122,7 @@ abstract class DockerExtension {
         }
         
         // Validate dockerfile exists (but not for sourceRef images)
-        if (imageSpec.dockerfile.present && !hasSourceRef) {
+        if (imageSpec.dockerfile.isPresent() && !hasSourceRef) {
             def dockerfileFile = imageSpec.dockerfile.get().asFile
             if (!dockerfileFile.exists()) {
                 throw new GradleException(
@@ -133,12 +133,12 @@ abstract class DockerExtension {
         }
         
         // Validate publish configuration if present
-        if (imageSpec.publish.present) {
+        if (imageSpec.publish.isPresent()) {
             validatePublishConfiguration(imageSpec.publish.get(), imageSpec.name)
         }
 
         // Validate save configuration if present
-        if (imageSpec.save.present) {
+        if (imageSpec.save.isPresent()) {
             validateSaveConfiguration(imageSpec.save.get(), imageSpec.name)
         }
     }
@@ -147,8 +147,27 @@ abstract class DockerExtension {
      * Validates Docker image nomenclature according to new API rules
      */
     void validateNomenclature(ImageSpec imageSpec) {
-        // Simplified validation - only validate tags if present  
-        if (imageSpec.tags.present && !imageSpec.tags.get().isEmpty()) {
+        def hasRepository = imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()
+        def hasNamespace = imageSpec.namespace.isPresent() && !imageSpec.namespace.get().isEmpty()
+        def hasImageName = imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()
+
+        // Enforce mutual exclusivity: repository XOR (namespace + imageName)
+        if (hasRepository && (hasNamespace || hasImageName)) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' has mutual exclusivity violation: cannot specify both 'repository' and 'namespace'/'imageName'. " +
+                "Use either 'repository' OR 'namespace'+'imageName'"
+            )
+        }
+
+        // Validate that at least one naming approach is used
+        if (!hasRepository && !hasImageName) {
+            throw new GradleException(
+                "Image '${imageSpec.name}' must specify either 'repository' OR 'imageName'"
+            )
+        }
+
+        // Validate tag formats if present
+        if (imageSpec.tags.isPresent() && !imageSpec.tags.get().isEmpty()) {
             def tags = imageSpec.tags.get()
             tags.each { tag ->
                 if (!isValidTagFormat(tag)) {
@@ -208,16 +227,44 @@ abstract class DockerExtension {
         if (!imageRef || imageRef.trim().isEmpty()) {
             return false
         }
-        
-        // Docker image reference can contain:
-        // - Registry hostname (optional): alphanumeric, dots, hyphens, colons for port
-        // - Namespace/repository path: alphanumeric, dots, hyphens, underscores, slashes
-        // - Tag (after colon): alphanumeric, dots, hyphens, underscores
-        
-        // Basic validation for Docker image reference format
-        // Requires explicit tag - must contain colon followed by tag name
-        // This allows: registry.com:5000/namespace/name:tag, namespace/name:tag, name:tag, etc.
-        return imageRef.matches("^[a-zA-Z0-9._:-]+(/[a-zA-Z0-9._-]+)*:([a-zA-Z0-9._-]+)\$") && 
+
+        // Split by colon to check tag
+        def colonCount = imageRef.count(':')
+
+        // Must have exactly one colon (except if registry port is specified)
+        if (colonCount == 0) {
+            return false // No tag
+        }
+
+        // Multiple colons are only allowed if first colon is for registry port
+        // Check for invalid patterns like "image::tag" or "registry:port/image:tag:extra"
+        if (imageRef.contains("::") || colonCount > 2) {
+            return false
+        }
+
+        // Split at the last colon to separate image reference from tag
+        def lastColonIndex = imageRef.lastIndexOf(':')
+        def imagePart = imageRef.substring(0, lastColonIndex)
+        def tagPart = imageRef.substring(lastColonIndex + 1)
+
+        // Tag cannot be empty
+        if (tagPart.isEmpty()) {
+            return false
+        }
+
+        // Image part cannot be empty
+        if (imagePart.isEmpty()) {
+            return false
+        }
+
+        // Validate tag format
+        if (!isValidTagFormat(tagPart)) {
+            return false
+        }
+
+        // Basic validation for image part (registry/namespace/name)
+        // Allow alphanumeric, dots, hyphens, underscores, slashes, and one colon for registry port
+        return imagePart.matches("^[a-zA-Z0-9._-]+(:[0-9]+)?(/[a-zA-Z0-9._/-]+)*\$") &&
                imageRef.length() <= 255
     }
 
@@ -242,7 +289,7 @@ abstract class DockerExtension {
      */
     void validatePublishTarget(def publishTarget, String imageName) {
         // Validate that tags are specified (new API uses 'tags' property not 'publishTags')
-        if (!publishTarget.publishTags.present || publishTarget.publishTags.get().isEmpty()) {
+        if (!publishTarget.publishTags.isPresent() || publishTarget.publishTags.get().isEmpty()) {
             throw new GradleException(
                 "Publish target '${publishTarget.name}' in image '${imageName}' must specify at least one tag"
             )
@@ -264,7 +311,7 @@ abstract class DockerExtension {
      * Validates save configuration for an image
      */
     void validateSaveConfiguration(def saveSpec, String imageName) {
-        if (!saveSpec.compression.present) {
+        if (!saveSpec.compression.isPresent()) {
             throw new GradleException(
                 "compression parameter is required for save configuration in image '${imageName}'"
             )
@@ -272,8 +319,16 @@ abstract class DockerExtension {
 
         // The compression is now a SaveCompression enum, so validation is handled by type safety
         // No need for additional validation of compression values
-        
-        if (!saveSpec.outputFile.present) {
+
+        // Check if outputFile was explicitly set (not just using convention)
+        if (!saveSpec.outputFile.isPresent()) {
+            throw new GradleException(
+                "outputFile parameter is required for save configuration in image '${imageName}'"
+            )
+        }
+        // Also check if it's just the default convention value (which indicates not explicitly set)
+        def defaultPath = "docker-images/image.tar"
+        if (saveSpec.outputFile.get().asFile.path.endsWith(defaultPath)) {
             throw new GradleException(
                 "outputFile parameter is required for save configuration in image '${imageName}'"
             )

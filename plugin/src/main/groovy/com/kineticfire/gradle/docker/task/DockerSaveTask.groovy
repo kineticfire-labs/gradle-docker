@@ -36,7 +36,10 @@ abstract class DockerSaveTask extends DefaultTask {
         compression.convention(SaveCompression.NONE)
         registry.convention("")
         namespace.convention("")
+        imageName.convention("")
         repository.convention("")
+        version.convention("")
+        tags.convention([])
         sourceRef.convention("")
         pullIfMissing.convention(false)
     }
@@ -89,10 +92,10 @@ abstract class DockerSaveTask extends DefaultTask {
     @TaskAction
     void saveImage() {
         // Configuration cache compatible implementation
-        if (!outputFile.present) {
+        if (!outputFile.isPresent()) {
             throw new IllegalStateException("outputFile property must be set")
         }
-        
+
         // Build the primary image reference for saving
         def imageRef = buildPrimaryImageReference()
         if (!imageRef) {
@@ -101,13 +104,16 @@ abstract class DockerSaveTask extends DefaultTask {
 
         // Handle pullIfMissing for sourceRef mode
         def sourceRefValue = sourceRef.getOrElse("")
-        if (!sourceRefValue.isEmpty() && pullIfMissing.get()) {
+        if (!sourceRefValue.isEmpty() && pullIfMissing.getOrElse(false)) {
             def service = dockerService.get()
+            if (!service) {
+                throw new IllegalStateException("dockerService must be provided for pullIfMissing")
+            }
             def exists = service.imageExists(imageRef).get()
             if (!exists) {
                 // Pull with authentication if configured
                 def authConfig = null
-                if (auth.present) {
+                if (auth.isPresent()) {
                     def authSpec = auth.get()
                     authConfig = new com.kineticfire.gradle.docker.model.AuthConfig(
                         authSpec.username.getOrElse(""),
@@ -123,10 +129,20 @@ abstract class DockerSaveTask extends DefaultTask {
 
         // Save Docker image using service
         def service = dockerService.get()
-        def compressionType = compression.get()
-        def outputPath = outputFile.get().asFile.toPath()
-        
+        if (!service) {
+            throw new IllegalStateException("dockerService must be provided")
+        }
+        def compressionType = compression.getOrElse(SaveCompression.NONE)
+        def outputFileValue = outputFile.get()
+        if (!outputFileValue) {
+            throw new IllegalStateException("outputFile must be provided")
+        }
+        def outputPath = outputFileValue.asFile.toPath()
+
         def future = service.saveImage(imageRef, outputPath, compressionType)
+        if (!future) {
+            throw new IllegalStateException("saveImage future cannot be null")
+        }
         future.get()
     }
     
@@ -146,7 +162,7 @@ abstract class DockerSaveTask extends DefaultTask {
             def repositoryValue = repository.getOrElse("")
             def imageNameValue = imageName.getOrElse("")
             def versionValue = version.getOrElse("")
-            def tagsValue = tags.get()
+            def tagsValue = tags.getOrElse([])
             
             if (tagsValue.isEmpty()) {
                 return null

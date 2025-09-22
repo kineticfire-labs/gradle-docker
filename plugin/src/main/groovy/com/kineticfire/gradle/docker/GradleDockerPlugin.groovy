@@ -183,7 +183,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             def capitalizedName = imageName.capitalize()
             
             // Validate that tags are specified for build tasks - avoid calling .get() which forces early evaluation
-            if (!imageSpec.tags.present || imageSpec.tags.getOrElse([]).empty) {
+            if (!imageSpec.tags.isPresent() || imageSpec.tags.getOrElse([]).empty) {
                 throw new GradleException(
                     "Image '${imageSpec.name}' must specify at least one tag\n" +
                     "Example: tags = ['latest', 'v1.0.0']"
@@ -196,7 +196,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
             
             // Save task
-            if (imageSpec.save.present) {
+            if (imageSpec.save.isPresent()) {
                 project.tasks.register("dockerSave${capitalizedName}", DockerSaveTask) { task ->
                     configureDockerSaveTask(task, imageSpec, dockerService)
                 }
@@ -208,7 +208,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
             
             // Publish task
-            if (imageSpec.publish.present) {
+            if (imageSpec.publish.isPresent()) {
                 project.tasks.register("dockerPublish${capitalizedName}", DockerPublishTask) { task ->
                     configureDockerPublishTask(task, imageSpec, dockerService)
                 }
@@ -224,10 +224,10 @@ class GradleDockerPlugin implements Plugin<Project> {
                 task.dependsOn("dockerTag${capitalizedName}")
                 
                 // Conditionally depend on save and publish
-                if (imageSpec.save.present) {
+                if (imageSpec.save.isPresent()) {
                     task.dependsOn("dockerSave${capitalizedName}")
                 }
-                if (imageSpec.publish.present) {
+                if (imageSpec.publish.isPresent()) {
                     task.dependsOn("dockerPublish${capitalizedName}")
                 }
             }
@@ -278,7 +278,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             def buildTaskName = "dockerBuild${capitalizedName}"
             
             // If image has build context, save/publish depend on build
-            def hasBuildContext = imageSpec.context.present || imageSpec.contextTask != null
+            def hasBuildContext = imageSpec.context.isPresent() || imageSpec.contextTask != null
             if (hasBuildContext) {
                 project.tasks.findByName("dockerSave${capitalizedName}")?.dependsOn(buildTaskName)
                 project.tasks.findByName("dockerPublish${capitalizedName}")?.dependsOn(buildTaskName)
@@ -291,14 +291,14 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
         
         project.tasks.named('dockerSave') {
-            def saveTaskNames = dockerExt.images.findAll { it.save.present }.collect { "dockerSave${it.name.capitalize()}" }
+            def saveTaskNames = dockerExt.images.findAll { it.save.isPresent() }.collect { "dockerSave${it.name.capitalize()}" }
             if (saveTaskNames) {
                 dependsOn saveTaskNames
             }
         }
         
         project.tasks.named('dockerPublish') {
-            def publishTaskNames = dockerExt.images.findAll { it.publish.present }.collect { "dockerPublish${it.name.capitalize()}" }
+            def publishTaskNames = dockerExt.images.findAll { it.publish.isPresent() }.collect { "dockerPublish${it.name.capitalize()}" }
             if (publishTaskNames) {
                 dependsOn publishTaskNames
             }
@@ -374,7 +374,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             // Directly set the expected destination directory without accessing the Task object
             // This avoids configuration cache issues with Task serialization
             task.contextPath.set(buildDirectory.dir("docker-context/${imageSpec.name}"))
-        } else if (imageSpec.context.present) {
+        } else if (imageSpec.context.isPresent()) {
             // Use traditional context directory
             task.contextPath.set(imageSpec.context)
         } else {
@@ -389,7 +389,7 @@ class GradleDockerPlugin implements Plugin<Project> {
      */
     private void configureDockerfile(DockerBuildTask task, ImageSpec imageSpec, project) {
         // Validate mutually exclusive dockerfile configuration
-        if (imageSpec.dockerfile.present && imageSpec.dockerfileName.present) {
+        if (imageSpec.dockerfile.isPresent() && imageSpec.dockerfileName.isPresent()) {
             throw new GradleException(
                 "Image '${imageSpec.name}' cannot specify both 'dockerfile' and 'dockerfileName'. " +
                 "Use 'dockerfile' for custom paths or 'dockerfileName' for custom names in default locations."
@@ -400,21 +400,21 @@ class GradleDockerPlugin implements Plugin<Project> {
         def providers = project.providers
         def buildDirectory = project.layout.buildDirectory
         
-        if (imageSpec.dockerfile.present) {
+        if (imageSpec.dockerfile.isPresent()) {
             // When dockerfile is explicitly set, always use it regardless of contextTask
             task.dockerfile.set(imageSpec.dockerfile)
         } else {
             // Handle dockerfileName or default dockerfile resolution using providers
             if (imageSpec.contextTask != null) {
                 // Use contextTask directory with custom or default filename
-                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                def dockerfileNameProvider = imageSpec.dockerfileName.isPresent() 
                     ? imageSpec.dockerfileName
                     : providers.provider { "Dockerfile" }
                 task.dockerfile.set(buildDirectory.dir("docker-context/${imageSpec.name}")
                     .map { contextDir -> contextDir.file(dockerfileNameProvider.get()) })
-            } else if (imageSpec.context.present) {
+            } else if (imageSpec.context.isPresent()) {
                 // Use traditional context directory with custom or default filename
-                def dockerfileNameProvider = imageSpec.dockerfileName.present 
+                def dockerfileNameProvider = imageSpec.dockerfileName.isPresent() 
                     ? imageSpec.dockerfileName
                     : providers.provider { "Dockerfile" }
                 task.dockerfile.set(imageSpec.context.file(dockerfileNameProvider))
