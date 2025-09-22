@@ -206,6 +206,8 @@ Write concise, clear comments to explain the demonstration code to a user.
 - **Limit line length to 120 characters; use spaces (never tabs).**
 - **Keep cyclomatic complexity ≤ 10 and nesting depth ≤ 3.**
 - **Do not declare success if code exceeds these limits without refactoring.**
+- **Correct ALL warnings resulting from the compilation, test, build, etc.**
+- **Do NOT declare success if compiling, testing, building, etc. the code generates warnings.**
 
 ### Apply Development Philosophies (`docs/project-standards/development-philosophies/development-philosophies.md`)
 - **Apply KISS, YAGNI, and DRY principles.**
