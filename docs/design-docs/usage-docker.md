@@ -139,7 +139,8 @@ docker {
                 outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
                 pullIfMissing.set(true)  // Pull if not available locally
                 
-                // Authentication for private registries (NEW FEATURE!)
+                // Optional authentication - only needed if registry requires credentials
+                // If omitted and registry requires auth, Docker will return an auth error
                 auth {
                     username.set("myuser")
                     password.set("mypass") 
@@ -213,11 +214,14 @@ Use enum values instead of strings:
 - `SaveCompression.XZ` - XZ compression (.tar.xz)
 - `SaveCompression.ZIP` - ZIP compression (.zip)
 
-### Authentication for Save Operations
-Save operations support authentication when `pullIfMissing=true`:
+### Authentication for Save Operations  
+Save operations support optional authentication when `pullIfMissing=true`:
 ```groovy
 save {
     pullIfMissing.set(true)
+    
+    // Optional - only add if registry requires authentication
+    // If omitted, operation proceeds without auth (may fail if registry requires it)
     auth {
         username.set("user")
         password.set("pass")
@@ -225,6 +229,8 @@ save {
     }
 }
 ```
+
+**Note**: Authentication blocks are always optional. If a registry requires authentication and none is provided, Docker will return a descriptive authentication error.
 
 ### Provider API Properties
 All properties use Gradle's Provider API for configuration cache compatibility:
@@ -234,16 +240,16 @@ All properties use Gradle's Provider API for configuration cache compatibility:
 
 ## Running Generated Tasks
 
-The plugin automatically generates tasks based on your image names:
+The plugin automatically generates tasks based on the DSL block name:
 
 ```bash
-# For a specific image named 'timeServer'
+# For a specific DSL block named 'timeServer'
 ./gradlew dockerBuildTimeServer    # Build only
 ./gradlew dockerTagTimeServer      # Tag only  
 ./gradlew dockerSaveTimeServer     # Save only
 ./gradlew dockerPublishTimeServer  # Publish only
 
-# Run ALL configured operations for specific image
+# Run ALL configured operations for specific DSL block named 'timeServer'
 ./gradlew dockerImageTimeServer
 
 # Run specific operation across ALL images
@@ -266,7 +272,7 @@ The plugin automatically generates tasks based on your image names:
 ### SourceRef Mode Rules  
 - **Required sourceRef**: Must specify valid `sourceRef` image reference
 - **No build properties**: Cannot use contextTask, buildArgs, labels, dockerfile when using `sourceRef`
-- **Authentication**: Required for private registries when `pullIfMissing=true`
+- **Authentication**: Optional for all registries; provide auth block if registry requires credentials
 
 ## Key Benefits
 
