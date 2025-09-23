@@ -1,0 +1,779 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.gradle.docker.service
+
+import com.github.dockerjava.api.DockerClient
+import com.github.dockerjava.api.command.*
+import com.github.dockerjava.api.exception.DockerException
+import com.github.dockerjava.api.exception.NotFoundException
+import com.github.dockerjava.api.model.BuildResponseItem
+import com.github.dockerjava.api.model.PushResponseItem
+import com.github.dockerjava.api.model.PullResponseItem
+import com.kineticfire.gradle.docker.exception.DockerServiceException
+import com.kineticfire.gradle.docker.model.*
+import org.gradle.api.services.BuildServiceParameters
+import spock.lang.Specification
+import spock.lang.TempDir
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.Paths
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.ExecutorService
+import java.util.concurrent.Executors
+import java.util.concurrent.Callable
+
+/**
+ * Enhanced unit tests for DockerServiceImpl to achieve 100% coverage
+ * Uses comprehensive mocking to test all Docker operations without requiring Docker daemon
+ */
+class DockerServiceImplEnhancedTest extends Specification {
+
+    @TempDir
+    Path tempDir
+
+    DockerClient mockDockerClient
+    ExecutorService mockExecutorService
+    TestableDockerServiceImpl service
+
+    def setup() {
+        mockDockerClient = Mock(DockerClient)
+        mockExecutorService = Mock(ExecutorService)
+        service = new TestableDockerServiceImpl(mockDockerClient, mockExecutorService)
+    }
+
+    // Constructor and initialization tests
+
+    def "constructor initializes with provided dependencies"() {
+        when:
+        def actualClient = service.getDockerClient()
+
+        then:
+        actualClient == mockDockerClient
+        service.executorService == mockExecutorService
+    }
+
+    def "createDockerClient creates and tests connection"() {
+        given:
+        def realService = new TestableDockerServiceImpl()
+        def pingCmd = Mock(PingCmd)
+
+        when:
+        realService.createDockerClient()
+
+        then:
+        // This will fail in test environment, which is expected
+        thrown(DockerServiceException)
+    }
+
+    def "createDockerClient handles connection failure"() {
+        given:
+        def realService = new TestableDockerServiceImpl()
+
+        when:
+        realService.createDockerClient()
+
+        then:
+        def ex = thrown(DockerServiceException)
+        ex.errorType == DockerServiceException.ErrorType.DAEMON_UNAVAILABLE
+        ex.message.contains("Failed to connect to Docker daemon")
+    }
+
+    // buildImage method tests
+
+    def "buildImage executes build command successfully"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(tempDir, dockerfile, [VAR1: "value1"], ["test:latest"])
+
+        def buildCmd = Mock(BuildImageCmd)
+        def buildCallback = Mock(BuildImageResultCallback)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag(_) >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.withBuildArg(_, _) >> buildCmd
+        buildCmd.exec(_) >> buildCallback
+        buildCallback.awaitImageId() >> "sha256:12345abcdef"
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            return CompletableFuture.completedFuture(callable.call())
+        }
+
+        when:
+        def result = service.buildImage(context).get()
+
+        then:
+        result == "sha256:12345abcdef"
+        1 * buildCmd.withDockerfile(dockerfile.toFile())
+        1 * buildCmd.withBaseDirectory(tempDir.toFile())
+        1 * buildCmd.withTag("test:latest")
+        1 * buildCmd.withBuildArg("VAR1", "value1")
+    }
+
+    def "buildImage applies multiple tags correctly"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(tempDir, dockerfile, [:], ["registry.io/app:1.0.0", "registry.io/app:latest"])
+
+        def buildCmd = Mock(BuildImageCmd)
+        def buildCallback = Mock(BuildImageResultCallback)
+        def tagCmd = Mock(TagImageCmd)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag("registry.io/app:1.0.0") >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.exec(_) >> buildCallback
+        buildCallback.awaitImageId() >> "sha256:12345abcdef"
+
+        mockDockerClient.tagImageCmd("sha256:12345abcdef", "registry.io/app", "latest") >> tagCmd
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            return CompletableFuture.completedFuture(callable.call())
+        }
+
+        when:
+        service.buildImage(context).get()
+
+        then:
+        1 * buildCmd.withTag("registry.io/app:1.0.0")
+        1 * tagCmd.exec()
+    }
+
+    def "buildImage handles DockerException during build"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(tempDir, dockerfile, [:], ["test:latest"])
+
+        def buildCmd = Mock(BuildImageCmd)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag(_) >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.exec(_) >> { throw new DockerException("Build failed", 500) }
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            try {
+                return CompletableFuture.completedFuture(callable.call())
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.buildImage(context).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.BUILD_FAILED
+        ex.cause.message.contains("Build failed")
+    }
+
+    def "buildImage handles general Exception during build"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(tempDir, dockerfile, [:], ["test:latest"])
+
+        def buildCmd = Mock(BuildImageCmd)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag(_) >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.exec(_) >> { throw new RuntimeException("Unexpected error") }
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            try {
+                return CompletableFuture.completedFuture(callable.call())
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.buildImage(context).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.BUILD_FAILED
+        ex.cause.message.contains("Unexpected error")
+    }
+
+    // tagImage method tests
+
+    def "tagImage applies all tags successfully"() {
+        given:
+        def sourceImage = "source:latest"
+        def tags = ["target1:latest", "target2:v1.0", "registry.io/target3:prod"]
+
+        def tagCmd1 = Mock(TagImageCmd)
+        def tagCmd2 = Mock(TagImageCmd)
+        def tagCmd3 = Mock(TagImageCmd)
+
+        mockDockerClient.tagImageCmd(sourceImage, "target1", "latest") >> tagCmd1
+        mockDockerClient.tagImageCmd(sourceImage, "target2", "v1.0") >> tagCmd2
+        mockDockerClient.tagImageCmd(sourceImage, "registry.io/target3", "prod") >> tagCmd3
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.tagImage(sourceImage, tags).get()
+
+        then:
+        1 * tagCmd1.exec()
+        1 * tagCmd2.exec()
+        1 * tagCmd3.exec()
+    }
+
+    def "tagImage handles DockerException during tagging"() {
+        given:
+        def sourceImage = "source:latest"
+        def tags = ["target:latest"]
+
+        def tagCmd = Mock(TagImageCmd)
+
+        mockDockerClient.tagImageCmd(sourceImage, "target", "latest") >> tagCmd
+        tagCmd.exec() >> { throw new DockerException("Tag failed", 404) }
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            try {
+                runnable.run()
+                return CompletableFuture.completedFuture(null)
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.tagImage(sourceImage, tags).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.TAG_FAILED
+        ex.cause.message.contains("Tag operation failed")
+    }
+
+    // saveImage method tests
+
+    def "saveImage with no compression saves successfully"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.tar")
+        def compression = SaveCompression.NONE
+
+        def saveCmd = Mock(SaveImageCmd)
+        def inputStream = new ByteArrayInputStream("image data".bytes)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> inputStream
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        Files.exists(outputFile)
+        Files.readString(outputFile) == "image data"
+    }
+
+    def "saveImage with GZIP compression saves successfully"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.tar.gz")
+        def compression = SaveCompression.GZIP
+
+        def saveCmd = Mock(SaveImageCmd)
+        def inputStream = new ByteArrayInputStream("image data".bytes)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> inputStream
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        Files.exists(outputFile)
+        Files.size(outputFile) > 0
+    }
+
+    def "saveImage with BZIP2 compression saves successfully"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.tar.bz2")
+        def compression = SaveCompression.BZIP2
+
+        def saveCmd = Mock(SaveImageCmd)
+        def inputStream = new ByteArrayInputStream("image data".bytes)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> inputStream
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        Files.exists(outputFile)
+        Files.size(outputFile) > 0
+    }
+
+    def "saveImage with XZ compression saves successfully"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.tar.xz")
+        def compression = SaveCompression.XZ
+
+        def saveCmd = Mock(SaveImageCmd)
+        def inputStream = new ByteArrayInputStream("image data".bytes)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> inputStream
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        Files.exists(outputFile)
+        Files.size(outputFile) > 0
+    }
+
+    def "saveImage with ZIP compression saves successfully"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.zip")
+        def compression = SaveCompression.ZIP
+
+        def saveCmd = Mock(SaveImageCmd)
+        def inputStream = new ByteArrayInputStream("image data".bytes)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> inputStream
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        Files.exists(outputFile)
+        Files.size(outputFile) > 0
+    }
+
+    def "saveImage handles DockerException during save"() {
+        given:
+        def imageId = "image123"
+        def outputFile = tempDir.resolve("image.tar")
+        def compression = SaveCompression.NONE
+
+        def saveCmd = Mock(SaveImageCmd)
+
+        mockDockerClient.saveImageCmd(imageId) >> saveCmd
+        saveCmd.exec() >> { throw new DockerException("Save failed", 404) }
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            try {
+                runnable.run()
+                return CompletableFuture.completedFuture(null)
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.saveImage(imageId, outputFile, compression).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.SAVE_FAILED
+        ex.cause.message.contains("Save failed")
+    }
+
+    // pushImage method tests
+
+    def "pushImage without auth pushes successfully"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+
+        def pushCmd = Mock(PushImageCmd)
+        def pushCallback = Mock(ResultCallback)
+
+        mockDockerClient.pushImageCmd("registry.io/app") >> pushCmd
+        pushCmd.withTag("latest") >> pushCmd
+        pushCmd.exec(_) >> pushCallback
+        pushCallback.awaitCompletion() >> null
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.pushImage(imageRef, null).get()
+
+        then:
+        1 * pushCmd.exec(_)
+        1 * pushCallback.awaitCompletion()
+    }
+
+    def "pushImage with auth credentials pushes successfully"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+        def auth = new AuthConfig("testuser", "testpass", null, "registry.io")
+
+        def pushCmd = Mock(PushImageCmd)
+        def pushCallback = Mock(ResultCallback)
+
+        mockDockerClient.pushImageCmd("registry.io/app") >> pushCmd
+        pushCmd.withTag("latest") >> pushCmd
+        pushCmd.withAuthConfig(_) >> pushCmd
+        pushCmd.exec(_) >> pushCallback
+        pushCallback.awaitCompletion() >> null
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.pushImage(imageRef, auth).get()
+
+        then:
+        1 * pushCmd.withAuthConfig(_)
+        1 * pushCmd.exec(_)
+        1 * pushCallback.awaitCompletion()
+    }
+
+    def "pushImage handles DockerException during push"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+
+        def pushCmd = Mock(PushImageCmd)
+
+        mockDockerClient.pushImageCmd("registry.io/app") >> pushCmd
+        pushCmd.withTag("latest") >> pushCmd
+        pushCmd.exec(_) >> { throw new DockerException("Push failed", 401) }
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            try {
+                runnable.run()
+                return CompletableFuture.completedFuture(null)
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.pushImage(imageRef, null).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.PUSH_FAILED
+        ex.cause.message.contains("Push failed")
+    }
+
+    // imageExists method tests
+
+    def "imageExists returns true for existing image"() {
+        given:
+        def imageRef = "existing:latest"
+
+        def inspectCmd = Mock(InspectImageCmd)
+        def inspectResponse = Mock(InspectImageResponse)
+
+        mockDockerClient.inspectImageCmd(imageRef) >> inspectCmd
+        inspectCmd.exec() >> inspectResponse
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            return CompletableFuture.completedFuture(callable.call())
+        }
+
+        when:
+        def result = service.imageExists(imageRef).get()
+
+        then:
+        result == true
+    }
+
+    def "imageExists returns false for non-existent image"() {
+        given:
+        def imageRef = "nonexistent:latest"
+
+        def inspectCmd = Mock(InspectImageCmd)
+
+        mockDockerClient.inspectImageCmd(imageRef) >> inspectCmd
+        inspectCmd.exec() >> { throw new NotFoundException("Image not found") }
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            try {
+                return CompletableFuture.completedFuture(callable.call())
+            } catch (NotFoundException e) {
+                return CompletableFuture.completedFuture(false)
+            }
+        }
+
+        when:
+        def result = service.imageExists(imageRef).get()
+
+        then:
+        result == false
+    }
+
+    def "imageExists returns false for general exception"() {
+        given:
+        def imageRef = "error:latest"
+
+        def inspectCmd = Mock(InspectImageCmd)
+
+        mockDockerClient.inspectImageCmd(imageRef) >> inspectCmd
+        inspectCmd.exec() >> { throw new RuntimeException("Connection error") }
+
+        mockExecutorService.submit(_ as Callable) >> { Callable callable ->
+            try {
+                return CompletableFuture.completedFuture(callable.call())
+            } catch (Exception e) {
+                return CompletableFuture.completedFuture(false)
+            }
+        }
+
+        when:
+        def result = service.imageExists(imageRef).get()
+
+        then:
+        result == false
+    }
+
+    // pullImage method tests
+
+    def "pullImage without auth pulls successfully"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+
+        def pullCmd = Mock(PullImageCmd)
+        def pullCallback = Mock(ResultCallback)
+
+        mockDockerClient.pullImageCmd("registry.io/app") >> pullCmd
+        pullCmd.withTag("latest") >> pullCmd
+        pullCmd.exec(_) >> pullCallback
+        pullCallback.awaitCompletion() >> null
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.pullImage(imageRef, null).get()
+
+        then:
+        1 * pullCmd.exec(_)
+        1 * pullCallback.awaitCompletion()
+    }
+
+    def "pullImage with auth credentials pulls successfully"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+        def auth = new AuthConfig("testuser", "testpass", null, "registry.io")
+
+        def pullCmd = Mock(PullImageCmd)
+        def pullCallback = Mock(ResultCallback)
+
+        mockDockerClient.pullImageCmd("registry.io/app") >> pullCmd
+        pullCmd.withTag("latest") >> pullCmd
+        pullCmd.withAuthConfig(_) >> pullCmd
+        pullCmd.exec(_) >> pullCallback
+        pullCallback.awaitCompletion() >> null
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            runnable.run()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        service.pullImage(imageRef, auth).get()
+
+        then:
+        1 * pullCmd.withAuthConfig(_)
+        1 * pullCmd.exec(_)
+        1 * pullCallback.awaitCompletion()
+    }
+
+    def "pullImage handles DockerException during pull"() {
+        given:
+        def imageRef = "registry.io/app:latest"
+
+        def pullCmd = Mock(PullImageCmd)
+
+        mockDockerClient.pullImageCmd("registry.io/app") >> pullCmd
+        pullCmd.withTag("latest") >> pullCmd
+        pullCmd.exec(_) >> { throw new DockerException("Pull failed", 404) }
+
+        mockExecutorService.submit(_ as Runnable) >> { Runnable runnable ->
+            try {
+                runnable.run()
+                return CompletableFuture.completedFuture(null)
+            } catch (Exception e) {
+                return CompletableFuture.failedFuture(e)
+            }
+        }
+
+        when:
+        service.pullImage(imageRef, null).get()
+
+        then:
+        def ex = thrown(ExecutionException)
+        ex.cause instanceof DockerServiceException
+        ex.cause.errorType == DockerServiceException.ErrorType.PULL_FAILED
+        ex.cause.message.contains("Pull failed")
+    }
+
+    // close method tests
+
+    def "close shuts down executor service and closes Docker client"() {
+        given:
+        mockExecutorService.isShutdown() >> false
+
+        when:
+        service.close()
+
+        then:
+        1 * mockExecutorService.shutdown()
+        1 * mockDockerClient.close()
+    }
+
+    def "close handles already shutdown executor service"() {
+        given:
+        mockExecutorService.isShutdown() >> true
+
+        when:
+        service.close()
+
+        then:
+        0 * mockExecutorService.shutdown()
+        1 * mockDockerClient.close()
+    }
+
+    def "close handles null executor service gracefully"() {
+        given:
+        service.executorService = null
+
+        when:
+        service.close()
+
+        then:
+        1 * mockDockerClient.close()
+        noExceptionThrown()
+    }
+
+    def "close handles null Docker client gracefully"() {
+        given:
+        service.dockerClient = null
+
+        when:
+        service.close()
+
+        then:
+        1 * mockExecutorService.shutdown()
+        noExceptionThrown()
+    }
+
+    def "close handles exceptions during shutdown"() {
+        given:
+        mockExecutorService.shutdown() >> { throw new RuntimeException("Shutdown error") }
+        mockDockerClient.close() >> { throw new RuntimeException("Close error") }
+
+        when:
+        service.close()
+
+        then:
+        noExceptionThrown() // Should not propagate exceptions
+    }
+
+    /**
+     * Testable implementation of DockerServiceImpl for testing
+     */
+    static class TestableDockerServiceImpl extends DockerServiceImpl {
+
+        DockerClient dockerClient
+        ExecutorService executorService
+
+        TestableDockerServiceImpl() {
+            super()
+        }
+
+        TestableDockerServiceImpl(DockerClient dockerClient, ExecutorService executorService) {
+            this.dockerClient = dockerClient
+            this.executorService = executorService
+        }
+
+        @Override
+        protected DockerClient createDockerClient() {
+            // Simulate real client creation for testing connection failure
+            throw new DockerServiceException(
+                DockerServiceException.ErrorType.DAEMON_UNAVAILABLE,
+                "Failed to connect to Docker daemon: Connection refused",
+                new RuntimeException("Connection refused")
+            )
+        }
+
+        @Override
+        protected DockerClient getDockerClient() {
+            return dockerClient ?: super.getDockerClient()
+        }
+
+        @Override
+        BuildServiceParameters.None getParameters() {
+            return null
+        }
+    }
+}

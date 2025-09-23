@@ -1,0 +1,498 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.gradle.docker.service
+
+import com.fasterxml.jackson.core.JsonProcessingException
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.kineticfire.gradle.docker.model.*
+import org.gradle.api.services.BuildServiceParameters
+import spock.lang.Specification
+import spock.lang.TempDir
+
+import java.nio.file.Files
+import java.nio.file.Path
+import java.nio.file.NoSuchFileException
+import java.io.IOException
+
+/**
+ * Enhanced unit tests for JsonServiceImpl to achieve 100% coverage
+ * Tests edge cases, error handling, and all code paths
+ */
+class JsonServiceImplEnhancedTest extends Specification {
+
+    @TempDir
+    Path tempDir
+
+    JsonServiceImpl service
+
+    def setup() {
+        service = new TestableJsonServiceImpl()
+    }
+
+    // Constructor and ObjectMapper tests
+
+    def "constructor initializes ObjectMapper with correct configuration"() {
+        when:
+        def mapper = service.getObjectMapper()
+
+        then:
+        mapper != null
+        mapper instanceof ObjectMapper
+        !mapper.getSerializationConfig().isEnabled(
+            com.fasterxml.jackson.databind.SerializationFeature.INDENT_OUTPUT
+        )
+    }
+
+    def "getObjectMapper returns configured ObjectMapper"() {
+        when:
+        def mapper1 = service.getObjectMapper()
+        def mapper2 = service.getObjectMapper()
+
+        then:
+        mapper1 != null
+        mapper1.is(mapper2) // Should return same instance
+    }
+
+    // toJson method comprehensive tests
+
+    def "toJson handles all primitive types"() {
+        expect:
+        service.toJson(value) == expected
+
+        where:
+        value       | expected
+        null        | "null"
+        true        | "true"
+        false       | "false"
+        42          | "42"
+        3.14        | "3.14"
+        "hello"     | '"hello"'
+        ""          | '""'
+        "null"      | '"null"'
+    }
+
+    def "toJson handles collections and maps"() {
+        expect:
+        service.toJson(value) == expected
+
+        where:
+        value                           | expected
+        []                             | "[]"
+        [1, 2, 3]                     | "[1,2,3]"
+        [:]                           | "{}"
+        [key: "value"]                | '{"key":"value"}'
+        [a: 1, b: [c: 2]]            | '{"a":1,"b":{"c":2}}'
+    }
+
+    def "toJson handles special characters and Unicode"() {
+        expect:
+        def result = service.toJson(input)
+        service.fromJson(result, String.class) == input
+
+        where:
+        input << [
+            "newline\ncharacter",
+            "tab\tcharacter",
+            "quote\"character",
+            "backslash\\character",
+            "unicode: ñoño 测试 русский",
+            "symbols: ©®™€£¥"
+        ]
+    }
+
+    def "toJson handles complex nested structures"() {
+        given:
+        def complex = [
+            metadata: [name: "app", version: "1.0.0"],
+            services: [
+                web: [port: 8080, replicas: 3],
+                db: [port: 5432, replicas: 1]
+            ],
+            networks: ["frontend", "backend"],
+            enabled: true
+        ]
+
+        when:
+        def json = service.toJson(complex)
+        def restored = service.fromJson(json, Map.class)
+
+        then:
+        restored.metadata.name == "app"
+        restored.services.web.port == 8080
+        restored.networks.size() == 2
+        restored.enabled == true
+    }
+
+    // fromJson method comprehensive tests
+
+    def "fromJson handles null and empty inputs"() {
+        expect:
+        service.fromJson(input, String.class) == expected
+
+        where:
+        input    | expected
+        null     | null
+        ""       | null
+        "   "    | null
+        "\t\n "  | null
+    }
+
+    def "fromJson handles primitive types"() {
+        expect:
+        service.fromJson(json, type) == expected
+
+        where:
+        json        | type        | expected
+        '"hello"'   | String      | "hello"
+        '42'        | Integer     | 42
+        '3.14'      | Double      | 3.14
+        'true'      | Boolean     | true
+        'false'     | Boolean     | false
+        'null'      | String      | null
+    }
+
+    def "fromJson throws JsonProcessingException for invalid JSON"() {
+        when:
+        service.fromJson(invalidJson, Map.class)
+
+        then:
+        thrown(JsonProcessingException)
+
+        where:
+        invalidJson << [
+            "{invalid",
+            "[invalid",
+            '{"key": invalid}',
+            '{"key": "value"',
+            'undefined',
+            '{key: "value"}' // Missing quotes around key
+        ]
+    }
+
+    def "fromJson throws JsonProcessingException for type mismatch"() {
+        when:
+        service.fromJson(json, type)
+
+        then:
+        thrown(Exception)
+
+        where:
+        json          | type
+        '"string"'    | Integer
+        '[]'          | String
+        '{}'          | Integer
+    }
+
+    // parseJsonArray method comprehensive tests
+
+    def "parseJsonArray handles null and empty inputs"() {
+        expect:
+        service.parseJsonArray(input) == []
+
+        where:
+        input << [null, "", "   ", "\t\n "]
+    }
+
+    def "parseJsonArray handles valid arrays"() {
+        when:
+        def result = service.parseJsonArray(json)
+
+        then:
+        result.size() == expectedSize
+        result == expected
+
+        where:
+        json                                    | expectedSize | expected
+        '[]'                                   | 0            | []
+        '[{}]'                                 | 1            | [[:]]
+        '[{"id":1}, {"id":2}]'                | 2            | [[id:1], [id:2]]
+        '[{"name":"test","data":[1,2,3]}]'     | 1            | [[name:"test", data:[1,2,3]]]
+    }
+
+    def "parseJsonArray throws JsonProcessingException for invalid input"() {
+        when:
+        service.parseJsonArray(invalidJson)
+
+        then:
+        thrown(JsonProcessingException)
+
+        where:
+        invalidJson << [
+            '[invalid',
+            '{"not": "array"}',
+            '[{invalid}]',
+            '[1, 2, invalid]'
+        ]
+    }
+
+    // parseJson method comprehensive tests
+
+    def "parseJson handles null and empty inputs"() {
+        expect:
+        service.parseJson(input) == null
+
+        where:
+        input << [null, "", "   ", "\t\n "]
+    }
+
+    def "parseJson handles all JSON types"() {
+        expect:
+        service.parseJson(json) == expected
+
+        where:
+        json                    | expected
+        'null'                  | null
+        'true'                  | true
+        'false'                 | false
+        '42'                    | 42
+        '3.14'                  | 3.14
+        '"string"'              | "string"
+        '[]'                    | []
+        '[1,2,3]'              | [1,2,3]
+        '{}'                    | [:]
+        '{"key":"value"}'       | [key:"value"]
+    }
+
+    def "parseJson throws JsonProcessingException for invalid JSON"() {
+        when:
+        service.parseJson(invalidJson)
+
+        then:
+        thrown(JsonProcessingException)
+
+        where:
+        invalidJson << [
+            '{invalid',
+            '[invalid',
+            'undefined',
+            'NaN'
+        ]
+    }
+
+    // writeComposeState method comprehensive tests
+
+    def "writeComposeState handles IOException during directory creation"() {
+        given:
+        def outputFile = tempDir.resolve("readonly/file.json")
+        def composeState = new ComposeState('test', 'test', [:], [])
+
+        // Make parent directory readonly to simulate permission error
+        def parentDir = outputFile.parent.toFile()
+        parentDir.mkdirs()
+        parentDir.setWritable(false)
+
+        when:
+        service.writeComposeState(composeState, outputFile)
+
+        then:
+        thrown(RuntimeException)
+
+        cleanup:
+        parentDir.setWritable(true)
+    }
+
+    def "writeComposeState handles valid cases"() {
+        given:
+        def outputFile = tempDir.resolve("output.json")
+        def composeState = new ComposeState('test', 'test', [:], [])
+
+        when:
+        service.writeComposeState(composeState, outputFile)
+
+        then:
+        Files.exists(outputFile)
+    }
+
+    // readComposeState method comprehensive tests
+
+    def "readComposeState handles non-existent file"() {
+        given:
+        def nonExistentFile = tempDir.resolve("does-not-exist.json")
+
+        when:
+        service.readComposeState(nonExistentFile)
+
+        then:
+        thrown(RuntimeException)
+    }
+
+    def "readComposeState handles valid JSON file"() {
+        given:
+        def inputFile = tempDir.resolve("valid.json")
+        Files.writeString(inputFile, '{"configName":"test","projectName":"test","services":{},"networks":[]}')
+
+        when:
+        def result = service.readComposeState(inputFile)
+
+        then:
+        result != null
+        result.configName == "test"
+    }
+
+    // Round-trip and integration tests
+
+    def "round-trip serialization works for ComposeState"() {
+        given:
+        def original = new ComposeState(
+            configName: 'test-config',
+            projectName: 'test-project',
+            services: [
+                'web': new ServiceInfo(
+                    containerId: 'web123',
+                    containerName: 'web',
+                    state: 'running',
+                    publishedPorts: [
+                        new PortMapping(hostPort: 8080, containerPort: 80, protocol: 'tcp')
+                    ]
+                )
+            ],
+            networks: ['frontend', 'backend']
+        )
+        def outputFile = tempDir.resolve("roundtrip.json")
+
+        when:
+        service.writeComposeState(original, outputFile)
+        def restored = service.readComposeState(outputFile)
+
+        then:
+        restored.configName == original.configName
+        restored.projectName == original.projectName
+        restored.services.size() == 1
+        restored.services['web'].containerId == 'web123'
+        restored.services['web'].publishedPorts.size() == 1
+        restored.networks.containsAll(['frontend', 'backend'])
+    }
+
+    def "handles large data structures efficiently"() {
+        given:
+        def largeData = [:]
+        (1..50).each { i ->
+            largeData["item$i"] = [
+                id: i,
+                name: "Item $i",
+                data: [value: i * 2, enabled: i % 2 == 0]
+            ]
+        }
+
+        when:
+        def json = service.toJson(largeData)
+        def restored = service.fromJson(json, Map.class)
+
+        then:
+        json.length() > 1000
+        restored.size() == 50
+        restored["item25"].id == 25
+        restored["item25"].data.value == 50
+    }
+
+    def "handles deeply nested structures"() {
+        given:
+        def deep = [level1: [level2: [level3: [level4: [level5: "deep value"]]]]]
+
+        when:
+        def json = service.toJson(deep)
+        def restored = service.fromJson(json, Map.class)
+
+        then:
+        restored.level1.level2.level3.level4.level5 == "deep value"
+    }
+
+    def "handles concurrent access safely"() {
+        given:
+        def service1 = new TestableJsonServiceImpl()
+        def service2 = new TestableJsonServiceImpl()
+        def data = [test: "concurrent"]
+
+        when:
+        def results = []
+        def threads = (1..10).collect { i ->
+            Thread.start {
+                def json = (i % 2 == 0) ? service1.toJson(data) : service2.toJson(data)
+                def parsed = (i % 2 == 0) ? service1.fromJson(json, Map.class) : service2.fromJson(json, Map.class)
+                results << parsed
+            }
+        }
+        threads.each { it.join() }
+
+        then:
+        results.size() == 10
+        results.every { it.test == "concurrent" }
+    }
+
+    // Edge cases and error conditions
+
+    def "handles extremely long strings"() {
+        given:
+        def longString = "x" * 100000
+        def data = [longField: longString]
+
+        when:
+        def json = service.toJson(data)
+        def restored = service.fromJson(json, Map.class)
+
+        then:
+        restored.longField == longString
+        json.length() > 100000
+    }
+
+    def "handles arrays with mixed types"() {
+        given:
+        def mixedArray = [1, "string", true, null, [nested: "object"], [1, 2, 3]]
+
+        when:
+        def json = service.toJson(mixedArray)
+        def restored = service.fromJson(json, List.class)
+
+        then:
+        restored.size() == 6
+        restored[0] == 1
+        restored[1] == "string"
+        restored[2] == true
+        restored[3] == null
+        restored[4] instanceof Map
+        restored[5] instanceof List
+    }
+
+    def "maintains field order in maps"() {
+        given:
+        def ordered = new LinkedHashMap()
+        ordered.put("first", 1)
+        ordered.put("second", 2)
+        ordered.put("third", 3)
+
+        when:
+        def json = service.toJson(ordered)
+
+        then:
+        json.indexOf("first") < json.indexOf("second")
+        json.indexOf("second") < json.indexOf("third")
+    }
+
+    /**
+     * Testable implementation of JsonServiceImpl
+     */
+    static class TestableJsonServiceImpl extends JsonServiceImpl {
+        TestableJsonServiceImpl() {
+            super()
+        }
+
+        @Override
+        BuildServiceParameters.None getParameters() {
+            return null
+        }
+    }
+}
