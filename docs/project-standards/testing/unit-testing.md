@@ -20,7 +20,7 @@
 - **MUST NOT** exclude code from coverage without a linked exception entry.
 
 ## Exceptions (unit-test gaps)
-- **MUST** document every gap in `docs/design-docs/testing/unit-test-gaps.md` (see "Gap entry template" below).
+- **MUST** document every gap in `docs/design-docs/tech-debt/unit-test-gaps.md` (see "Gap entry template" below).
 - **MUST** include: entity, extent of gap, reason, and compensating test plan (functional/integration).
 - **MUST** reference the gap entry in the coverage config exclusion (comment or ID).
 - **MUST** add/point to compensating tests that cover the behavior end-to-end.

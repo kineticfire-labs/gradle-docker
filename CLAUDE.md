@@ -150,7 +150,29 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 
 ## ENFORCE PROJECT STANDARDS ENFORCEMENT
 
-### Meet Testing Requirements (`docs/project-standards/testing/testing.md`)
+### Write code for maximal unit test coverage (minimize & simplify mocks)
+- Prefer pure functions; move logic out of methods with side effects into pure helpers.
+- Isolate side effects (I/O, clock, randomness, OS, network, DB) behind tiny boundary functions.
+- Inject dependencies (constructor/params) as interfaces; never locate them inside functions.
+- No globals/singletons/static I/O; avoid hidden state and implicit caches.
+- Keep classes and functions small, single-purpose, with minimal public surface.
+- Make functions deterministic and total; validate inputs early with guard clauses.
+- Return values, not void; avoid work in constructors.
+- Flatten control flow: explicit branches, early returns, shallow nesting.
+- Favor immutable data/value objects over mutable maps and optional internal state.
+- Abstract time, randomness, config (e.g., `Clock`, `Rng`, `Config`) and pass them in.
+- Apply impure shell, pure core: boundary → translate → pure core → translate → boundary.
+- Create test seams: pass factories/selectors; avoid `new` inside logic.
+- When mocking is needed, mock only boundary interfaces; keep them narrow and stable.
+- Prefer fakes/in-memory impls over deep mocks for complex protocols.
+- Control concurrency: inject executors/schedulers; make async code awaitable/testable.
+- No sleeps; wait on signals/conditions; expose timeouts as parameters.
+- Make boundary helpers idempotent; surface retries as configurable policy.
+- Inject logger; keep log formatting outside core logic.
+- Keep configuration external; pass as data, never read env/files in core.
+- Aim for one behavior per function to map cleanly to one focused test.
+
+### Meet Unit Testing Requirements (`docs/project-standards/testing/unit-testing.md`)
 - **Achieve 100% line and branch coverage** in all tests.
     - If 100% is not possible (e.g., due to external service calls), **document the gap** in the gap file.
     - Applies to all methods, including private methods; **use reflection if necessary** to test these.
@@ -159,6 +181,11 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
     - Move code that cannot be easily unit tested into the smallest method possible, and document gaps.
 - **Apply property-based testing** where applicable to achieve input domain coverage.
 - **Do not declare success if partial coverage or untested code exists without explicit gap documentation.**
+
+### Meeting Functional Testing Requirements (`docs/project-standards/testing/functional-testing.md`)
+1. 100% functionality coverage is required.
+2. Validate end-to-end behavior.
+
 
 ### Adhere to Integration Testing Requirements
 
