@@ -149,14 +149,15 @@ docker {
 ## **Phase 3: Task Implementation Updates**
 
 ### **Step 3.1: Update DockerBuildTask**
-- **Dual-mode support**:
-  - **Build Mode**: Use new nomenclature to construct full image references
-  - **SourceRef Mode**: Use sourceRef as primary image reference (no building occurs)
+- **Build Mode ONLY support**:
+  - Use new nomenclature to construct full image references
+  - Validate that sourceRef is NOT set (mutually exclusive with building)
+  - Throw error if sourceRef is provided (building and existing image reference are mutually exclusive)
 - Support labels via `--label` arguments to `docker build` (Build Mode only)
 - Maintain Provider API patterns (only call `.get()` in `@TaskAction`)
 - **Add missing properties**:
   - All nomenclature properties: `registry`, `namespace`, `imageName`, `repository`, `version`, `tags`, `labels`
-  - SourceRef properties: `sourceRef`
+  - **NO sourceRef property** - mutually exclusive with building new images
 
 ### **Step 3.2: Update DockerTagTask**
 - **Dual-mode support**:
@@ -211,7 +212,7 @@ docker {
 ### **Step 5.2: Task Registration with Providers**
 ```groovy
 tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-    // Build Mode properties
+    // Build Mode properties ONLY
     task.registry.set(imageSpec.registry)
     task.namespace.set(imageSpec.namespace)
     task.imageName.set(imageSpec.imageName)
@@ -220,8 +221,8 @@ tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
     task.tags.set(imageSpec.tags)
     task.labels.set(imageSpec.labels)
 
-    // SourceRef Mode properties
-    task.sourceRef.set(imageSpec.sourceRef)
+    // NO sourceRef - mutually exclusive with building
+    // Validation in task will ensure sourceRef is not set in ImageSpec
 
     // ... other provider-based configuration
 }
