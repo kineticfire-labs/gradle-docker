@@ -145,12 +145,11 @@ class DockerNomenclatureFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
-            .build()
+            .buildAndFail()
 
         then:
-        // Currently the validation allows this configuration, so test should pass
-        // The validation logic might be implemented in the task execution phase rather than configuration
-        result.output.contains('dockerBuild')
+        // Should now properly validate and reject sourceRef + build properties combination
+        result.output.contains('cannot use both') && result.output.contains('sourceRef')
     }
 
     def "supports valid build mode configuration with namespace and imageName"() {

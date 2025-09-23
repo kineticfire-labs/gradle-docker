@@ -425,11 +425,11 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Save Docker image to file: ${imageSpec.name}"
-        
+
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-        
+
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
@@ -437,23 +437,28 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.repository.set(imageSpec.repository)
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
-        
+
+        // Configure SourceRef Mode property
+        task.sourceRef.set(imageSpec.sourceRef)
+
         // Configure save specification if present
         if (imageSpec.save.present) {
             def saveSpec = imageSpec.save.get()
             task.outputFile.set(saveSpec.outputFile)
             task.compression.set(saveSpec.compression)  // Now using SaveCompression enum directly
+            task.pullIfMissing.set(saveSpec.pullIfMissing)
+            task.auth.set(saveSpec.auth)
         }
     }
     
     private void configureDockerTagTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Tag Docker image: ${imageSpec.name}"
-        
+
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-        
+
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
@@ -461,6 +466,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.repository.set(imageSpec.repository)
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
+
+        // Configure SourceRef Mode property
+        task.sourceRef.set(imageSpec.sourceRef)
     }
     
     private void configureDockerPublishTask(task, imageSpec, dockerService) {

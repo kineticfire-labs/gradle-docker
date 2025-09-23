@@ -86,7 +86,23 @@ abstract class DockerExtension {
         if (!hasSourceRef) {
             validateNomenclature(imageSpec)
         }
-        
+
+        // Validate sourceRef exclusivity with build properties
+        if (hasSourceRef) {
+            def hasBuildProperties = hasContextTask || hasExplicitContext ||
+                                   imageSpec.buildArgs.isPresent() && !imageSpec.buildArgs.get().isEmpty() ||
+                                   imageSpec.labels.isPresent() && !imageSpec.labels.get().isEmpty() ||
+                                   imageSpec.dockerfile.isPresent() || imageSpec.dockerfileName.isPresent()
+
+            if (hasBuildProperties) {
+                throw new GradleException(
+                    "Image '${imageSpec.name}' cannot use both 'sourceRef' and build-related properties. " +
+                    "sourceRef is for existing images, while build properties are for building new images. " +
+                    "Use either sourceRef OR build properties, not both."
+                )
+            }
+        }
+
         // Validate required properties - must have at least one context source
         if (!hasExplicitContext && !hasContextTask && !hasSourceRef) {
             throw new GradleException(
