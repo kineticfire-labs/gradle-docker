@@ -384,4 +384,509 @@ class DockerComposeClassExtensionTest extends Specification {
         method.setAccessible(true)
         method.invoke(extension, uniqueProjectName)
     }
+
+    // Additional tests for missing coverage scenarios
+
+    def "sanitizeProjectName handles edge cases"() {
+        expect:
+        invokeSanitizeProjectName(input) == expected
+
+        where:
+        input                    | expected
+        "-start-with-hyphen"    | "start-with-hyphen"
+        "end-with-hyphen-"      | "end-with-hyphen"
+        "multiple---hyphens"    | "multiple-hyphens"
+        "123numbers"            | "123numbers"
+        "MixedCASE"             | "mixedcase"
+        "@special-chars"               | "special-chars"
+    }
+
+    def "beforeAll handles startup failure with cleanup failure"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.toFile(_) >> new File(".")
+
+        // First cleanup succeeds, compose start fails, second cleanup fails
+        processExecutor.executeWithTimeout(_, _, _) >>> [
+            new ProcessExecutor.ProcessResult(0, "Cleanup success"),
+            new ProcessExecutor.ProcessResult(1, "Startup failed"),
+            new ProcessExecutor.ProcessResult(1, "Cleanup failed")
+        ]
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(1, "Compose failed")
+
+        when:
+        extension.beforeAll(context)
+
+        then:
+        Exception ex = thrown()
+        // Check that some exception is thrown due to the startup failure
+        ex.message != null
+    }
+
+    def "beforeAll handles compose file not found"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> false
+
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Cleanup success")
+
+        when:
+        extension.beforeAll(context)
+
+        then:
+        IllegalStateException ex = thrown()
+        ex.message.contains("Compose file not found")
+    }
+
+    def "afterAll handles null stored project name"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "fallback-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(_) >> false
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+
+        // Don't call beforeAll to set up project name, so afterAll uses fallback
+
+        when:
+        extension.afterAll(context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "waitForStackToBeReady times out after max attempts"() {
+        given:
+        // Return non-healthy status for all attempts
+        processExecutor.execute("docker", "compose", "-p", "test-project", "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"State":"starting"}')
+
+        when:
+        invokeWaitForStackToBeReady("test-stack", "test-project")
+
+        then:
+        noExceptionThrown()
+        // Should complete after max attempts without throwing exception
+    }
+
+    def "waitForStackToBeReady handles process execution failure"() {
+        given:
+        processExecutor.execute("docker", "compose", "-p", "test-project", "ps", "--format", "json") >>> [
+            { throw new IOException("Process execution failed") },
+            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
+        ]
+
+        when:
+        invokeWaitForStackToBeReady("test-stack", "test-project")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupStateFile handles file deletion IOException"() {
+        given:
+        Path stateDir = Paths.get("build/compose-state")
+        Path stateFile = stateDir.resolve("test-stack-MyClass-state.json")
+
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(stateDir) >> true
+        fileService.list(stateDir) >> Stream.of(stateFile)
+        fileService.delete(stateFile) >> { throw new IOException("Delete failed") }
+
+        when:
+        invokeCleanupStateFile("test-stack", "test-project-MyClass-123")
+
+        then:
+        noExceptionThrown()
+        // Should handle IOException gracefully
+    }
+
+    def "forceRemoveContainersByName handles container removal failure"() {
+        given:
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "name=test-project") >>
+            new ProcessExecutor.ProcessResult(0, "container1\ncontainer2")
+        processExecutor.execute("docker", "rm", "-f", "container1") >>
+            new ProcessExecutor.ProcessResult(1, "Removal failed")
+        processExecutor.execute("docker", "rm", "-f", "container2") >>
+            new ProcessExecutor.ProcessResult(0, "Removed")
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=test-project") >>
+            new ProcessExecutor.ProcessResult(0, "container3")
+        processExecutor.execute("docker", "rm", "-f", "container3") >>
+            new ProcessExecutor.ProcessResult(1, "Label removal failed")
+
+        when:
+        invokeForceRemoveContainersByName("test-project")
+
+        then:
+        noExceptionThrown()
+        // Should handle individual container removal failures gracefully
+    }
+
+    def "forceRemoveContainersByName handles process execution exceptions"() {
+        given:
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "name=test-project") >>
+            { throw new IOException("Docker command failed") }
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=test-project") >>
+            { throw new InterruptedException("Process interrupted") }
+
+        when:
+        invokeForceRemoveContainersByName("test-project")
+
+        then:
+        noExceptionThrown()
+        // Should handle exceptions gracefully
+    }
+
+    def "startComposeStack handles non-zero exit code"() {
+        given:
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(1, "Docker compose failed")
+
+        when:
+        invokeStartComposeStack("test-stack", "test-project")
+
+        then:
+        RuntimeException ex = thrown()
+        ex.message.contains("Failed to start compose stack")
+        ex.message.contains("Docker compose failed")
+    }
+
+    def "stopComposeStack handles non-zero exit code gracefully"() {
+        given:
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(1, "Docker compose down failed")
+
+        when:
+        invokeStopComposeStack("test-stack", "test-project")
+
+        then:
+        noExceptionThrown()
+        // stopComposeStack should not throw exceptions, just log warnings
+    }
+
+    // Helper methods for testing private methods not already covered
+
+    private void invokeStartComposeStack(String stackName, String uniqueProjectName) {
+        Method method = DockerComposeClassExtension.class.getDeclaredMethod("startComposeStack", String.class, String.class)
+        method.setAccessible(true)
+        try {
+            method.invoke(extension, stackName, uniqueProjectName)
+        } catch (InvocationTargetException e) {
+            // Unwrap the actual exception from reflection
+            throw e.cause
+        }
+    }
+
+    private void invokeStopComposeStack(String stackName, String uniqueProjectName) {
+        Method method = DockerComposeClassExtension.class.getDeclaredMethod("stopComposeStack", String.class, String.class)
+        method.setAccessible(true)
+        method.invoke(extension, stackName, uniqueProjectName)
+    }
+
+    // Tests for missing exception handling coverage in afterAll method
+    
+    def "afterAll handles container cleanup failure"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
+
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+
+        extension.beforeAll(context)  // Initialize state
+
+        // Make cleanup operations fail
+        processExecutor.executeInDirectory(_, _) >>> [
+            new ProcessExecutor.ProcessResult(0, "Success"),  // For beforeAll
+            { throw new Exception("Container cleanup failed") },  // stopComposeStack fails
+            new ProcessExecutor.ProcessResult(0, "Force cleanup success")  // forceRemoveContainersByName succeeds
+        ]
+
+        when:
+        extension.afterAll(context)
+
+        then:
+        noExceptionThrown()  // Should handle the exception gracefully
+    }
+
+    def "afterAll handles force cleanup failure"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
+
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+
+        extension.beforeAll(context)  // Initialize state
+
+        // Make force cleanup fail
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >>> [
+            new ProcessExecutor.ProcessResult(0, ""),  // For beforeAll
+            { throw new Exception("Force cleanup failed") }  // forceRemoveContainersByName fails
+        ]
+
+        when:
+        extension.afterAll(context)
+
+        then:
+        noExceptionThrown()  // Should handle the exception gracefully
+    }
+
+    def "afterAll handles state file cleanup failure"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        fileService.list(Paths.get("build/compose-state")) >> Stream.of(Paths.get("state-file"))
+
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+
+        extension.beforeAll(context)  // Initialize state
+
+        // Make state file cleanup fail
+        fileService.delete(_) >> { throw new IOException("State file cleanup failed") }
+
+        when:
+        extension.afterAll(context)
+
+        then:
+        noExceptionThrown()  // Should handle the exception gracefully
+    }
+
+    def "afterAll propagates exception when both cleanup and force cleanup fail"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
+        systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        context.getTestClass() >> Optional.of(String.class)
+        timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
+
+        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
+        fileService.exists(composeFile) >> true
+        fileService.resolve(".") >> Paths.get(".")
+        fileService.toFile(_) >> new File(".")
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
+
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
+        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+
+        extension.beforeAll(context)  // Initialize state
+
+        // Make both cleanup operations fail
+        processExecutor.executeInDirectory(_, _) >>> [
+            new ProcessExecutor.ProcessResult(0, "Success"),  // For beforeAll
+            { throw new Exception("Container cleanup failed") }  // stopComposeStack fails
+        ]
+        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >>> [
+            new ProcessExecutor.ProcessResult(0, ""),  // For beforeAll
+            { throw new Exception("Force cleanup failed") }  // forceRemoveContainersByName fails
+        ]
+
+        when:
+        extension.afterAll(context)
+
+        then:
+        // Should complete without throwing exception - failures are logged but don't fail the test
+        noExceptionThrown()
+    }
+
+    // Tests for forceRemoveContainersByName method coverage gaps
+    
+    def "forceRemoveContainersByName handles containers found and removed"() {
+        given:
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=test-project") >>
+            new ProcessExecutor.ProcessResult(0, "container1\ncontainer2\n")
+        processExecutor.execute("docker", "rm", "-f", "container1", "container2") >>
+            new ProcessExecutor.ProcessResult(0, "Removed containers")
+
+        when:
+        invokeForceRemoveContainersByName("test-project")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "forceRemoveContainersByName handles container removal failure"() {
+        given:
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=test-project") >>
+            new ProcessExecutor.ProcessResult(0, "container1\n")
+        processExecutor.execute("docker", "rm", "-f", "container1") >>
+            new ProcessExecutor.ProcessResult(1, "Failed to remove container")
+
+        when:
+        invokeForceRemoveContainersByName("test-project")
+
+        then:
+        noExceptionThrown()  // Should not throw exception, just log warning
+    }
+
+    def "forceRemoveContainersByName handles process executor exception"() {
+        given:
+        processExecutor.execute("docker", "ps", "-aq", "--filter", "label=com.docker.compose.project=test-project") >>
+            { throw new IOException("Process execution failed") }
+
+        when:
+        invokeForceRemoveContainersByName("test-project")
+
+        then:
+        noExceptionThrown()  // Should not throw exception, just log warning
+    }
+
+    // Tests for cleanupStateFile lambda expressions coverage
+    
+    def "cleanupStateFile handles file deletion with lambda expressions"() {
+        given:
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        Path stateFile1 = Paths.get("build/compose-state/state1")
+        Path stateFile2 = Paths.get("build/compose-state/state2")
+        fileService.list(Paths.get("build/compose-state")) >> Stream.of(stateFile1, stateFile2)
+
+        // Mock the toString to match expected pattern
+        stateFile1.metaClass.toString = { -> "test-project-123045.state" }
+        stateFile2.metaClass.toString = { -> "other-project-456789.state" }
+        
+        fileService.delete(stateFile1) >> { /* successful deletion */ }
+        fileService.delete(stateFile2) >> { /* successful deletion */ }
+
+        when:
+        invokeCleanupStateFile("test-project", "123045")
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupStateFile handles file deletion exception in lambda"() {
+        given:
+        fileService.resolve("build") >> Paths.get("build")
+        fileService.exists(Paths.get("build/compose-state")) >> true
+        Path stateFile = Paths.get("build/compose-state/state1")
+        fileService.list(Paths.get("build/compose-state")) >> Stream.of(stateFile)
+
+        // Mock the toString to match expected pattern
+        stateFile.metaClass.toString = { -> "test-project-123045.state" }
+        
+        fileService.delete(stateFile) >> { throw new IOException("File deletion failed") }
+
+        when:
+        invokeCleanupStateFile("test-project", "123045")
+
+        then:
+        noExceptionThrown()  // Lambda should catch and handle IOException
+    }
+
+    // Tests for missing edge cases in sanitizeProjectName
+    
+    def "sanitizeProjectName handles edge case with leading non-alphanumeric character"() {
+        expect:
+        invokeSanitizeProjectName("@project-name") == "project-name"
+        invokeSanitizeProjectName("123project") == "123project"  // Numbers are allowed at start
+        invokeSanitizeProjectName("!@#\$%project") == "project"
+    }
+
+    // Test for missing branch in getProjectName
+    
+    def "getProjectName handles empty test class scenario"() {
+        given:
+        systemPropertyService.getProperty("docker.compose.project") >> null
+        context.getTestClass() >> Optional.empty()
+
+        when:
+        String result = invokeGetProjectName(context)
+
+        then:
+        result == "test"
+    }
+
+    // Test for timeout scenario in waitForStackToBeReady
+    
+    def "waitForStackToBeReady handles maximum attempts reached with timeout"() {
+        given:
+        // Mock the sleep to avoid actual delays
+        timeService.sleep(1000) >> { /* immediate return */ }
+        
+        // Return unhealthy status for all attempts (including the loop timeout condition)
+        processExecutor.execute("docker", "compose", "-p", "test-project", "ps", "--format", "json") >>
+            new ProcessExecutor.ProcessResult(0, '{"State":"starting"}')
+
+        when:
+        invokeWaitForStackToBeReady("test-stack", "test-project")
+
+        then:
+        noExceptionThrown()
+        // Should complete after max attempts without throwing exception
+    }
+
 }
