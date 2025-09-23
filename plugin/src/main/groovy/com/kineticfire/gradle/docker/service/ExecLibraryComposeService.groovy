@@ -18,8 +18,7 @@ package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.exception.ComposeServiceException
 import com.kineticfire.gradle.docker.model.*
-import org.gradle.api.logging.Logger
-import org.gradle.api.logging.Logging
+import com.google.common.annotations.VisibleForTesting
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
 
@@ -32,54 +31,31 @@ import java.util.concurrent.CompletableFuture
  */
 abstract class ExecLibraryComposeService implements BuildService<BuildServiceParameters.None>, ComposeService {
     
-    private static final Logger logger = Logging.getLogger(ExecLibraryComposeService)
+    private final ProcessExecutor processExecutor
+    private final CommandValidator commandValidator
+    private final ServiceLogger serviceLogger
     
     @Inject
     ExecLibraryComposeService() {
-        validateDockerCompose()
-        logger.info("ComposeService initialized with docker-compose CLI")
+        this(new DefaultProcessExecutor(), 
+             new DefaultCommandValidator(new DefaultProcessExecutor()), 
+             new DefaultServiceLogger(ExecLibraryComposeService.class))
     }
     
-    protected void validateDockerCompose() {
-        try {
-            def process = new ProcessBuilder("docker", "compose", "version").start()
-            process.waitFor()
-            if (process.exitValue() != 0) {
-                // Try fallback to docker-compose
-                process = new ProcessBuilder("docker-compose", "--version").start()
-                process.waitFor()
-                if (process.exitValue() != 0) {
-                    throw new ComposeServiceException(
-                        ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
-                        "Docker Compose is not available. Please install Docker Compose.",
-                        "Install Docker Compose or Docker Desktop which includes Compose"
-                    )
-                }
-                logger.info("Using legacy docker-compose command")
-            } else {
-                logger.info("Using docker compose plugin")
-            }
-        } catch (Exception e) {
-            throw new ComposeServiceException(
-                ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE,
-                "Failed to validate Docker Compose installation: ${e.message}",
-                "Ensure Docker and Docker Compose are installed and accessible in PATH"
-            )
-        }
+    @VisibleForTesting
+    ExecLibraryComposeService(ProcessExecutor processExecutor, 
+                              CommandValidator commandValidator, 
+                              ServiceLogger serviceLogger) {
+        this.processExecutor = processExecutor
+        this.commandValidator = commandValidator
+        this.serviceLogger = serviceLogger
+        
+        commandValidator.validateDockerCompose()
+        serviceLogger.info("ComposeService initialized with docker-compose CLI")
     }
     
     protected List<String> getComposeCommand() {
-        // Try docker compose first (newer), fallback to docker-compose
-        try {
-            def process = new ProcessBuilder("docker", "compose", "version").start()
-            process.waitFor()
-            if (process.exitValue() == 0) {
-                return ["docker", "compose"]
-            }
-        } catch (Exception ignored) {
-            // Fall through to legacy command
-        }
-        return ["docker-compose"]
+        return commandValidator.detectComposeCommand()
     }
     
     @Override
@@ -89,7 +65,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
         return CompletableFuture.supplyAsync({
             try {
-                logger.info("Starting Docker Compose stack: {}", config.stackName)
+                serviceLogger.info("Starting Docker Compose stack: ${config.stackName}")
                 
                 def composeCommand = getComposeCommand()
                 def command = composeCommand.clone()
@@ -110,19 +86,15 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                 // Add the up command
                 command.addAll(["up", "-d"])
                 
-                logger.debug("Executing: {}", command.join(" "))
+                serviceLogger.debug("Executing: ${command.join(' ')}")
                 
-                def processBuilder = new ProcessBuilder(command)
-                processBuilder.directory(config.composeFiles.first().parent.toFile())
+                def workingDir = config.composeFiles.first().parent.toFile()
+                def result = processExecutor.execute(command, workingDir)
                 
-                def process = processBuilder.start()
-                def exitCode = process.waitFor()
-                
-                if (exitCode != 0) {
-                    def errorOutput = process.errorStream.text
+                if (!result.isSuccess()) {
                     throw new ComposeServiceException(
                         ComposeServiceException.ErrorType.SERVICE_START_FAILED,
-                        "Docker Compose up failed with exit code ${exitCode}: ${errorOutput}",
+                        "Docker Compose up failed with exit code ${result.exitCode}: ${result.stderr}",
                         "Check your compose file syntax and service configurations"
                     )
                 }
@@ -136,7 +108,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                     services
                 )
                 
-                logger.info("Docker Compose stack started: {}", config.stackName)
+                serviceLogger.info("Docker Compose stack started: ${config.stackName}")
                 return composeState
                 
             } catch (ComposeServiceException e) {
@@ -156,19 +128,17 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", "--format", "json"]
             
-            def process = new ProcessBuilder(command).start()
-            def output = process.inputStream.text
-            def exitCode = process.waitFor()
+            def result = processExecutor.execute(command)
             
-            if (exitCode != 0) {
-                logger.warn("Failed to get stack services for project {}: {}", projectName, process.errorStream.text)
+            if (!result.isSuccess()) {
+                serviceLogger.warn("Failed to get stack services for project ${projectName}: ${result.stderr}")
                 return [:]
             }
             
             def services = [:]
-            if (output?.trim()) {
+            if (result.stdout?.trim()) {
                 // Parse JSON lines (docker compose ps outputs one JSON object per line)
-                output.split('\n').each { line ->
+                result.stdout.split('\n').each { line ->
                     if (line?.trim()) {
                         try {
                             def json = new groovy.json.JsonSlurper().parseText(line)
@@ -179,16 +149,14 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                             if (serviceName) {
                                 def serviceState = parseServiceState(status)
                                 services[serviceName] = new ServiceInfo(
+                                    json.ID ?: 'unknown',
                                     serviceName,
-                                    json.Image ?: 'unknown',
-                                    serviceState,
-                                    ports,
-                                    json.Names ? [json.Names] : [json.Name ?: serviceName],
-                                    json.ID ?: 'unknown'
+                                    serviceState.toString(),
+                                    ports
                                 )
                             }
                         } catch (Exception e) {
-                            logger.debug("Failed to parse service info line: {} - {}", line, e.message)
+                            serviceLogger.debug("Failed to parse service info line: ${line} - ${e.message}")
                         }
                     }
                 }
@@ -197,7 +165,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             return services
             
         } catch (Exception e) {
-            logger.warn("Error getting stack services: {}", e.message)
+            serviceLogger.warn("Error getting stack services: ${e.message}")
             return [:]
         }
     }
@@ -227,26 +195,24 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
         return CompletableFuture.runAsync({
             try {
-                logger.info("Stopping Docker Compose stack: {}", projectName)
+                serviceLogger.info("Stopping Docker Compose stack: ${projectName}")
                 
                 def composeCommand = getComposeCommand()
                 def command = composeCommand + ["-p", projectName, "down", "--remove-orphans"]
                 
-                logger.debug("Executing: {}", command.join(" "))
+                serviceLogger.debug("Executing: ${command.join(' ')}")
                 
-                def process = new ProcessBuilder(command).start()
-                def exitCode = process.waitFor()
+                def result = processExecutor.execute(command)
                 
-                if (exitCode != 0) {
-                    def errorOutput = process.errorStream.text
+                if (!result.isSuccess()) {
                     throw new ComposeServiceException(
                         ComposeServiceException.ErrorType.SERVICE_STOP_FAILED,
-                        "Docker Compose down failed with exit code ${exitCode}: ${errorOutput}",
+                        "Docker Compose down failed with exit code ${result.exitCode}: ${result.stderr}",
                         "Check if the project exists and is accessible"
                     )
                 }
                 
-                logger.info("Docker Compose stack stopped: {}", projectName)
+                serviceLogger.info("Docker Compose stack stopped: ${projectName}")
                 
             } catch (ComposeServiceException e) {
                 throw e
@@ -267,7 +233,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
         return CompletableFuture.runAsync({
             try {
-                logger.info("Stopping Docker Compose stack: {} (project: {})", config.stackName, config.projectName)
+                serviceLogger.info("Stopping Docker Compose stack: ${config.stackName} (project: ${config.projectName})")
                 
                 def composeCommand = getComposeCommand()
                 def command = composeCommand.clone()
@@ -288,24 +254,20 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                 // Add the down command
                 command.addAll(["down", "--remove-orphans"])
                 
-                logger.debug("Executing: {}", command.join(" "))
+                serviceLogger.debug("Executing: ${command.join(' ')}")
                 
-                def processBuilder = new ProcessBuilder(command)
-                processBuilder.directory(config.composeFiles.first().parent.toFile())
+                def workingDir = config.composeFiles.first().parent.toFile()
+                def result = processExecutor.execute(command, workingDir)
                 
-                def process = processBuilder.start()
-                def exitCode = process.waitFor()
-                
-                if (exitCode != 0) {
-                    def errorOutput = process.errorStream.text
+                if (!result.isSuccess()) {
                     throw new ComposeServiceException(
                         ComposeServiceException.ErrorType.SERVICE_STOP_FAILED,
-                        "Docker Compose down failed with exit code ${exitCode}: ${errorOutput}",
+                        "Docker Compose down failed with exit code ${result.exitCode}: ${result.stderr}",
                         "Check your compose file syntax and project configuration"
                     )
                 }
                 
-                logger.info("Docker Compose stack stopped: {} (project: {})", config.stackName, config.projectName)
+                serviceLogger.info("Docker Compose stack stopped: ${config.stackName} (project: ${config.projectName})")
                 
             } catch (ComposeServiceException e) {
                 throw e
@@ -326,7 +288,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
         return CompletableFuture.supplyAsync({
             try {
-                logger.info("Waiting for services: {}", config.services)
+                serviceLogger.info("Waiting for services: ${config.services}")
                 
                 def startTime = System.currentTimeMillis()
                 def timeoutMillis = config.timeout.toMillis()
@@ -343,7 +305,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                     }
                     
                     if (allReady) {
-                        logger.info("All services are ready: {}", config.services)
+                        serviceLogger.info("All services are ready: ${config.services}")
                         return config.targetState
                     }
                     
@@ -373,23 +335,21 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", serviceName, "--format", "table"]
             
-            def process = new ProcessBuilder(command).start()
-            def output = process.inputStream.text
-            def exitCode = process.waitFor()
+            def result = processExecutor.execute(command)
             
-            if (exitCode == 0 && output) {
+            if (result.isSuccess() && result.stdout) {
                 // Simple state checking - in real implementation would parse the output properly
                 if (targetState == ServiceStatus.RUNNING) {
-                    return output.toLowerCase().contains("up") || output.toLowerCase().contains("running")
+                    return result.stdout.toLowerCase().contains("up") || result.stdout.toLowerCase().contains("running")
                 } else if (targetState == ServiceStatus.HEALTHY) {
-                    return output.toLowerCase().contains("healthy")
+                    return result.stdout.toLowerCase().contains("healthy")
                 }
             }
             
             return false
             
         } catch (Exception e) {
-            logger.debug("Error checking service ready state: {}", e.message)
+            serviceLogger.debug("Error checking service ready state: ${e.message}")
             return false
         }
     }
@@ -404,7 +364,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
         return CompletableFuture.supplyAsync({
             try {
-                logger.info("Capturing logs for project: {}", projectName)
+                serviceLogger.info("Capturing logs for project: ${projectName}")
                 
                 def composeCommand = getComposeCommand()
                 def command = composeCommand + ["-p", projectName, "logs"]
@@ -413,28 +373,25 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                     command.add("--follow")
                 }
                 
-                if (config.tail > 0) {
-                    command.addAll(["--tail", config.tail.toString()])
+                if (config.tailLines > 0) {
+                    command.addAll(["--tail", config.tailLines.toString()])
                 }
                 
                 if (config.services && !config.services.isEmpty()) {
                     command.addAll(config.services)
                 }
                 
-                def process = new ProcessBuilder(command).start()
-                def output = process.inputStream.text
-                def exitCode = process.waitFor()
+                def result = processExecutor.execute(command)
                 
-                if (exitCode != 0) {
-                    def errorOutput = process.errorStream.text
+                if (!result.isSuccess()) {
                     throw new ComposeServiceException(
                         ComposeServiceException.ErrorType.LOGS_CAPTURE_FAILED,
-                        "Failed to capture logs: ${errorOutput}",
+                        "Failed to capture logs: ${result.stderr}",
                         "Check if the project and services exist"
                     )
                 }
                 
-                return output
+                return result.stdout
                 
             } catch (ComposeServiceException e) {
                 throw e
