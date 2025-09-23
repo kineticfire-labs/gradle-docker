@@ -243,7 +243,22 @@ tasks.register("dockerSave${capitalizedName}", DockerSaveTask) { task ->
     task.compression.set(imageSpec.save.compression)
     task.outputFile.set(imageSpec.save.outputFile)
     task.pullIfMissing.set(imageSpec.save.pullIfMissing)
-    // Auth configuration passed through
+    task.auth.set(imageSpec.save.auth)
+}
+
+tasks.register("dockerTag${capitalizedName}", DockerTagTask) { task ->
+    // Build Mode properties
+    task.registry.set(imageSpec.registry)
+    task.namespace.set(imageSpec.namespace)
+    task.imageName.set(imageSpec.imageName)
+    task.repository.set(imageSpec.repository)
+    task.version.set(imageSpec.version)
+    task.tags.set(imageSpec.tags)
+
+    // SourceRef Mode properties
+    task.sourceRef.set(imageSpec.sourceRef)
+
+    // ... other provider-based configuration
 }
 ```
 
