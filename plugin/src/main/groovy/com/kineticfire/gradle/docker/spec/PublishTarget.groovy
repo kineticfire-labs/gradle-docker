@@ -83,6 +83,10 @@ abstract class PublishTarget {
         getPublishTags().set(tags)
     }
     
+    void publishTags(org.gradle.api.provider.Provider<List<String>> tagsProvider) {
+        getPublishTags().set(tagsProvider)
+    }
+    
     void auth(@DelegatesTo(AuthSpec) Closure closure) {
         def authSpec = objectFactory.newInstance(AuthSpec)
         closure.delegate = authSpec

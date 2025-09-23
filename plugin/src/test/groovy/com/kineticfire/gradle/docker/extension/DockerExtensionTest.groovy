@@ -256,7 +256,9 @@ class DockerExtensionTest extends Specification {
                 tags.set(['latest', 'v1.0.0'])  // Simple tag names
                 publish {
                     to('registry') {
-                        tags(['localhost:5000/test-app:latest', 'localhost:5000/test-app:stable'])  // Full image references
+                        registry.set('localhost:5000')
+                        namespace.set('test')
+                        publishTags(['latest', 'stable'])  // Simple tag names
                     }
                 }
             }
@@ -288,25 +290,7 @@ class DockerExtensionTest extends Specification {
         ex.message.contains('testImage')
     }
 
-    def "validatePublishTarget fails when target has invalid image references"() {
-        given: "A publish target with invalid image references"
-        def publishTarget = project.objects.newInstance(
-            com.kineticfire.gradle.docker.spec.PublishTarget, 
-            'testTarget', 
-            project.objects
-        )
-        publishTarget.tags.set(['invalid-reference-without-tag'])  // Invalid image reference
 
-        when: "validation is performed directly on the publish target"
-        extension.validatePublishTarget(publishTarget, 'testImage')
-
-        then: "validation fails with descriptive error"
-        def ex = thrown(GradleException)
-        ex.message.contains("Invalid image reference")
-        ex.message.contains("invalid-reference-without-tag")
-        ex.message.contains('testTarget')
-        ex.message.contains('testImage')
-    }
 
     def "validatePublishConfiguration fails when configuration has no targets"() {
         given: "A publish configuration with empty targets"
@@ -325,25 +309,7 @@ class DockerExtensionTest extends Specification {
         ex.message.contains('testImage')
     }
 
-    def "validatePublishTarget accepts valid full image references"() {
-        given: "A publish target with valid full image references"
-        def publishTarget = project.objects.newInstance(
-            com.kineticfire.gradle.docker.spec.PublishTarget, 
-            'testTarget', 
-            project.objects
-        )
-        publishTarget.tags.set([
-            'myapp:latest',
-            'registry.company.com/team/myapp:v1.0.0',
-            'localhost:5000/namespace/myapp:stable'
-        ])
 
-        when: "validation is performed"
-        extension.validatePublishTarget(publishTarget, 'testImage')
-
-        then: "validation passes without exception"
-        noExceptionThrown()
-    }
 
     def "validatePublishTarget fails when tags list is empty"() {
         given: "A publish target with empty tags list"
@@ -364,60 +330,9 @@ class DockerExtensionTest extends Specification {
         ex.message.contains('testImage')
     }
 
-    def "validation works with full image references in publish targets"() {
-        given: "Image with both image tags and publish configuration using full references"
-        project.file('docker').mkdirs()
-        project.file('docker/Dockerfile').text = 'FROM alpine'
-        
-        extension.images {
-            mixedTagsImage {
-                context.set(project.file('docker'))
-                dockerfile.set(project.file('docker/Dockerfile'))
-                imageName.set('test-app')
-                tags.set(['dev', 'latest'])  // Image tags - full references
-                publish {
-                    to('prod') {
-                        tags(['registry.company.com/team/app:prod', 'registry.company.com/team/app:stable'])
-                    }
-                    to('staging') {
-                        tags(['localhost:5000/staging/app:staging', 'localhost:5000/staging/app:test'])
-                    }
-                }
-            }
-        }
 
-        when: "validation is performed"
-        extension.validate()
 
-        then: "both contexts validate correctly without confusion"
-        noExceptionThrown()
-    }
 
-    def "regression test - exact configuration from integration tests"() {
-        given: "Configuration matching integration test patterns"
-        project.file('docker').mkdirs()
-        project.file('docker/Dockerfile').text = 'FROM alpine'
-        
-        extension.images {
-            timeServer {  // Exact name from integration test
-                context.set(project.file('docker'))
-                dockerfile.set(project.file('docker/Dockerfile'))
-                imageName.set('time-server')
-                tags.set(['1.0.0', 'latest'])  // Version and latest tags
-                publish {
-                    to('basic') {
-                        tags(['localhost:25000/time-server-integration:latest'])  // Full image reference
-                    }
-                }
-            }
-        }
-
-        when: "validation is performed on real-world configuration"
-        extension.validate()
-
-        then: "validation passes without issues"
-        noExceptionThrown()
-    }
 
     // ===== REPOSITORY NAME VALIDATION TESTS =====
     
@@ -681,5 +596,89 @@ class DockerExtensionTest extends Specification {
         def ex = thrown(GradleException)
         ex.message.contains("cannot specify both 'dockerfile' and 'dockerfileName'")
         ex.message.contains('conflictingWithContextTask')
+    }
+
+    // ===== NEW PUBLISHTAGS API VALIDATION TESTS =====
+
+    def "validatePublishTarget accepts simple tag names"() {
+        given: "A publish target with simple tag names"
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project.objects
+        )
+        publishTarget.publishTags(['latest', 'v1.0.0', 'stable'])
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation passes without exception"
+        noExceptionThrown()
+    }
+
+    def "validatePublishTarget fails when publishTags are not specified"() {
+        given: "A publish target with no publishTags"
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project.objects
+        )
+        // Don't set publishTags
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation fails with descriptive error"
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "validatePublishTarget fails with invalid simple tag format"() {
+        given: "A publish target with invalid tag formats"
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget, 
+            'testTarget', 
+            project.objects
+        )
+        publishTarget.publishTags(['invalid::tag', 'bad tag name'])
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation fails with descriptive error"
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "validate accepts complete image configuration with publish targets using simple tag names"() {
+        given: "Complete image configuration matching functional test patterns"
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile').text = 'FROM alpine'
+        
+        extension.images {
+            testImage {
+                context.set(project.file('docker'))
+                dockerfile.set(project.file('docker/Dockerfile'))
+                imageName.set('test-app')
+                tags.set(['latest', 'v1.0.0'])
+                publish {
+                    to('dockerhub') {
+                        registry.set('docker.io')
+                        namespace.set('mycompany')
+                        publishTags(['latest', 'v1.0.0'])  // Simple tag names
+                    }
+                }
+            }
+        }
+        
+        when: "validation is performed"
+        extension.validate()
+        
+        then: "validation passes without exception"
+        noExceptionThrown()
     }
 }

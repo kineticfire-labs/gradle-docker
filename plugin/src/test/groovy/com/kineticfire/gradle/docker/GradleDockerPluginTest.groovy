@@ -530,7 +530,7 @@ class GradleDockerPluginTest extends Specification {
                 publish {
                     // Simple publish config that should trigger task creation
                     to {
-                        publishTags(['docker.io/myapp:latest'])
+                        publishTags(['latest'])
                     }
                 }
             }
@@ -1132,7 +1132,7 @@ class GradleDockerPluginTest extends Specification {
                 tags.set(['latest'])
                 publish {
                     to {
-                        publishTags(['localhost:5000/webapp:latest'])
+                        publishTags(['latest'])
                     }
                 }
             }

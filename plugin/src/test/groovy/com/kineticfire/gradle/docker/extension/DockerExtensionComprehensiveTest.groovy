@@ -26,6 +26,7 @@ import org.gradle.api.GradleException
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 import spock.lang.TempDir
+import spock.lang.Unroll
 import java.nio.file.Path
 
 /**
@@ -466,33 +467,9 @@ class DockerExtensionComprehensiveTest extends Specification {
         ex.message.contains("must specify at least one tag")
     }
 
-    def "validatePublishTarget validates tag image references"() {
-        given:
-        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
-        target.publishTags.set([invalidTag])
 
-        when:
-        extension.validatePublishTarget(target, "testImage")
 
-        then:
-        def ex = thrown(GradleException)
-        ex.message.contains("Invalid image reference")
 
-        where:
-        invalidTag << ["invalid", "invalid::", "invalid tag:latest"]
-    }
-
-    def "validatePublishTarget accepts valid image references"() {
-        given:
-        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
-        target.publishTags.set(["registry.io/namespace/name:tag"])
-
-        when:
-        extension.validatePublishTarget(target, "testImage")
-
-        then:
-        noExceptionThrown()
-    }
 
     // ===== SAVE CONFIGURATION VALIDATION =====
 
@@ -558,7 +535,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         
         def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
         def target = project.objects.newInstance(PublishTarget, "dockerhub", project.objects)
-        target.publishTags.set(["docker.io/company/app:1.0.0", "docker.io/company/app:latest"])
+        target.publishTags(["1.0.0", "latest"])
         publishSpec.to.add(target)
         imageSpec.publish.set(publishSpec)
         
@@ -602,5 +579,122 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then:
         thrown(GradleException)
+    }
+
+    // ===== NEW PUBLISHTAGS API COMPREHENSIVE VALIDATION TESTS =====
+
+    @Unroll
+    def "validatePublishTarget accepts valid simple tag format [tag: #tag]"() {
+        given: "A publish target with valid tag"
+        def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
+        publishTarget.publishTags([tag])
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation passes"
+        noExceptionThrown()
+        
+        where:
+        tag << ['latest', 'v1.0.0', 'stable', 'rc-1', 'main', 'test', 'dev-branch', 'sha-abc123', 'v1.0.0-alpha', 'latest-dev']
+    }
+
+    @Unroll
+    def "validatePublishTarget rejects invalid simple tag format [tag: #tag]"() {
+        given: "A publish target with invalid tag"
+        def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
+        publishTarget.publishTags([tag])
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation fails"
+        thrown(GradleException)
+        
+        where:
+        tag << ['invalid::', 'bad tag', '', '.invalid', '-invalid']
+    }
+
+    def "validatePublishTarget handles edge cases correctly"() {
+        given: "A publish target with edge case tags"
+        def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
+        publishTarget.publishTags(['v1.0.0-alpha', 'latest-dev', 'sha-abc123'])
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation passes for valid tag patterns"
+        noExceptionThrown()
+    }
+
+    def "validate accepts multiple publish targets with simple tag names"() {
+        given: "Image configuration with multiple publish targets using simple tags"
+        def contextDir = tempDir.resolve("docker-context").toFile()
+        contextDir.mkdirs()
+        new File(contextDir, "Dockerfile").text = "FROM alpine"
+        
+        extension.images {
+            multipleTargetsImage {
+                context.set(contextDir)
+                dockerfile.set(new File(contextDir, "Dockerfile"))
+                imageName.set('multi-target-app')
+                tags.set(['latest', 'v2.0.0'])
+                publish {
+                    to('dockerhub') {
+                        registry.set('docker.io')
+                        namespace.set('mycompany')
+                        publishTags(['latest', 'stable', 'v2.0.0'])  // Simple tag names
+                    }
+                    to('internal') {
+                        registry.set('localhost:5000')
+                        namespace.set('internal')
+                        publishTags(['internal-latest', 'test', 'dev'])  // Simple tag names
+                    }
+                    to('staging') {
+                        registry.set('staging.company.com')
+                        namespace.set('staging')
+                        publishTags(['staging-latest', 'pre-release'])  // Simple tag names
+                    }
+                }
+            }
+        }
+        
+        when: "validation is performed"
+        extension.validate()
+        
+        then: "validation passes without exception"
+        noExceptionThrown()
+    }
+
+    def "validate fails with mixed valid and invalid publishTags"() {
+        given: "A publish target with both valid and invalid tag formats"
+        def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
+        publishTarget.publishTags(['latest', 'invalid::', 'v1.0.0'])  // Mixed valid/invalid
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation fails on first invalid tag"
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+        ex.message.contains("invalid::")
+        ex.message.contains('testTarget')
+        ex.message.contains('testImage')
+    }
+
+    def "publishTags property works correctly via tags alias"() {
+        given: "A publish target configured via tags alias"
+        def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
+        publishTarget.tags(['latest', 'v1.0.0'])  // Using alias
+        
+        when: "validation is performed"
+        extension.validatePublishTarget(publishTarget, 'testImage')
+        
+        then: "validation passes since tags is alias for publishTags"
+        noExceptionThrown()
+        
+        and: "both properties return the same values"
+        publishTarget.tags.get() == ['latest', 'v1.0.0']
+        publishTarget.publishTags.get() == ['latest', 'v1.0.0']
     }
 }

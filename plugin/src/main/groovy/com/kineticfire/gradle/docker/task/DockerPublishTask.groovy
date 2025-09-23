@@ -46,6 +46,7 @@ abstract class DockerPublishTask extends DefaultTask {
         version.convention("")
         tags.convention([])
         publishTargets.convention([])
+        sourceRef.convention("")
 
         // Map publishSpec.to to publishTargets
         publishSpec.convention(null)
@@ -77,6 +78,11 @@ abstract class DockerPublishTask extends DefaultTask {
     
     @Input
     abstract ListProperty<String> getTags()
+    
+    // SourceRef Mode property (for existing/pre-built images)
+    @Input
+    @Optional
+    abstract Property<String> getSourceRef()
     
     @Input
     abstract ListProperty<PublishTarget> getPublishTargets()
@@ -175,6 +181,13 @@ abstract class DockerPublishTask extends DefaultTask {
      * Build source image reference from nomenclature properties (use first tag)
      */
     String buildSourceImageReference() {
+        // Check for SourceRef Mode first (existing/pre-built images)
+        def sourceRefValue = sourceRef.getOrElse("")
+        if (!sourceRefValue.isEmpty()) {
+            return sourceRefValue
+        }
+        
+        // Build Mode (building new images) - use nomenclature properties
         def registryValue = registry.getOrElse("")
         def namespaceValue = namespace.getOrElse("")
         def repositoryValue = repository.getOrElse("")

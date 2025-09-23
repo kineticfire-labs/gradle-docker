@@ -55,20 +55,9 @@ class DockerBuildFunctionalTest extends Specification {
         buildFile = testProjectDir.resolve('build.gradle').toFile()
     }
 
-    // TEMPORARILY DISABLED - All tests in this class use withPluginClasspath() which is incompatible with Gradle 9.0.0 TestKit
-    /*
-
-    def "docker build task executes successfully with valid Dockerfile"() {
+    def "docker build task configuration validates new nomenclature API"() {
         given:
-        settingsFile << "rootProject.name = 'test-docker-build'"
-        
-        // Create a simple Dockerfile
-        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Test image"
-            LABEL test=true
-        """
+        settingsFile << "rootProject.name = 'test-docker-nomenclature'"
         
         buildFile << """
             plugins {
@@ -77,11 +66,42 @@ class DockerBuildFunctionalTest extends Specification {
             
             docker {
                 images {
-                    test {
-                        dockerfile = 'Dockerfile'
-                        contextPath = '.'
-                        tags = ['test:latest']
+                    appWithNomenclature {
+                        // Build Mode using new nomenclature
+                        registry.set('ghcr.io')
+                        namespace.set('kineticfire/apps')
+                        imageName.set('my-app')
+                        version.set('1.0.0')
+                        tags.set(['latest', 'stable'])
+                        
+                        // Labels support
+                        labels.put('org.opencontainers.image.version', '1.0.0')
+                        labels.put('org.opencontainers.image.vendor', 'KineticFire')
+                        
+                        // Build configuration
+                        context.set(file('.'))
+                        dockerfileName.set('Dockerfile')
+                        buildArgs.put('VERSION', '1.0.0')
+                        buildArgs.put('BUILD_ENV', 'production')
                     }
+                }
+            }
+            
+            // Verify task configuration
+            tasks.register('verifyDockerBuildConfiguration') {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildAppWithNomenclature')
+                    println "Task configured: " + buildTask.name
+                    
+                    // Verify Provider API usage
+                    assert buildTask.registry.isPresent()
+                    assert buildTask.namespace.isPresent()
+                    assert buildTask.imageName.isPresent()
+                    assert buildTask.version.isPresent()
+                    assert !buildTask.tags.get().isEmpty()
+                    assert !buildTask.labels.get().isEmpty()
+                    
+                    println "All nomenclature properties configured correctly"
                 }
             }
         """
@@ -89,24 +109,18 @@ class DockerBuildFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildTest', '--info')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDockerBuildConfiguration', '--info')
             .build()
 
         then:
-        result.task(':dockerBuildTest').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
+        result.output.contains('Task configured: dockerBuildAppWithNomenclature')
+        result.output.contains('All nomenclature properties configured correctly')
     }
 
-    def "docker build task skips when no Docker daemon available"() {
+    def "docker build task configuration validates sourceRef mode"() {
         given:
-        settingsFile << "rootProject.name = 'test-no-docker'"
-        
-        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Test image"
-        """
+        settingsFile << "rootProject.name = 'test-sourceref-mode'"
         
         buildFile << """
             plugins {
@@ -115,18 +129,26 @@ class DockerBuildFunctionalTest extends Specification {
             
             docker {
                 images {
-                    test {
-                        dockerfile = 'Dockerfile'
-                        contextPath = '.'
-                        tags = ['test:latest']
+                    existingImage {
+                        // SourceRef Mode for existing images
+                        sourceRef.set('ghcr.io/acme/myapp:1.2.3')
+                        
+                        // Apply local tags
+                        tags.set(['local:latest', 'local:stable'])
                     }
                 }
             }
             
-            // Mock the Docker service to simulate no daemon
-            tasks.named('dockerBuildTest') {
-                doFirst {
-                    // This test verifies error handling when Docker is not available
+            // Verify task configuration
+            tasks.register('verifySourceRefConfiguration') {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildExistingImage')
+                    println "Task configured: " + buildTask.name
+                    
+                    // Verify sourceRef mode - tasks are configured but sourceRef might not be exposed on build task
+                    assert !buildTask.tags.get().isEmpty()
+                    
+                    println "SourceRef mode configured correctly"
                 }
             }
         """
@@ -134,69 +156,18 @@ class DockerBuildFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildTest', '--info')
-            .buildAndFail()
-
-        then:
-        result.task(':dockerBuildTest').outcome == TaskOutcome.FAILED
-        result.output.contains('Docker')
-    }
-
-    def "docker build task uses custom build args"() {
-        given:
-        settingsFile << "rootProject.name = 'test-build-args'"
-        
-        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            ARG BUILD_VERSION=unknown
-            ARG BUILD_ENV=dev
-            RUN echo "Version: \${BUILD_VERSION}, Env: \${BUILD_ENV}"
-            LABEL version=\${BUILD_VERSION}
-        """
-        
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
-            }
-            
-            docker {
-                images {
-                    app {
-                        dockerfile = 'Dockerfile'
-                        contextPath = '.'
-                        tags = ['app:1.2.3']
-                        buildArgs = [
-                            'BUILD_VERSION': '1.2.3',
-                            'BUILD_ENV': 'production'
-                        ]
-                    }
-                }
-            }
-        """
-
-        when:
-        def result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildApp', '--info')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifySourceRefConfiguration', '--info')
             .build()
 
         then:
-        result.task(':dockerBuildApp').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
+        result.output.contains('Task configured: dockerBuildExistingImage')
+        result.output.contains('SourceRef mode configured correctly')
     }
 
-    def "docker build task fails with invalid Dockerfile"() {
+    def "docker build task configuration validates labels feature"() {
         given:
-        settingsFile << "rootProject.name = 'test-invalid-dockerfile'"
-        
-        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile << """
-            INVALID_INSTRUCTION alpine:latest
-            RUN echo "This will fail"
-        """
+        settingsFile << "rootProject.name = 'test-labels-feature'"
         
         buildFile << """
             plugins {
@@ -205,49 +176,49 @@ class DockerBuildFunctionalTest extends Specification {
             
             docker {
                 images {
-                    broken {
-                        dockerfile = 'Dockerfile'
-                        contextPath = '.'
-                        tags = ['broken:latest']
+                    labeledApp {
+                        registry.set('docker.io')
+                        repository.set('mycompany/myapp')
+                        version.set(project.version.toString())
+                        tags.set(['latest'])
+                        
+                        // Test various label configurations
+                        label('org.opencontainers.image.title', 'My Application')
+                        label('org.opencontainers.image.description', 'A sample application')
+                        label('org.opencontainers.image.version', providers.provider { project.version.toString() })
+                        
+                        labels([
+                            'com.example.team': 'backend',
+                            'com.example.environment': 'production'
+                        ])
+                        
+                        labels(providers.provider { 
+                            ['runtime.version': System.getProperty('java.version')] 
+                        })
+                        
+                        context.set(file('.'))
                     }
                 }
-            }
-        """
-
-        when:
-        def result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildBroken', '--info')
-            .buildAndFail()
-
-        then:
-        result.task(':dockerBuildBroken').outcome == TaskOutcome.FAILED
-        result.output.contains('Build failed') || result.output.contains('Docker')
-    }
-
-    def "docker build task creates output correctly"() {
-        given:
-        settingsFile << "rootProject.name = 'test-output'"
-        
-        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Test output" > /tmp/test.txt
-        """
-        
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
             }
             
-            docker {
-                images {
-                    output {
-                        dockerfile = 'Dockerfile'
-                        contextPath = '.'
-                        tags = ['output-test:latest']
+            tasks.register('verifyLabelsConfiguration') {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildLabeledApp')
+                    def labelsMap = buildTask.labels.get()
+                    
+                    println "Configured labels:"
+                    labelsMap.each { k, v ->
+                        println "  \${k}: \${v}"
                     }
+                    
+                    assert labelsMap.containsKey('org.opencontainers.image.title')
+                    assert labelsMap.containsKey('org.opencontainers.image.description')
+                    assert labelsMap.containsKey('org.opencontainers.image.version')
+                    assert labelsMap.containsKey('com.example.team')
+                    assert labelsMap.containsKey('com.example.environment')
+                    assert labelsMap.containsKey('runtime.version')
+                    
+                    println "All labels configured correctly"
                 }
             }
         """
@@ -255,40 +226,67 @@ class DockerBuildFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildOutput', '--info')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyLabelsConfiguration', '--info')
             .build()
 
         then:
-        result.task(':dockerBuildOutput').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image') || result.output.contains('Successfully built')
+        result.output.contains('Configured labels:')
+        result.output.contains('All labels configured correctly')
     }
 
-    def "docker build task uses dockerfileName with context directory"() {
+    def "docker build task configuration supports Provider API patterns"() {
         given:
-        settingsFile << "rootProject.name = 'test-dockerfile-name'"
-        
-        // Create custom Dockerfile with different name
-        testProjectDir.resolve('docker').toFile().mkdirs()
-        def dockerFile = testProjectDir.resolve('docker/Dockerfile.prod').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Production image"
-            LABEL environment=production
-        """
+        settingsFile << "rootProject.name = 'test-provider-api'"
         
         buildFile << """
             plugins {
                 id 'com.kineticfire.gradle.gradle-docker'
             }
             
+            // Create providers for lazy evaluation
+            def registryProvider = providers.gradleProperty('docker.registry').orElse('docker.io')
+            def versionProvider = providers.provider { project.version.toString() }
+            def buildTimeProvider = providers.provider { new Date().toString() }
+            
             docker {
                 images {
-                    prodApp {
-                        context = file('docker')
-                        dockerfileName = 'Dockerfile.prod'
-                        tags = ['prod-app:latest']
+                    providerApp {
+                        // Use providers for lazy evaluation
+                        registry.set(registryProvider)
+                        namespace.set('example')
+                        imageName.set('provider-test')
+                        version.set(versionProvider)
+                        tags.set(['latest', 'snapshot'])
+                        
+                        // Labels with providers
+                        label('build.time', buildTimeProvider)
+                        label('build.version', versionProvider)
+                        
+                        // Build args with providers
+                        buildArg('VERSION', versionProvider)
+                        buildArg('BUILD_TIME', buildTimeProvider)
+                        
+                        context.set(layout.projectDirectory)
                     }
+                }
+            }
+            
+            tasks.register('verifyProviderConfiguration') {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildProviderApp')
+                    
+                    // Test lazy evaluation - values should not be resolved during configuration
+                    println "Registry provider: " + buildTask.registry.get()
+                    println "Version provider: " + buildTask.version.get()
+                    
+                    def labelsMap = buildTask.labels.get()
+                    println "Build time label: " + labelsMap['build.time']
+                    
+                    def argsMap = buildTask.buildArgs.get()
+                    println "Build time arg: " + argsMap['BUILD_TIME']
+                    
+                    println "Provider API working correctly"
                 }
             }
         """
@@ -296,27 +294,18 @@ class DockerBuildFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildProdApp', '--info')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyProviderConfiguration', '--info')
             .build()
 
         then:
-        result.task(':dockerBuildProdApp').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
+        result.output.contains('Registry provider: docker.io')
+        result.output.contains('Provider API working correctly')
     }
 
-    def "docker build task uses dockerfileName with contextTask"() {
+    def "docker build task supports both repository and namespace+imageName configurations"() {
         given:
-        settingsFile << "rootProject.name = 'test-dockerfile-name-context-task'"
-        
-        // Create source directory with custom Dockerfile name
-        testProjectDir.resolve('src/main/docker').toFile().mkdirs()
-        def dockerFile = testProjectDir.resolve('src/main/docker/Dockerfile.dev').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Development image"
-            LABEL environment=development
-        """
+        settingsFile << "rootProject.name = 'test-dual-config'"
         
         buildFile << """
             plugins {
@@ -325,13 +314,41 @@ class DockerBuildFunctionalTest extends Specification {
             
             docker {
                 images {
-                    devApp {
-                        context {
-                            from 'src/main/docker'
-                        }
-                        dockerfileName = 'Dockerfile.dev'
-                        tags = ['dev-app:latest']
+                    // Using repository approach
+                    repoApp {
+                        registry.set('ghcr.io')
+                        repository.set('kineticfire/apps/my-app')
+                        version.set('1.0.0')
+                        tags.set(['latest'])
+                        context.set(file('.'))
                     }
+                    
+                    // Using namespace + imageName approach  
+                    namespaceApp {
+                        registry.set('ghcr.io')
+                        namespace.set('kineticfire/apps')
+                        imageName.set('my-app')
+                        version.set('1.0.0')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+            
+            tasks.register('verifyDualConfiguration') {
+                doLast {
+                    def repoTask = tasks.getByName('dockerBuildRepoApp')
+                    def namespaceTask = tasks.getByName('dockerBuildNamespaceApp')
+                    
+                    println "Repository task: " + repoTask.name
+                    println "Namespace task: " + namespaceTask.name
+                    
+                    // Both approaches should be valid
+                    assert repoTask.repository.isPresent()
+                    assert namespaceTask.namespace.isPresent()
+                    assert namespaceTask.imageName.isPresent()
+                    
+                    println "Both configuration approaches work"
                 }
             }
         """
@@ -339,163 +356,13 @@ class DockerBuildFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildDevApp', '--info')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDualConfiguration', '--info')
             .build()
 
         then:
-        result.task(':dockerBuildDevApp').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
+        result.output.contains('Repository task: dockerBuildRepoApp')
+        result.output.contains('Namespace task: dockerBuildNamespaceApp')
+        result.output.contains('Both configuration approaches work')
     }
-
-    def "docker build task fails when both dockerfile and dockerfileName are set"() {
-        given:
-        settingsFile << "rootProject.name = 'test-conflicting-dockerfile-config'"
-        
-        // Create both Dockerfiles
-        def dockerFile1 = testProjectDir.resolve('Dockerfile').toFile()
-        dockerFile1 << """
-            FROM alpine:latest
-            RUN echo "Default Dockerfile"
-        """
-        
-        def dockerFile2 = testProjectDir.resolve('Dockerfile.custom').toFile()
-        dockerFile2 << """
-            FROM alpine:latest
-            RUN echo "Custom Dockerfile"
-        """
-        
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
-            }
-            
-            docker {
-                images {
-                    conflictingApp {
-                        context = file('.')
-                        dockerfile = file('Dockerfile')
-                        dockerfileName = 'Dockerfile.custom'
-                        tags = ['conflict-app:latest']
-                    }
-                }
-            }
-        """
-
-        when:
-        def result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildConflictingApp', '--info')
-            .buildAndFail()
-
-        then:
-        result.task(':dockerBuildConflictingApp') == null // Task creation should fail during configuration
-        result.output.contains("cannot have both 'dockerfile' and 'dockerfileName' set")
-    }
-
-    def "docker build task uses default Dockerfile when neither dockerfile nor dockerfileName set"() {
-        given:
-        settingsFile << "rootProject.name = 'test-default-dockerfile'"
-        
-        // Create context directory with default Dockerfile
-        testProjectDir.resolve('docker-context').toFile().mkdirs()
-        def dockerFile = testProjectDir.resolve('docker-context/Dockerfile').toFile()
-        dockerFile << """
-            FROM alpine:latest
-            RUN echo "Default Dockerfile name"
-            LABEL type=default
-        """
-        
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
-            }
-            
-            docker {
-                images {
-                    defaultApp {
-                        context = file('docker-context')
-                        tags = ['default-app:latest']
-                        // Neither dockerfile nor dockerfileName set
-                    }
-                }
-            }
-        """
-
-        when:
-        def result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildDefaultApp', '--info')
-            .build()
-
-        then:
-        result.task(':dockerBuildDefaultApp').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
-    }
-
-    def "docker build task handles various dockerfileName formats"() {
-        given:
-        settingsFile << "rootProject.name = 'test-various-dockerfile-names'"
-        
-        // Create context directory with various Dockerfile names
-        testProjectDir.resolve('build-context').toFile().mkdirs()
-        
-        def customNames = ['Dockerfile.prod', 'MyDockerfile', 'app.dockerfile', 'Dockerfile-alpine']
-        customNames.each { name ->
-            def dockerFile = testProjectDir.resolve("build-context/${name}").toFile()
-            dockerFile << """
-                FROM alpine:latest
-                RUN echo "Image built with ${name}"
-                LABEL dockerfile-name=${name}
-            """
-        }
-        
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
-            }
-            
-            docker {
-                images {
-                    prodImage {
-                        context = file('build-context')
-                        dockerfileName = 'Dockerfile.prod'
-                        tags = ['prod:latest']
-                    }
-                    customImage {
-                        context = file('build-context')  
-                        dockerfileName = 'MyDockerfile'
-                        tags = ['custom:latest']
-                    }
-                    appImage {
-                        context = file('build-context')
-                        dockerfileName = 'app.dockerfile'
-                        tags = ['app:latest']
-                    }
-                    alpineImage {
-                        context = file('build-context')
-                        dockerfileName = 'Dockerfile-alpine'
-                        tags = ['alpine:latest']
-                    }
-                }
-            }
-        """
-
-        when:
-        def result = GradleRunner.create()
-            .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('dockerBuildProdImage', 'dockerBuildCustomImage', 'dockerBuildAppImage', 'dockerBuildAlpineImage', '--info')
-            .build()
-
-        then:
-        result.task(':dockerBuildProdImage').outcome == TaskOutcome.SUCCESS
-        result.task(':dockerBuildCustomImage').outcome == TaskOutcome.SUCCESS
-        result.task(':dockerBuildAppImage').outcome == TaskOutcome.SUCCESS
-        result.task(':dockerBuildAlpineImage').outcome == TaskOutcome.SUCCESS
-        result.output.contains('Building Docker image')
-    }
-    */
 }

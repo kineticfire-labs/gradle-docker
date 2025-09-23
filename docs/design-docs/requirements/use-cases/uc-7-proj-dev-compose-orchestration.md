@@ -55,6 +55,7 @@ the-application-project/
    │  ├─ functionalTest/resources/
    │  │  ├─ compose/                       # compose files for functional tests
    │  │  └─ docker/                        # optional: test-only wrapper image assets
+   │  ├─ integrationTest/groovy/           # Groovy/Spock integration tests
    │  ├─ integrationTest/java/             # Java/JUnit integration tests
    │  ├─ integrationTest/resources/
    │  │  ├─ compose/                       # compose files for integration tests

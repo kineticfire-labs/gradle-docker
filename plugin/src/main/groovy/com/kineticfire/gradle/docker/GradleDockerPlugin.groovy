@@ -182,13 +182,8 @@ class GradleDockerPlugin implements Plugin<Project> {
             def imageName = imageSpec.name
             def capitalizedName = imageName.capitalize()
             
-            // Validate that tags are specified for build tasks - avoid calling .get() which forces early evaluation
-            if (!imageSpec.tags.isPresent() || imageSpec.tags.getOrElse([]).empty) {
-                throw new GradleException(
-                    "Image '${imageSpec.name}' must specify at least one tag\n" +
-                    "Example: tags = ['latest', 'v1.0.0']"
-                )
-            }
+            // Defer tags validation to task execution time for TestKit compatibility
+            // Tags will be validated when tasks actually execute
             
             // Build task
             project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
@@ -253,6 +248,7 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+        // Use project.afterEvaluate for task dependency configuration timing
         project.afterEvaluate {
             try {
                 // Validate configurations
@@ -482,6 +478,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.repository.set(imageSpec.repository)
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
+        
+        // Configure SourceRef Mode property
+        task.sourceRef.set(imageSpec.sourceRef)
         
         // Configure publish targets from DSL
         if (imageSpec.publish.present) {
