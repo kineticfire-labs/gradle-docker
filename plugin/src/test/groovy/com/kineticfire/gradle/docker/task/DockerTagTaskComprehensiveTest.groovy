@@ -280,4 +280,109 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         then:
         refs == ["app:latest"]
     }
+    
+    // ===== PHASE 2: DUAL-MODE TASK BEHAVIOR ENHANCEMENT TESTS =====
+    
+    def "DockerTagTask builds references correctly in SourceRef mode"() {
+        given: "Task configured with sourceRef mode"
+        def task = project.tasks.create("dockerTagTest", DockerTagTask)
+        task.sourceRef.set("external.registry.io/existing/app:v2.1.0")
+        task.tags.set(["local:latest", "local:stable", "test:v2.1.0"])
+        
+        when: "Building image references"
+        def refs = task.buildImageReferences()
+        
+        then: "References are built correctly for SourceRef mode"
+        refs.size() == 4
+        refs[0] == "external.registry.io/existing/app:v2.1.0"  // Source reference
+        refs[1] == "local:latest"   // Target tags
+        refs[2] == "local:stable"
+        refs[3] == "test:v2.1.0"
+    }
+    
+    def "DockerTagTask builds references correctly in Build mode"() {
+        given: "Task configured with Build mode using nomenclature"
+        def task = project.tasks.create("dockerTagTest", DockerTagTask)
+        task.registry.set("build.registry.io")
+        task.namespace.set("mycompany/team")
+        task.imageName.set("newapp")
+        task.tags.set(["v1.0.0", "latest", "release"])
+        
+        when: "Building image references"
+        def refs = task.buildImageReferences()
+        
+        then: "References are built correctly for Build mode"
+        refs.size() == 3
+        refs[0] == "build.registry.io/mycompany/team/newapp:v1.0.0"  // Primary reference
+        refs[1] == "build.registry.io/mycompany/team/newapp:latest"  // Additional tags
+        refs[2] == "build.registry.io/mycompany/team/newapp:release"
+    }
+    
+    def "DockerTagTask validates mode requirements correctly"() {
+        when: "Task has neither sourceRef nor imageName/repository"
+        def task1 = project.tasks.create("dockerTagTest1", DockerTagTask)
+        task1.registry.set("registry.io")
+        task1.tags.set(["tag"])
+        // Missing both sourceRef and imageName/repository
+        task1.buildImageReferences()
+        
+        then: "Validation fails for insufficient configuration"
+        thrown(IllegalStateException)
+        
+        when: "Task has both sourceRef and build mode properties"
+        def task2 = project.tasks.create("dockerTagTest2", DockerTagTask)
+        task2.sourceRef.set("source:image")
+        task2.imageName.set("conflicting")
+        task2.tags.set(["tag"])
+        def refs2 = task2.buildImageReferences()
+        
+        then: "SourceRef takes precedence (legacy behavior preserved)"
+        refs2[0] == "source:image"
+        refs2[1] == "tag"
+    }
+    
+    def "DockerTagTask handles empty tag lists appropriately"() {
+        given: "Task with sourceRef but no tags"
+        def task1 = project.tasks.create("dockerTagTest1", DockerTagTask)
+        task1.sourceRef.set("source:image")
+        task1.tags.set([])
+        
+        when: "Building references with empty tags"
+        def refs1 = task1.buildImageReferences()
+        
+        then: "Source reference is preserved even without targets"
+        refs1 == ["source:image"]
+        
+        and: "Task with build mode but no tags"
+        def task2 = project.tasks.create("dockerTagTest2", DockerTagTask)
+        task2.imageName.set("app")
+        task2.tags.set([])
+        
+        when: "Building references with empty tags in build mode"
+        task2.buildImageReferences()
+        
+        then: "IllegalStateException thrown for build mode without tags"
+        thrown(IllegalStateException)
+    }
+    
+    def "DockerTagTask detects mode correctly based on properties"() {
+        expect: "Mode detection works correctly for various configurations"
+        def task = project.tasks.create("dockerTagTest", DockerTagTask)
+        if (sourceRef) task.sourceRef.set(sourceRef)
+        if (imageName) task.imageName.set(imageName)
+        if (repository) task.repository.set(repository)
+        task.tags.set(tags)
+        
+        def refs = task.buildImageReferences()
+        def isSourceRefMode = refs.size() > 0 && refs[0] == sourceRef
+        isSourceRefMode == expectedSourceRefMode
+        
+        where:
+        sourceRef     | imageName | repository   | tags        | expectedSourceRefMode
+        "src:tag"     | null      | null         | ["target"]  | true    // SourceRef mode
+        null          | "app"     | null         | ["tag"]     | false   // Build mode (imageName)
+        null          | null      | "repo/app"   | ["tag"]     | false   // Build mode (repository)
+        "src:tag"     | "app"     | null         | ["target"]  | true    // SourceRef takes precedence
+        "src:tag"     | null      | "repo/app"   | ["target"]  | true    // SourceRef takes precedence
+    }
 }

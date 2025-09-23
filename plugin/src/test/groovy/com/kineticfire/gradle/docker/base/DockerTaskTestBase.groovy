@@ -95,6 +95,19 @@ abstract class DockerTaskTestBase extends Specification {
         return authSpec
     }
     
+    protected AuthSpec createAuthSpec(String username, String password, String registryToken) {
+        def authSpec = project.objects.newInstance(AuthSpec)
+        authSpec.username.set(username)
+        if (password != null) {
+            authSpec.password.set(password)
+        }
+        if (registryToken != null) {
+            authSpec.registryToken.set(registryToken)
+        }
+        authSpec.serverAddress.set("registry.io")
+        return authSpec
+    }
+    
     protected void setupMockServiceForFailure(Exception error) {
         mockDockerService.buildImage(_) >> CompletableFuture.failedFuture(error)
         mockDockerService.tagImage(_, _) >> CompletableFuture.failedFuture(error)

@@ -686,15 +686,151 @@ class DockerExtensionComprehensiveTest extends Specification {
         given: "A publish target configured via tags alias"
         def publishTarget = project.objects.newInstance(PublishTarget, 'testTarget', project.objects)
         publishTarget.tags(['latest', 'v1.0.0'])  // Using alias
-        
+
         when: "validation is performed"
         extension.validatePublishTarget(publishTarget, 'testImage')
-        
+
         then: "validation passes since tags is alias for publishTags"
         noExceptionThrown()
-        
+
         and: "both properties return the same values"
         publishTarget.tags.get() == ['latest', 'v1.0.0']
         publishTarget.publishTags.get() == ['latest', 'v1.0.0']
+    }
+
+    // SOURCEREF EXCLUSIVITY VALIDATION TESTS
+
+    def "validateImageSpec rejects sourceRef with buildArgs"() {
+        given: "ImageSpec with sourceRef and buildArgs (conflicting configuration)"
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.buildArgs.put("VERSION", "1.0")
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+        ex.message.contains("cannot use both")
+    }
+
+    def "validateImageSpec rejects sourceRef with explicit context"() {
+        given: "ImageSpec with sourceRef and explicit context directory"
+        def contextDir = tempDir.resolve("custom-context").toFile()
+        contextDir.mkdirs()
+
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.context.set(project.layout.projectDirectory.dir(contextDir.name))
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+    }
+
+    def "validateImageSpec rejects sourceRef with contextTask"() {
+        given: "ImageSpec with sourceRef and contextTask"
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.contextTask = project.tasks.register("prepareContext") {
+            // Mock context task
+        }
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+    }
+
+    def "validateImageSpec rejects sourceRef with labels"() {
+        given: "ImageSpec with sourceRef and labels"
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.labels.put("build.version", "1.0.0")
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+    }
+
+    def "validateImageSpec rejects sourceRef with dockerfile"() {
+        given: "ImageSpec with sourceRef and custom dockerfile"
+        def dockerfileFile = tempDir.resolve("custom.dockerfile").toFile()
+        dockerfileFile.createNewFile()
+
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.dockerfile.set(project.layout.projectDirectory.file(dockerfileFile.name))
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+    }
+
+    def "validateImageSpec rejects sourceRef with dockerfileName"() {
+        given: "ImageSpec with sourceRef and custom dockerfileName"
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.dockerfileName.set("Custom.dockerfile")
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+    }
+
+    def "validateImageSpec rejects sourceRef with multiple build properties"() {
+        given: "ImageSpec with sourceRef and multiple build properties"
+        def contextDir = tempDir.resolve("multi-context").toFile()
+        contextDir.mkdirs()
+
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.context.set(project.layout.projectDirectory.dir(contextDir.name))
+        imageSpec.buildArgs.put("VERSION", "1.0")
+        imageSpec.labels.put("build.time", "now")
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation fails with exclusivity error"
+        def ex = thrown(GradleException)
+        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
+        ex.message.contains("build-related properties")
+        ex.message.contains("existing images")
+        ex.message.contains("building new images")
+    }
+
+    def "validateImageSpec allows sourceRef without build properties"() {
+        given: "ImageSpec with only sourceRef (valid SourceRef Mode)"
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        imageSpec.sourceRef.set("existing:image")
+        imageSpec.tags.set(["local:latest"])  // Tags are allowed with sourceRef
+
+        when: "validation is performed"
+        extension.validateImageSpec(imageSpec)
+
+        then: "validation passes"
+        noExceptionThrown()
     }
 }

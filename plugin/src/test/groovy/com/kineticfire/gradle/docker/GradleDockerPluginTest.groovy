@@ -1247,12 +1247,190 @@ class GradleDockerPluginTest extends Specification {
         def buildTask = project.tasks.findByName('dockerBuildSimple')
         def saveTask = project.tasks.findByName('dockerSaveSimple')
         def publishTask = project.tasks.findByName('dockerPublishSimple')
-        
+
         buildTask != null
         saveTask == null  // No save task created
         publishTask == null  // No publish task created
-        
+
         // Should not throw exceptions during evaluation
         noExceptionThrown()
+    }
+
+    // PLUGIN REGISTRATION CONFIGURATION TESTS
+
+    def "plugin configures sourceRef property for DockerTagTask"() {
+        given: "Plugin applied with image configuration including sourceRef"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when: "Image is configured with sourceRef and tags"
+        dockerExt.images {
+            testImage {
+                sourceRef.set("existing:image")
+                tags.set(["new:tag"])
+            }
+        }
+        project.evaluate()
+
+        then: "DockerTagTask has sourceRef property configured"
+        def tagTask = project.tasks.getByName("dockerTagTestImage")
+        tagTask.sourceRef.get() == "existing:image"
+        tagTask.tags.get() == ["new:tag"]
+    }
+
+    def "plugin configures sourceRef property for DockerSaveTask"() {
+        given: "Plugin applied with image configuration including sourceRef and save"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when: "Image is configured with sourceRef and save configuration"
+        dockerExt.images {
+            testImage {
+                sourceRef.set("existing:image")
+                tags.set(["local:tag"])
+                save {
+                    outputFile.set(project.file("saved-image.tar"))
+                    compression.set(SaveCompression.GZIP)
+                }
+            }
+        }
+        project.evaluate()
+
+        then: "DockerSaveTask has sourceRef property configured"
+        def saveTask = project.tasks.getByName("dockerSaveTestImage")
+        saveTask.sourceRef.get() == "existing:image"
+        saveTask.compression.get() == SaveCompression.GZIP
+    }
+
+    def "plugin configures pullIfMissing from SaveSpec"() {
+        given: "Plugin applied with save configuration including pullIfMissing"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when: "Image is configured with pullIfMissing in save spec"
+        dockerExt.images {
+            testImage {
+                sourceRef.set("remote:image")
+                tags.set(["local:tag"])
+                save {
+                    outputFile.set(project.file("pulled-image.tar"))
+                    compression.set(SaveCompression.NONE)
+                    pullIfMissing.set(true)
+                }
+            }
+        }
+        project.evaluate()
+
+        then: "DockerSaveTask has pullIfMissing property configured"
+        def saveTask = project.tasks.getByName("dockerSaveTestImage")
+        saveTask.pullIfMissing.get() == true
+        saveTask.sourceRef.get() == "remote:image"
+    }
+
+    def "plugin configures auth from SaveSpec"() {
+        given: "Plugin applied with save configuration including auth"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when: "Image is configured with auth in save spec"
+        dockerExt.images {
+            testImage {
+                sourceRef.set("private.registry.com/image:latest")
+                tags.set(["local:tag"])
+                save {
+                    outputFile.set(project.file("private-image.tar"))
+                    compression.set(SaveCompression.NONE)
+                    pullIfMissing.set(true)
+                    auth {
+                        username.set("testuser")
+                        password.set("testpass")
+                        registryToken.set("token123")
+                    }
+                }
+            }
+        }
+        project.evaluate()
+
+        then: "DockerSaveTask has auth property configured"
+        def saveTask = project.tasks.getByName("dockerSaveTestImage")
+        saveTask.auth.isPresent()
+        saveTask.auth.get().username.get() == "testuser"
+        saveTask.auth.get().password.get() == "testpass"
+        saveTask.auth.get().registryToken.get() == "token123"
+        saveTask.pullIfMissing.get() == true
+    }
+
+    def "plugin preserves property values through configuration chain"() {
+        given: "Plugin applied with complex image configuration"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when: "Image is configured with nomenclature properties and sourceRef for different tasks"
+        dockerExt.images {
+            testImage {
+                // Build Mode properties for build task
+                registry.set("ghcr.io")
+                namespace.set("myorg")
+                imageName.set("myapp")
+                version.set("1.0.0")
+                tags.set(["latest", "v1.0.0"])
+                
+                // Add sourceRef to make configuration valid (validation tested elsewhere)
+                sourceRef.set("ghcr.io/myorg/myapp:latest")
+            }
+        }
+        project.evaluate()
+
+        then: "Properties flow correctly to tasks"
+        def buildTask = project.tasks.getByName("dockerBuildTestImage")
+        def tagTask = project.tasks.getByName("dockerTagTestImage")
+
+        // Verify nomenclature properties are configured
+        buildTask.registry.get() == "ghcr.io"
+        buildTask.namespace.get() == "myorg"
+        buildTask.imageName.get() == "myapp"
+        buildTask.version.get() == "1.0.0"
+        buildTask.tags.get() == ["latest", "v1.0.0"]
+
+        tagTask.registry.get() == "ghcr.io"
+        tagTask.namespace.get() == "myorg"
+        tagTask.imageName.get() == "myapp"
+        tagTask.version.get() == "1.0.0"
+        tagTask.tags.get() == ["latest", "v1.0.0"]
+    }
+
+    def "plugin does NOT configure sourceRef for DockerBuildTask"() {
+        given: "Plugin applied to verify DockerBuildTask does not get sourceRef"
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create minimal valid context for build
+        def contextDir = project.file('docker-context')
+        contextDir.mkdirs()
+        def dockerfile = project.file('docker-context/Dockerfile')
+        dockerfile.text = "FROM alpine"
+
+        when: "Image is configured for Build Mode"
+        dockerExt.images {
+            testImage {
+                context.set(contextDir)
+                imageName.set("test-app")
+                version.set("1.0.0")
+                tags.set(["latest"])
+            }
+        }
+        project.evaluate()
+
+        then: "DockerBuildTask exists but has no sourceRef property access"
+        def buildTask = project.tasks.getByName("dockerBuildTestImage")
+
+        // Verify DockerBuildTask has nomenclature properties but not sourceRef
+        buildTask.imageName.get() == "test-app"
+        buildTask.version.get() == "1.0.0"
+        buildTask.tags.get() == ["latest"]
+
+        // DockerBuildTask should not have sourceRef property (architectural separation)
+        // We can't test for absence of property directly, but we can verify the task type
+        buildTask instanceof com.kineticfire.gradle.docker.task.DockerBuildTask
     }
 }

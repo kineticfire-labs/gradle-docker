@@ -333,4 +333,162 @@ class DockerSaveTaskComprehensiveTest extends DockerTaskTestBase {
         def ex = thrown(Exception)
         ex.cause == authError
     }
+    
+    // ===== PHASE 2: DUAL-MODE TASK BEHAVIOR ENHANCEMENT TESTS =====
+    
+    def "DockerSaveTask pulls missing image with auth in SourceRef mode"() {
+        given: "Task configured with sourceRef mode and authentication"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        task.dockerService.set(mockDockerService)
+        task.sourceRef.set("private.registry.io/secure/app:v1.0")
+        task.pullIfMissing.set(true)
+        task.auth.set(createAuthSpec("authuser", "authpass"))
+        task.compression.set(SaveCompression.GZIP)
+        task.outputFile.set(createOutputFile("authenticated-image.tar.gz"))
+        
+        when: "Save operation is executed"
+        task.saveImage()
+        
+        then: "Image is checked, pulled with auth, then saved"
+        1 * mockDockerService.imageExists("private.registry.io/secure/app:v1.0") >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage("private.registry.io/secure/app:v1.0", _) >> { imageRef, authConfig ->
+            assert authConfig != null
+            assert authConfig.username == "authuser"
+            assert authConfig.password == "authpass"
+            return CompletableFuture.completedFuture(null)
+        }
+        1 * mockDockerService.saveImage("private.registry.io/secure/app:v1.0", _, SaveCompression.GZIP) >> CompletableFuture.completedFuture(null)
+    }
+    
+    def "DockerSaveTask builds primary image reference in both modes"() {
+        expect: "Primary reference is built correctly for different modes"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        
+        // Configure task based on mode
+        if (sourceRef) {
+            task.sourceRef.set(sourceRef)
+        } else {
+            if (registry) task.registry.set(registry)
+            if (namespace) task.namespace.set(namespace)
+            if (imageName) task.imageName.set(imageName)
+            if (repository) task.repository.set(repository)
+            if (tags) task.tags.set(tags)
+        }
+        
+        def primaryRef = task.buildPrimaryImageReference()
+        primaryRef == expectedRef
+        
+        where:
+        sourceRef                    | registry      | namespace  | imageName | repository    | tags            | expectedRef
+        "external:v1.0"             | null          | null       | null      | null          | null            | "external:v1.0"
+        null                        | "docker.io"   | "company"  | "app"     | null          | ["1.0", "2.0"]  | "docker.io/company/app:1.0"
+        null                        | "registry.io" | null       | null      | "org/project" | ["latest"]      | "registry.io/org/project:latest"
+        null                        | null          | "ns"       | "app"     | null          | ["tag"]         | "ns/app:tag"
+        "source:ref"                | "registry.io" | "ns"       | "app"     | null          | ["tag"]         | "source:ref"  // SourceRef takes precedence
+    }
+    
+    def "DockerSaveTask uses auth configuration for pullIfMissing"() {
+        given: "Task with various auth configurations"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        task.dockerService.set(mockDockerService)
+        task.sourceRef.set("registry.com/private:image")
+        task.pullIfMissing.set(true)
+        task.compression.set(SaveCompression.NONE)
+        task.outputFile.set(createOutputFile("private-image.tar"))
+        
+        def authSpec = null
+        
+        if (authType == "userpass") {
+            authSpec = createAuthSpec("user", "pass")
+        } else if (authType == "token") {
+            authSpec = createAuthSpec("tokenuser", null, "token")
+        }
+        
+        if (authSpec) {
+            task.auth.set(authSpec)
+        }
+        
+        when: "Save operation is executed"
+        task.saveImage()
+        
+        then: "Pull is called with correct auth configuration"
+        1 * mockDockerService.imageExists("registry.com/private:image") >> CompletableFuture.completedFuture(false)
+        if (authType == null) {
+            1 * mockDockerService.pullImage("registry.com/private:image", null) >> CompletableFuture.completedFuture(null)
+        } else if (authType == "userpass") {
+            1 * mockDockerService.pullImage("registry.com/private:image", { it != null && it.username == "user" && it.password == "pass" }) >> CompletableFuture.completedFuture(null)
+        } else if (authType == "token") {
+            1 * mockDockerService.pullImage("registry.com/private:image", { it != null && it.username == "tokenuser" && it.registryToken == "token" }) >> CompletableFuture.completedFuture(null)
+        }
+        1 * mockDockerService.saveImage("registry.com/private:image", _, SaveCompression.NONE) >> CompletableFuture.completedFuture(null)
+        
+        where:
+        authType << [null, "userpass", "token"]
+    }
+    
+    // ===== PHASE 2: SAVECOMPRESSION SERVICE INTEGRATION TESTS =====
+    
+    def "DockerSaveTask passes SaveCompression enum to service correctly"() {
+        given: "Task configured with specific compression type"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        task.dockerService.set(mockDockerService)
+        task.sourceRef.set("test:image")
+        task.compression.set(SaveCompression.GZIP)
+        task.outputFile.set(createOutputFile("image.tar.gz"))
+        
+        when: "Save operation is executed"
+        task.saveImage()
+        
+        then: "Service is called with exact SaveCompression enum value"
+        1 * mockDockerService.saveImage("test:image", _, SaveCompression.GZIP) >> { imageRef, outputFile, compression ->
+            assert compression == SaveCompression.GZIP
+            assert compression instanceof SaveCompression
+            return CompletableFuture.completedFuture(null)
+        }
+    }
+    
+    def "DockerSaveTask handles all SaveCompression types"() {
+        expect: "All compression types are passed correctly to service"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        task.dockerService.set(mockDockerService)
+        task.sourceRef.set("test:image")
+        task.compression.set(compressionType)
+        task.outputFile.set(createOutputFile("image${fileExtension}"))
+        
+        when: "Save operation is executed"
+        task.saveImage()
+        
+        then: "Service receives correct enum value"
+        1 * mockDockerService.saveImage("test:image", _, compressionType) >> { imageRef, outputFile, compression ->
+            assert compression == compressionType
+            assert compression instanceof SaveCompression
+            return CompletableFuture.completedFuture(null)
+        }
+        
+        where:
+        compressionType          | fileExtension
+        SaveCompression.NONE     | ".tar"
+        SaveCompression.GZIP     | ".tar.gz"
+        SaveCompression.ZIP      | ".zip"
+        SaveCompression.BZIP2    | ".tar.bz2"
+        SaveCompression.XZ       | ".tar.xz"
+    }
+    
+    def "DockerSaveTask uses NONE compression by default"() {
+        given: "Task without explicit compression setting"
+        def task = project.tasks.create("dockerSaveTest", DockerSaveTask)
+        task.dockerService.set(mockDockerService)
+        task.sourceRef.set("test:image")
+        task.outputFile.set(createOutputFile("image.tar"))
+        // No compression explicitly set - should use default
+        
+        when: "Save operation is executed"
+        task.saveImage()
+        
+        then: "Service receives default NONE compression"
+        1 * mockDockerService.saveImage("test:image", _, SaveCompression.NONE) >> { imageRef, outputFile, compression ->
+            assert compression == SaveCompression.NONE
+            return CompletableFuture.completedFuture(null)
+        }
+    }
 }
