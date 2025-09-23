@@ -1,5 +1,8 @@
 # Use Case - 6 - Project Developer Create, Tag, Save, and Publish Image
 
+This document describes Gradle tasks and functionality to create, tag, save, and publish an image.  Tests for this
+functionality consists only of unit tests and functional tests-- no integration tests.
+
 ## Document Metadata
 
 | Key     | Value       |

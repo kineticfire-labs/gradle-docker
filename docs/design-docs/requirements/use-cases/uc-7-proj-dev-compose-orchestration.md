@@ -1,5 +1,8 @@
 # Use Case - 7 - Project Developer Compose Orchestration
 
+This document describes Gradle tasks and functionality related to image testing.  Tests here are integration tests 
+only-- there are no unit tests or functional tests.
+
 ## Document Metadata
 
 | Key     | Value       |
@@ -51,10 +54,6 @@ the-application-project/
    │  ├─ main/docker/                      # Dockerfile + build assets (image context)
    │  │  ├─ Dockerfile
    │  │  └─ ...                            # scripts, config, .dockerignore, etc.
-   │  ├─ functionalTest/groovy/            # Groovy/Spock functional tests
-   │  ├─ functionalTest/resources/
-   │  │  ├─ compose/                       # compose files for functional tests
-   │  │  └─ docker/                        # optional: test-only wrapper image assets
    │  ├─ integrationTest/groovy/           # Groovy/Spock integration tests
    │  ├─ integrationTest/java/             # Java/JUnit integration tests
    │  ├─ integrationTest/resources/
@@ -73,7 +72,6 @@ In this scenario, the `app/` directory contains the source and build file to bui
 The `app-image/` directory then assembles the application into a Docker image and tests it.  This applies Separation of 
 Concerns (SoC) principle, given the amount of functionality is being performed in the process of building the image,
 particularly with integration tests.  Within the `app-image/` directory, tests are located at:
-- `app-image/src/functionalTest/`: contains functional tests
 - `app-image/src/integrationTest/`: contains integration tests
 
 ## Implementation Phases
@@ -155,26 +153,11 @@ plugins {
 repositories { mavenCentral() }
 
 dependencies {
-  // Unit + functional (Groovy/Spock)
-  testImplementation         platform("org.spockframework:spock-bom:2.4-M4-groovy-4.0")
-  testImplementation         "org.spockframework:spock-core"
-
-  // Functional test source set will extend these:
-  functionalTestImplementation sourceSets.test.output
-  functionalTestImplementation configurations.testImplementation
-  functionalTestRuntimeOnly    configurations.testRuntimeOnly
-
   // Integration (Java/JUnit)
   integrationTestImplementation "org.junit.jupiter:junit-jupiter:5.10.2"
 }
 
 sourceSets {
-  functionalTest {
-    groovy.srcDir "src/functionalTest/groovy"
-    resources.srcDir "src/functionalTest/resources"
-    compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
-    runtimeClasspath += output + compileClasspath
-  }
   integrationTest {
     java.srcDir "src/integrationTest/java"
     resources.srcDir "src/integrationTest/resources"
@@ -184,8 +167,6 @@ sourceSets {
 }
 
 configurations {
-  functionalTestImplementation.extendsFrom testImplementation
-  functionalTestRuntimeOnly.extendsFrom testRuntimeOnly
   integrationTestImplementation.extendsFrom testImplementation
   integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
@@ -226,18 +207,6 @@ dockerOrch {
 
 // --- Classic Test tasks bound to stacks ---
 
-tasks.register("functionalTest", Test) {
-  description = "Functional tests against db-only stack"
-  testClassesDirs = sourceSets.functionalTest.output.classesDirs
-  classpath       = sourceSets.functionalTest.runtimeClasspath
-  useJUnitPlatform() // Spock 2 runs on JUnit Platform
-  // Choose lifecycle per group
-  usesCompose stack: "dbOnly", lifecycle: "class"   // suite|class|method (Phase 2/3)
-  // Pass state file path to tests  
-  systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("dbOnly")
-  shouldRunAfter("test")
-}
-
 tasks.register("integrationTest", Test) {
   description = "Java integration tests against api+db stack"
   testClassesDirs = sourceSets.integrationTest.output.classesDirs
@@ -245,11 +214,6 @@ tasks.register("integrationTest", Test) {
   useJUnitPlatform()
   usesCompose stack: "apiDb", lifecycle: "suite"    // or "method" if you need full isolation (Phase 3)
   systemProperty "COMPOSE_STATE_FILE", composeStateFileFor("apiDb")
-  mustRunAfter("functionalTest")
-}
-
-tasks.named("check") {
-  dependsOn "functionalTest", "integrationTest"
 }
 ```
 
