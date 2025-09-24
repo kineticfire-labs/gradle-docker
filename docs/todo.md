@@ -19,6 +19,7 @@
 9. if i `./gradlw build` then functional tests should run
 10. tests that are *.disabled
 11. todo statements in CLAUDE.md
+12. there are disabled functional tests
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it

@@ -343,4 +343,230 @@ class DockerTagFunctionalTest extends Specification {
         result.output.contains('latest')
         result.output.contains('Dynamic tag generation working')
     }
+
+    def "docker tag task configuration supports sourceRef mode with complex tag scenarios"() {
+        given:
+        settingsFile << "rootProject.name = 'test-tag-sourceref-complex'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    complexSourceRefApp {
+                        // SourceRef mode for retagging existing images with complex tags
+                        sourceRef.set('ghcr.io/upstream/awesome-app:v2.1.0')
+                        tags.set([
+                            'internal:latest',
+                            'internal:stable',
+                            'internal:v2.1.0',
+                            'backup.registry.com/mirrors/awesome-app:latest',
+                            'backup.registry.com/mirrors/awesome-app:v2.1.0'
+                        ])
+                    }
+                }
+            }
+
+            tasks.register('verifyComplexSourceRefTagConfiguration') {
+                doLast {
+                    def tagTask = tasks.getByName('dockerTagComplexSourceRefApp')
+
+                    println "Complex SourceRef tag task: " + tagTask.name
+
+                    def tags = tagTask.tags.get()
+                    println "SourceRef tags: " + tags
+
+                    // Verify all expected tags are present
+                    assert tags.contains('internal:latest')
+                    assert tags.contains('internal:stable')
+                    assert tags.contains('internal:v2.1.0')
+                    assert tags.contains('backup.registry.com/mirrors/awesome-app:latest')
+                    assert tags.contains('backup.registry.com/mirrors/awesome-app:v2.1.0')
+                    assert tags.size() == 5
+
+                    println "Complex sourceRef tag configuration verified"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyComplexSourceRefTagConfiguration', '--info')
+            .build()
+
+        then:
+        result.output.contains('Complex SourceRef tag task: dockerTagComplexSourceRefApp')
+        result.output.contains('internal:latest')
+        result.output.contains('backup.registry.com/mirrors/awesome-app:latest')
+        result.output.contains('Complex sourceRef tag configuration verified')
+    }
+
+    def "docker tag task configuration validates sourceRef mode excludes build properties"() {
+        given:
+        settingsFile << "rootProject.name = 'test-tag-sourceref-validation'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    invalidSourceRefApp {
+                        // SourceRef mode with build properties (should be invalid)
+                        sourceRef.set('ghcr.io/upstream/app:1.0.0')
+                        tags.set(['local:latest'])
+
+                        // These should be invalid with sourceRef
+                        context.set(file('.'))
+                        buildArgs.put('VERSION', '1.0.0')
+                        labels.put('build.time', 'now')
+                    }
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks', '--all')
+            .buildAndFail()
+
+        then:
+        // Should fail due to sourceRef + build properties combination
+        result.output.contains('cannot use both') || result.output.contains('sourceRef') || result.output.contains('mutual exclusivity')
+    }
+
+    def "docker tag task configuration supports provider-based sourceRef and tags"() {
+        given:
+        settingsFile << "rootProject.name = 'test-tag-provider-sourceref'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            def sourceImageProvider = providers.gradleProperty('source.image')
+                .orElse('ghcr.io/default/app:latest')
+            def targetRegistryProvider = providers.gradleProperty('target.registry')
+                .orElse('local')
+            def versionProvider = providers.provider { project.version.toString() }
+
+            docker {
+                images {
+                    providerSourceRefApp {
+                        // Provider-based sourceRef mode
+                        sourceRef.set(sourceImageProvider)
+                        tags.set(providers.provider {
+                            def registry = targetRegistryProvider.get()
+                            def version = versionProvider.get()
+                            return [
+                                "\${registry}:latest",
+                                "\${registry}:stable",
+                                "\${registry}:v\${version}"
+                            ]
+                        })
+                    }
+                }
+            }
+
+            tasks.register('verifyProviderSourceRefTagConfiguration') {
+                doLast {
+                    def tagTask = tasks.getByName('dockerTagProviderSourceRefApp')
+
+                    println "Provider SourceRef tag task: " + tagTask.name
+
+                    def tags = tagTask.tags.get()
+                    println "Provider-based tags: " + tags
+
+                    // Verify provider-based tags are resolved
+                    assert tags.contains('local:latest')
+                    assert tags.contains('local:stable')
+                    assert tags.any { it.startsWith('local:v') }
+                    assert tags.size() == 3
+
+                    println "Provider-based sourceRef tag configuration verified"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyProviderSourceRefTagConfiguration', '--info')
+            .build()
+
+        then:
+        result.output.contains('Provider SourceRef tag task: dockerTagProviderSourceRefApp')
+        result.output.contains('local:latest')
+        result.output.contains('local:stable')
+        result.output.contains('Provider-based sourceRef tag configuration verified')
+    }
+
+    def "docker tag task configuration supports dual-mode detection and validation"() {
+        given:
+        settingsFile << "rootProject.name = 'test-tag-dual-mode'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    buildModeApp {
+                        // Build mode - should work
+                        registry.set('docker.io')
+                        imageName.set('build-app')
+                        version.set('1.0.0')
+                        tags.set(['latest', 'build'])
+                        context.set(file('.'))
+                    }
+
+                    sourceRefModeApp {
+                        // SourceRef mode - should work
+                        sourceRef.set('ghcr.io/existing/app:v1.0.0')
+                        tags.set(['local:latest', 'local:imported'])
+                    }
+                }
+            }
+
+            tasks.register('verifyDualModeTagConfiguration') {
+                doLast {
+                    def buildTask = tasks.getByName('dockerTagBuildModeApp')
+                    def sourceRefTask = tasks.getByName('dockerTagSourceRefModeApp')
+
+                    println "Build mode task: " + buildTask.name
+                    println "SourceRef mode task: " + sourceRefTask.name
+
+                    // Both tasks should be configured correctly
+                    assert buildTask.registry.isPresent()
+                    assert buildTask.imageName.isPresent()
+                    assert !buildTask.tags.get().isEmpty()
+
+                    assert !sourceRefTask.tags.get().isEmpty()
+
+                    println "Dual-mode configuration verified"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDualModeTagConfiguration', '--info')
+            .build()
+
+        then:
+        result.output.contains('Build mode task: dockerTagBuildModeApp')
+        result.output.contains('SourceRef mode task: dockerTagSourceRefModeApp')
+        result.output.contains('Dual-mode configuration verified')
+    }
 }
