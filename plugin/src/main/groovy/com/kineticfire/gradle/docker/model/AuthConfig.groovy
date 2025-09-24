@@ -26,11 +26,10 @@ class AuthConfig {
     final String password
     final String registryToken
     
-    AuthConfig(String username = null, String password = null, String registryToken = null, String serverAddress = null) {
+    AuthConfig(String username = null, String password = null, String registryToken = null) {
         this.username = username
         this.password = password
         this.registryToken = registryToken
-        // serverAddress parameter ignored - extracted automatically from image reference
     }
     
     /**

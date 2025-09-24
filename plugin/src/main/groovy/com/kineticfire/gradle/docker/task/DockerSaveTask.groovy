@@ -118,8 +118,7 @@ abstract class DockerSaveTask extends DefaultTask {
                     authConfig = new com.kineticfire.gradle.docker.model.AuthConfig(
                         authSpec.username.getOrElse(""),
                         authSpec.password.getOrElse(""),
-                        authSpec.registryToken.getOrElse(""),
-                        null // serverAddress extracted from imageRef automatically
+                        authSpec.registryToken.getOrElse("")
                     )
                 }
                 def future = service.pullImage(imageRef, authConfig)

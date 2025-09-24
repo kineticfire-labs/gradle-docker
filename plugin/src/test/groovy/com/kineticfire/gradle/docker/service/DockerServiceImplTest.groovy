@@ -200,7 +200,7 @@ class DockerServiceImplTest extends Specification {
     def "pushImage handles valid auth config"() {
         given:
         def imageRef = "test:latest"
-        def auth = new AuthConfig("testuser", "testpass", null, "registry.example.com")
+        def auth = new AuthConfig("testuser", "testpass", null)
         
         when:
         def result = service.pushImage(imageRef, auth)
@@ -234,7 +234,7 @@ class DockerServiceImplTest extends Specification {
     def "pullImage handles valid auth config"() {
         given:
         def imageRef = "test:latest"
-        def auth = new AuthConfig("testuser", "testpass", null, "registry.example.com")
+        def auth = new AuthConfig("testuser", "testpass", null)
         
         when:
         def result = service.pullImage(imageRef, auth)

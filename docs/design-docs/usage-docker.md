@@ -51,7 +51,21 @@ The plugin supports two distinct usage modes:
 
 ## Build Mode: Building New Docker Images
 
-Use Docker nomenclature properties for building new images. Choose one of two naming approaches:
+Use Docker nomenclature properties for building new images. 
+
+Two naming approaches:
+1. registry (optional) + namespace (optional) + name + tag(s)
+2. registry (optional) + repository + tag(s)
+
+Recommended:
+1. Create an image reference sufficient for the local image store, such as:
+   1. namespace + name + tag(s)
+   2. repository' + tag(s)
+2. When publishing an image:
+   1. Set the registry
+   2. If necessary, override the namespace
+
+Choose one of two naming approaches:
 
 ### Approach 1: Registry + Namespace + ImageName
 

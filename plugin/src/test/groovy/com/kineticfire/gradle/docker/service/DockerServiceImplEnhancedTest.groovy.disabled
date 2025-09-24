@@ -468,7 +468,7 @@ class DockerServiceImplEnhancedTest extends Specification {
     def "pushImage with auth credentials pushes successfully"() {
         given:
         def imageRef = "registry.io/app:latest"
-        def auth = new AuthConfig("testuser", "testpass", null, "registry.io")
+        def auth = new AuthConfig("testuser", "testpass", null)
 
         def pushCmd = Mock(PushImageCmd)
         def pushCallback = Mock(ResultCallback)
@@ -623,7 +623,7 @@ class DockerServiceImplEnhancedTest extends Specification {
     def "pullImage with auth credentials pulls successfully"() {
         given:
         def imageRef = "registry.io/app:latest"
-        def auth = new AuthConfig("testuser", "testpass", null, "registry.io")
+        def auth = new AuthConfig("testuser", "testpass", null)
 
         def pullCmd = Mock(PullImageCmd)
         def pullCallback = Mock(ResultCallback)

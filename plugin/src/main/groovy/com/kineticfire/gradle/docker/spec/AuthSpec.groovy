@@ -56,8 +56,7 @@ abstract class AuthSpec {
         return new AuthConfig(
             username.orNull,
             password.orNull,
-            registryToken.orNull,
-            null  // serverAddress removed - extracted automatically from image reference
+            registryToken.orNull
         )
     }
 }

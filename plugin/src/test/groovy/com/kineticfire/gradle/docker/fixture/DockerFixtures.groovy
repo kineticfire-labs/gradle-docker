@@ -144,11 +144,11 @@ class DockerFixtures {
         }
         
         static AuthConfig createAuthConfig(String username = "testuser", String password = "testpass") {
-            return new AuthConfig(username, password, null, "docker.io")
+            return new AuthConfig(username, password, null)
         }
         
         static AuthConfig createRegistryAuthConfig(String registry = "registry.example.com") {
-            return new AuthConfig("testuser", "testpass", null, registry)
+            return new AuthConfig("testuser", "testpass", null)
         }
     }
     

@@ -84,7 +84,7 @@ class DockerServiceTest extends Specification {
     def "pushImage method signature is correct"() {
         given:
         def imageRef = "test:latest"
-        def auth = new AuthConfig("user", "pass", null, "registry.example.com")
+        def auth = new AuthConfig("user", "pass", null)
 
         when:
         def result = service.pushImage(imageRef, auth)
@@ -109,7 +109,7 @@ class DockerServiceTest extends Specification {
     def "pullImage method signature is correct"() {
         given:
         def imageRef = "test:latest"
-        def auth = new AuthConfig("user", "pass", null, "registry.example.com")
+        def auth = new AuthConfig("user", "pass", null)
 
         when:
         def result = service.pullImage(imageRef, auth)

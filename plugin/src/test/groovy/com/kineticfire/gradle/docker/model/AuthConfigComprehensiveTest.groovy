@@ -25,7 +25,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "constructor with all parameters"() {
         when:
-        def authConfig = new AuthConfig("user", "pass", "token", "server.io")
+        def authConfig = new AuthConfig("user", "pass", "token")
 
         then:
         authConfig.username == "user"
@@ -36,7 +36,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "constructor with null parameters"() {
         when:
-        def authConfig = new AuthConfig(null, null, null, null)
+        def authConfig = new AuthConfig(null, null, null)
 
         then:
         authConfig.username == null
@@ -47,7 +47,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "constructor with mixed null and non-null parameters"() {
         when:
-        def authConfig = new AuthConfig("user", null, "token", null)
+        def authConfig = new AuthConfig("user", null, "token")
 
         then:
         authConfig.username == "user"
@@ -58,7 +58,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns true when username and password are set"() {
         given:
-        def authConfig = new AuthConfig("user", "pass", null, "server.io")
+        def authConfig = new AuthConfig("user", "pass", null)
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -69,7 +69,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns true when registry token is set"() {
         given:
-        def authConfig = new AuthConfig(null, null, "token123", "server.io")
+        def authConfig = new AuthConfig(null, null, "token123")
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -80,7 +80,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns false when no credentials are set"() {
         given:
-        def authConfig = new AuthConfig(null, null, null, "server.io")
+        def authConfig = new AuthConfig(null, null, null)
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -91,7 +91,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns false when only username is set"() {
         given:
-        def authConfig = new AuthConfig("user", null, null, "server.io")
+        def authConfig = new AuthConfig("user", null, null)
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -102,7 +102,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns false when only password is set"() {
         given:
-        def authConfig = new AuthConfig(null, "pass", null, "server.io")
+        def authConfig = new AuthConfig(null, "pass", null)
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -113,7 +113,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns true when username and password are both empty strings"() {
         given:
-        def authConfig = new AuthConfig("", "", null, "server.io")
+        def authConfig = new AuthConfig("", "", null)
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -124,7 +124,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials returns true when registry token is empty string"() {
         given:
-        def authConfig = new AuthConfig(null, null, "", "server.io")
+        def authConfig = new AuthConfig(null, null, "")
 
         when:
         def hasCredentials = authConfig.hasCredentials()
@@ -135,7 +135,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "hasCredentials scenarios"() {
         expect:
-        new AuthConfig(username, password, token, "server").hasCredentials() == expectedResult
+        new AuthConfig(username, password, token).hasCredentials() == expectedResult
 
         where:
         username | password | token   | expectedResult
@@ -153,7 +153,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "toDockerJavaAuthConfig with username and password"() {
         given:
-        def authConfig = new AuthConfig("dockeruser", "dockerpass", null, "docker.io")
+        def authConfig = new AuthConfig("dockeruser", "dockerpass", null)
 
         when:
         def dockerJavaAuth = authConfig.toDockerJavaAuthConfig()
@@ -168,7 +168,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "toDockerJavaAuthConfig with registry token"() {
         given:
-        def authConfig = new AuthConfig(null, null, "ghp_token123", "ghcr.io")
+        def authConfig = new AuthConfig(null, null, "ghp_token123")
 
         when:
         def dockerJavaAuth = authConfig.toDockerJavaAuthConfig()
@@ -183,7 +183,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "toDockerJavaAuthConfig with all fields"() {
         given:
-        def authConfig = new AuthConfig("user", "pass", "token", "registry.io")
+        def authConfig = new AuthConfig("user", "pass", "token")
 
         when:
         def dockerJavaAuth = authConfig.toDockerJavaAuthConfig()
@@ -198,7 +198,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "toDockerJavaAuthConfig with minimal fields"() {
         given:
-        def authConfig = new AuthConfig(null, null, null, null)
+        def authConfig = new AuthConfig(null, null, null)
 
         when:
         def dockerJavaAuth = authConfig.toDockerJavaAuthConfig()
@@ -213,9 +213,9 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "equals and hashCode contract"() {
         given:
-        def auth1 = new AuthConfig("user", "pass", "token", "server")
-        def auth2 = new AuthConfig("user", "pass", "token", "server")
-        def auth3 = new AuthConfig("different", "pass", "token", "server")
+        def auth1 = new AuthConfig("user", "pass", "token")
+        def auth2 = new AuthConfig("user", "pass", "token")
+        def auth3 = new AuthConfig("different", "pass", "token")
 
         expect:
         auth1 == auth2
@@ -227,7 +227,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "toString contains relevant information"() {
         given:
-        def authConfig = new AuthConfig("user", "pass", "token", "server.io")
+        def authConfig = new AuthConfig("user", "pass", "token")
 
         when:
         def string = authConfig.toString()
@@ -242,7 +242,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "real-world authentication scenarios"() {
         expect:
-        def authConfig = new AuthConfig(username, password, token, server)
+        def authConfig = new AuthConfig(username, password, token)
         authConfig.hasCredentials() == hasCredentials
         authConfig.toDockerJavaAuthConfig() != null
 
@@ -259,7 +259,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "edge cases with empty strings"() {
         given:
-        def authConfig = new AuthConfig("", "", "", "")
+        def authConfig = new AuthConfig("", "", "")
 
         expect:
         authConfig.username == ""
@@ -271,7 +271,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
     def "immutability of fields"() {
         given:
-        def authConfig = new AuthConfig("user", "pass", "token", "server")
+        def authConfig = new AuthConfig("user", "pass", "token")
 
         expect:
         // Fields should be final and immutable
@@ -284,11 +284,11 @@ class AuthConfigComprehensiveTest extends Specification {
     def "constructor parameter validation"() {
         expect:
         // Constructor should accept any combination of parameters
-        new AuthConfig(null, null, null, null) != null
-        new AuthConfig("", "", "", "") != null
-        new AuthConfig("user", null, null, null) != null
-        new AuthConfig(null, "pass", null, null) != null
-        new AuthConfig(null, null, "token", null) != null
-        new AuthConfig(null, null, null, "server") != null
+        new AuthConfig(null, null, null) != null
+        new AuthConfig("", "", "") != null
+        new AuthConfig("user", null, null) != null
+        new AuthConfig(null, "pass", null) != null
+        new AuthConfig(null, null, "token") != null
+        new AuthConfig(null, null, null) != null
     }
 }

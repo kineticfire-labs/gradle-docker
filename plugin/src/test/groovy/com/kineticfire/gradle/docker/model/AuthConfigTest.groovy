@@ -39,7 +39,7 @@ class AuthConfigTest extends Specification {
 
     def "can create username/password AuthConfig"() {
         when:
-        def auth = new AuthConfig("testuser", "testpass", null, "registry.example.com")
+        def auth = new AuthConfig("testuser", "testpass", null)
 
         then:
         auth.username == "testuser"
@@ -53,7 +53,7 @@ class AuthConfigTest extends Specification {
 
     def "can create token-based AuthConfig"() {
         when:
-        def auth = new AuthConfig(null, null, "ghp_abcd1234", "ghcr.io")
+        def auth = new AuthConfig(null, null, "ghp_abcd1234")
 
         then:
         auth.username == null
@@ -99,7 +99,7 @@ class AuthConfigTest extends Specification {
     def "hasCredentials returns true for valid username/password"() {
         expect:
         new AuthConfig("user", "pass").hasCredentials()
-        new AuthConfig("user", "pass", null, "server").hasCredentials() // serverAddress ignored
+        new AuthConfig("user", "pass", null).hasCredentials() // serverAddress ignored
     }
 
     def "hasCredentials returns true for token-based auth"() {
@@ -133,7 +133,7 @@ class AuthConfigTest extends Specification {
 
     def "toDockerJavaAuthConfig creates proper Docker Java AuthConfig"() {
         given:
-        def auth = new AuthConfig("testuser", "testpass", "testtoken", "registry.example.com") // serverAddress ignored
+        def auth = new AuthConfig("testuser", "testpass", "testtoken") // serverAddress ignored
 
         when:
         def dockerAuth = auth.toDockerJavaAuthConfig()
@@ -148,7 +148,7 @@ class AuthConfigTest extends Specification {
 
     def "toDockerJavaAuthConfig handles null values properly"() {
         given:
-        def auth = new AuthConfig("user", null, null, null)
+        def auth = new AuthConfig("user", null, null)
 
         when:
         def dockerAuth = auth.toDockerJavaAuthConfig()
@@ -180,10 +180,10 @@ class AuthConfigTest extends Specification {
         expect:
         new AuthConfig().toString() == "AuthConfig{empty}"
         
-        new AuthConfig("user", "secret", null, "server").toString() == 
+        new AuthConfig("user", "secret", null).toString() == 
             "AuthConfig{username='user', password=*****}" // serverAddress removed
             
-        new AuthConfig(null, null, "secrettoken", "server").toString() == 
+        new AuthConfig(null, null, "secrettoken").toString() == 
             "AuthConfig{token=*****}" // serverAddress removed
     }
 
@@ -198,7 +198,7 @@ class AuthConfigTest extends Specification {
 
     def "toString prioritizes token over username/password when both present"() {
         when:
-        def auth = new AuthConfig("user", "pass", "token", "server") // serverAddress ignored
+        def auth = new AuthConfig("user", "pass", "token") // serverAddress ignored
 
         then:
         auth.toString() == "AuthConfig{token=*****}" // serverAddress removed
@@ -206,7 +206,7 @@ class AuthConfigTest extends Specification {
 
     def "edge case: empty strings vs null values"() {
         given:
-        def auth = new AuthConfig("", "", "", "") // serverAddress ignored
+        def auth = new AuthConfig("", "", "") // serverAddress ignored
 
         expect:
         // Empty strings are falsy in Groovy boolean context, but still valid for auth purposes
@@ -220,7 +220,7 @@ class AuthConfigTest extends Specification {
 
     def "edge case: whitespace-only strings"() {
         given:
-        def auth = new AuthConfig("  ", "  ", "  ", "  ") // serverAddress ignored
+        def auth = new AuthConfig("  ", "  ", "  ") // serverAddress ignored
 
         expect:
         auth.hasCredentials() // Whitespace strings are truthy in Groovy

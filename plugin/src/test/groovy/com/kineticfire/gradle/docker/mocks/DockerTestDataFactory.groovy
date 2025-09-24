@@ -67,8 +67,7 @@ class DockerTestDataFactory {
         return new AuthConfig(
             "testuser",
             "testpass",
-            null,
-            "registry.io"
+            null
         )
     }
     
@@ -76,8 +75,7 @@ class DockerTestDataFactory {
         return new AuthConfig(
             null,
             null,
-            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9",
-            "ghcr.io"
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
         )
     }
     
