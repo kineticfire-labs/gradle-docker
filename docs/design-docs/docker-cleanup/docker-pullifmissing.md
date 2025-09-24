@@ -5,44 +5,15 @@
 - Status: Planned
 - Version: 1.0.0
 - Last updated: 2025-01-15
-- Comment: Implement validation for pullIfMissing usage and move pullIfMissing to image-level architecture
+- Comment: Move pullIfMissing to image-level architecture with validation for better user experience and consistency across operations
 
 ## Overview
 
-Implement validation for pullIfMissing usage and move pullIfMissing to image-level architecture for better user experience and consistency across operations.
+Move pullIfMissing to image-level architecture for better user experience and consistency across operations, including validation to prevent invalid configurations.
 
-## Phase 1: Validation Implementation
+## Phase 1: Image-Level pullIfMissing Architecture
 
-### Step 1.1: Add pullIfMissing Validation in Save Task
-**File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/DockerSaveTask.groovy`
-**Logic**: Add validation method to prevent pullIfMissing=true with build context
-```groovy
-private void validatePullIfMissingConfiguration() {
-    if (pullIfMissing.getOrElse(false) && hasBuildContext()) {
-        throw new GradleException(
-            "Cannot set pullIfMissing=true when build context is configured for image '${imageName.get()}'. " +
-            "Either build the image (remove pullIfMissing) or reference an existing image (use sourceRef instead of build context)."
-        )
-    }
-}
-
-private boolean hasBuildContext() {
-    return contextTask.isPresent() ||
-           (contextPath.isPresent() && contextPath.get().asFile.exists())
-}
-```
-**Integration**: Call `validatePullIfMissingConfiguration()` at start of `saveImage()` method
-
-### Step 1.2: Add Unit Tests for Validation
-**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/DockerSaveTaskTest.groovy`
-**Tests**:
-- `pullIfMissing with build context throws exception`
-- `pullIfMissing with sourceRef succeeds`
-- `pullIfMissing false with build context succeeds`
-
-## Phase 2: Image-Level pullIfMissing Architecture
-
-### Step 2.1: Update ImageSpec with pullIfMissing Support
+### Step 1.1: Update ImageSpec with pullIfMissing Support and Validation
 **File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/ImageSpec.groovy`
 **Changes**:
 - Add `Property<Boolean> pullIfMissing` property
@@ -54,15 +25,31 @@ private boolean hasBuildContext() {
   - `Property<String> sourceRefTag`
 - Add method `String getEffectiveSourceRef()` to assemble full reference from components
 - Add validation method `validateSourceRefConfiguration()` to ensure either full sourceRef or component assembly
+- Add validation method `validatePullIfMissingConfiguration()` to prevent pullIfMissing=true with build context:
+```groovy
+void validatePullIfMissingConfiguration() {
+    if (pullIfMissing.getOrElse(false) && hasBuildContext()) {
+        throw new GradleException(
+            "Cannot set pullIfMissing=true when build context is configured for image '${name}'. " +
+            "Either build the image (remove pullIfMissing) or reference an existing image (use sourceRef instead of build context)."
+        )
+    }
+}
 
-### Step 2.2: Update SaveSpec to Remove pullIfMissing
+private boolean hasBuildContext() {
+    return contextTask.isPresent() ||
+           (contextPath.isPresent() && contextPath.get().asFile.exists())
+}
+```
+
+### Step 1.2: Update SaveSpec to Remove pullIfMissing
 **File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/SaveSpec.groovy`
 **Changes**:
 - Remove `Property<Boolean> pullIfMissing` property
 - Remove `Property<AuthSpec> auth` property
 - Update logic to delegate to parent ImageSpec for pull behavior
 
-### Step 2.3: Add pullIfMissing Support to Tag and Publish Operations
+### Step 1.3: Add pullIfMissing Support to Tag and Publish Operations
 **Files**:
 - `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/DockerTagTask.groovy`
 - `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/DockerPublishTask.groovy`
@@ -70,6 +57,8 @@ private boolean hasBuildContext() {
 **Logic**: Both tasks check image-level `pullIfMissing` and pull sourceRef if needed before operation:
 ```groovy
 private void pullSourceRefIfNeeded() {
+    imageSpec.validatePullIfMissingConfiguration()
+
     if (imageSpec.pullIfMissing.getOrElse(false) && imageSpec.sourceRef.isPresent()) {
         def sourceRef = imageSpec.getEffectiveSourceRef()
         def authConfig = imageSpec.pullAuth.isPresent() ?
@@ -82,21 +71,21 @@ private void pullSourceRefIfNeeded() {
 }
 ```
 
-### Step 2.4: Update DockerSaveTask for New Architecture
+### Step 1.4: Update DockerSaveTask for New Architecture
 **File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/DockerSaveTask.groovy`
 **Changes**:
 - Remove operation-level pullIfMissing logic
 - Use image-level pullIfMissing from parent ImageSpec
-- Update validation to check image-level configuration
+- Call image-level validation: `imageSpec.validatePullIfMissingConfiguration()`
 - Use image-level pullAuth instead of save-level auth
 
-### Step 2.5: Update Service Layer for Consistent Pull Logic
+### Step 1.5: Update Service Layer for Consistent Pull Logic
 **File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/DockerServiceImpl.groovy`
 **Enhancement**: Ensure pullImage method handles component-assembled sourceRefs correctly
 
-## Phase 3: DSL and Configuration Updates
+## Phase 2: DSL and Configuration Updates
 
-### Step 3.1: Update DSL Structure
+### Step 2.1: Update DSL Structure
 **Pattern**: Enable image-level configuration:
 ```groovy
 docker {
@@ -123,7 +112,7 @@ docker {
 }
 ```
 
-### Step 3.2: Add SourceRef Builder Methods
+### Step 2.2: Add SourceRef Builder Methods
 **File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/ImageSpec.groovy`
 **Methods**:
 ```groovy
@@ -139,9 +128,9 @@ void sourceRef(@DelegatesTo(SourceRefSpec) Closure closure) {
 }
 ```
 
-## Phase 4: Testing Updates
+## Phase 3: Testing Updates
 
-### Step 4.1: Update Unit Tests
+### Step 3.1: Update Unit Tests
 **Files to Update**:
 - `DockerSaveTaskTest.groovy` - Remove save-level pullIfMissing tests
 - `DockerTagTaskTest.groovy` - Add pullIfMissing support tests
@@ -153,10 +142,15 @@ void sourceRef(@DelegatesTo(SourceRefSpec) Closure closure) {
 - Image-level pullIfMissing configuration
 - SourceRef component assembly
 - Pull authentication configuration
-- Validation of conflicting configurations
+- Validation of conflicting configurations (pullIfMissing=true with build context)
 - Cross-operation pullIfMissing behavior consistency
 
-### Step 4.2: Update Functional Tests
+**Key Validation Tests**:
+- `pullIfMissing with build context throws exception`
+- `pullIfMissing with sourceRef succeeds`
+- `pullIfMissing false with build context succeeds`
+
+### Step 3.2: Update Functional Tests
 **Files to Update**:
 - All functional test files that use pullIfMissing
 - Add tests for new DSL structure
@@ -168,9 +162,9 @@ void sourceRef(@DelegatesTo(SourceRefSpec) Closure closure) {
 - Pull authentication works with new architecture
 - Validation catches invalid configurations
 
-## Phase 5: Documentation Updates
+## Phase 4: Documentation Updates
 
-### Step 5.1: Update Usage Documentation
+### Step 4.1: Update Usage Documentation
 **File**: `docs/design-docs/usage-docker.md`
 
 **Add Sections**:
@@ -237,7 +231,7 @@ docker {
 }
 ```
 
-### Step 5.2: Add Migration Notes
+### Step 4.2: Add Migration Notes
 **Section**: Document the architectural change and new capabilities:
 - pullIfMissing now works across all operations (save, tag, publish)
 - SourceRef supports both full references and component assembly
