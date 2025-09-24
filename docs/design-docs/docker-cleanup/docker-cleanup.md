@@ -287,12 +287,7 @@ publish {
 
 **Note**: Environment variables are validated automatically by the plugin with helpful error messages if missing or empty, including registry-specific suggestions for common variable names.
 
-#### **Step 3.3: Add Complete Context Examples**
-- Direct `context` property usage
-- Inline `context {}` DSL block
-- Multiple context configuration approaches
-
-#### **Step 3.4: Add Label Helper Method Examples**
+#### **Step 3.3: Add Label Helper Method Examples**
 - Single `label(key, value)` usage
 - Bulk `labels(map)` usage
 - Provider-based label examples
