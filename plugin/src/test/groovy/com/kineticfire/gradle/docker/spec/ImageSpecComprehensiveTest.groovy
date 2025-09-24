@@ -181,7 +181,7 @@ class ImageSpecComprehensiveTest extends Specification {
             auth {
                 username.set("pullUser")
                 password.set("pullPass")
-                serverAddress.set("private.registry.io")
+                // serverAddress removed - extracted automatically from image reference
             }
         }
 
@@ -194,7 +194,7 @@ class ImageSpecComprehensiveTest extends Specification {
             auth.isPresent()
             auth.get().username.get() == "pullUser"
             auth.get().password.get() == "pullPass"
-            auth.get().serverAddress.get() == "private.registry.io"
+            // serverAddress removed - extracted automatically from image reference
         }
     }
 

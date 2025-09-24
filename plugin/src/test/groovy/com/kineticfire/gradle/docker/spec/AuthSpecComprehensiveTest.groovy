@@ -62,14 +62,7 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.registryToken.get() == "token123abc"
     }
 
-    def "serverAddress property works"() {
-        when:
-        authSpec.serverAddress.set("registry.example.com")
-
-        then:
-        authSpec.serverAddress.present
-        authSpec.serverAddress.get() == "registry.example.com"
-    }
+    // serverAddress property removed - extracted automatically from image reference
 
     def "helper property works"() {
         when:
@@ -115,16 +108,7 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.registryToken.get() == "dynamic-token-xyz"
     }
 
-    def "serverAddress property works with Provider API"() {
-        given:
-        def serverProvider = project.provider { "dynamic.registry.io" }
-
-        when:
-        authSpec.serverAddress.set(serverProvider)
-
-        then:
-        authSpec.serverAddress.get() == "dynamic.registry.io"
-    }
+    // serverAddress property removed - extracted automatically from image reference
 
     def "helper property works with Provider API"() {
         given:
@@ -143,12 +127,12 @@ class AuthSpecComprehensiveTest extends Specification {
         when:
         authSpec.username.set("dockeruser")
         authSpec.password.set("dockerpass")
-        authSpec.serverAddress.set("docker.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         authSpec.username.get() == "dockeruser"
         authSpec.password.get() == "dockerpass"
-        authSpec.serverAddress.get() == "docker.io"
+        // serverAddress removed - extracted automatically from image reference
         !authSpec.registryToken.present
         !authSpec.helper.present
     }
@@ -156,11 +140,11 @@ class AuthSpecComprehensiveTest extends Specification {
     def "token authentication"() {
         when:
         authSpec.registryToken.set("ghp_abcdef123456")
-        authSpec.serverAddress.set("ghcr.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         authSpec.registryToken.get() == "ghp_abcdef123456"
-        authSpec.serverAddress.get() == "ghcr.io"
+        // serverAddress removed - extracted automatically from image reference
         !authSpec.username.present
         !authSpec.password.present
         !authSpec.helper.present
@@ -169,11 +153,11 @@ class AuthSpecComprehensiveTest extends Specification {
     def "helper authentication"() {
         when:
         authSpec.helper.set("ecr-login")
-        authSpec.serverAddress.set("123456789012.dkr.ecr.us-west-2.amazonaws.com")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         authSpec.helper.get() == "ecr-login"
-        authSpec.serverAddress.get() == "123456789012.dkr.ecr.us-west-2.amazonaws.com"
+        // serverAddress removed - extracted automatically from image reference
         !authSpec.username.present
         !authSpec.password.present
         !authSpec.registryToken.present
@@ -185,14 +169,14 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.password.set("pass")
         authSpec.registryToken.set("token")
         authSpec.helper.set("helper")
-        authSpec.serverAddress.set("mixed.registry.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         authSpec.username.get() == "user"
         authSpec.password.get() == "pass"
         authSpec.registryToken.get() == "token"
         authSpec.helper.get() == "helper"
-        authSpec.serverAddress.get() == "mixed.registry.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== TO AUTH CONFIG CONVERSION =====
@@ -201,7 +185,7 @@ class AuthSpecComprehensiveTest extends Specification {
         given:
         authSpec.username.set("configuser")
         authSpec.password.set("configpass")
-        authSpec.serverAddress.set("config.registry.io")
+        // serverAddress removed - extracted automatically from image reference
 
         when:
         def authConfig = authSpec.toAuthConfig()
@@ -210,14 +194,14 @@ class AuthSpecComprehensiveTest extends Specification {
         authConfig instanceof AuthConfig
         authConfig.username == "configuser"
         authConfig.password == "configpass"
-        authConfig.serverAddress == "config.registry.io"
+        // serverAddress removed - extracted automatically from image reference
         authConfig.registryToken == null
     }
 
     def "toAuthConfig with registry token"() {
         given:
         authSpec.registryToken.set("config_token_abc")
-        authSpec.serverAddress.set("token.config.registry")
+        // serverAddress removed - extracted automatically from image reference
 
         when:
         def authConfig = authSpec.toAuthConfig()
@@ -225,7 +209,7 @@ class AuthSpecComprehensiveTest extends Specification {
         then:
         authConfig instanceof AuthConfig
         authConfig.registryToken == "config_token_abc"
-        authConfig.serverAddress == "token.config.registry"
+        // serverAddress removed - extracted automatically from image reference
         authConfig.username == null
         authConfig.password == null
     }
@@ -239,7 +223,7 @@ class AuthSpecComprehensiveTest extends Specification {
         authConfig.username == null
         authConfig.password == null
         authConfig.registryToken == null
-        authConfig.serverAddress == null
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "toAuthConfig with all properties set"() {
@@ -247,7 +231,7 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.username.set("alluser")
         authSpec.password.set("allpass")
         authSpec.registryToken.set("alltoken")
-        authSpec.serverAddress.set("all.registry.io")
+        // serverAddress removed - extracted automatically from image reference
 
         when:
         def authConfig = authSpec.toAuthConfig()
@@ -257,7 +241,7 @@ class AuthSpecComprehensiveTest extends Specification {
         authConfig.username == "alluser"
         authConfig.password == "allpass"
         authConfig.registryToken == "alltoken"
-        authConfig.serverAddress == "all.registry.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== REAL-WORLD SCENARIOS =====
@@ -266,34 +250,34 @@ class AuthSpecComprehensiveTest extends Specification {
         when:
         authSpec.username.set("dockerhubuser")
         authSpec.password.set("dockerhubtoken")  // Docker Hub uses tokens as passwords
-        authSpec.serverAddress.set("docker.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         def authConfig = authSpec.toAuthConfig()
         authConfig.username == "dockerhubuser"
         authConfig.password == "dockerhubtoken"
-        authConfig.serverAddress == "docker.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "GitHub Container Registry authentication"() {
         when:
         authSpec.registryToken.set("ghp_1234567890abcdef")
-        authSpec.serverAddress.set("ghcr.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         def authConfig = authSpec.toAuthConfig()
         authConfig.registryToken == "ghp_1234567890abcdef"
-        authConfig.serverAddress == "ghcr.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "Amazon ECR authentication with helper"() {
         when:
         authSpec.helper.set("ecr-login")
-        authSpec.serverAddress.set("123456789012.dkr.ecr.us-west-2.amazonaws.com")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         def authConfig = authSpec.toAuthConfig()
-        authConfig.serverAddress == "123456789012.dkr.ecr.us-west-2.amazonaws.com"
+        // serverAddress removed - extracted automatically from image reference
         // Note: helper is not part of AuthConfig model
     }
 
@@ -301,26 +285,26 @@ class AuthSpecComprehensiveTest extends Specification {
         when:
         authSpec.username.set("_json_key")
         authSpec.password.set('{"type": "service_account", "project_id": "my-project"}')
-        authSpec.serverAddress.set("gcr.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         def authConfig = authSpec.toAuthConfig()
         authConfig.username == "_json_key"
         authConfig.password == '{"type": "service_account", "project_id": "my-project"}'
-        authConfig.serverAddress == "gcr.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "Private registry with basic auth"() {
         when:
         authSpec.username.set("privateuser")
         authSpec.password.set("privatepass")
-        authSpec.serverAddress.set("private.company.registry:5000")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         def authConfig = authSpec.toAuthConfig()
         authConfig.username == "privateuser"
         authConfig.password == "privatepass"
-        authConfig.serverAddress == "private.company.registry:5000"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== EDGE CASES =====
@@ -330,21 +314,21 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.username.set("")
         authSpec.password.set("")
         authSpec.registryToken.set("")
-        authSpec.serverAddress.set("")
+        // serverAddress removed - extracted automatically from image reference
         authSpec.helper.set("")
 
         then:
         authSpec.username.get() == ""
         authSpec.password.get() == ""
         authSpec.registryToken.get() == ""
-        authSpec.serverAddress.get() == ""
+        // serverAddress removed - extracted automatically from image reference
         authSpec.helper.get() == ""
         
         def authConfig = authSpec.toAuthConfig()
         authConfig.username == ""
         authConfig.password == ""
         authConfig.registryToken == ""
-        authConfig.serverAddress == ""
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "properties can be overridden"() {
@@ -352,29 +336,14 @@ class AuthSpecComprehensiveTest extends Specification {
         authSpec.username.set("firstuser")
         authSpec.username.set("seconduser")
         
-        authSpec.serverAddress.set("first.registry.io")
-        authSpec.serverAddress.set("second.registry.io")
+        // serverAddress removed - extracted automatically from image reference
 
         then:
         authSpec.username.get() == "seconduser"
-        authSpec.serverAddress.get() == "second.registry.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
-    def "complex server addresses"() {
-        expect:
-        authSpec.serverAddress.set(serverAddress)
-        authSpec.serverAddress.get() == serverAddress
-
-        where:
-        serverAddress << [
-            "localhost:5000",
-            "192.168.1.100:8080",
-            "registry.company.internal",
-            "sub.domain.registry.com:443",
-            "registry-with-dashes.io",
-            "registry_with_underscores.com"
-        ]
-    }
+    // serverAddress property removed - extracted automatically from image reference
 
     def "long credentials"() {
         given:

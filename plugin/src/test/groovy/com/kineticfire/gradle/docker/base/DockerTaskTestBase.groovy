@@ -91,7 +91,7 @@ abstract class DockerTaskTestBase extends Specification {
         def authSpec = project.objects.newInstance(AuthSpec)
         authSpec.username.set(username)
         authSpec.password.set(password)
-        authSpec.serverAddress.set("registry.io")
+        // serverAddress removed - extracted automatically from image reference
         return authSpec
     }
     
@@ -104,7 +104,7 @@ abstract class DockerTaskTestBase extends Specification {
         if (registryToken != null) {
             authSpec.registryToken.set(registryToken)
         }
-        authSpec.serverAddress.set("registry.io")
+        // serverAddress removed - extracted automatically from image reference
         return authSpec
     }
     

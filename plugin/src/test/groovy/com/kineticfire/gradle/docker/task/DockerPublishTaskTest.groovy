@@ -346,6 +346,156 @@ class DockerPublishTaskTest extends Specification {
         targetRefs == ['localhost:5000/myapp:v1.0.0', 'localhost:5000/myapp:latest']
     }
 
+    // ===== ENVIRONMENT VARIABLE VALIDATION TESTS =====
+
+    def "validateAuthenticationCredentials succeeds when credentials are valid"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = project.objects.newInstance(AuthSpec)
+        authSpec.username.set("testuser")
+        authSpec.password.set("testpass")
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateAuthenticationCredentials fails when username is empty"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = project.objects.newInstance(AuthSpec)
+        authSpec.username.set("")
+        authSpec.password.set("testpass")
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Authentication username is empty for registry 'docker.io' in target 'test'")
+        exception.message.contains("Ensure your username environment variable contains a valid value")
+    }
+
+    def "validateAuthenticationCredentials fails when password is empty"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('ghcr.io')
+        def authSpec = project.objects.newInstance(AuthSpec)
+        authSpec.username.set("testuser")
+        authSpec.password.set("")
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Authentication password/token is empty for registry 'ghcr.io' in target 'test'")
+        exception.message.contains("Ensure your password/token environment variable contains a valid value")
+    }
+
+    def "getEffectiveRegistry returns registry when explicitly set"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'docker.io'
+    }
+
+    def "getEffectiveRegistry extracts registry from repository"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.repository.set('ghcr.io/user/app')
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'ghcr.io'
+    }
+
+    def "getEffectiveRegistry returns unknown-registry as fallback"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.repository.set('user/app') // No registry part
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'unknown-registry'
+    }
+
+    def "getExampleEnvironmentVariables provides Docker Hub suggestions"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('docker.io')
+
+        then:
+        examples.username.contains('DOCKERHUB_USERNAME')
+        examples.username.contains('DOCKER_USERNAME')
+        examples.password.contains('DOCKERHUB_TOKEN')
+        examples.password.contains('DOCKER_TOKEN')
+    }
+
+    def "getExampleEnvironmentVariables provides GitHub suggestions"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('ghcr.io')
+
+        then:
+        examples.username.contains('GHCR_USERNAME')
+        examples.username.contains('GITHUB_USERNAME')
+        examples.password.contains('GHCR_TOKEN')
+        examples.password.contains('GITHUB_TOKEN')
+    }
+
+    def "getExampleEnvironmentVariables provides localhost suggestions"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('localhost:5000')
+
+        then:
+        examples.username.contains('REGISTRY_USERNAME')
+        examples.username.contains('LOCAL_USERNAME')
+        examples.password.contains('REGISTRY_PASSWORD')
+        examples.password.contains('LOCAL_PASSWORD')
+    }
+
+    def "getExampleEnvironmentVariables provides generic suggestions for custom registry"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('my-company.com')
+
+        then:
+        examples.username.contains('REGISTRY_USERNAME')
+        examples.username.contains('MY_COMPANY_COM_USERNAME')
+        examples.password.contains('REGISTRY_TOKEN')
+        examples.password.contains('MY_COMPANY_COM_TOKEN')
+    }
+
+    def "publish calls validation methods"() {
+        given:
+        task.imageName.set('myapp')
+        task.version.set('1.0.0')
+        task.tags.set(['latest'])
+        def target = createPublishTargetWithValidation(['latest'])
+        task.publishTargets.set([target])
+        
+        and:
+        mockDockerService.tagImage('myapp:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('docker.io/myapp:latest', null) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.publish()
+
+        then:
+        noExceptionThrown() // All validations should pass
+    }
+
     // ===== HELPER METHODS =====
 
     private PublishTarget createPublishTarget(List<String> publishTags) {
@@ -387,5 +537,13 @@ class DockerPublishTaskTest extends Specification {
         if (password) authSpec.password.set(password)
         if (token) authSpec.registryToken.set(token)
         return authSpec
+    }
+    
+    private PublishTarget createPublishTargetWithValidation(List<String> publishTags) {
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        target.imageName.set('myapp')
+        target.publishTags.set(publishTags)
+        return target
     }
 }

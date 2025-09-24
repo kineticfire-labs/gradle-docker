@@ -25,13 +25,12 @@ class AuthConfig {
     final String username
     final String password
     final String registryToken
-    final String serverAddress
     
     AuthConfig(String username = null, String password = null, String registryToken = null, String serverAddress = null) {
         this.username = username
         this.password = password
         this.registryToken = registryToken
-        this.serverAddress = serverAddress
+        // serverAddress parameter ignored - extracted automatically from image reference
     }
     
     /**
@@ -73,7 +72,7 @@ class AuthConfig {
         if (username != null) authConfig.withUsername(username)
         if (password != null) authConfig.withPassword(password)
         if (registryToken != null) authConfig.withRegistrytoken(registryToken)
-        if (serverAddress != null) authConfig.withRegistryAddress(serverAddress)
+        // serverAddress removed - extracted automatically from image reference
 
         return authConfig
     }
@@ -82,9 +81,9 @@ class AuthConfig {
     String toString() {
         if (isTokenBased()) {
             // Token-based auth takes priority
-            return "AuthConfig{token=*****, serverAddress='${serverAddress}'}"
+            return "AuthConfig{token=*****}"
         } else if (isUsernamePassword()) {
-            return "AuthConfig{username='${username}', password=*****, serverAddress='${serverAddress}'}"
+            return "AuthConfig{username='${username}', password=*****}"
         } else {
             return "AuthConfig{empty}"
         }
@@ -98,12 +97,13 @@ class AuthConfig {
         AuthConfig other = (AuthConfig) obj
         return Objects.equals(username, other.username) &&
                Objects.equals(password, other.password) &&
-               Objects.equals(registryToken, other.registryToken) &&
-               Objects.equals(serverAddress, other.serverAddress)
+               Objects.equals(registryToken, other.registryToken)
+        // serverAddress removed from comparison - extracted automatically from image reference
     }
 
     @Override
     int hashCode() {
-        return Objects.hash(username, password, registryToken, serverAddress)
+        return Objects.hash(username, password, registryToken)
+        // serverAddress removed from hash - extracted automatically from image reference
     }
 }

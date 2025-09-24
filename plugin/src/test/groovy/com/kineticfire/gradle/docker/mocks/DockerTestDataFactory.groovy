@@ -111,13 +111,13 @@ class DockerTestDataFactory {
     static SaveSpec createSaveSpecWithAuth(Project project) {
         def spec = createSaveSpec(project)
         spec.pullIfMissing.set(true)
-        
+
         def authSpec = project.objects.newInstance(AuthSpec)
         authSpec.username.set("testuser")
         authSpec.password.set("testpass")
-        authSpec.serverAddress.set("registry.io")
+        // serverAddress removed - extracted automatically from image reference
         spec.auth.set(authSpec)
-        
+
         return spec
     }
     

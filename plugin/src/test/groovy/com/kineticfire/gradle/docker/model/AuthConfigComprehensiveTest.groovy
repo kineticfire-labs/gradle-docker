@@ -31,7 +31,7 @@ class AuthConfigComprehensiveTest extends Specification {
         authConfig.username == "user"
         authConfig.password == "pass"
         authConfig.registryToken == "token"
-        authConfig.serverAddress == "server.io"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "constructor with null parameters"() {
@@ -42,7 +42,7 @@ class AuthConfigComprehensiveTest extends Specification {
         authConfig.username == null
         authConfig.password == null
         authConfig.registryToken == null
-        authConfig.serverAddress == null
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "constructor with mixed null and non-null parameters"() {
@@ -53,7 +53,7 @@ class AuthConfigComprehensiveTest extends Specification {
         authConfig.username == "user"
         authConfig.password == null
         authConfig.registryToken == "token"
-        authConfig.serverAddress == null
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "hasCredentials returns true when username and password are set"() {
@@ -162,7 +162,7 @@ class AuthConfigComprehensiveTest extends Specification {
         dockerJavaAuth != null
         dockerJavaAuth.username == "dockeruser"
         dockerJavaAuth.password == "dockerpass"
-        dockerJavaAuth.registryAddress == "docker.io"
+        // serverAddress removed - registry address extracted automatically from image reference
         dockerJavaAuth.registrytoken == null
     }
 
@@ -176,7 +176,7 @@ class AuthConfigComprehensiveTest extends Specification {
         then:
         dockerJavaAuth != null
         dockerJavaAuth.registrytoken == "ghp_token123"
-        dockerJavaAuth.registryAddress == "ghcr.io"
+        // serverAddress removed - registry address extracted automatically from image reference
         dockerJavaAuth.username == null
         dockerJavaAuth.password == null
     }
@@ -193,7 +193,7 @@ class AuthConfigComprehensiveTest extends Specification {
         dockerJavaAuth.username == "user"
         dockerJavaAuth.password == "pass"
         dockerJavaAuth.registrytoken == "token"
-        dockerJavaAuth.registryAddress == "registry.io"
+        // serverAddress removed - registry address extracted automatically from image reference
     }
 
     def "toDockerJavaAuthConfig with minimal fields"() {
@@ -208,8 +208,7 @@ class AuthConfigComprehensiveTest extends Specification {
         dockerJavaAuth.username == null
         dockerJavaAuth.password == null
         dockerJavaAuth.registrytoken == null
-        // Docker Java client sets default registry address when none provided
-        dockerJavaAuth.registryAddress == "https://index.docker.io/v1/"
+        // serverAddress removed - registry address extracted automatically from image reference
     }
 
     def "equals and hashCode contract"() {
@@ -235,7 +234,7 @@ class AuthConfigComprehensiveTest extends Specification {
 
         then:
         string.contains("AuthConfig")
-        string.contains("server.io")
+        // serverAddress removed - not included in toString output
         // Token-based auth takes priority, so username is not shown when token is present
         string.contains("token=*****")
         // Password and token should be masked or not included for security
@@ -266,7 +265,7 @@ class AuthConfigComprehensiveTest extends Specification {
         authConfig.username == ""
         authConfig.password == ""
         authConfig.registryToken == ""
-        authConfig.serverAddress == ""
+        // serverAddress removed - extracted automatically from image reference
         authConfig.hasCredentials() == true  // Empty strings count as credentials
     }
 
@@ -279,7 +278,7 @@ class AuthConfigComprehensiveTest extends Specification {
         authConfig.username == "user"
         authConfig.password == "pass"
         authConfig.registryToken == "token"
-        authConfig.serverAddress == "server"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "constructor parameter validation"() {

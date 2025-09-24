@@ -275,7 +275,7 @@ class ImageSpecTest extends Specification {
                 tags.set(['prod.registry.com/myapp:1.2.3', 'prod.registry.com/myapp:stable'])
                 auth {
                     registryToken.set('prod-token-123')
-                    serverAddress.set('prod.registry.com')
+                    // serverAddress removed - extracted automatically from image reference
                 }
             }
         }

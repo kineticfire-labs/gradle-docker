@@ -104,4 +104,51 @@ abstract class PublishTarget {
     void tags(List<String> tagList) {
         tags.set(tagList)
     }
+    
+    /**
+     * Validate that registry is explicitly specified
+     */
+    void validateRegistry() {
+        def registryValue = registry.getOrElse("")
+        def repositoryValue = repository.getOrElse("")
+
+        // Check if repository is fully qualified (basic detection)
+        def isFullyQualified = repositoryValue.contains("/") &&
+                              (repositoryValue.contains(".") || repositoryValue.contains(":"))
+
+        if (registryValue.isEmpty() && !isFullyQualified) {
+            throw new org.gradle.api.GradleException(
+                "Registry must be explicitly specified for publish target '${name}'. " +
+                "Use registry.set('docker.io') for Docker Hub, registry.set('localhost:5000') for local registry, " +
+                "or registry.set('<other-target-registry>') for other registries."
+            )
+        }
+
+        // No registry format validation - allow any string to support various registry formats
+        // Registry formats vary widely (hostnames, IPs, ports, paths) and validation would be complex
+        // Let Docker daemon handle registry validation at runtime for better error messages
+    }
+    
+    /**
+     * Detect conflicting registry specifications
+     */
+    void validateRegistryConsistency() {
+        def registryValue = registry.getOrElse("")
+        def repositoryValue = repository.getOrElse("")
+
+        if (!registryValue.isEmpty() && repositoryValue.contains("/")) {
+            // Extract potential registry from repository (before first slash)
+            def potentialRegistry = repositoryValue.split("/")[0]
+
+            // If the repository part looks like a registry (contains . or :) and differs from registry property
+            if ((potentialRegistry.contains(".") || potentialRegistry.contains(":")) &&
+                !potentialRegistry.equals(registryValue)) {
+                throw new org.gradle.api.GradleException(
+                    "Registry conflict in publish target '${name}': " +
+                    "registry.set('${registryValue}') conflicts with repository '${repositoryValue}'. " +
+                    "Use either registry property OR fully qualified repository, not both."
+                )
+            }
+        }
+    }
 }

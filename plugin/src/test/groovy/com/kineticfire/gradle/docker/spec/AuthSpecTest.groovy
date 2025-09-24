@@ -69,14 +69,7 @@ class AuthSpecTest extends Specification {
         authSpec.registryToken.get() == 'ghp_abc123def456'
     }
 
-    def "serverAddress property works correctly"() {
-        when:
-        authSpec.serverAddress.set('docker.io')
-
-        then:
-        authSpec.serverAddress.present
-        authSpec.serverAddress.get() == 'docker.io'
-    }
+    // serverAddress property removed - extracted automatically from image reference
 
     def "helper property works correctly"() {
         when:
@@ -93,7 +86,7 @@ class AuthSpecTest extends Specification {
         given:
         authSpec.username.set('testuser')
         authSpec.password.set('testpass')
-        authSpec.serverAddress.set('registry.example.com')
+        // serverAddress removed - extracted automatically from image reference
 
         when:
         def authConfig = authSpec.toAuthConfig()
@@ -103,13 +96,13 @@ class AuthSpecTest extends Specification {
         authConfig.username == 'testuser'
         authConfig.password == 'testpass'
         authConfig.registryToken == null
-        authConfig.serverAddress == 'registry.example.com'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "toAuthConfig with registry token"() {
         given:
         authSpec.registryToken.set('token_abc123')
-        authSpec.serverAddress.set('ghcr.io')
+        // serverAddress removed - extracted automatically from image reference
 
         when:
         def authConfig = authSpec.toAuthConfig()
@@ -119,7 +112,7 @@ class AuthSpecTest extends Specification {
         authConfig.username == null
         authConfig.password == null
         authConfig.registryToken == 'token_abc123'
-        authConfig.serverAddress == 'ghcr.io'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "toAuthConfig with all properties set"() {
@@ -127,7 +120,7 @@ class AuthSpecTest extends Specification {
         authSpec.username.set('fulluser')
         authSpec.password.set('fullpass')
         authSpec.registryToken.set('fulltoken')
-        authSpec.serverAddress.set('full.registry.com')
+        // serverAddress removed - extracted automatically from image reference
         authSpec.helper.set('credential-helper')
 
         when:
@@ -138,7 +131,7 @@ class AuthSpecTest extends Specification {
         authConfig.username == 'fulluser'
         authConfig.password == 'fullpass'
         authConfig.registryToken == 'fulltoken'
-        authConfig.serverAddress == 'full.registry.com'
+        // serverAddress removed - extracted automatically from image reference
         // Note: helper is not included in AuthConfig model
     }
 
@@ -154,7 +147,7 @@ class AuthSpecTest extends Specification {
         authConfig.username == 'minuser'
         authConfig.password == null
         authConfig.registryToken == null
-        authConfig.serverAddress == null
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "toAuthConfig with empty configuration"() {
@@ -166,7 +159,7 @@ class AuthSpecTest extends Specification {
         authConfig.username == null
         authConfig.password == null
         authConfig.registryToken == null
-        authConfig.serverAddress == null
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== PROPERTY UPDATE TESTS =====
@@ -206,7 +199,7 @@ class AuthSpecTest extends Specification {
         !authSpec.username.present
         !authSpec.password.present
         !authSpec.registryToken.present
-        !authSpec.serverAddress.present
+        // serverAddress property removed - extracted automatically from image reference
         !authSpec.helper.present
     }
 
@@ -223,6 +216,6 @@ class AuthSpecTest extends Specification {
         config1.username == config2.username
         config1.registryToken == config2.registryToken
         config1.password == config2.password
-        config1.serverAddress == config2.serverAddress
+        // serverAddress removed - extracted automatically from image reference
     }
 }

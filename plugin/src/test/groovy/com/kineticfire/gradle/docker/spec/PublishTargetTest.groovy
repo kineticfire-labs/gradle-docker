@@ -109,27 +109,27 @@ class PublishTargetTest extends Specification {
         publishTarget.auth {
             username.set('myuser')
             password.set('mypassword')
-            serverAddress.set('docker.io')
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'myuser'
         publishTarget.auth.get().password.get() == 'mypassword'
-        publishTarget.auth.get().serverAddress.get() == 'docker.io'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "auth(Closure) with registry token"() {
         when:
         publishTarget.auth {
             registryToken.set('ghp_abc123def456')
-            serverAddress.set('ghcr.io')
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         publishTarget.auth.present
         publishTarget.auth.get().registryToken.get() == 'ghp_abc123def456'
-        publishTarget.auth.get().serverAddress.get() == 'ghcr.io'
+        // serverAddress removed - extracted automatically from image reference
         !publishTarget.auth.get().username.present
         !publishTarget.auth.get().password.present
     }
@@ -138,13 +138,13 @@ class PublishTargetTest extends Specification {
         when:
         publishTarget.auth {
             helper.set('docker-credential-helper')
-            serverAddress.set('private.registry.com')
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         publishTarget.auth.present
         publishTarget.auth.get().helper.get() == 'docker-credential-helper'
-        publishTarget.auth.get().serverAddress.get() == 'private.registry.com'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== AUTH ACTION TESTS =====
@@ -156,7 +156,7 @@ class PublishTargetTest extends Specification {
             void execute(AuthSpec authSpec) {
                 authSpec.username.set('actionuser')
                 authSpec.password.set('actionpass')
-                authSpec.serverAddress.set('registry.company.com')
+                // serverAddress removed - extracted automatically from image reference
             }
         })
 
@@ -164,7 +164,7 @@ class PublishTargetTest extends Specification {
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'actionuser'
         publishTarget.auth.get().password.get() == 'actionpass'
-        publishTarget.auth.get().serverAddress.get() == 'registry.company.com'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "auth(Action) with minimal configuration"() {
@@ -181,7 +181,7 @@ class PublishTargetTest extends Specification {
         publishTarget.auth.get().registryToken.get() == 'minimal-token'
         !publishTarget.auth.get().username.present
         !publishTarget.auth.get().password.present
-        !publishTarget.auth.get().serverAddress.present
+        // serverAddress property removed - extracted automatically from image reference
         !publishTarget.auth.get().helper.present
     }
 
@@ -193,7 +193,7 @@ class PublishTargetTest extends Specification {
         publishTarget.auth {
             username.set('deployuser')
             password.set('deploypass')
-            serverAddress.set('private.registry.com')
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
@@ -202,7 +202,7 @@ class PublishTargetTest extends Specification {
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'deployuser'
         publishTarget.auth.get().password.get() == 'deploypass'
-        publishTarget.auth.get().serverAddress.get() == 'private.registry.com'
+        // serverAddress removed - extracted automatically from image reference
     }
 
     // ===== EDGE CASES =====
@@ -221,12 +221,113 @@ class PublishTargetTest extends Specification {
         when:
         publishTarget.auth {
             registryToken.set('token123')
-            serverAddress.set('new.registry.com')
+            // serverAddress removed - extracted automatically from image reference
         }
         
         then:
         publishTarget.auth.get().registryToken.get() == 'token123'
-        publishTarget.auth.get().serverAddress.get() == 'new.registry.com'
+        // serverAddress removed - extracted automatically from image reference
+    }
+
+    // ===== REGISTRY VALIDATION TESTS =====
+
+    def "validateRegistry succeeds when registry is explicitly set"() {
+        when:
+        publishTarget.registry.set('docker.io')
+
+        then:
+        publishTarget.validateRegistry() // Should not throw
+    }
+
+    def "validateRegistry succeeds when repository is fully qualified"() {
+        when:
+        publishTarget.repository.set('docker.io/myuser/myapp')
+
+        then:
+        publishTarget.validateRegistry() // Should not throw
+    }
+
+    def "validateRegistry fails when neither registry nor fully qualified repository is set"() {
+        when:
+        publishTarget.validateRegistry()
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Registry must be explicitly specified for publish target 'testTarget'")
+        exception.message.contains("registry.set('docker.io') for Docker Hub")
+        exception.message.contains("registry.set('localhost:5000') for local registry")
+        exception.message.contains("registry.set('<other-target-registry>') for other registries")
+    }
+
+    def "validateRegistry fails when repository contains slash but is not fully qualified"() {
+        when:
+        publishTarget.repository.set('myuser/myapp') // Not fully qualified (no . or :)
+        publishTarget.validateRegistry()
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Registry must be explicitly specified for publish target 'testTarget'")
+    }
+
+    // ===== REGISTRY CONFLICT DETECTION TESTS =====
+
+    def "validateRegistryConsistency succeeds when no conflict exists"() {
+        when:
+        publishTarget.registry.set('docker.io')
+        publishTarget.repository.set('myuser/myapp')
+
+        then:
+        publishTarget.validateRegistryConsistency() // Should not throw
+    }
+
+    def "validateRegistryConsistency succeeds when only registry is set"() {
+        when:
+        publishTarget.registry.set('docker.io')
+
+        then:
+        publishTarget.validateRegistryConsistency() // Should not throw
+    }
+
+    def "validateRegistryConsistency succeeds when only repository is set"() {
+        when:
+        publishTarget.repository.set('docker.io/myuser/myapp')
+
+        then:
+        publishTarget.validateRegistryConsistency() // Should not throw
+    }
+
+    def "validateRegistryConsistency succeeds when registry matches repository registry"() {
+        when:
+        publishTarget.registry.set('docker.io')
+        publishTarget.repository.set('docker.io/myuser/myapp')
+
+        then:
+        publishTarget.validateRegistryConsistency() // Should not throw
+    }
+
+    def "validateRegistryConsistency fails when registry conflicts with repository registry"() {
+        when:
+        publishTarget.registry.set('docker.io')
+        publishTarget.repository.set('ghcr.io/myuser/myapp')
+        publishTarget.validateRegistryConsistency()
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Registry conflict in publish target 'testTarget'")
+        exception.message.contains("registry.set('docker.io') conflicts with repository 'ghcr.io/myuser/myapp'")
+        exception.message.contains("Use either registry property OR fully qualified repository, not both")
+    }
+
+    def "validateRegistryConsistency fails with localhost registry conflict"() {
+        when:
+        publishTarget.registry.set('localhost:5000')
+        publishTarget.repository.set('myregistry.com:8080/myuser/myapp')
+        publishTarget.validateRegistryConsistency()
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Registry conflict in publish target 'testTarget'")
+        exception.message.contains("registry.set('localhost:5000') conflicts with repository 'myregistry.com:8080/myuser/myapp'")
     }
 
     def "properties can be updated after initial configuration"() {

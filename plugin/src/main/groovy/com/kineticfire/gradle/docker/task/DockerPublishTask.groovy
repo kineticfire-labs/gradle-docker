@@ -96,6 +96,28 @@ abstract class DockerPublishTask extends DefaultTask {
     abstract RegularFileProperty getImageIdFile()
     
     @TaskAction
+    void publish() {
+        // Validate each publish target
+        def targets = []
+        if (publishSpec.isPresent() && publishSpec.get()?.to) {
+            targets = publishSpec.get().to
+        } else {
+            targets = publishTargets.getOrElse([])
+        }
+        
+        targets.each { target ->
+            target.validateRegistry()
+            target.validateRegistryConsistency()
+
+            if (target.auth.isPresent()) {
+                validateAuthenticationCredentials(target, target.auth.get())
+            }
+        }
+
+        // Proceed with publish operation
+        publishImage()
+    }
+    
     void publishImage() {
         def service = dockerService.get()
         def sourceImageRef = buildSourceImageReference()
@@ -267,5 +289,105 @@ abstract class DockerPublishTask extends DefaultTask {
         }
         
         return targetRefs
+    }
+    
+    /**
+     * Validate authentication credentials with registry-specific suggestions
+     */
+    void validateAuthenticationCredentials(PublishTarget target, com.kineticfire.gradle.docker.spec.AuthSpec authSpec) {
+        if (authSpec == null) return
+
+        def registryName = getEffectiveRegistry(target)
+        def exampleVars = getExampleEnvironmentVariables(registryName)
+
+        // Validate username
+        if (authSpec.username.isPresent()) {
+            try {
+                def username = authSpec.username.get()
+                if (username == null || username.trim().isEmpty()) {
+                    throw new org.gradle.api.GradleException(
+                        "Authentication username is empty for registry '${registryName}' in target '${target.name}'. " +
+                        "Ensure your username environment variable contains a valid value."
+                    )
+                }
+            } catch (IllegalStateException e) {
+                if (e.message?.contains("environment variable") || e.message?.contains("provider")) {
+                    throw new org.gradle.api.GradleException(
+                        "Authentication username environment variable is not set for registry '${registryName}' in target '${target.name}'. " +
+                        "Ensure your username environment variable is set. ${exampleVars.username}"
+                    )
+                }
+                throw e
+            }
+        }
+
+        // Validate password/token
+        if (authSpec.password.isPresent()) {
+            try {
+                def password = authSpec.password.get()
+                if (password == null || password.trim().isEmpty()) {
+                    throw new org.gradle.api.GradleException(
+                        "Authentication password/token is empty for registry '${registryName}' in target '${target.name}'. " +
+                        "Ensure your password/token environment variable contains a valid value."
+                    )
+                }
+            } catch (IllegalStateException e) {
+                if (e.message?.contains("environment variable") || e.message?.contains("provider")) {
+                    throw new org.gradle.api.GradleException(
+                        "Authentication password/token environment variable is not set for registry '${registryName}' in target '${target.name}'. " +
+                        "Ensure your password/token environment variable is set. ${exampleVars.password}"
+                    )
+                }
+                throw e
+            }
+        }
+    }
+
+    /**
+     * Get effective registry name from target
+     */
+    String getEffectiveRegistry(PublishTarget target) {
+        def registryValue = target.registry.getOrElse("")
+        if (!registryValue.isEmpty()) {
+            return registryValue
+        }
+
+        def repositoryValue = target.repository.getOrElse("")
+        if (repositoryValue.contains("/")) {
+            def potentialRegistry = repositoryValue.split("/")[0]
+            if (potentialRegistry.contains(".") || potentialRegistry.contains(":")) {
+                return potentialRegistry
+            }
+        }
+
+        return "unknown-registry"
+    }
+
+    /**
+     * Get example environment variables for different registries
+     */
+    Map<String, String> getExampleEnvironmentVariables(String registryName) {
+        switch (registryName.toLowerCase()) {
+            case "docker.io":
+                return [
+                    username: "Common examples: DOCKERHUB_USERNAME, DOCKER_USERNAME",
+                    password: "Common examples: DOCKERHUB_TOKEN, DOCKER_TOKEN"
+                ]
+            case "ghcr.io":
+                return [
+                    username: "Common examples: GHCR_USERNAME, GITHUB_USERNAME",
+                    password: "Common examples: GHCR_TOKEN, GITHUB_TOKEN"
+                ]
+            case { it.contains("localhost") }:
+                return [
+                    username: "Common examples: REGISTRY_USERNAME, LOCAL_USERNAME",
+                    password: "Common examples: REGISTRY_PASSWORD, LOCAL_PASSWORD"
+                ]
+            default:
+                return [
+                    username: "Common examples: REGISTRY_USERNAME, ${registryName.toUpperCase().replaceAll(/[^A-Z0-9]/, '_')}_USERNAME",
+                    password: "Common examples: REGISTRY_TOKEN, ${registryName.toUpperCase().replaceAll(/[^A-Z0-9]/, '_')}_TOKEN"
+                ]
+        }
     }
 }

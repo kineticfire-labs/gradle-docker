@@ -137,7 +137,7 @@ class SaveSpecComprehensiveTest extends Specification {
         saveSpec.auth {
             username.set("saveUser")
             password.set("savePass")
-            serverAddress.set("save.registry.io")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
@@ -145,7 +145,7 @@ class SaveSpecComprehensiveTest extends Specification {
         with(saveSpec.auth.get()) {
             username.get() == "saveUser"
             password.get() == "savePass"
-            serverAddress.get() == "save.registry.io"
+            // serverAddress removed - extracted automatically from image reference
             !registryToken.isPresent()
             !helper.isPresent()
         }
@@ -155,14 +155,14 @@ class SaveSpecComprehensiveTest extends Specification {
         when:
         saveSpec.auth {
             registryToken.set("save_token_xyz")
-            serverAddress.set("token.registry.io")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         saveSpec.auth.isPresent()
         with(saveSpec.auth.get()) {
             registryToken.get() == "save_token_xyz"
-            serverAddress.get() == "token.registry.io"
+            // serverAddress removed - extracted automatically from image reference
             !username.isPresent()
             !password.isPresent()
             !helper.isPresent()
@@ -173,14 +173,14 @@ class SaveSpecComprehensiveTest extends Specification {
         when:
         saveSpec.auth {
             helper.set("save-credential-helper")
-            serverAddress.set("helper.registry.io")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         saveSpec.auth.isPresent()
         with(saveSpec.auth.get()) {
             helper.get() == "save-credential-helper"
-            serverAddress.get() == "helper.registry.io"
+            // serverAddress removed - extracted automatically from image reference
             !username.isPresent()
             !password.isPresent()
             !registryToken.isPresent()
@@ -213,7 +213,7 @@ class SaveSpecComprehensiveTest extends Specification {
         saveSpec.auth {
             username.set(usernameProvider)
             password.set(passwordProvider)
-            serverAddress.set(serverProvider)
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
@@ -221,7 +221,7 @@ class SaveSpecComprehensiveTest extends Specification {
         with(saveSpec.auth.get()) {
             username.get() == "dynamicUser"
             password.get() == "dynamicPass"
-            serverAddress.get() == "dynamic.registry.io"
+            // serverAddress removed - extracted automatically from image reference
         }
     }
 
@@ -239,7 +239,7 @@ class SaveSpecComprehensiveTest extends Specification {
         saveSpec.auth {
             username.set("completeUser")
             password.set("completePass")
-            serverAddress.set("complete.registry.io")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
@@ -251,7 +251,7 @@ class SaveSpecComprehensiveTest extends Specification {
             auth.isPresent()
             auth.get().username.get() == "completeUser"
             auth.get().password.get() == "completePass"
-            auth.get().serverAddress.get() == "complete.registry.io"
+            // serverAddress removed - extracted automatically from image reference
         }
     }
 
@@ -262,7 +262,7 @@ class SaveSpecComprehensiveTest extends Specification {
         saveSpec.pullIfMissing.set(true)
         saveSpec.auth {
             registryToken.set("sourceref_token_abc")
-            serverAddress.set("private.sourceref.registry")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
@@ -272,7 +272,7 @@ class SaveSpecComprehensiveTest extends Specification {
             pullIfMissing.get() == true
             auth.isPresent()
             auth.get().registryToken.get() == "sourceref_token_abc"
-            auth.get().serverAddress.get() == "private.sourceref.registry"
+            // serverAddress removed - extracted automatically from image reference
         }
     }
 
@@ -318,14 +318,14 @@ class SaveSpecComprehensiveTest extends Specification {
         }
         saveSpec.auth {
             registryToken.set("newToken")
-            serverAddress.set("new.registry.io")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         then:
         saveSpec.auth.isPresent()
         with(saveSpec.auth.get()) {
             registryToken.get() == "newToken"
-            serverAddress.get() == "new.registry.io"
+            // serverAddress removed - extracted automatically from image reference
             !username.isPresent()  // Overridden auth spec
             !password.isPresent()
         }
@@ -345,7 +345,7 @@ class SaveSpecComprehensiveTest extends Specification {
             !username.isPresent()
             !password.isPresent()
             !registryToken.isPresent()
-            !serverAddress.isPresent()
+            // serverAddress property removed - extracted automatically from image reference
             !helper.isPresent()
         }
     }

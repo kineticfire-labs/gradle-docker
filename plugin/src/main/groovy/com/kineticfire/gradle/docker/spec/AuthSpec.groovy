@@ -47,12 +47,8 @@ abstract class AuthSpec {
     
     @Input
     @Optional
-    abstract Property<String> getServerAddress()
-    
-    @Input
-    @Optional
     abstract Property<String> getHelper()
-    
+
     /**
      * Convert to model AuthConfig
      */
@@ -61,7 +57,7 @@ abstract class AuthSpec {
             username.orNull,
             password.orNull,
             registryToken.orNull,
-            serverAddress.orNull
+            null  // serverAddress removed - extracted automatically from image reference
         )
     }
 }

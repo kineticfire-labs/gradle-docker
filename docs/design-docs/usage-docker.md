@@ -172,7 +172,7 @@ docker {
                 auth {
                     username.set("myuser")
                     password.set("mypass") 
-                    // serverAddress extracted automatically from sourceRef
+                    // serverAddress extracted automatically from image reference
                 }
             }
         }
@@ -223,6 +223,141 @@ docker {
 }
 ```
 
+## Comprehensive Publishing Examples
+
+### Basic Registry Examples
+
+#### Docker Hub Publishing
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            registry.set("docker.io")  // Explicit Docker Hub registry
+            repository.set("username/myapp")
+            publishTags.set(["latest", "v1.0"])
+            
+            publish {
+                to('dockerhub') {
+                    registry.set("docker.io")  // Explicit Docker Hub registry
+                    repository.set("username/myapp")
+                    publishTags.set(["latest", "v1.0"])
+                    
+                    auth {
+                        username.set(providers.environmentVariable("DOCKERHUB_USERNAME"))
+                        // Use Personal Access Token (preferred) instead of password
+                        password.set(providers.environmentVariable("DOCKERHUB_TOKEN"))
+                        // serverAddress automatically extracted as docker.io
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+#### GitHub Container Registry
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            registry.set("ghcr.io")
+            repository.set("username/myapp")
+            publishTags.set(["latest"])
+            
+            publish {
+                to('ghcr') {
+                    registry.set("ghcr.io")
+                    repository.set("username/myapp")
+                    publishTags.set(["latest"])
+                    
+                    auth {
+                        username.set(providers.environmentVariable("GHCR_USERNAME"))
+                        password.set(providers.environmentVariable("GHCR_PASSWORD"))
+                        // serverAddress automatically extracted as ghcr.io
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Registry Authentication Examples
+
+#### Private Registry WITHOUT Authentication
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            publish {
+                to('privateRegistry') {
+                    registry.set("my-company.com:5000")
+                    repository.set("team/myapp")
+                    publishTags.set(["latest", "beta"])
+                    // No auth block - registry allows anonymous push
+                }
+            }
+        }
+    }
+}
+```
+
+#### Private Registry WITH Authentication
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            publish {
+                to('authenticatedRegistry') {
+                    registry.set("secure-registry.company.com")
+                    namespace.set("engineering")
+                    imageName.set("myapp")
+                    publishTags.set(["latest", "v2.1"])
+                    
+                    auth {
+                        username.set(providers.environmentVariable("REGISTRY_USERNAME"))
+                        password.set(providers.environmentVariable("REGISTRY_PASSWORD"))
+                        // serverAddress automatically extracted as secure-registry.company.com
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+### Local Development Example
+
+#### Local Development Registry
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            publish {
+                to('localDev') {
+                    registry.set("localhost:5000")  // Example for local dev registry
+                    repository.set("myapp")
+                    publishTags.set(["dev", "latest"])
+                    // No auth block - local registry typically runs without authentication
+                }
+            }
+        }
+    }
+}
+```
+
+**Note**: Environment variables are validated automatically by the plugin with helpful error messages if missing or empty, including registry-specific suggestions for common variable names.
+
 ## Key API Properties
 
 ### Docker Nomenclature Properties
@@ -253,7 +388,7 @@ save {
     auth {
         username.set("user")
         password.set("pass")
-        // serverAddress automatically extracted from sourceRef
+        // serverAddress automatically extracted from image reference
     }
 }
 ```

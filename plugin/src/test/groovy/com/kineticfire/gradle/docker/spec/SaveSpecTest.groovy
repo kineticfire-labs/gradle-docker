@@ -262,7 +262,7 @@ class SaveSpecTest extends Specification {
             username.set("testuser")
             password.set("testpass")
             registryToken.set("token123")
-            serverAddress.set("registry.example.com")
+            // serverAddress removed - extracted automatically from image reference
         }
 
         when: "auth is converted to AuthConfig"
@@ -273,7 +273,7 @@ class SaveSpecTest extends Specification {
         authConfig.username == "testuser"
         authConfig.password == "testpass"
         authConfig.registryToken == "token123"
-        authConfig.serverAddress == "registry.example.com"
+        // serverAddress removed - extracted automatically from image reference
     }
 
     def "SaveSpec pullIfMissing property has correct default"() {
