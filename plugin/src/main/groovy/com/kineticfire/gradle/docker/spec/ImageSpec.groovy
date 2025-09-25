@@ -140,7 +140,7 @@ abstract class ImageSpec {
     
     @Nested
     @Optional
-    abstract Property<AuthSpec> getPullAuth()
+    AuthSpec pullAuth
     
     // Nested Specifications
     @Nested
@@ -260,16 +260,18 @@ abstract class ImageSpec {
     
     // DSL methods for pullAuth configuration
     void pullAuth(@DelegatesTo(AuthSpec) Closure closure) {
-        def authSpec = objectFactory.newInstance(AuthSpec)
-        closure.delegate = authSpec
+        if (!pullAuth) {
+            pullAuth = objectFactory.newInstance(AuthSpec)
+        }
+        closure.delegate = pullAuth
         closure.call()
-        pullAuth.set(authSpec)
     }
     
     void pullAuth(Action<AuthSpec> action) {
-        def authSpec = objectFactory.newInstance(AuthSpec)
-        action.execute(authSpec)
-        pullAuth.set(authSpec)
+        if (!pullAuth) {
+            pullAuth = objectFactory.newInstance(AuthSpec)
+        }
+        action.execute(pullAuth)
     }
     
     // SourceRef builder methods
@@ -278,6 +280,13 @@ abstract class ImageSpec {
         sourceRefNamespace.set(namespace) 
         sourceRefImageName.set(imageName)
         sourceRefTag.set(tag)
+    }
+    
+    void sourceRef(@DelegatesTo(SourceRefSpec) Closure closure) {
+        def sourceRefSpec = new SourceRefSpec(this)
+        closure.delegate = sourceRefSpec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call()
     }
     
     // Helper method to get effective sourceRef (either direct or assembled from components)
@@ -339,5 +348,32 @@ abstract class ImageSpec {
                 "pullIfMissing=true requires either sourceRef or sourceRefImageName to be specified for image '${name}'"
             )
         }
+    }
+}
+
+/**
+ * DSL specification for sourceRef component configuration
+ */
+class SourceRefSpec {
+    private final ImageSpec parent
+
+    SourceRefSpec(ImageSpec parent) {
+        this.parent = parent
+    }
+
+    void registry(String registry) {
+        parent.sourceRefRegistry.set(registry)
+    }
+
+    void namespace(String namespace) {
+        parent.sourceRefNamespace.set(namespace)
+    }
+
+    void imageName(String imageName) {
+        parent.sourceRefImageName.set(imageName)
+    }
+
+    void tag(String tag) {
+        parent.sourceRefTag.set(tag)
     }
 }

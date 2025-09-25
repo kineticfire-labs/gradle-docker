@@ -60,7 +60,7 @@ Two naming approaches:
 Recommended:
 1. Create an image reference sufficient for the local image store, such as:
    1. namespace + name + tag(s)
-   2. repository' + tag(s)
+   2. repository + tag(s)
 2. When publishing an image:
    1. Set the registry
    2. If necessary, override the namespace
@@ -236,6 +236,92 @@ docker {
 }
 ```
 
+### Scenario 4: Pull Missing Images Automatically
+
+```groovy
+docker {
+    images {
+        myApp {
+            sourceRef.set("ghcr.io/company/baseimage:v2.0")
+            pullIfMissing.set(true)  // Image-level setting - applies to all operations
+
+            // Pull-specific authentication at image level
+            pullAuth {
+                username.set(providers.environmentVariable("GHCR_USER"))
+                password.set(providers.environmentVariable("GHCR_TOKEN"))
+            }
+
+            // All operations inherit pullIfMissing behavior
+            save {
+                compression.set(SaveCompression.GZIP)
+                outputFile.set(layout.buildDirectory.file("docker-images/baseimage.tar.gz"))
+            }
+
+            tag {
+                tags.set(["local:latest", "local:stable"])
+            }
+
+            publish {
+                to('prod') {
+                    registry.set("docker.io")
+                    repository.set("company/myapp")
+                    publishTags.set(["published-latest"])
+                }
+            }
+        }
+    }
+}
+```
+
+### Scenario 5: SourceRef Component Assembly
+
+Instead of specifying a full sourceRef string, you can assemble it from components:
+
+```groovy
+docker {
+    images {
+        // Pattern A: Individual component properties
+        alpineApp {
+            // Assemble sourceRef from components
+            sourceRefRegistry.set("docker.io")      // Registry
+            sourceRefNamespace.set("library")       // Namespace/organization
+            sourceRefImageName.set("alpine")        // Image name (required)
+            sourceRefTag.set("3.18")               // Tag (defaults to "latest" if omitted)
+            // Results in: docker.io/library/alpine:3.18
+
+            pullIfMissing.set(true)
+
+            save {
+                outputFile.set(file("build/alpine-base.tar"))
+            }
+        }
+
+        // Pattern B: Helper method for component assembly
+        ubuntuApp {
+            sourceRef("docker.io", "library", "ubuntu", "22.04")
+            // Results in: docker.io/library/ubuntu:22.04
+
+            pullIfMissing.set(true)
+        }
+
+        // Pattern C: Mixed usage - some components, some full references
+        customApp {
+            sourceRefRegistry.set("my-registry.company.com:5000")
+            sourceRefImageName.set("custom-base")
+            // sourceRefTag defaults to "latest"
+            // Results in: my-registry.company.com:5000/custom-base:latest
+
+            pullIfMissing.set(true)
+
+            pullAuth {
+                username.set(providers.environmentVariable("COMPANY_REGISTRY_USER"))
+                password.set(providers.environmentVariable("COMPANY_REGISTRY_TOKEN"))
+            }
+        }
+    }
+}
+```
+
 ## Comprehensive Publishing Examples
 
 ### Basic Registry Examples
@@ -390,6 +476,24 @@ Use enum values instead of strings:
 - `SaveCompression.XZ` - XZ compression (.tar.xz)
 - `SaveCompression.ZIP` - ZIP compression (.zip)
 
+### pullIfMissing and SourceRef Properties (Image-Level)
+- `pullIfMissing.set(Boolean)` - Whether to pull source image if missing locally (defaults to false)
+- `sourceRef.set(String)` - Full source image reference (e.g., "ghcr.io/company/app:v1.0")
+- `sourceRefRegistry.set(String)` - Source registry component (e.g., "docker.io")
+- `sourceRefNamespace.set(String)` - Source namespace component (e.g., "library")
+- `sourceRefImageName.set(String)` - Source image name component (e.g., "alpine")
+- `sourceRefTag.set(String)` - Source tag component (defaults to "latest" if omitted)
+
+### pullAuth Configuration (Image-Level)
+```groovy
+pullAuth {
+    username.set(providers.environmentVariable("REGISTRY_USER"))
+    password.set(providers.environmentVariable("REGISTRY_TOKEN"))
+}
+```
+
+**Note**: pullAuth is separate from publish auth - pullAuth is used for pulling source images, while publish auth is used for pushing to target registries.
+
 ### Authentication for Save Operations  
 
 ```groovy
@@ -447,6 +551,23 @@ The plugin automatically generates tasks based on the DSL block name:
 - **Required sourceRef**: Must specify valid `sourceRef` image reference
 - **No build properties**: Cannot use contextTask, buildArgs, labels, dockerfile when using `sourceRef`
 - **Authentication**: Optional for all registries; provide auth block if registry requires credentials
+
+### Usage Notes and Patterns
+
+#### pullIfMissing Behavior
+- **Default**: `pullIfMissing.set(false)` - operations fail if source image is missing locally
+- **When true**: automatically pulls source image if not found locally before performing operation
+- **Applies to**: save, tag, and publish operations when using sourceRef mode
+- **Authentication**: use `pullAuth` block for pull operations, separate from publish authentication
+
+#### SourceRef vs Build Context
+- **Cannot combine**: pullIfMissing=true with build context (contextTask, dockerfile, buildArgs) will throw validation error
+- **Either/or**: use pullIfMissing for existing images OR build context for new images, not both
+
+#### Component Assembly Priority
+1. Full `sourceRef.set("registry/namespace/image:tag")` takes precedence
+2. Component assembly used if sourceRef is empty or not set
+3. Required: either sourceRef OR sourceRefImageName must be specified when using pullIfMissing=true
 
 ## Key Benefits
 

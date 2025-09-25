@@ -126,13 +126,14 @@ abstract class DockerSaveTask extends DefaultTask {
         def imageSpecValue = imageSpec.orNull
         if (!imageSpecValue) return
         
+        imageSpecValue.validateSourceRefConfiguration()
         imageSpecValue.validatePullIfMissingConfiguration()
 
         if (imageSpecValue.pullIfMissing.getOrElse(false)) {
             def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
             if (sourceRefValue && !sourceRefValue.isEmpty()) {
-                def authConfig = imageSpecValue.pullAuth.isPresent() ? 
-                    imageSpecValue.pullAuth.get().toAuthConfig() : null
+                def authConfig = imageSpecValue.pullAuth ? 
+                    imageSpecValue.pullAuth.toAuthConfig() : null
 
                 def service = dockerService.get()
                 if (!service.imageExists(sourceRefValue).get()) {

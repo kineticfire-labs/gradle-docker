@@ -296,4 +296,5 @@ class DockerSaveTaskTest extends Specification {
         'docker.tar.xz'    | 'docker.tar.xz'
         'backup.zip'       | 'backup.zip'
     }
+
 }

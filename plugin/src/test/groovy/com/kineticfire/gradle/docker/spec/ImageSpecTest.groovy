@@ -491,8 +491,8 @@ class ImageSpecTest extends Specification {
         }
 
         then:
-        imageSpec.pullAuth.isPresent()
-        def authSpec = imageSpec.pullAuth.get()
+        imageSpec.pullAuth != null
+        def authSpec = imageSpec.pullAuth
         authSpec.username.get() == "testuser"
         authSpec.password.get() == "testpass"
         authSpec.registryToken.get() == "token123"
@@ -509,8 +509,8 @@ class ImageSpecTest extends Specification {
         })
 
         then:
-        imageSpec.pullAuth.isPresent()
-        def authSpec = imageSpec.pullAuth.get()
+        imageSpec.pullAuth != null
+        def authSpec = imageSpec.pullAuth
         authSpec.username.get() == "actionuser"
         authSpec.password.get() == "actionpass"
     }
@@ -637,5 +637,107 @@ class ImageSpecTest extends Specification {
 
         then:
         noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration throws when pullIfMissing=true but no sourceRef"() {
+        when:
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("pullIfMissing=true requires either sourceRef or sourceRefImageName")
+        ex.message.contains("testImage")
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=false"() {
+        when:
+        imageSpec.pullIfMissing.set(false)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=true with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("nginx:latest")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=true with sourceRefImageName"() {
+        when:
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== CLOSURE-BASED SOURCEREF DSL TESTS =====
+
+    def "sourceRef closure DSL configures components correctly"() {
+        when:
+        imageSpec.sourceRef {
+            registry "docker.io"
+            namespace "library"
+            imageName "ubuntu"
+            tag "22.04"
+        }
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "docker.io"
+        imageSpec.sourceRefNamespace.get() == "library"
+        imageSpec.sourceRefImageName.get() == "ubuntu"
+        imageSpec.sourceRefTag.get() == "22.04"
+        imageSpec.getEffectiveSourceRef() == "docker.io/library/ubuntu:22.04"
+    }
+
+    def "sourceRef closure DSL with partial configuration"() {
+        when:
+        imageSpec.sourceRef {
+            registry "localhost:5000"
+            imageName "myapp"
+            // namespace and tag omitted
+        }
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "localhost:5000"
+        imageSpec.sourceRefNamespace.get() == ""
+        imageSpec.sourceRefImageName.get() == "myapp"
+        imageSpec.sourceRefTag.get() == ""
+        imageSpec.getEffectiveSourceRef() == "localhost:5000/myapp:latest"
+    }
+
+    def "sourceRef closure DSL can be called multiple times"() {
+        when:
+        imageSpec.sourceRef {
+            registry "initial.registry"
+            imageName "initial"
+        }
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "initial.registry"
+        imageSpec.sourceRefImageName.get() == "initial"
+
+        when:
+        imageSpec.sourceRef {
+            registry "updated.registry"
+            namespace "updated-ns"
+            imageName "updated"
+            tag "v2.0"
+        }
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "updated.registry"
+        imageSpec.sourceRefNamespace.get() == "updated-ns"
+        imageSpec.sourceRefImageName.get() == "updated"
+        imageSpec.sourceRefTag.get() == "v2.0"
+        imageSpec.getEffectiveSourceRef() == "updated.registry/updated-ns/updated:v2.0"
     }
 }
