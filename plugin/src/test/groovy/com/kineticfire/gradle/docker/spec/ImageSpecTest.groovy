@@ -145,14 +145,12 @@ class ImageSpecTest extends Specification {
         imageSpec.save {
             outputFile.set(myOutputFile)
             compression.set('gzip')
-            pullIfMissing.set(true)
         }
 
         then:
         imageSpec.save.present
         imageSpec.save.get().outputFile.get().asFile == myOutputFile
         imageSpec.save.get().compression.get() == SaveCompression.GZIP
-        imageSpec.save.get().pullIfMissing.get() == true
     }
 
     def "save(Action) configures save spec"() {
@@ -165,7 +163,6 @@ class ImageSpecTest extends Specification {
             void execute(SaveSpec saveSpec) {
                 saveSpec.outputFile.set(outputFile)
                 saveSpec.compression.set('bzip2')
-                saveSpec.pullIfMissing.set(false)
             }
         })
 
@@ -173,7 +170,6 @@ class ImageSpecTest extends Specification {
         imageSpec.save.present
         imageSpec.save.get().outputFile.get().asFile == outputFile
         imageSpec.save.get().compression.get() == SaveCompression.BZIP2
-        imageSpec.save.get().pullIfMissing.get() == false
     }
 
     def "save configuration requires compression parameter"() {
@@ -268,7 +264,6 @@ class ImageSpecTest extends Specification {
         imageSpec.save {
             outputFile.set(saveFile)
             compression.set('bzip2')
-            pullIfMissing.set(true)
         }
         imageSpec.publish {
             to('production') {
@@ -463,5 +458,184 @@ class ImageSpecTest extends Specification {
         image1.contextTask.get().name == 'prepareWebappContext'
         image2.contextTask.get().name == 'prepareApiContext'
         image1.contextTask.get() != image2.contextTask.get()
+    }
+
+    // ===== IMAGE-LEVEL PULLIFMISSING TESTS =====
+
+    def "pullIfMissing property has correct default"() {
+        expect:
+        imageSpec.pullIfMissing.present
+        imageSpec.pullIfMissing.get() == false
+    }
+
+    def "pullIfMissing property can be configured"() {
+        when:
+        imageSpec.pullIfMissing.set(true)
+
+        then:
+        imageSpec.pullIfMissing.get() == true
+
+        when:
+        imageSpec.pullIfMissing.set(false)
+
+        then:
+        imageSpec.pullIfMissing.get() == false
+    }
+
+    def "pullAuth property can be configured via DSL"() {
+        when:
+        imageSpec.pullAuth {
+            username.set("testuser")
+            password.set("testpass")
+            registryToken.set("token123")
+        }
+
+        then:
+        imageSpec.pullAuth.isPresent()
+        def authSpec = imageSpec.pullAuth.get()
+        authSpec.username.get() == "testuser"
+        authSpec.password.get() == "testpass"
+        authSpec.registryToken.get() == "token123"
+    }
+
+    def "pullAuth property can be configured via Action"() {
+        when:
+        imageSpec.pullAuth(new Action<AuthSpec>() {
+            @Override
+            void execute(AuthSpec authSpec) {
+                authSpec.username.set("actionuser")
+                authSpec.password.set("actionpass")
+            }
+        })
+
+        then:
+        imageSpec.pullAuth.isPresent()
+        def authSpec = imageSpec.pullAuth.get()
+        authSpec.username.get() == "actionuser"
+        authSpec.password.get() == "actionpass"
+    }
+
+    // ===== SOURCEREF COMPONENT ASSEMBLY TESTS =====
+
+    def "sourceRef component properties have correct defaults"() {
+        expect:
+        imageSpec.sourceRefRegistry.present
+        imageSpec.sourceRefRegistry.get() == ""
+        imageSpec.sourceRefNamespace.present
+        imageSpec.sourceRefNamespace.get() == ""
+        imageSpec.sourceRefImageName.present
+        imageSpec.sourceRefImageName.get() == ""
+        imageSpec.sourceRefTag.present
+        imageSpec.sourceRefTag.get() == ""
+    }
+
+    def "sourceRef component properties can be configured"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.sourceRefTag.set("3.18")
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "docker.io"
+        imageSpec.sourceRefNamespace.get() == "library"
+        imageSpec.sourceRefImageName.get() == "alpine"
+        imageSpec.sourceRefTag.get() == "3.18"
+    }
+
+    def "sourceRef builder method sets all components"() {
+        when:
+        imageSpec.sourceRef("ghcr.io", "company", "myapp", "v1.0")
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "ghcr.io"
+        imageSpec.sourceRefNamespace.get() == "company"
+        imageSpec.sourceRefImageName.get() == "myapp"
+        imageSpec.sourceRefTag.get() == "v1.0"
+    }
+
+    def "getEffectiveSourceRef returns direct sourceRef when present"() {
+        when:
+        imageSpec.sourceRef.set("docker.io/library/nginx:latest")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "docker.io/library/nginx:latest"
+    }
+
+    def "getEffectiveSourceRef assembles from components when sourceRef is empty"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.sourceRefTag.set("3.18")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "docker.io/library/alpine:3.18"
+    }
+
+    def "getEffectiveSourceRef handles partial component configuration"() {
+        when:
+        imageSpec.sourceRefImageName.set("nginx")
+        imageSpec.sourceRefTag.set("latest")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "nginx:latest"
+
+        when:
+        imageSpec.sourceRefRegistry.set("localhost:5000")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "localhost:5000/nginx:latest"
+    }
+
+    def "getEffectiveSourceRef handles empty tag correctly"() {
+        when:
+        imageSpec.sourceRefImageName.set("alpine")
+        // tag remains empty
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "alpine:latest"
+    }
+
+    // ===== VALIDATION TESTS =====
+
+    def "validatePullIfMissingConfiguration throws exception when pullIfMissing=true with build context"() {
+        given:
+        def contextDir = project.file('build-context')
+        contextDir.mkdirs()
+
+        when:
+        imageSpec.context.set(contextDir)
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validatePullIfMissingConfiguration()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot set pullIfMissing=true when build context is configured")
+        ex.message.contains("testImage")
+    }
+
+    def "validatePullIfMissingConfiguration succeeds when pullIfMissing=false with build context"() {
+        given:
+        def contextDir = project.file('build-context')
+        contextDir.mkdirs()
+
+        when:
+        imageSpec.context.set(contextDir)
+        imageSpec.pullIfMissing.set(false)
+        imageSpec.validatePullIfMissingConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePullIfMissingConfiguration succeeds when pullIfMissing=true with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("docker.io/library/alpine:latest")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validatePullIfMissingConfiguration()
+
+        then:
+        noExceptionThrown()
     }
 }

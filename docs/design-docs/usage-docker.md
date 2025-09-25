@@ -107,7 +107,6 @@ docker {
             save {
                 compression.set(SaveCompression.GZIP)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
                 outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
-                // defaults to pullIfMissing.set(false)
             }
             
             publish {
@@ -141,7 +140,6 @@ docker {
             save {
                 compression.set(SaveCompression.ZIP)
                 outputFile.set(file("build/my-app.zip"))
-                // defaults to pullIfMissing.set(false)
             }
         }
     }
@@ -160,6 +158,7 @@ docker {
         existingApp {
             // Use existing image - NO build properties allowed
             sourceRef.set("ghcr.io/acme/myapp:1.2.3")
+            // defaults to pullIfMissing.set(false)
             
             // Apply new local tags to the sourceRef
             tags.set(["local:latest", "local:stable"])
@@ -175,11 +174,11 @@ docker {
     images {
         remoteImage {
             sourceRef.set("ghcr.io/acme/private-app:1.0.0")
+            // defaults to pullIfMissing.set(false)
             
             save {
                 compression.set(SaveCompression.GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
-                pullIfMissing.set(true)  // Pull if not available locally
                 
                 // Optional authentication - only needed if registry requires credentials
                 // If omitted and registry requires auth, Docker will return an auth error
@@ -201,6 +200,7 @@ docker {
     images {
         myExistingImage {
             sourceRef.set("my-app:1.0.0")
+           // defaults to pullIfMissing.set(false)
             
             // Apply tags first
             tags.set(["timeServer:1.0.0", "timeServer:stable"])
@@ -209,7 +209,6 @@ docker {
             save {
                 compression.set(SaveCompression.BZIP2)  // Enum value required
                 outputFile.set(file("build/docker-images/my-app-v1.0.0.tar.bz2"))
-                // defaults to pullIfMissing.set(false)
             }
             
             // Publish to registries
@@ -392,11 +391,9 @@ Use enum values instead of strings:
 - `SaveCompression.ZIP` - ZIP compression (.zip)
 
 ### Authentication for Save Operations  
-Save operations support optional authentication when `pullIfMissing=true`:
+
 ```groovy
-save {
-    pullIfMissing.set(true)
-    
+save {    
     // Optional - only add if registry requires authentication
     // If omitted, operation proceeds without auth (may fail if registry requires it)
     auth {
@@ -526,34 +523,3 @@ The plugin automatically configures these dependencies:
 - `dockerPublishTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
 - `dockerImageTimeServer` depends on all configured operations for that image
 - `dockerImages` depends on all `dockerImage*` tasks
-
-### Build Context Types
-Both traditional `context` and `contextTask` scenarios get proper dependencies:
-
-```groovy
-// Traditional context
-docker {
-    images {
-        myApp {
-            context = file('src/main/docker')
-            save {
-                outputFile = file('myapp.tar')
-                compression = 'gzip'  // Required parameter
-            }  // ← dockerSaveMyApp depends on dockerBuildMyApp
-        }
-    }
-}
-
-// Copy task context
-docker {
-    images {
-        myApp {
-            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            save {
-                outputFile = file('myapp.tar')
-                compression = 'none'  // Required parameter
-            }  // ← dockerSaveMyApp depends on dockerBuildMyApp
-        }
-    }
-}
-```

@@ -181,16 +181,16 @@ class DockerSaveFunctionalTest extends Specification {
                         sourceRef.set('ghcr.io/acme/myapp:1.2.3')
                         tags.set(['local:latest'])
                         
+                        // pullIfMissing and auth moved to image level
+                        pullIfMissing.set(true)
+                        pullAuth {
+                            username.set('myuser')
+                            password.set('mypass')
+                        }
+                        
                         save {
                             compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
                             outputFile.set(layout.buildDirectory.file('docker-images/existing.tar.gz'))
-                            pullIfMissing.set(true)
-                            
-                            // Authentication for private registry
-                            auth {
-                                username.set('myuser')
-                                password.set('mypass')
-                            }
                         }
                     }
                 }
@@ -250,12 +250,14 @@ class DockerSaveFunctionalTest extends Specification {
                         tags.set(['latest'])
                         context.set(file('.'))
                         
+                        // pullIfMissing moved to image level
+                        pullIfMissing.set(providers.gradleProperty('docker.pull').map { 
+                            Boolean.parseBoolean(it) 
+                        }.orElse(false))
+                        
                         save {
                             compression.set(compressionProvider)
                             outputFile.set(outputPathProvider)
-                            pullIfMissing.set(providers.gradleProperty('docker.pull').map { 
-                                Boolean.parseBoolean(it) 
-                            }.orElse(false))
                         }
                     }
                 }
@@ -268,12 +270,11 @@ class DockerSaveFunctionalTest extends Specification {
                     // Values should be lazily evaluated
                     println "Compression: " + saveTask.compression.get()
                     println "Output file: " + saveTask.outputFile.get().asFile.path
-                    println "Pull if missing: " + saveTask.pullIfMissing.get()
                     
                     // Verify defaults are applied
                     assert saveTask.compression.get() == SaveCompression.GZIP
                     assert saveTask.outputFile.get().asFile.path.contains('docker-images')
-                    assert saveTask.pullIfMissing.get() == false
+                    // pullIfMissing moved to image level, not directly accessible on task
                     
                     println "Provider-based save configuration working"
                 }
@@ -291,8 +292,8 @@ class DockerSaveFunctionalTest extends Specification {
         result.output.contains('Compression: GZIP')
         result.output.contains('Output file:')
         result.output.contains('docker-images')
-        result.output.contains('Pull if missing: false')
         result.output.contains('Provider-based save configuration working')
+        // pullIfMissing moved to image level, no longer printed in task output
     }
 
     def "docker save task configuration supports file extension inference"() {

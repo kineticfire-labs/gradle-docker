@@ -20,6 +20,7 @@ import com.kineticfire.gradle.docker.exception.DockerServiceException
 import com.kineticfire.gradle.docker.model.AuthConfig
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.PublishTarget
+import com.kineticfire.gradle.docker.spec.ImageSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -54,6 +55,9 @@ abstract class DockerPublishTask extends DefaultTask {
     
     @Internal
     abstract Property<DockerService> getDockerService()
+    
+    @Internal
+    abstract Property<ImageSpec> getImageSpec()
     
     // Docker Image Nomenclature Properties
     @Input
@@ -97,6 +101,9 @@ abstract class DockerPublishTask extends DefaultTask {
     
     @TaskAction
     void publish() {
+        // Pull source image if needed
+        pullSourceRefIfNeeded()
+        
         // Validate each publish target
         def targets = []
         if (publishSpec.isPresent() && publishSpec.get()?.to) {
@@ -388,6 +395,26 @@ abstract class DockerPublishTask extends DefaultTask {
                     username: "Common examples: REGISTRY_USERNAME, ${registryName.toUpperCase().replaceAll(/[^A-Z0-9]/, '_')}_USERNAME",
                     password: "Common examples: REGISTRY_TOKEN, ${registryName.toUpperCase().replaceAll(/[^A-Z0-9]/, '_')}_TOKEN"
                 ]
+        }
+    }
+    
+    private void pullSourceRefIfNeeded() {
+        def imageSpecValue = imageSpec.orNull
+        if (!imageSpecValue) return
+        
+        imageSpecValue.validatePullIfMissingConfiguration()
+
+        if (imageSpecValue.pullIfMissing.getOrElse(false)) {
+            def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
+            if (sourceRefValue && !sourceRefValue.isEmpty()) {
+                def authConfig = imageSpecValue.pullAuth.isPresent() ? 
+                    imageSpecValue.pullAuth.get().toAuthConfig() : null
+
+                def service = dockerService.get()
+                if (!service.imageExists(sourceRefValue).get()) {
+                    service.pullImage(sourceRefValue, authConfig).get()
+                }
+            }
         }
     }
 }

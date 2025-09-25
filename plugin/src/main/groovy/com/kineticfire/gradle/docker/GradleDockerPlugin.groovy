@@ -446,8 +446,9 @@ class GradleDockerPlugin implements Plugin<Project> {
             def saveSpec = imageSpec.save.get()
             task.outputFile.set(saveSpec.outputFile)
             task.compression.set(saveSpec.compression)  // Now using SaveCompression enum directly
-            task.pullIfMissing.set(saveSpec.pullIfMissing)
-            task.auth.set(saveSpec.auth)
+            
+            // pullIfMissing and auth now handled at image level via imageSpec
+            task.imageSpec.set(imageSpec)
         }
     }
     
@@ -458,6 +459,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
+        
+        // Configure image spec for pullIfMissing support
+        task.imageSpec.set(imageSpec)
 
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
@@ -478,6 +482,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
+        
+        // Configure image spec for pullIfMissing support
+        task.imageSpec.set(imageSpec)
         
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)

@@ -54,6 +54,13 @@ abstract class ImageSpec {
         labels.convention([:])
         sourceRef.convention("")
         
+        // pullIfMissing conventions
+        pullIfMissing.convention(false)
+        sourceRefRegistry.convention("")
+        sourceRefNamespace.convention("")
+        sourceRefImageName.convention("")
+        sourceRefTag.convention("")
+        
         // Set context convention
         context.convention(layout.projectDirectory.dir("src/main/docker"))
     }
@@ -110,6 +117,30 @@ abstract class ImageSpec {
     @Input
     @Optional
     abstract Property<String> getSourceRef()
+    
+    // pullIfMissing support properties
+    @Input
+    abstract Property<Boolean> getPullIfMissing()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRegistry()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefNamespace()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefImageName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefTag()
+    
+    @Nested
+    @Optional
+    abstract Property<AuthSpec> getPullAuth()
     
     // Nested Specifications
     @Nested
@@ -225,5 +256,88 @@ abstract class ImageSpec {
             action.execute(task)
         }
         this.contextTask = copyTask
+    }
+    
+    // DSL methods for pullAuth configuration
+    void pullAuth(@DelegatesTo(AuthSpec) Closure closure) {
+        def authSpec = objectFactory.newInstance(AuthSpec)
+        closure.delegate = authSpec
+        closure.call()
+        pullAuth.set(authSpec)
+    }
+    
+    void pullAuth(Action<AuthSpec> action) {
+        def authSpec = objectFactory.newInstance(AuthSpec)
+        action.execute(authSpec)
+        pullAuth.set(authSpec)
+    }
+    
+    // SourceRef builder methods
+    void sourceRef(String registry, String namespace, String imageName, String tag) {
+        sourceRefRegistry.set(registry)
+        sourceRefNamespace.set(namespace) 
+        sourceRefImageName.set(imageName)
+        sourceRefTag.set(tag)
+    }
+    
+    // Helper method to get effective sourceRef (either direct or assembled from components)
+    String getEffectiveSourceRef() {
+        if (sourceRef.isPresent() && !sourceRef.get().isEmpty()) {
+            return sourceRef.get()
+        }
+        
+        // Assemble from components
+        def registry = sourceRefRegistry.getOrElse("")
+        def namespace = sourceRefNamespace.getOrElse("")
+        def imageName = sourceRefImageName.getOrElse("")
+        def tag = sourceRefTag.getOrElse("")
+        
+        // If tag is empty, default to "latest"
+        if (tag.isEmpty()) {
+            tag = "latest"
+        }
+        
+        if (imageName.isEmpty()) {
+            throw new GradleException("Either sourceRef or sourceRefImageName must be specified for image '${name}'")
+        }
+        
+        def reference = ""
+        if (!registry.isEmpty()) {
+            reference += registry + "/"
+        }
+        if (!namespace.isEmpty()) {
+            reference += namespace + "/"
+        }
+        reference += imageName
+        // Always add tag - it defaults to "latest" if empty
+        reference += ":" + tag
+        
+        return reference
+    }
+    
+    // Validation methods
+    void validatePullIfMissingConfiguration() {
+        if (pullIfMissing.getOrElse(false) && hasBuildContext()) {
+            throw new GradleException(
+                "Cannot set pullIfMissing=true when build context is configured for image '${name}'. " +
+                "Either build the image (remove pullIfMissing) or reference an existing image (use sourceRef instead of build context)."
+            )
+        }
+    }
+    
+    private boolean hasBuildContext() {
+        return contextTask != null ||
+               (context.isPresent() && context.get().asFile.exists())
+    }
+    
+    void validateSourceRefConfiguration() {
+        def hasDirectSourceRef = sourceRef.isPresent() && !sourceRef.get().isEmpty()
+        def hasComponentSourceRef = sourceRefImageName.isPresent() && !sourceRefImageName.get().isEmpty()
+        
+        if (!hasDirectSourceRef && !hasComponentSourceRef && pullIfMissing.getOrElse(false)) {
+            throw new GradleException(
+                "pullIfMissing=true requires either sourceRef or sourceRefImageName to be specified for image '${name}'"
+            )
+        }
     }
 }

@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.task
 import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.AuthSpec
+import com.kineticfire.gradle.docker.spec.ImageSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -41,24 +42,21 @@ abstract class DockerSaveTask extends DefaultTask {
         version.convention("")
         tags.convention([])
         sourceRef.convention("")
-        pullIfMissing.convention(false)
+
     }
     
     @Internal
     abstract Property<DockerService> getDockerService()
+    
+    @Internal
+    abstract Property<ImageSpec> getImageSpec()
     
     // SourceRef Mode Properties (for existing images)
     @Input
     @Optional
     abstract Property<String> getSourceRef()
     
-    @Input
-    @Optional
-    abstract Property<Boolean> getPullIfMissing()
-    
-    @Nested
-    @Optional
-    abstract Property<AuthSpec> getAuth()
+
     
     // Docker Image Nomenclature Properties (for building new images)
     @Input
@@ -91,6 +89,9 @@ abstract class DockerSaveTask extends DefaultTask {
 
     @TaskAction
     void saveImage() {
+        // Pull source image if needed
+        pullSourceRefIfNeeded()
+        
         // Configuration cache compatible implementation
         if (!outputFile.isPresent()) {
             throw new IllegalStateException("outputFile property must be set")
@@ -100,30 +101,6 @@ abstract class DockerSaveTask extends DefaultTask {
         def imageRef = buildPrimaryImageReference()
         if (!imageRef) {
             throw new IllegalStateException("Unable to build image reference")
-        }
-
-        // Handle pullIfMissing for sourceRef mode
-        def sourceRefValue = sourceRef.getOrElse("")
-        if (!sourceRefValue.isEmpty() && pullIfMissing.getOrElse(false)) {
-            def service = dockerService.get()
-            if (!service) {
-                throw new IllegalStateException("dockerService must be provided for pullIfMissing")
-            }
-            def exists = service.imageExists(imageRef).get()
-            if (!exists) {
-                // Pull with authentication if configured
-                def authConfig = null
-                if (auth.isPresent()) {
-                    def authSpec = auth.get()
-                    authConfig = new com.kineticfire.gradle.docker.model.AuthConfig(
-                        authSpec.username.getOrElse(""),
-                        authSpec.password.getOrElse(""),
-                        authSpec.registryToken.getOrElse("")
-                    )
-                }
-                def future = service.pullImage(imageRef, authConfig)
-                future.get()
-            }
         }
 
         // Save Docker image using service
@@ -143,6 +120,26 @@ abstract class DockerSaveTask extends DefaultTask {
             throw new IllegalStateException("saveImage future cannot be null")
         }
         future.get()
+    }
+    
+    private void pullSourceRefIfNeeded() {
+        def imageSpecValue = imageSpec.orNull
+        if (!imageSpecValue) return
+        
+        imageSpecValue.validatePullIfMissingConfiguration()
+
+        if (imageSpecValue.pullIfMissing.getOrElse(false)) {
+            def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
+            if (sourceRefValue && !sourceRefValue.isEmpty()) {
+                def authConfig = imageSpecValue.pullAuth.isPresent() ? 
+                    imageSpecValue.pullAuth.get().toAuthConfig() : null
+
+                def service = dockerService.get()
+                if (!service.imageExists(sourceRefValue).get()) {
+                    service.pullImage(sourceRefValue, authConfig).get()
+                }
+            }
+        }
     }
     
     /**

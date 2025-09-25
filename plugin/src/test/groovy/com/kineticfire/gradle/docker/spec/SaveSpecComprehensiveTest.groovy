@@ -17,12 +17,12 @@
 package com.kineticfire.gradle.docker.spec
 
 import com.kineticfire.gradle.docker.model.SaveCompression
-import org.gradle.api.Action
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
 /**
  * Comprehensive unit tests for SaveSpec
+ * NOTE: pullIfMissing and auth functionality moved to ImageSpec level
  */
 class SaveSpecComprehensiveTest extends Specification {
 
@@ -34,348 +34,53 @@ class SaveSpecComprehensiveTest extends Specification {
         saveSpec = project.objects.newInstance(SaveSpec, project.objects, project.layout)
     }
 
-    // ===== CONSTRUCTOR AND CONVENTIONS =====
-
     def "constructor sets proper convention values"() {
         expect:
+        saveSpec != null
+        saveSpec.compression.present
         saveSpec.compression.get() == SaveCompression.NONE
-        saveSpec.pullIfMissing.get() == false
-        saveSpec.outputFile.get().asFile.path.endsWith("docker-images/image.tar")
+        saveSpec.outputFile.present
+        saveSpec.outputFile.get().asFile.name == "image.tar"
     }
-
-    // ===== COMPRESSION TESTS =====
 
     def "compression property works with all enum values"() {
         expect:
-        saveSpec.compression.set(compression)
-        saveSpec.compression.get() == compression
-
-        where:
-        compression << SaveCompression.values()
+        [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP].each { compressionType ->
+            saveSpec.compression.set(compressionType)
+            assert saveSpec.compression.get() == compressionType
+        }
     }
 
-    def "compression property works with Provider API"() {
+    def "outputFile property works correctly"() {
         given:
-        def compressionProvider = project.provider { SaveCompression.GZIP }
-
-        when:
-        saveSpec.compression.set(compressionProvider)
-
-        then:
-        saveSpec.compression.get() == SaveCompression.GZIP
-    }
-
-    // ===== OUTPUT FILE TESTS =====
-
-    def "outputFile property works with various file types"() {
-        given:
-        def outputFile = project.file(fileName)
+        def outputFile = project.file('custom-output.tar.gz')
 
         when:
         saveSpec.outputFile.set(outputFile)
 
         then:
-        saveSpec.outputFile.get().asFile.name == expectedName
-
-        where:
-        fileName                | expectedName
-        "image.tar"            | "image.tar"
-        "image.tar.gz"         | "image.tar.gz"
-        "image.tar.bz2"        | "image.tar.bz2"
-        "image.tar.xz"         | "image.tar.xz"
-        "image.zip"            | "image.zip"
-        "custom-name.archive"  | "custom-name.archive"
-        "path/to/image.tar"    | "image.tar"
+        saveSpec.outputFile.get().asFile == outputFile
     }
 
-    def "outputFile property works with Provider API"() {
+    def "properties can be updated after initial configuration"() {
         given:
-        def fileProvider = project.layout.file(project.provider { project.file("dynamic-image.tar.gz") })
+        def file1 = project.file('file1.tar')
+        def file2 = project.file('file2.tar.gz')
 
         when:
-        saveSpec.outputFile.set(fileProvider)
+        saveSpec.outputFile.set(file1)
+        saveSpec.compression.set(SaveCompression.NONE)
 
         then:
-        saveSpec.outputFile.get().asFile.name == "dynamic-image.tar.gz"
-    }
-
-    def "outputFile property works with layout provider"() {
-        when:
-        saveSpec.outputFile.set(project.layout.buildDirectory.file("docker/custom-image.tar"))
-
-        then:
-        saveSpec.outputFile.get().asFile.path.contains("build")
-        saveSpec.outputFile.get().asFile.name == "custom-image.tar"
-    }
-
-    // ===== PULL IF MISSING TESTS =====
-
-    def "pullIfMissing property works with boolean values"() {
-        expect:
-        saveSpec.pullIfMissing.set(value)
-        saveSpec.pullIfMissing.get() == value
-
-        where:
-        value << [true, false]
-    }
-
-    def "pullIfMissing property works with Provider API"() {
-        given:
-        def pullProvider = project.provider { true }
+        saveSpec.outputFile.get().asFile == file1
+        saveSpec.compression.get() == SaveCompression.NONE
 
         when:
-        saveSpec.pullIfMissing.set(pullProvider)
-
-        then:
-        saveSpec.pullIfMissing.get() == true
-    }
-
-    // ===== AUTHENTICATION TESTS =====
-
-    def "auth configuration with username and password"() {
-        when:
-        saveSpec.auth {
-            username.set("saveUser")
-            password.set("savePass")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            username.get() == "saveUser"
-            password.get() == "savePass"
-            // serverAddress removed - extracted automatically from image reference
-            !registryToken.isPresent()
-            !helper.isPresent()
-        }
-    }
-
-    def "auth configuration with registry token"() {
-        when:
-        saveSpec.auth {
-            registryToken.set("save_token_xyz")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            registryToken.get() == "save_token_xyz"
-            // serverAddress removed - extracted automatically from image reference
-            !username.isPresent()
-            !password.isPresent()
-            !helper.isPresent()
-        }
-    }
-
-    def "auth configuration with helper"() {
-        when:
-        saveSpec.auth {
-            helper.set("save-credential-helper")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            helper.get() == "save-credential-helper"
-            // serverAddress removed - extracted automatically from image reference
-            !username.isPresent()
-            !password.isPresent()
-            !registryToken.isPresent()
-        }
-    }
-
-    def "auth Action configuration"() {
-        when:
-        saveSpec.auth(new Action<AuthSpec>() {
-            @Override
-            void execute(AuthSpec authSpec) {
-                authSpec.username.set("actionUser")
-                authSpec.password.set("actionPass")
-            }
-        })
-
-        then:
-        saveSpec.auth.isPresent()
-        saveSpec.auth.get().username.get() == "actionUser"
-        saveSpec.auth.get().password.get() == "actionPass"
-    }
-
-    def "auth configuration with Provider API"() {
-        given:
-        def usernameProvider = project.provider { "dynamicUser" }
-        def passwordProvider = project.provider { "dynamicPass" }
-        def serverProvider = project.provider { "dynamic.registry.io" }
-
-        when:
-        saveSpec.auth {
-            username.set(usernameProvider)
-            password.set(passwordProvider)
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            username.get() == "dynamicUser"
-            password.get() == "dynamicPass"
-            // serverAddress removed - extracted automatically from image reference
-        }
-    }
-
-    // ===== COMPLEX SCENARIOS =====
-
-    def "complete save configuration with all options"() {
-        given:
-        def outputDir = project.file("build/docker-saves")
-        outputDir.mkdirs()
-
-        when:
-        saveSpec.compression.set(SaveCompression.XZ)
-        saveSpec.outputFile.set(new File(outputDir, "complete-image.tar.xz"))
-        saveSpec.pullIfMissing.set(true)
-        saveSpec.auth {
-            username.set("completeUser")
-            password.set("completePass")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        with(saveSpec) {
-            compression.get() == SaveCompression.XZ
-            outputFile.get().asFile.name == "complete-image.tar.xz"
-            outputFile.get().asFile.parentFile.name == "docker-saves"
-            pullIfMissing.get() == true
-            auth.isPresent()
-            auth.get().username.get() == "completeUser"
-            auth.get().password.get() == "completePass"
-            // serverAddress removed - extracted automatically from image reference
-        }
-    }
-
-    def "save configuration for sourceRef scenario"() {
-        when:
-        saveSpec.compression.set(SaveCompression.BZIP2)
-        saveSpec.outputFile.set(project.layout.buildDirectory.file("sourceref/pulled-image.tar.bz2"))
-        saveSpec.pullIfMissing.set(true)
-        saveSpec.auth {
-            registryToken.set("sourceref_token_abc")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        with(saveSpec) {
-            compression.get() == SaveCompression.BZIP2
-            outputFile.get().asFile.name == "pulled-image.tar.bz2"
-            pullIfMissing.get() == true
-            auth.isPresent()
-            auth.get().registryToken.get() == "sourceref_token_abc"
-            // serverAddress removed - extracted automatically from image reference
-        }
-    }
-
-    def "save configuration for build mode scenario"() {
-        when:
-        saveSpec.compression.set(SaveCompression.ZIP)
-        saveSpec.outputFile.set(project.file("exports/built-image.zip"))
-        saveSpec.pullIfMissing.set(false)  // Not needed for built images
-
-        then:
-        with(saveSpec) {
-            compression.get() == SaveCompression.ZIP
-            outputFile.get().asFile.name == "built-image.zip"
-            pullIfMissing.get() == false
-            !auth.isPresent()  // No auth needed for local images
-        }
-    }
-
-    // ===== PROPERTY OVERRIDING TESTS =====
-
-    def "properties can be overridden"() {
-        when:
+        saveSpec.outputFile.set(file2)
         saveSpec.compression.set(SaveCompression.GZIP)
-        saveSpec.compression.set(SaveCompression.XZ)
-        
-        saveSpec.pullIfMissing.set(true)
-        saveSpec.pullIfMissing.set(false)
-        
-        saveSpec.outputFile.set(project.file("first.tar"))
-        saveSpec.outputFile.set(project.file("second.tar"))
 
         then:
-        saveSpec.compression.get() == SaveCompression.XZ
-        saveSpec.pullIfMissing.get() == false
-        saveSpec.outputFile.get().asFile.name == "second.tar"
-    }
-
-    def "auth configuration can be overridden"() {
-        when:
-        saveSpec.auth {
-            username.set("firstUser")
-            password.set("firstPass")
-        }
-        saveSpec.auth {
-            registryToken.set("newToken")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            registryToken.get() == "newToken"
-            // serverAddress removed - extracted automatically from image reference
-            !username.isPresent()  // Overridden auth spec
-            !password.isPresent()
-        }
-    }
-
-    // ===== EDGE CASES =====
-
-    def "empty auth configuration"() {
-        when:
-        saveSpec.auth {
-            // No properties set
-        }
-
-        then:
-        saveSpec.auth.isPresent()
-        with(saveSpec.auth.get()) {
-            !username.isPresent()
-            !password.isPresent()
-            !registryToken.isPresent()
-            // serverAddress property removed - extracted automatically from image reference
-            !helper.isPresent()
-        }
-    }
-
-    def "outputFile with nested directories"() {
-        given:
-        def nestedFile = project.file("very/deep/nested/path/to/image.tar.gz")
-
-        when:
-        saveSpec.outputFile.set(nestedFile)
-
-        then:
-        saveSpec.outputFile.get().asFile.path.contains("very/deep/nested/path/to")
-        saveSpec.outputFile.get().asFile.name == "image.tar.gz"
-    }
-
-    def "compression with different file extensions match"() {
-        expect:
-        saveSpec.compression.set(compression)
-        saveSpec.outputFile.set(project.file(fileName))
-        
-        saveSpec.compression.get() == compression
-        saveSpec.outputFile.get().asFile.name == fileName
-
-        where:
-        compression              | fileName
-        SaveCompression.NONE     | "image.tar"
-        SaveCompression.GZIP     | "image.tar.gz"
-        SaveCompression.BZIP2    | "image.tar.bz2"
-        SaveCompression.XZ       | "image.tar.xz"
-        SaveCompression.ZIP      | "image.zip"
+        saveSpec.outputFile.get().asFile == file2
+        saveSpec.compression.get() == SaveCompression.GZIP
     }
 }

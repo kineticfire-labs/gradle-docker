@@ -69,7 +69,6 @@ class DockerSaveTaskTest extends Specification {
         expect:
         task.compression.present
         task.compression.get() == SaveCompression.NONE
-        task.pullIfMissing.get() == false
         task.sourceRef.get() == ""
     }
 
@@ -100,15 +99,11 @@ class DockerSaveTaskTest extends Specification {
         task.sourceRef.set('registry.example.com/test:latest')
         task.outputFile.set(project.file('test.tar.gz'))
         task.compression.set(SaveCompression.NONE)
-        task.pullIfMissing.set(true)
-
         when:
         def sourceRef = task.sourceRef.get()
-        def pullIfMissing = task.pullIfMissing.get()
 
         then:
         sourceRef == 'registry.example.com/test:latest'
-        pullIfMissing == true
     }
 
     def "task configuration supports all properties"() {
@@ -117,14 +112,12 @@ class DockerSaveTaskTest extends Specification {
         task.imageName.set('local-image:latest')
         task.outputFile.set(project.file('test.tar.gz'))
         task.compression.set(SaveCompression.BZIP2)
-        task.pullIfMissing.set(true)
 
         then:
         task.sourceRef.get() == 'registry.example.com/test:latest'
         task.imageName.get() == 'local-image:latest'
         task.outputFile.get().asFile.name == 'test.tar.gz'
         task.compression.get() == SaveCompression.BZIP2
-        task.pullIfMissing.get() == true
     }
     
     def "task fails when neither imageName nor sourceRef is set"() {
@@ -274,7 +267,6 @@ class DockerSaveTaskTest extends Specification {
         
         task.compression.present  // Has default compression
         task.compression.get() == SaveCompression.NONE
-        task.pullIfMissing.get() == false  // default
     }
     
     def "task can be configured with different compression formats"() {
@@ -288,17 +280,7 @@ class DockerSaveTaskTest extends Specification {
         compressionType << [SaveCompression.NONE, SaveCompression.GZIP, SaveCompression.BZIP2, SaveCompression.XZ, SaveCompression.ZIP]
     }
     
-    def "task supports pullIfMissing configurations"() {
-        when:
-        task.pullIfMissing.set(value)
-        
-        then:
-        task.pullIfMissing.get() == value
-        
-        where:
-        value << [true, false]
-    }
-    
+
     def "task properly handles file path configurations"() {
         when:
         task.outputFile.set(project.file(filePath))

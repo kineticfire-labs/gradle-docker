@@ -40,7 +40,6 @@ class SaveSpecTest extends Specification {
         saveSpec != null
         saveSpec.compression.present  // Has default compression
         saveSpec.compression.get() == SaveCompression.NONE
-        saveSpec.pullIfMissing.get() == false  // pullIfMissing still has default
     }
 
     // ===== PROPERTY TESTS =====
@@ -72,20 +71,7 @@ class SaveSpecTest extends Specification {
         saveSpec.outputFile.get().asFile == outputFile
     }
 
-    def "pullIfMissing property works correctly"() {
-        when:
-        saveSpec.pullIfMissing.set(true)
 
-        then:
-        saveSpec.pullIfMissing.present
-        saveSpec.pullIfMissing.get() == true
-    }
-
-    def "pullIfMissing has default value"() {
-        expect:
-        saveSpec.pullIfMissing.present
-        saveSpec.pullIfMissing.get() == false
-    }
 
     // ===== COMPLETE CONFIGURATION TESTS =====
 
@@ -96,12 +82,9 @@ class SaveSpecTest extends Specification {
         when:
         saveSpec.compression.set(SaveCompression.GZIP)
         saveSpec.outputFile.set(outputFile)
-        saveSpec.pullIfMissing.set(true)
-
         then:
         saveSpec.compression.get() == SaveCompression.GZIP
         saveSpec.outputFile.get().asFile == outputFile
-        saveSpec.pullIfMissing.get() == true
     }
 
     def "configuration with different compression types"() {
@@ -123,22 +106,17 @@ class SaveSpecTest extends Specification {
         when:
         saveSpec.outputFile.set(initialFile)
         saveSpec.compression.set(SaveCompression.NONE)
-        saveSpec.pullIfMissing.set(false)
-
         then:
         saveSpec.outputFile.get().asFile == initialFile
         saveSpec.compression.get() == SaveCompression.NONE
-        saveSpec.pullIfMissing.get() == false
 
         when:
         saveSpec.outputFile.set(updatedFile)
         saveSpec.compression.set(SaveCompression.GZIP)
-        saveSpec.pullIfMissing.set(true)
 
         then:
         saveSpec.outputFile.get().asFile == updatedFile
         saveSpec.compression.get() == SaveCompression.GZIP
-        saveSpec.pullIfMissing.get() == true
     }
 
     // ===== EDGE CASES =====
@@ -212,105 +190,6 @@ class SaveSpecTest extends Specification {
         saveSpec.compression.get() == SaveCompression.ZIP
     }
 
-    // SAVESPEC AUTHENTICATION INTEGRATION TESTS
 
-    def "SaveSpec auth property can be configured via DSL"() {
-        given: "SaveSpec with authentication configuration"
-        saveSpec.auth {
-            username.set("testuser")
-            password.set("testpass")
-            registryToken.set("token123")
-        }
 
-        when: "auth property is accessed"
-        def authSpec = saveSpec.auth.get()
-
-        then: "auth properties are correctly configured"
-        saveSpec.auth.isPresent()
-        authSpec.username.get() == "testuser"
-        authSpec.password.get() == "testpass"
-        authSpec.registryToken.get() == "token123"
-    }
-
-    def "SaveSpec auth property has correct defaults"() {
-        when: "SaveSpec is created without auth configuration"
-        // No auth configuration
-
-        then: "auth property is not present by default"
-        !saveSpec.auth.isPresent()
-    }
-
-    def "SaveSpec auth property validates required fields for authentication"() {
-        given: "SaveSpec with partial auth configuration"
-        saveSpec.auth {
-            username.set("testuser")
-            // Missing password and token
-        }
-
-        when: "auth property is accessed"
-        def authSpec = saveSpec.auth.get()
-
-        then: "username is set but others are empty"
-        authSpec.username.get() == "testuser"
-        !authSpec.password.isPresent()
-        !authSpec.registryToken.isPresent()
-    }
-
-    def "SaveSpec auth converts to AuthConfig correctly"() {
-        given: "SaveSpec with complete auth configuration"
-        saveSpec.auth {
-            username.set("testuser")
-            password.set("testpass")
-            registryToken.set("token123")
-            // serverAddress removed - extracted automatically from image reference
-        }
-
-        when: "auth is converted to AuthConfig"
-        def authSpec = saveSpec.auth.get()
-        def authConfig = authSpec.toAuthConfig()
-
-        then: "AuthConfig has correct values"
-        authConfig.username == "testuser"
-        authConfig.password == "testpass"
-        authConfig.registryToken == "token123"
-        // serverAddress removed - extracted automatically from image reference
-    }
-
-    def "SaveSpec pullIfMissing property has correct default"() {
-        when: "SaveSpec is created without pullIfMissing configuration"
-        // No pullIfMissing configuration
-
-        then: "pullIfMissing defaults to false"
-        saveSpec.pullIfMissing.get() == false
-    }
-
-    def "SaveSpec pullIfMissing property can be configured"() {
-        when: "pullIfMissing is explicitly set"
-        saveSpec.pullIfMissing.set(true)
-
-        then: "pullIfMissing value is preserved"
-        saveSpec.pullIfMissing.get() == true
-    }
-
-    def "SaveSpec supports complex authentication scenarios"() {
-        given: "SaveSpec with authentication and pullIfMissing"
-        saveSpec.compression.set(SaveCompression.GZIP)
-        saveSpec.outputFile.set(project.layout.buildDirectory.file("authenticated-image.tar.gz"))
-        saveSpec.pullIfMissing.set(true)
-        saveSpec.auth {
-            username.set("registry-user")
-            password.set("secret-password")
-            helper.set("docker-credential-helper")
-        }
-
-        when: "all properties are accessed"
-        def authSpec = saveSpec.auth.get()
-
-        then: "all properties are correctly configured"
-        saveSpec.compression.get() == SaveCompression.GZIP
-        saveSpec.pullIfMissing.get() == true
-        authSpec.username.get() == "registry-user"
-        authSpec.password.get() == "secret-password"
-        authSpec.helper.get() == "docker-credential-helper"
-    }
 }

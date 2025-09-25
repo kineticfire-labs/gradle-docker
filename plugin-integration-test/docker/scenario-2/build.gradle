@@ -41,6 +41,7 @@ version = '1.0.0'
 docker {
     images {
         timeServer {
+            imageName.set('scenario2-time-server')
             contextTask = tasks.register('prepareScenario2TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -55,7 +56,7 @@ docker {
             }
             dockerfileName = 'CustomDockerfile'
             buildArgs = ['JAR_FILE': "app-${version}.jar"]
-            tags.set(["scenario2-time-server:latest"])
+            tags.set(["latest"])
             save {
                 outputFile = file('build/docker-images/scenario2-time-server-latest.tar')
                 compression = 'none'
@@ -63,7 +64,9 @@ docker {
             }
             publish {
                 to('testRegistry') {
-                    tags(['localhost:5200/scenario2-time-server:latest'])
+                    registry.set('localhost:5200')
+                    imageName.set('scenario2-time-server')
+                    publishTags(['latest'])
                 }
             }
         }

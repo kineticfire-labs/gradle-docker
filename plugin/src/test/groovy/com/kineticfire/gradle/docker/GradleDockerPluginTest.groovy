@@ -1302,62 +1302,58 @@ class GradleDockerPluginTest extends Specification {
         saveTask.compression.get() == SaveCompression.GZIP
     }
 
-    def "plugin configures pullIfMissing from SaveSpec"() {
-        given: "Plugin applied with save configuration including pullIfMissing"
+    def "plugin configures imageSpec for DockerSaveTask"() {
+        given: "Plugin applied with image configuration"
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
 
-        when: "Image is configured with pullIfMissing in save spec"
+        when: "Image is configured with pullIfMissing at image level"
         dockerExt.images {
             testImage {
                 sourceRef.set("remote:image")
                 tags.set(["local:tag"])
+                pullIfMissing.set(true)
                 save {
                     outputFile.set(project.file("pulled-image.tar"))
                     compression.set(SaveCompression.NONE)
-                    pullIfMissing.set(true)
                 }
             }
         }
         project.evaluate()
 
-        then: "DockerSaveTask has pullIfMissing property configured"
+        then: "DockerSaveTask has imageSpec configured"
         def saveTask = project.tasks.getByName("dockerSaveTestImage")
-        saveTask.pullIfMissing.get() == true
+        saveTask.imageSpec.isPresent()
         saveTask.sourceRef.get() == "remote:image"
     }
 
-    def "plugin configures auth from SaveSpec"() {
-        given: "Plugin applied with save configuration including auth"
+    def "plugin configures pullAuth at image level"() {
+        given: "Plugin applied with image configuration"
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
 
-        when: "Image is configured with auth in save spec"
+        when: "Image is configured with pullAuth at image level"
         dockerExt.images {
             testImage {
                 sourceRef.set("private.registry.com/image:latest")
                 tags.set(["local:tag"])
+                pullIfMissing.set(true)
+                pullAuth {
+                    username.set("testuser")
+                    password.set("testpass")
+                    registryToken.set("token123")
+                }
                 save {
                     outputFile.set(project.file("private-image.tar"))
                     compression.set(SaveCompression.NONE)
-                    pullIfMissing.set(true)
-                    auth {
-                        username.set("testuser")
-                        password.set("testpass")
-                        registryToken.set("token123")
-                    }
                 }
             }
         }
         project.evaluate()
 
-        then: "DockerSaveTask has auth property configured"
+        then: "DockerSaveTask has imageSpec configured"
         def saveTask = project.tasks.getByName("dockerSaveTestImage")
-        saveTask.auth.isPresent()
-        saveTask.auth.get().username.get() == "testuser"
-        saveTask.auth.get().password.get() == "testpass"
-        saveTask.auth.get().registryToken.get() == "token123"
-        saveTask.pullIfMissing.get() == true
+        saveTask.imageSpec.isPresent()
     }
 
     def "plugin preserves property values through configuration chain"() {

@@ -44,7 +44,6 @@ abstract class SaveSpec {
         
         // Set defaults
         compression.convention(SaveCompression.NONE)
-        pullIfMissing.convention(false)
         outputFile.convention(layout.buildDirectory.file("docker-images/image.tar"))
     }
     
@@ -54,24 +53,5 @@ abstract class SaveSpec {
     @OutputFile
     abstract RegularFileProperty getOutputFile()
     
-    @Input
-    @Optional
-    abstract Property<Boolean> getPullIfMissing()
 
-    @Nested
-    @Optional
-    abstract Property<AuthSpec> getAuth()
-
-    void auth(@DelegatesTo(AuthSpec) Closure closure) {
-        def authSpec = objectFactory.newInstance(AuthSpec)
-        closure.delegate = authSpec
-        closure.call()
-        auth.set(authSpec)
-    }
-
-    void auth(Action<AuthSpec> action) {
-        def authSpec = objectFactory.newInstance(AuthSpec)
-        action.execute(authSpec)
-        auth.set(authSpec)
-    }
 }

@@ -31,6 +31,7 @@ version = '1.0.0'
 docker {
     images {
         timeServer {
+            imageName.set('time-server')
             contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -51,7 +52,7 @@ docker {
             // dockerfile will default to 'build/docker-context/timeServer/Dockerfile' based on image name
             //dockerfileName = 'Dockerfile'
             tags.set([  // note different syntax to list tax vs docker/images/<name>/publish/to/publishTags
-                        "${version}",
+                        "v1.0.0",
                         "latest"
             ])
             // todo

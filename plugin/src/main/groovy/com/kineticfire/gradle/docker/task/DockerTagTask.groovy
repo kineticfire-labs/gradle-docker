@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.spec.ImageSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -41,6 +42,9 @@ abstract class DockerTagTask extends DefaultTask {
     
     @Internal
     abstract Property<DockerService> getDockerService()
+    
+    @Internal
+    abstract Property<ImageSpec> getImageSpec()
     
     // SourceRef Mode Properties (for existing images)
     @Input
@@ -73,6 +77,9 @@ abstract class DockerTagTask extends DefaultTask {
 
     @TaskAction
     void tagImage() {
+        // Pull source image if needed
+        pullSourceRefIfNeeded()
+        
         def sourceRefValue = sourceRef.getOrElse("")
         def tagsValue = tags.getOrElse([])
 
@@ -160,5 +167,25 @@ abstract class DockerTagTask extends DefaultTask {
         }
         
         return references
+    }
+    
+    private void pullSourceRefIfNeeded() {
+        def imageSpecValue = imageSpec.orNull
+        if (!imageSpecValue) return
+        
+        imageSpecValue.validatePullIfMissingConfiguration()
+
+        if (imageSpecValue.pullIfMissing.getOrElse(false)) {
+            def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
+            if (sourceRefValue && !sourceRefValue.isEmpty()) {
+                def authConfig = imageSpecValue.pullAuth.isPresent() ? 
+                    imageSpecValue.pullAuth.get().toAuthConfig() : null
+
+                def service = dockerService.get()
+                if (!service.imageExists(sourceRefValue).get()) {
+                    service.pullImage(sourceRefValue, authConfig).get()
+                }
+            }
+        }
     }
 }

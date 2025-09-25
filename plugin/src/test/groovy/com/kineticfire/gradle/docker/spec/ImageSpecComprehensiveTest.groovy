@@ -177,12 +177,8 @@ class ImageSpecComprehensiveTest extends Specification {
         imageSpec.save {
             compression.set(SaveCompression.XZ)
             outputFile.set(project.layout.buildDirectory.file("images/app.tar.xz"))
-            pullIfMissing.set(true)
-            auth {
-                username.set("pullUser")
-                password.set("pullPass")
-                // serverAddress removed - extracted automatically from image reference
-            }
+            // pullIfMissing moved to image level
+            // auth moved to image level (pullAuth)
         }
 
         then:
@@ -190,11 +186,7 @@ class ImageSpecComprehensiveTest extends Specification {
         with(imageSpec.save.get()) {
             compression.get() == SaveCompression.XZ
             outputFile.get().asFile.name == "app.tar.xz"
-            pullIfMissing.get() == true
-            auth.isPresent()
-            auth.get().username.get() == "pullUser"
-            auth.get().password.get() == "pullPass"
-            // serverAddress removed - extracted automatically from image reference
+            // pullIfMissing and auth moved to image level
         }
     }
 
@@ -205,7 +197,7 @@ class ImageSpecComprehensiveTest extends Specification {
             void execute(SaveSpec saveSpec) {
                 saveSpec.compression.set(SaveCompression.ZIP)
                 saveSpec.outputFile.set(project.file("output.zip"))
-                saveSpec.pullIfMissing.set(false)
+                // pullIfMissing moved to image level
             }
         })
 
@@ -213,7 +205,7 @@ class ImageSpecComprehensiveTest extends Specification {
         imageSpec.save.isPresent()
         imageSpec.save.get().compression.get() == SaveCompression.ZIP
         imageSpec.save.get().outputFile.get().asFile.name == "output.zip"
-        imageSpec.save.get().pullIfMissing.get() == false
+        // pullIfMissing moved to image level
     }
 
     def "publish configuration with multiple targets"() {
@@ -392,7 +384,7 @@ class ImageSpecComprehensiveTest extends Specification {
         imageSpec.save {
             compression.set(SaveCompression.GZIP)
             outputFile.set(project.layout.buildDirectory.file("images/complex-app.tar.gz"))
-            pullIfMissing.set(false)
+            // pullIfMissing moved to image level
         }
 
         imageSpec.publish {

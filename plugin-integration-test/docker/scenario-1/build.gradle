@@ -39,6 +39,7 @@ version = '1.0.0'
 docker {
     images {
         timeServer {
+            imageName.set('scenario1-time-server')
             contextTask = tasks.register('prepareScenario1TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -58,8 +59,8 @@ docker {
             ]
             // dockerfile will default to 'build/docker-context/scenario1TimeServer/Dockerfile' based on image name
             tags.set([
-                        "scenario1-time-server:${version}",
-                        "scenario1-time-server:latest"
+                        "v1.0.0",
+                        "latest"
             ])
             // no save
             // no publish
