@@ -69,7 +69,10 @@ abstract class DockerExtension {
     
     void validateImageSpec(ImageSpec imageSpec) {
         def hasContextTask = imageSpec.contextTask != null
-        def hasSourceRef = imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()
+        def hasSourceRef = (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) ||
+            (imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()) ||
+            (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) ||
+            (imageSpec.sourceRefNamespace.isPresent() && !imageSpec.sourceRefNamespace.get().isEmpty())
         
         // Check if context was explicitly set (not just the convention)
         // The challenge is distinguishing explicit setting from convention
@@ -96,9 +99,7 @@ abstract class DockerExtension {
 
             if (hasBuildProperties) {
                 throw new GradleException(
-                    "Image '${imageSpec.name}' cannot use both 'sourceRef' and build-related properties. " +
-                    "sourceRef is for existing images, while build properties are for building new images. " +
-                    "Use either sourceRef OR build properties, not both."
+                    "Cannot mix Build Mode and SourceRef Mode"
                 )
             }
         }
@@ -171,10 +172,16 @@ abstract class DockerExtension {
         def repositoryValue = imageSpec.repository.getOrElse("")
         def namespaceValue = imageSpec.namespace.getOrElse("")
         def imageNameValue = imageSpec.imageName.getOrElse("")
-        
+
         def hasRepository = !repositoryValue.isEmpty()
         def hasNamespace = !namespaceValue.isEmpty()
         def hasImageName = !imageNameValue.isEmpty()
+
+        // Also check for SourceRef component properties
+        def hasSourceRef = imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()
+        def hasSourceRefRepository = imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()
+        def hasSourceRefNamespace = imageSpec.sourceRefNamespace.isPresent() && !imageSpec.sourceRefNamespace.get().isEmpty()
+        def hasSourceRefImageName = imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()
 
         // WORKAROUND: Skip mutual exclusivity validation if publish targets are configured
         // This avoids the property contamination issue where publish target properties
@@ -189,9 +196,15 @@ abstract class DockerExtension {
         }
 
         // Validate that at least one naming approach is used
-        if (!hasRepository && !hasImageName) {
+        // Consider both traditional properties and SourceRef component properties
+        // Be more permissive at configuration time - allow partial SourceRef configurations
+        // The detailed validation will happen at task execution time
+        def hasAnyNamingApproach = hasRepository || hasImageName || hasSourceRefImageName || hasSourceRef ||
+                                  hasSourceRefRepository || hasSourceRefNamespace
+        if (!hasAnyNamingApproach && !hasSourceRef) {
+            // Only fail if there are no naming hints at all
             throw new GradleException(
-                "Image '${imageSpec.name}' must specify either 'repository' OR 'imageName'"
+                "Image '${imageSpec.name}' must specify some form of image naming (repository, imageName, or sourceRef)"
             )
         }
 

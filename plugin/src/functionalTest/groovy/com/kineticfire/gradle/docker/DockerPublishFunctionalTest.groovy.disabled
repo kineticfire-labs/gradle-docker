@@ -495,7 +495,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         then:
         // Should fail due to sourceRef + build properties combination
-        result.output.contains('cannot use both') || result.output.contains('sourceRef') || result.output.contains('mutual exclusivity')
+        result.output.contains('Cannot mix Build Mode and SourceRef Mode')
     }
 
     def "docker publish task configuration supports provider-based sourceRef publishing"() {

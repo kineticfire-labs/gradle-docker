@@ -173,6 +173,7 @@ abstract class DockerTagTask extends DefaultTask {
         def imageSpecValue = imageSpec.orNull
         if (!imageSpecValue) return
         
+        imageSpecValue.validateModeConsistency()
         imageSpecValue.validateSourceRefConfiguration()
         imageSpecValue.validatePullIfMissingConfiguration()
 

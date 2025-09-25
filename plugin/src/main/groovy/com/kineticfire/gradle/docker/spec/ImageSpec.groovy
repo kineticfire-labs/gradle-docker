@@ -60,6 +60,7 @@ abstract class ImageSpec {
         sourceRefNamespace.convention("")
         sourceRefImageName.convention("")
         sourceRefTag.convention("")
+        sourceRefRepository.convention("")
         
         // Set context convention
         context.convention(layout.projectDirectory.dir("src/main/docker"))
@@ -137,6 +138,10 @@ abstract class ImageSpec {
     @Input
     @Optional
     abstract Property<String> getSourceRefTag()
+    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRepository()
     
     @Nested
     @Optional
@@ -294,22 +299,30 @@ abstract class ImageSpec {
         if (sourceRef.isPresent() && !sourceRef.get().isEmpty()) {
             return sourceRef.get()
         }
-        
+
         // Assemble from components
         def registry = sourceRefRegistry.getOrElse("")
         def namespace = sourceRefNamespace.getOrElse("")
+        def repository = sourceRefRepository.getOrElse("")
         def imageName = sourceRefImageName.getOrElse("")
         def tag = sourceRefTag.getOrElse("")
-        
+
         // If tag is empty, default to "latest"
         if (tag.isEmpty()) {
             tag = "latest"
         }
-        
-        if (imageName.isEmpty()) {
-            throw new GradleException("Either sourceRef or sourceRefImageName must be specified for image '${name}'")
+
+        // Repository approach takes precedence (mirrors build mode logic)
+        if (!repository.isEmpty()) {
+            def baseRef = registry.isEmpty() ? repository : "${registry}/${repository}"
+            return "${baseRef}:${tag}"
         }
-        
+
+        // Fall back to namespace + imageName approach
+        if (imageName.isEmpty()) {
+            throw new GradleException("Either sourceRef, sourceRefRepository, or sourceRefImageName must be specified for image '${name}'")
+        }
+
         def reference = ""
         if (!registry.isEmpty()) {
             reference += registry + "/"
@@ -320,7 +333,7 @@ abstract class ImageSpec {
         reference += imageName
         // Always add tag - it defaults to "latest" if empty
         reference += ":" + tag
-        
+
         return reference
     }
     
@@ -341,15 +354,96 @@ abstract class ImageSpec {
     
     void validateSourceRefConfiguration() {
         def hasDirectSourceRef = sourceRef.isPresent() && !sourceRef.get().isEmpty()
-        def hasComponentSourceRef = sourceRefImageName.isPresent() && !sourceRefImageName.get().isEmpty()
-        
-        if (!hasDirectSourceRef && !hasComponentSourceRef && pullIfMissing.getOrElse(false)) {
+        def hasRepositorySourceRef = sourceRefRepository.isPresent() && !sourceRefRepository.get().isEmpty()
+        def hasImageNameSourceRef = sourceRefImageName.isPresent() && !sourceRefImageName.get().isEmpty()
+
+        if (!hasDirectSourceRef && !hasRepositorySourceRef && !hasImageNameSourceRef && pullIfMissing.getOrElse(false)) {
             throw new GradleException(
-                "pullIfMissing=true requires either sourceRef or sourceRefImageName to be specified for image '${name}'"
+                "pullIfMissing=true requires either sourceRef, sourceRefRepository, or sourceRefImageName to be specified for image '${name}'"
             )
         }
     }
-}
+
+    void validateModeConsistency() {
+        // Detect build mode properties (only consider properties that are definitely build-mode)
+        // Avoid false positives from property sharing with SourceRef components and conventions
+        def hasExplicitContext = false
+        if (context.isPresent()) {
+            def contextPath = context.get().asFile.path
+            def conventionPath = "src/main/docker"
+            // Consider it explicit if path doesn't end with the convention path
+            hasExplicitContext = !contextPath.endsWith(conventionPath)
+        }
+
+        def hasBuildMode = contextTask != null ||
+            (hasExplicitContext && context.get().asFile.exists()) ||
+            !buildArgs.get().isEmpty() ||
+            !labels.get().isEmpty()
+
+        // Only consider traditional naming properties as build mode if SourceRef components are NOT used
+        def hasSourceRefComponents = !sourceRefRegistry.getOrElse("").isEmpty() ||
+            !sourceRefNamespace.getOrElse("").isEmpty() ||
+            !sourceRefImageName.getOrElse("").isEmpty() ||
+            !sourceRefRepository.getOrElse("").isEmpty() ||
+            !sourceRefTag.getOrElse("").isEmpty()
+
+        if (!hasSourceRefComponents) {
+            // Only count traditional properties as build mode if no SourceRef components are present
+            hasBuildMode = hasBuildMode ||
+                !registry.getOrElse("").isEmpty() ||
+                !namespace.getOrElse("").isEmpty() ||
+                !imageName.getOrElse("").isEmpty() ||
+                !repository.getOrElse("").isEmpty()
+        }
+
+        // Detect sourceRef mode properties
+        def hasDirectSourceRef = !sourceRef.getOrElse("").isEmpty()
+        // hasSourceRefComponents is already defined above
+
+        // Rule 2a: Build mode excludes all sourceRef properties
+        if (hasBuildMode && (hasDirectSourceRef || hasSourceRefComponents)) {
+            throw new GradleException(
+                "Cannot mix Build Mode and SourceRef Mode"
+            )
+        }
+
+        // Rule 2b: Direct sourceRef excludes component assembly and build mode
+        if (hasDirectSourceRef && (hasSourceRefComponents || hasBuildMode)) {
+            throw new GradleException(
+                "Cannot use direct sourceRef with component assembly properties or build mode properties for image '${name}'. " +
+                "Use sourceRef alone for complete image references."
+            )
+        }
+
+        // Rule 2c & 2d: Component assembly mutual exclusions
+        def hasNamespaceMode = !sourceRefNamespace.getOrElse("").isEmpty() || !sourceRefImageName.getOrElse("").isEmpty()
+        def hasRepositoryMode = !sourceRefRepository.getOrElse("").isEmpty()
+
+        if (hasNamespaceMode && hasRepositoryMode) {
+            throw new GradleException(
+                "Cannot use both repository approach and namespace+imageName approach"
+            )
+        }
+
+        // Ensure repository mode doesn't mix with namespace/imageName
+        if (hasRepositoryMode && (hasNamespaceMode || hasBuildMode)) {
+            throw new GradleException(
+                "When using sourceRefRepository, cannot use sourceRef, sourceRefNamespace, sourceRefImageName, or build mode properties " +
+                "for image '${name}'. Repository mode should use: sourceRefRegistry + sourceRefRepository + sourceRefTag only."
+            )
+        }
+
+        // Validate incomplete namespace approach
+        def hasOnlyNamespace = !sourceRefNamespace.getOrElse("").isEmpty() && sourceRefImageName.getOrElse("").isEmpty()
+        def hasOnlyImageName = sourceRefNamespace.getOrElse("").isEmpty() && !sourceRefImageName.getOrElse("").isEmpty()
+        
+        if (hasOnlyNamespace || hasOnlyImageName) {
+            throw new GradleException(
+                "When using namespace+imageName approach, both namespace and imageName are required for image '${name}'. " +
+                "Either specify both sourceRefNamespace and sourceRefImageName, or use sourceRefRepository instead."
+            )
+        }
+    }
 
 /**
  * DSL specification for sourceRef component configuration
@@ -376,4 +470,9 @@ class SourceRefSpec {
     void tag(String tag) {
         parent.sourceRefTag.set(tag)
     }
+
+    void repository(String repository) {
+        parent.sourceRefRepository.set(repository)
+    }
+}
 }

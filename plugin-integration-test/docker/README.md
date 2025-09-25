@@ -5,7 +5,34 @@ This document provides a matrix to track features against integration test cover
 Note that these tests run in parallel, so operations based on image or file names require unique ones per test.
 
 
-## Build Image Features
+## Build Mode
+
+- Image Name Mode: registry, namespace, imageName, tags
+   - registry, namespace, imageName, 1 tag
+   - namespace, imageName, 2 tags
+   - imageName, tag(s)
+- Repository Mode: registry, repository, tags
+   - registry, repository, 1 tag
+   - repository, 2 tags
+- Number of images
+   - 1
+   - `> 1`
+- Number of build args
+   - none
+   - 1
+   - `> 1`
+- Number of build labels
+  - none
+  - 1
+  - `> 1`
+- Dockerfile
+   - default
+   - specify by name
+   - specify by path/name
+- build only
+- build, save, publish
+
+
 
 | # | Tested Feature                    | Test Scenario                                   | 
 |---|-----------------------------------|-------------------------------------------------|
@@ -19,9 +46,28 @@ Note that these tests run in parallel, so operations based on image or file name
 | 8 | dockerfile = specify by path/name | todo                                            |
 
 
-## Image Already Present (e.g., No Building the Image)
+## Source Ref Mode
+
+- complete sourceRef
+- Image Name Mode: registry, namespace, imageName, tag
+  - registry, namespace, imageName, tag
+  - namespace, imageName, tag
+  - imageName, tag
+- Repository Mode: registry, repository, tag
+  - registry, repository, tag
+  - repository, tag
+- pull if missing
+   - pullIfMissing not set
+   - pullIfMissing=false
+   - pullIfMissing=true
+      - image is local, no pull
+      - must pull image
+- save
+- publish
 
 todo
+
+
 
 
 ## Tag Features

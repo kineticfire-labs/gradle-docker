@@ -1,0 +1,468 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.gradle.docker
+
+import org.gradle.testkit.runner.TaskOutcome
+import spock.lang.Specification
+import spock.lang.TempDir
+import org.gradle.testkit.runner.GradleRunner
+
+import java.nio.file.Path
+
+/**
+ * Functional tests for mode consistency validation between Build Mode and SourceRef Mode
+ */
+class ModeConsistencyValidationFunctionalTest extends Specification {
+
+    @TempDir
+    Path testProjectDir
+
+    File settingsFile
+    File buildFile
+
+    def setup() {
+        settingsFile = testProjectDir.resolve('settings.gradle').toFile()
+        buildFile = testProjectDir.resolve('build.gradle').toFile()
+        
+        settingsFile << "rootProject.name = 'mode-consistency-test'"
+        
+        // Create minimal Docker context
+        def contextDir = testProjectDir.resolve('src/main/docker').toFile()
+        contextDir.mkdirs()
+        def dockerfile = new File(contextDir, 'Dockerfile')
+        dockerfile.text = '''
+            FROM alpine:latest
+            CMD ["echo", "test"]
+        '''
+    }
+
+    def "pure Build Mode configuration succeeds"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    buildModeTest {
+                        context.set(file("src/main/docker"))
+                        dockerfile.set(file("src/main/docker/Dockerfile"))
+                        buildArgs.set(["VERSION": "1.0"])
+                        imageName.set("build-mode-test")
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('help', '--stacktrace')  // Just validate DSL parsing
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .build()
+
+        then:
+        result.task(':help').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "pure SourceRef Mode with full reference succeeds"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    sourceRefTest {
+                        sourceRef.set("docker.io/library/alpine:3.18")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('help', '--stacktrace')  // Just validate DSL parsing
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .build()
+
+        then:
+        result.task(':help').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "pure SourceRef Mode with repository approach succeeds"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    repositoryTest {
+                        sourceRefRegistry.set("ghcr.io")
+                        sourceRefRepository.set("company/webapp")
+                        sourceRefTag.set("v1.0")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('help', '--stacktrace')  // Just validate DSL parsing
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .build()
+
+        then:
+        result.task(':help').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "pure SourceRef Mode with namespace approach succeeds"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    namespaceTest {
+                        sourceRefRegistry.set("docker.io")
+                        sourceRefNamespace.set("library")
+                        sourceRefImageName.set("ubuntu")
+                        sourceRefTag.set("22.04")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('help', '--stacktrace')  // Just validate DSL parsing
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .build()
+
+        then:
+        result.task(':help').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "mixing Build Mode with SourceRef Mode fails validation"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    mixedModeTest {
+                        // Build Mode properties
+                        context.set(file("src/main/docker"))
+                        dockerfile.set(file("src/main/docker/Dockerfile"))
+                        
+                        // SourceRef Mode properties - should cause validation error
+                        sourceRef.set("alpine:latest")
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagMixedModeTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+
+        then:
+        result.output.contains("Cannot mix Build Mode and SourceRef Mode")
+        result.task(':dockerTagMixedModeTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "mixing repository and namespace approaches fails validation"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    mixedApproachTest {
+                        // Repository approach
+                        sourceRefRepository.set("company/webapp")
+                        
+                        // Namespace approach - should cause validation error
+                        sourceRefNamespace.set("library")
+                        sourceRefImageName.set("alpine")
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagMixedApproachTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+
+        then:
+        result.output.contains("Cannot use both repository approach and namespace+imageName approach")
+        result.task(':dockerTagMixedApproachTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "incomplete repository approach fails validation"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    incompleteRepoTest {
+                        // Repository approach with conflicting imageName
+                        sourceRefRepository.set("company/webapp")
+                        sourceRefImageName.set("alpine")  // Should not be used with repository approach
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagIncompleteRepoTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+
+        then:
+        result.output.contains("Cannot use both repository approach and namespace+imageName approach")
+        result.task(':dockerTagIncompleteRepoTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "incomplete namespace approach fails validation"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    incompleteNsTest {
+                        // Namespace approach missing imageName
+                        sourceRefNamespace.set("library")
+                        // sourceRefImageName is missing - should cause validation error
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagIncompleteNsTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+
+        then:
+        result.output.contains("When using namespace+imageName approach, both namespace and imageName are required")
+        result.task(':dockerTagIncompleteNsTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "repository approach with namespace fails validation"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    repoWithNsTest {
+                        sourceRefRepository.set("company/webapp")
+                        sourceRefNamespace.set("library")  // Should not be used with repository approach
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagRepoWithNsTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+
+        then:
+        result.output.contains("Cannot use both repository approach and namespace+imageName approach")
+        result.task(':dockerTagRepoWithNsTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "validation works across different task types"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    validationTest {
+                        // Mixed mode configuration
+                        context.set(file("src/main/docker"))
+                        sourceRef.set("alpine:latest")
+                        
+                        save {
+                            outputFile.set(file("build/test.tar"))
+                        }
+                        
+                        tags.set(["test-build-mode"])
+                        
+                        publish {
+                            to('test') {
+                                registry.set("localhost:5000")
+                                repository.set("test/validation")
+                                publishTags.set(["validation"])
+                            }
+                        }
+                    }
+                }
+            }
+        '''
+
+        expect:
+        // Test validation in save task
+        def saveResult = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerSaveValidationTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+        
+        saveResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
+        saveResult.task(':dockerSaveValidationTest').outcome == TaskOutcome.FAILED
+
+        // Test validation in tag task
+        def tagResult = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerTagValidationTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+        
+        tagResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
+        tagResult.task(':dockerTagValidationTest').outcome == TaskOutcome.FAILED
+
+        // Test validation in publish task
+        def publishResult = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('dockerPublishValidationTestTest', '--stacktrace')
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .buildAndFail()
+        
+        publishResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
+        publishResult.task(':dockerPublishValidationTestTest').outcome == TaskOutcome.FAILED
+    }
+
+    def "multiple images with different approaches work when each is consistent"() {
+        given:
+        buildFile.text = '''
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+
+            docker {
+                images {
+                    // Build Mode image
+                    buildImage {
+                        context.set(file("src/main/docker"))
+                        dockerfile.set(file("src/main/docker/Dockerfile"))
+                        buildArgs.set(["VERSION": "1.0"])
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                    
+                    // SourceRef Mode with repository approach
+                    sourceRefRepo {
+                        sourceRefRepository.set("company/webapp")
+                        sourceRefTag.set("v1.0")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                    
+                    // SourceRef Mode with namespace approach
+                    sourceRefNs {
+                        sourceRefRegistry.set("docker.io")
+                        sourceRefNamespace.set("library")
+                        sourceRefImageName.set("alpine")
+                        sourceRefTag.set("3.18")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                    
+                    // SourceRef Mode with full reference
+                    sourceRefFull {
+                        sourceRef.set("nginx:latest")
+                        pullIfMissing.set(false)
+                        
+                        tags.set(["test-build-mode"])
+                    }
+                }
+            }
+        '''
+
+        when:
+        def result = GradleRunner.create()
+                .withProjectDir(testProjectDir.toFile())
+                .withArguments('help', '--stacktrace')  // Just validate DSL parsing
+                .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+                .build()
+
+        then:
+        result.task(':help').outcome == TaskOutcome.SUCCESS
+    }
+}

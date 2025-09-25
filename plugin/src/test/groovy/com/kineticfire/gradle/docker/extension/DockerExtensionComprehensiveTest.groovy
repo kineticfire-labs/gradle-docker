@@ -711,9 +711,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
-        ex.message.contains("cannot use both")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with explicit context"() {
@@ -730,8 +728,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with contextTask"() {
@@ -747,8 +744,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with labels"() {
@@ -762,8 +758,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with dockerfile"() {
@@ -780,8 +775,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with dockerfileName"() {
@@ -795,8 +789,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
     }
 
     def "validateImageSpec rejects sourceRef with multiple build properties"() {
@@ -815,10 +808,8 @@ class DockerExtensionComprehensiveTest extends Specification {
 
         then: "validation fails with exclusivity error"
         def ex = thrown(GradleException)
-        ex.message.contains("cannot use both") && ex.message.contains("sourceRef")
-        ex.message.contains("build-related properties")
-        ex.message.contains("existing images")
-        ex.message.contains("building new images")
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+
     }
 
     def "validateImageSpec allows sourceRef without build properties"() {

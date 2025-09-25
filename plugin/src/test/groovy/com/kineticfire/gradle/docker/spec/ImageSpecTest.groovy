@@ -523,6 +523,8 @@ class ImageSpecTest extends Specification {
         imageSpec.sourceRefRegistry.get() == ""
         imageSpec.sourceRefNamespace.present
         imageSpec.sourceRefNamespace.get() == ""
+        imageSpec.sourceRefRepository.present
+        imageSpec.sourceRefRepository.get() == ""
         imageSpec.sourceRefImageName.present
         imageSpec.sourceRefImageName.get() == ""
         imageSpec.sourceRefTag.present
@@ -530,6 +532,22 @@ class ImageSpecTest extends Specification {
     }
 
     def "sourceRef component properties can be configured"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefRepository.set("myorg/myapp")
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.sourceRefTag.set("3.18")
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "docker.io"
+        imageSpec.sourceRefNamespace.get() == "library"
+        imageSpec.sourceRefRepository.get() == "myorg/myapp"
+        imageSpec.sourceRefImageName.get() == "alpine"
+        imageSpec.sourceRefTag.get() == "3.18"
+    }
+
+    def "sourceRef component properties old test can be configured"() {
         when:
         imageSpec.sourceRefRegistry.set("docker.io")
         imageSpec.sourceRefNamespace.set("library")
@@ -562,7 +580,7 @@ class ImageSpecTest extends Specification {
         imageSpec.getEffectiveSourceRef() == "docker.io/library/nginx:latest"
     }
 
-    def "getEffectiveSourceRef assembles from components when sourceRef is empty"() {
+    def "getEffectiveSourceRef assembles from namespace+imageName when sourceRef is empty"() {
         when:
         imageSpec.sourceRefRegistry.set("docker.io")
         imageSpec.sourceRefNamespace.set("library")
@@ -571,6 +589,45 @@ class ImageSpecTest extends Specification {
 
         then:
         imageSpec.getEffectiveSourceRef() == "docker.io/library/alpine:3.18"
+    }
+
+    def "getEffectiveSourceRef assembles from repository approach when present"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefRepository.set("myorg/myapp")
+        imageSpec.sourceRefTag.set("v1.0")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "docker.io/myorg/myapp:v1.0"
+    }
+
+    def "getEffectiveSourceRef repository approach takes precedence over namespace+imageName"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefRepository.set("company/webapp")
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.sourceRefTag.set("latest")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "docker.io/company/webapp:latest"
+    }
+
+    def "getEffectiveSourceRef repository approach without registry"() {
+        when:
+        imageSpec.sourceRefRepository.set("myuser/myapp")
+        imageSpec.sourceRefTag.set("v2.0")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "myuser/myapp:v2.0"
+    }
+
+    def "getEffectiveSourceRef repository approach defaults tag to latest"() {
+        when:
+        imageSpec.sourceRefRepository.set("company/backend")
+
+        then:
+        imageSpec.getEffectiveSourceRef() == "company/backend:latest"
     }
 
     def "getEffectiveSourceRef handles partial component configuration"() {
@@ -646,7 +703,167 @@ class ImageSpecTest extends Specification {
 
         then:
         def ex = thrown(org.gradle.api.GradleException)
-        ex.message.contains("pullIfMissing=true requires either sourceRef or sourceRefImageName")
+        ex.message.contains("pullIfMissing=true requires either sourceRef, sourceRefRepository, or sourceRefImageName")
+        ex.message.contains("testImage")
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=false"() {
+        when:
+        imageSpec.pullIfMissing.set(false)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=true with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("nginx:latest")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=true with sourceRefImageName"() {
+        when:
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration succeeds when pullIfMissing=true with sourceRefRepository"() {
+        when:
+        imageSpec.sourceRefRepository.set("myorg/myapp")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== MODE CONSISTENCY VALIDATION TESTS =====
+
+    def "validateModeConsistency succeeds with pure Build Mode configuration"() {
+        given:
+        def contextDir = project.file('build-context')
+        contextDir.mkdirs()
+
+        when:
+        imageSpec.context.set(contextDir)
+        imageSpec.dockerfile.set(project.file('Dockerfile'))
+        imageSpec.buildArgs.set(['VERSION': '1.0'])
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds with pure SourceRef Mode - full reference"() {
+        when:
+        imageSpec.sourceRef.set("docker.io/library/alpine:3.18")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds with pure SourceRef Mode - namespace approach"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefImageName.set("ubuntu")
+        imageSpec.sourceRefTag.set("22.04")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds with pure SourceRef Mode - repository approach"() {
+        when:
+        imageSpec.sourceRefRegistry.set("ghcr.io")
+        imageSpec.sourceRefRepository.set("company/webapp")
+        imageSpec.sourceRefTag.set("v1.0")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency throws when mixing Build Mode with SourceRef Mode"() {
+        given:
+        def contextDir = project.file('build-context')
+        contextDir.mkdirs()
+
+        when:
+        imageSpec.context.set(contextDir)
+        imageSpec.sourceRef.set("alpine:latest")
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    }
+
+    def "validateModeConsistency throws when mixing namespace and repository approaches"() {
+        when:
+        imageSpec.sourceRefNamespace.set("library")
+        imageSpec.sourceRefImageName.set("alpine")
+        imageSpec.sourceRefRepository.set("myorg/webapp")
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot use both repository approach and namespace+imageName approach")
+    }
+
+    def "validateModeConsistency throws when repository approach is incomplete"() {
+        when:
+        imageSpec.sourceRefRepository.set("company/webapp")
+        imageSpec.sourceRefImageName.set("alpine")  // This makes repository approach invalid
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot use both repository approach and namespace+imageName approach")
+    }
+
+    def "validateModeConsistency throws when namespace approach is incomplete"() {
+        when:
+        imageSpec.sourceRefNamespace.set("library")
+        // Missing sourceRefImageName makes this invalid
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+        ex.message.contains("testImage")
+    }
+
+    def "validatePullIfMissingConfiguration succeeds when pullIfMissing=true with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("docker.io/library/alpine:latest")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validatePullIfMissingConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSourceRefConfiguration throws when pullIfMissing=true but no sourceRef"() {
+        when:
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validateSourceRefConfiguration()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("pullIfMissing=true requires either sourceRef, sourceRefRepository, or sourceRefImageName")
         ex.message.contains("testImage")
     }
 
@@ -739,5 +956,33 @@ class ImageSpecTest extends Specification {
         imageSpec.sourceRefImageName.get() == "updated"
         imageSpec.sourceRefTag.get() == "v2.0"
         imageSpec.getEffectiveSourceRef() == "updated.registry/updated-ns/updated:v2.0"
+    }
+
+    def "sourceRef closure DSL supports repository approach"() {
+        when:
+        imageSpec.sourceRef {
+            registry "docker.io"
+            repository "company/backend-api"
+            tag "v1.5"
+        }
+
+        then:
+        imageSpec.sourceRefRegistry.get() == "docker.io"
+        imageSpec.sourceRefRepository.get() == "company/backend-api"
+        imageSpec.sourceRefTag.get() == "v1.5"
+        imageSpec.getEffectiveSourceRef() == "docker.io/company/backend-api:v1.5"
+    }
+
+    def "sourceRef closure DSL repository approach without registry"() {
+        when:
+        imageSpec.sourceRef {
+            repository "myuser/myproject"
+            tag "stable"
+        }
+
+        then:
+        imageSpec.sourceRefRepository.get() == "myuser/myproject"
+        imageSpec.sourceRefTag.get() == "stable"
+        imageSpec.getEffectiveSourceRef() == "myuser/myproject:stable"
     }
 }

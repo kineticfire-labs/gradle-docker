@@ -45,9 +45,12 @@ the-application-project/                  # a project that (1) builds an applica
 The plugin supports two distinct usage modes:
 
 1. **Build Mode** - Building new Docker images using nomenclature options
-   1. registry, namespace, imageName, tags
-   2. registry, repository, tags
-2. **SourceRef Mode** - Working with existing/pre-built images using `sourceRef`
+   1. **Image Name Mode** - registry, namespace, imageName, tags
+   2. **Repository Mode** - registry, repository, tags
+2. **SourceRef Mode** - Working with existing/pre-built images using sourceRef
+   1. **Complete SourceRef Mode** - string (e.g., "ghcr.io/company/app:v1.0")
+   2. **Image Name Mode** - registry, namespace, imageName, tag
+   3. **Repository Mode** - registry, repository, tag
 
 ## Build Mode: Building New Docker Images
 
@@ -322,6 +325,66 @@ docker {
 }
 ```
 
+### Scenario 6: SourceRef Component Assembly (Repository Approach)
+
+Using the repository approach for component assembly (alternative to namespace+imageName):
+
+```groovy
+docker {
+    images {
+        // Repository-based component assembly
+        ghcrApp {
+            sourceRefRegistry.set("ghcr.io")
+            sourceRefRepository.set("company/myapp")    // Combines namespace/imageName
+            sourceRefTag.set("v2.1.0")
+            // Results in: ghcr.io/company/myapp:v2.1.0
+
+            pullIfMissing.set(true)
+
+            pullAuth {
+                username.set(providers.environmentVariable("GHCR_USER"))
+                password.set(providers.environmentVariable("GHCR_TOKEN"))
+            }
+
+            save {
+                outputFile.set(file("build/ghcr-app.tar"))
+            }
+        }
+
+        // Mixed approaches in same project (different images)
+        dockerhubApp {
+            sourceRefRegistry.set("docker.io")
+            sourceRefRepository.set("username/webapp")
+            // sourceRefTag defaults to "latest"
+            // Results in: docker.io/username/webapp:latest
+
+            pullIfMissing.set(true)
+
+            tag {
+                tags.set(["local:webapp"])
+            }
+        }
+
+        // Registry-only repository
+        localApp {
+            sourceRefRepository.set("internal/app")     // No registry specified
+            sourceRefTag.set("stable")
+            // Results in: internal/app:stable
+
+            pullIfMissing.set(true)
+
+            publish {
+                to('prod') {
+                    registry.set("prod.company.com")
+                    repository.set("production/app")
+                    publishTags.set(["deployed"])
+                }
+            }
+        }
+    }
+}
+```
+
 ## Comprehensive Publishing Examples
 
 ### Basic Registry Examples
@@ -483,6 +546,7 @@ Use enum values instead of strings:
 - `sourceRefNamespace.set(String)` - Source namespace component (e.g., "library")
 - `sourceRefImageName.set(String)` - Source image name component (e.g., "alpine")
 - `sourceRefTag.set(String)` - Source tag component (defaults to "latest" if omitted)
+- `sourceRefRepository.set(String)` - Source repository component (e.g., "company/app") - alternative to namespace+imageName
 
 ### pullAuth Configuration (Image-Level)
 ```groovy
@@ -565,9 +629,16 @@ The plugin automatically generates tasks based on the DSL block name:
 - **Either/or**: use pullIfMissing for existing images OR build context for new images, not both
 
 #### Component Assembly Priority
-1. Full `sourceRef.set("registry/namespace/image:tag")` takes precedence
-2. Component assembly used if sourceRef is empty or not set
-3. Required: either sourceRef OR sourceRefImageName must be specified when using pullIfMissing=true
+1. Full `sourceRef.set("registry/namespace/image:tag")` takes precedence over all components
+2. Repository approach: `sourceRefRepository` takes precedence over `sourceRefNamespace + sourceRefImageName`
+3. Namespace approach: used when `sourceRefRepository` is not specified
+4. Required: either `sourceRef` OR `sourceRefRepository` OR `sourceRefImageName` must be specified when using pullIfMissing=true
+
+#### Component Assembly Patterns
+- **Full Reference**: `sourceRef.set("ghcr.io/company/app:v1.0")` - complete image reference
+- **Repository Assembly**: `sourceRefRegistry + sourceRefRepository + sourceRefTag` - mirrors build mode repository approach
+- **Namespace Assembly**: `sourceRefRegistry + sourceRefNamespace + sourceRefImageName + sourceRefTag` - mirrors build mode namespace approach
+- **Mutually Exclusive**: Cannot mix repository and namespace approaches in same image configuration
 
 ## Key Benefits
 

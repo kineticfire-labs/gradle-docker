@@ -149,7 +149,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
 
         then:
         // Should now properly validate and reject sourceRef + build properties combination
-        result.output.contains('cannot use both') && result.output.contains('sourceRef')
+        result.output.contains('Cannot mix Build Mode and SourceRef Mode')
     }
 
     def "supports valid build mode configuration with namespace and imageName"() {
