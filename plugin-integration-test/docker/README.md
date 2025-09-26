@@ -7,43 +7,37 @@ Note that these tests run in parallel, so operations based on image or file name
 
 ## Build Mode
 
-- Image Name Mode: registry, namespace, imageName, tags
-   - registry, namespace, imageName, 1 tag
-   - namespace, imageName, 2 tags
-   - imageName, tag(s)
-- Repository Mode: registry, repository, tags
-   - registry, repository, 1 tag
-   - repository, 2 tags
-- Number of images
-   - 1
-   - `> 1`
-- Number of build args
-   - none
-   - 1
-   - `> 1`
-- Number of build labels
-  - none
-  - 1
-  - `> 1`
-- Dockerfile
-   - default
-   - specify by name
-   - specify by path/name
-- build only
-- build, save, publish
+| # | Tested Feature                                         | Test Scenario                | 
+|---|--------------------------------------------------------|------------------------------|
+| 2 | number of images = 1                                   | <ol><li>scenario-1</li></ol> |
+| 2 | number of images > 1                                   | todo                         |
+| 2 | build image only                                       | <ol><li>scenario-1</li></ol> |
+| 2 | build image + follow-on save and/or publish            | todo                         |
+| 2 | Image Name Mode: registry, namespace, imageName, 1 tag | todo                         |
+| 2 | Image Name Mode: namespace, imageName, 2 tags          | todo                         |
+| 2 | Image Name Mode: imageName, tag(s)                     | <ol><li>scenario-1</li></ol> |
+| 2 | Repository Mode: registry, repository, 1 tag           | todo                         |
+| 2 | Repository Mode: repository, 2 tags                    | todo                         |
+| 3 | number of build args = none                            | todo                         |
+| 4 | number of build args = 1                               | todo                         |
+| 5 | number of build args > 1                               | <ol><li>scenario-1</li></ol> |
+| 4 | number of build args w/ put = 1                        | todo                         |
+| 4 | number of build args w/ put > 1                        | <ol><li>scenario-1</li></ol> |
+| 4 | number of build args w/ providers.provider = 1         | todo                         |
+| 4 | number of build args w/ providers.provider > 1         | todo                         |
+| 4 | number of build args w/ put & providers.provider > 1   | todo                         |
+| 3 | number of labels = none                                | <ol><li>scenario-1</li></ol> |
+| 4 | number of labels = 1                                   | todo                         |
+| 5 | number of labels > 1                                   | todo                         |
+| 4 | number of labels w/ put = 1                            | todo                         |
+| 4 | number of labels w/ put > 1                            | todo                         |
+| 4 | number of labels w/ providers.provider = 1             | todo                         |
+| 4 | number of labels w/ providers.provider > 1             | todo                         |
+| 4 | number of labels w/ put & providers.provider > 1       | todo                         |
+| 6 | dockerfile = default                                   | <ol><li>scenario-1</li></ol> |
+| 7 | dockerfile = specify by name                           | todo                         |
+| 8 | dockerfile = specify by path/name                      | todo                         |
 
-
-
-| # | Tested Feature                    | Test Scenario                                   | 
-|---|-----------------------------------|-------------------------------------------------|
-| 1 | number of images = 1              | <ol><li>scenario-1</li><li>scenario-2</li></ol> |
-| 2 | number of images > 1              | todo                                            |
-| 3 | number of build args = none       | todo                                            |
-| 4 | number of build args = 1          | <ol><li>scenario-2</li></ol>                    |
-| 5 | number of build args > 1          | <ol><li>scenario-1</li></ol>                    |
-| 6 | dockerfile = default              | <ol><li>scenario-1</li></ol>                    |
-| 7 | dockerfile = specify by name      | <ol><li>scenario-2</li></ol>                    |
-| 8 | dockerfile = specify by path/name | todo                                            |
 
 
 ## Source Ref Mode

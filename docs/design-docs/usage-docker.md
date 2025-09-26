@@ -70,7 +70,7 @@ Recommended:
 
 Choose one of two naming approaches:
 
-### Approach 1: Registry + Namespace + ImageName
+### Approach 1: Registry + Namespace + ImageName + Tag(s)
 
 ```groovy
 docker {
@@ -97,15 +97,31 @@ docker {
             version.set(project.version.toString())     // Defaults to project.version
             tags.set(["latest", "1.0.0"])              // Tag names only (no registry/namespace)
             
-            // Build arguments
+            // optional build arguments - using 'put'
             buildArgs.put("JAR_FILE", "app-${version}.jar")
             buildArgs.put("BUILD_VERSION", version)
-            buildArgs.put("BUILD_TIME", new Date().format('yyyy-MM-dd HH:mm:ss'))
+           
+            // optional build arguments - using 'providers.prouider'
+            //buildArgs.putAll(providers.provider {
+            //  [
+            //          'JAR_FILE': "app-${project.version}.jar",
+            //          'BUILD_VERSION': project.version.toString()
+            //  ]
+            //})
             
-            // Custom labels
+            // optional custom labels - using 'put'
             labels.put("org.opencontainers.image.revision", gitSha)
             labels.put("org.opencontainers.image.version", version)
             labels.put("maintainer", "team@kineticfire.com")
+
+            // optional custom labels - using 'providers.provider'
+            //labels.putAll(providers.provider {
+            //  [
+            //          "org.opencontainers.image.revision": gitSha,
+            //          "org.opencontainers.image.version": version,
+            //          "maintainer": "team@kineticfire.com"
+            //  ]
+            //})
             
             save {
                 compression.set(SaveCompression.GZIP)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
@@ -124,7 +140,7 @@ docker {
 }
 ```
 
-### Approach 2: Registry + Repository
+### Approach 2: Registry + Repository + Tag(s)
 
 ```groovy
 docker {
