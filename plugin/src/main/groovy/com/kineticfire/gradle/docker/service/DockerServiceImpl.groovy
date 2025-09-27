@@ -297,12 +297,16 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 def pushCallback = new ResultCallback.Adapter<PushResponseItem>() {
                     @Override
                     void onNext(PushResponseItem item) {
-                        if (item.status) {
-                            // Debug: Push status: ${item.status}
+                        // Only log errors, not all status messages to avoid spam
+                        if (item.errorDetail) {
+                            throw new RuntimeException("Push failed: ${item.errorDetail.message}")
                         }
                     }
                 }
-                def pushCmd = dockerClient.pushImageCmd(parts.fullRepository)
+                def repositoryName = parts.isRegistryQualified() ? 
+                    "${parts.registry}/${parts.fullRepository}" : 
+                    parts.fullRepository
+                def pushCmd = dockerClient.pushImageCmd(repositoryName)
                     .withTag(parts.tag)
                     
                 if (auth?.hasCredentials()) {

@@ -714,4 +714,100 @@ class DockerPublishFunctionalTest extends Specification {
         result.output.contains('SourceRef mode publish task: dockerPublishSourceRefModeApp')
         result.output.contains('Dual-mode publish configuration verified')
     }
+
+    def "publish task should fail when source image is missing"() {
+        given:
+        settingsFile << "rootProject.name = 'test-publish-missing-source'"
+        
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+            
+            docker {
+                images {
+                    missingImageApp {
+                        imageName.set('nonexistent-image')
+                        tags.set(['latest'])
+                        
+                        publish {
+                            to('local') {
+                                registry.set('localhost:5555')
+                                publishTags(['latest'])
+                            }
+                        }
+                    }
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('dockerPublishMissingImageApp', '--stacktrace')
+            .buildAndFail()
+
+        then:
+        result.output.contains("Source image 'nonexistent-image:latest' does not exist")
+        result.output.contains("Build the image first")
+    }
+
+    def "publish task should fail when tag operation fails"() {
+        given:
+        settingsFile << "rootProject.name = 'test-publish-tag-failure'"
+        
+        // Create a simple Dockerfile that will build successfully
+        def dockerFile = testProjectDir.resolve('Dockerfile').toFile()
+        dockerFile << """
+            FROM alpine:latest
+            RUN echo "test image"
+        """
+        
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.gradle-docker'
+            }
+            
+            docker {
+                images {
+                    testApp {
+                        imageName.set('test-app')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                        
+                        publish {
+                            to('invalidRegistry') {
+                                // Use an invalid registry format to trigger tag failures
+                                registry.set('invalid@registry:format')
+                                publishTags(['latest'])
+                            }
+                        }
+                    }
+                }
+            }
+        """
+
+        when:
+        def buildResult = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('dockerBuildTestApp')
+            .build()
+
+        and:
+        def publishResult = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('dockerPublishTestApp', '--stacktrace')
+            .buildAndFail()
+
+        then:
+        buildResult.output.contains('BUILD SUCCESSFUL')
+        publishResult.output.contains('Docker publish failed')
+        // The exact error message may vary depending on Docker client behavior
+        (publishResult.output.contains('Tag operation failed') || 
+         publishResult.output.contains('invalid') ||
+         publishResult.output.contains('format'))
+    }
 }

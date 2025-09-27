@@ -146,6 +146,13 @@ abstract class DockerPublishTask extends DefaultTask {
             return
         }
         
+        // Validate source image exists before attempting publish
+        if (!service.imageExists(sourceImageRef).get()) {
+            throw new IllegalStateException(
+                "Source image '${sourceImageRef}' does not exist. Build the image first or ensure the correct image reference."
+            )
+        }
+        
         logger.lifecycle("Publishing image '{}' to {} targets", sourceImageRef, targets.size())
         
         def publishFutures = []
@@ -167,22 +174,26 @@ abstract class DockerPublishTask extends DefaultTask {
                 
                 // First tag the local image with the target registry tag
                 def tagFuture = service.tagImage(sourceImageRef, [targetRef])
-                    .whenComplete { result, throwable ->
+                    .handle { result, throwable ->
                         if (throwable) {
                             logger.error("Failed to tag {} as {}: {}", sourceImageRef, targetRef, throwable.message)
+                            throw throwable
                         } else {
                             logger.debug("Successfully tagged {} as {}", sourceImageRef, targetRef)
+                            return result
                         }
                     }
                 
                 // Then push the registry tag
                 def publishFuture = tagFuture.thenCompose { 
                     service.pushImage(targetRef, authConfig) 
-                }.whenComplete { result, throwable ->
+                }.handle { result, throwable ->
                     if (throwable) {
                         logger.error("Failed to push {}: {}", targetRef, throwable.message)
+                        throw throwable
                     } else {
                         logger.lifecycle("Successfully pushed: {}", targetRef)
+                        return result
                     }
                 }
                 publishFutures << publishFuture

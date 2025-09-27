@@ -50,7 +50,8 @@ class DockerPublishTaskComprehensiveTest extends DockerTaskTestBase {
         task.publishImage()
 
         then:
-        // Should tag source image with target tag, then push - using wildcards to match any parameters
+        // Should check image exists, tag source image with target tag, then push
+        1 * mockDockerService.imageExists(_) >> CompletableFuture.completedFuture(true)
         1 * mockDockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
         1 * mockDockerService.pushImage(_, _) >> CompletableFuture.completedFuture(null)
     }
@@ -73,6 +74,7 @@ class DockerPublishTaskComprehensiveTest extends DockerTaskTestBase {
         task.publishImage()
 
         then:
+        1 * mockDockerService.imageExists(_) >> CompletableFuture.completedFuture(true)
         1 * mockDockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
         1 * mockDockerService.pushImage(_, _) >> CompletableFuture.completedFuture(null)
     }

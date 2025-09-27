@@ -80,7 +80,7 @@ docker {
 
             publish {
                 to('testRegistry') {
-                    registry.set('localhost:5200')
+                    registry.set('localhost:5201')
                     imageName.set('scenario2-time-server')
                     publishTags(['latest'])
                 }
@@ -100,7 +100,7 @@ apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 apply plugin: RegistryManagementPlugin
 
 // Configure test registry using the plugin
-withTestRegistry('test-registry-scenario2', 5200) {
+withTestRegistry('test-registry-scenario2', 5201) {
     // Registry will be configured with default settings
 }
 
@@ -111,14 +111,14 @@ registerBuildWorkflowTasks(project, ['scenario2/scenario2-time-server:latest'])
 registerVerifySavedImagesTask(project, ['build/docker-images/scenario2-time-server-latest.tar'])
 
 // Register registry image verification task since this scenario tests publish functionality
-registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2-time-server:latest'])
+registerVerifyRegistryImagesTask(project, ['localhost:5201/scenario2-time-server:latest'])
 
 
-// Task that runs complete integration test workflow  
+// Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify'
     group = 'verification'
-    
+
     // Dependencies
     dependsOn 'startTestRegistries'
     dependsOn 'cleanDockerImages'

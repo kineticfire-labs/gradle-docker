@@ -91,6 +91,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
@@ -112,6 +113,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
 
         and:
+        mockDockerService.imageExists('mycompany/myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('mycompany/myapp:latest', ['localhost:5000/mycompany/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/mycompany/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
         
@@ -134,6 +136,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target1, target2])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
         mockDockerService.tagImage('myapp:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:v1.0.0', null) >> CompletableFuture.completedFuture(null)
@@ -155,6 +158,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.0']) >> CompletableFuture.completedFuture(null)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:v1.0.1']) >> CompletableFuture.completedFuture(null)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
@@ -181,6 +185,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.username == 'testuser' && auth.password == 'testpass'
@@ -203,6 +208,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', { AuthConfig auth ->
             auth.registryToken == 'test-token'
@@ -245,6 +251,7 @@ class DockerPublishTaskTest extends Specification {
         )
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(serviceException)
         
@@ -267,6 +274,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.failedFuture(new RuntimeException('Network error'))
         
@@ -276,6 +284,131 @@ class DockerPublishTaskTest extends Specification {
         then:
         def e = thrown(GradleException)
         e.message.contains('Docker publish failed: Network error')
+    }
+
+    def "should fail when source image does not exist"() {
+        given:
+        task.imageName.set('nonexistent')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        task.publishTargets.set([target])
+        
+        and:
+        mockDockerService.imageExists('nonexistent:latest') >> CompletableFuture.completedFuture(false)
+        
+        when:
+        task.publishImage()
+        
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains("Source image 'nonexistent:latest' does not exist")
+        e.message.contains("Build the image first")
+        
+        // Verify no tag or push operations were attempted
+        0 * mockDockerService.tagImage(_, _)
+        0 * mockDockerService.pushImage(_, _)
+    }
+
+    def "should fail immediately when tag operation fails"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        task.publishTargets.set([target])
+        def tagException = new DockerServiceException(
+            DockerServiceException.ErrorType.TAG_FAILED,
+            'No such image: myapp:latest'
+        )
+        
+        and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> 
+            CompletableFuture.failedFuture(tagException)
+        
+        when:
+        task.publishImage()
+        
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('Docker publish failed')
+        e.message.contains('No such image: myapp:latest')
+        
+        // Verify push was never attempted since tag failed
+        0 * mockDockerService.pushImage(_, _)
+    }
+
+    def "should complete successfully when both tag and push succeed"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        task.publishTargets.set([target])
+        
+        when:
+        task.publishImage()
+        
+        then:
+        noExceptionThrown()
+        
+        // Mock setup and verification in then block
+        1 * mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> 
+            CompletableFuture.completedFuture(null)
+        1 * mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> 
+            CompletableFuture.completedFuture(null)
+    }
+
+    def "should handle tag failure and not attempt push"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        task.publishTargets.set([target])
+        def tagException = new DockerServiceException(
+            DockerServiceException.ErrorType.TAG_FAILED,
+            'Tag operation failed: Status 404: {"message":"No such image: myapp:latest"}'
+        )
+        
+        when:
+        task.publishImage()
+        
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('Docker publish failed')
+        e.message.contains('Tag operation failed')
+        
+        // Mock setup and verification in then block
+        1 * mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> 
+            CompletableFuture.failedFuture(tagException)
+        0 * mockDockerService.pushImage(_, _)
+    }
+
+    def "should handle push failure after successful tag"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        task.publishTargets.set([target])
+        def pushException = new DockerServiceException(
+            DockerServiceException.ErrorType.PUSH_FAILED,
+            'Push failed: authentication required'
+        )
+        
+        when:
+        task.publishImage()
+        
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('Docker publish failed')
+        e.message.contains('authentication required')
+        
+        // Mock setup and verification in then block
+        1 * mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> 
+            CompletableFuture.completedFuture(null)
+        1 * mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> 
+            CompletableFuture.failedFuture(pushException)
     }
 
     // ===== NOMENCLATURE TESTS =====
@@ -486,6 +619,7 @@ class DockerPublishTaskTest extends Specification {
         task.publishTargets.set([target])
         
         and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('myapp:latest', ['docker.io/myapp:latest']) >> CompletableFuture.completedFuture(null)
         mockDockerService.pushImage('docker.io/myapp:latest', null) >> CompletableFuture.completedFuture(null)
 
