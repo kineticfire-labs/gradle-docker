@@ -72,6 +72,7 @@ dependencies {
     testRuntimeOnly libs.junit.platform.launcher
     testRuntimeOnly libs.junit.platform.engine
     testRuntimeOnly libs.junit.vintage.engine
+    testImplementation gradleApi()
     testImplementation gradleTestKit()
     testImplementation libs.junit4
 }
@@ -101,7 +102,7 @@ gradlePlugin {
 }
 
 jar {
-    archiveBaseName = 'gradle-docker'
+    archiveBaseName.set('gradle-docker')
 
     manifest {
         attributes(
@@ -111,9 +112,7 @@ jar {
         )
     }
 
-    // Reproducible builds
-    preserveFileTimestamps = false
-    reproducibleFileOrder = true
+    // Reproducible builds are enabled by default in Gradle 9+
 }
 
 // Configure functional test source set manually to work around TestKit issues
@@ -135,6 +134,7 @@ dependencies {
     // Functional testing dependencies
     functionalTestImplementation platform(libs.spock.bom)
     functionalTestImplementation libs.spock.core
+    functionalTestImplementation gradleApi()
     functionalTestImplementation gradleTestKit()
     functionalTestRuntimeOnly libs.junit.platform.launcher
     functionalTestRuntimeOnly libs.junit.vintage.engine
