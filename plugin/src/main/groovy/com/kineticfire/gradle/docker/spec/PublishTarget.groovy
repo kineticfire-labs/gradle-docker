@@ -38,7 +38,7 @@ abstract class PublishTarget {
     PublishTarget(String name, ObjectFactory objectFactory) {
         this.name = name
         this.objectFactory = objectFactory
-        
+
         // Set default values
         registry.convention("")
         namespace.convention("")

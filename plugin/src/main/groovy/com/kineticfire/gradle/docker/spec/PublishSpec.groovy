@@ -55,12 +55,14 @@ abstract class PublishSpec {
     void to(@DelegatesTo(PublishTarget) Closure closure) {
         def target = targets.create("target${targets.size()}")
         closure.delegate = target
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
         closure.call()
     }
     
     void to(String name, @DelegatesTo(PublishTarget) Closure closure) {
         def target = targets.create(name)
         closure.delegate = target
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
         closure.call()
     }
     
