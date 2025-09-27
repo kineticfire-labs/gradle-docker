@@ -57,11 +57,11 @@ docker {
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 
-                // Capture project version during configuration time to avoid Task.project deprecation
-                def projectVersion = project.version
+                // Capture version as string during configuration to avoid closure access at execution
+                def versionString = project.version.toString()
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    rename { String fileName -> "app-${projectVersion}.jar" }
+                    rename { String fileName -> "app-${versionString}.jar" }
                 }
                 dependsOn ':app:jar'
             }
@@ -70,7 +70,7 @@ docker {
 
             buildArgs.put("JAR_FILE", "app-${project.version}.jar")
 
-            labels.put("org.opencontainers.image.version", project.version)
+            labels.put("org.opencontainers.image.version", project.version.toString())
 
             namespace.set('scenario2')
             imageName.set('scenario2-time-server')
@@ -130,12 +130,12 @@ tasks.register('integrationTest') {
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'stopTestRegistries'
-
-    // Ensure proper task ordering
-    tasks.cleanDockerImages.mustRunAfter tasks.startTestRegistries
-    tasks.dockerImages.mustRunAfter tasks.cleanDockerImages
-    tasks.verifyDockerImages.mustRunAfter tasks.dockerImages
-    tasks.verifySavedDockerImages.mustRunAfter tasks.dockerImages
-    tasks.verifyRegistryDockerImages.mustRunAfter tasks.dockerImages
-    tasks.stopTestRegistries.mustRunAfter tasks.verifyRegistryDockerImages
 }
+
+// Configure task ordering without direct task references
+tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }

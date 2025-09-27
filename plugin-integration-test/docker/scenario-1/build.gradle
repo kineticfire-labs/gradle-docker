@@ -53,19 +53,19 @@ docker {
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 
-                // Capture project version during configuration time to avoid Task.project deprecation
-                def projectVersion = project.version
+                // Capture version as string during configuration to avoid closure access at execution
+                def versionString = project.version.toString()
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    rename { String fileName -> "app-${projectVersion}.jar" }
+                    rename { String fileName -> "app-${versionString}.jar" }
                 }
                 dependsOn ':app:jar'
             }
 
             buildArgs.put("JAR_FILE", "app-${project.version}.jar")
-            buildArgs.put("BUILD_VERSION", project.version)
+            buildArgs.put("BUILD_VERSION", project.version.toString())
 
-            labels.put("org.opencontainers.image.version", project.version)
+            labels.put("org.opencontainers.image.version", project.version.toString())
             labels.put("maintainer", "team@kineticfire.com")
 
             // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'
@@ -102,10 +102,13 @@ tasks.register('integrationTest') {
     dependsOn 'cleanDockerImages'
     dependsOn 'dockerBuild'  
     dependsOn 'verifyDockerImages'
+    
+    // Configure task ordering using provider-based configuration
+    doFirst {
+        // Ensure proper task ordering without afterEvaluate
+    }
 }
 
-// Configure task ordering after registration
-afterEvaluate {
-    tasks.named('dockerBuild') { mustRunAfter 'cleanDockerImages' }
-    tasks.named('verifyDockerImages') { mustRunAfter 'dockerBuild' }
-}
+// Configure task ordering immediately without afterEvaluate
+tasks.named('dockerBuild') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerBuild' }
