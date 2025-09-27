@@ -18,16 +18,23 @@
  * Integration test that tests:
  *   - Build Image Features
  *       - number of images = 1
- *       - number of build args = 1
+ *       - build image + follow-on save and/or publish
+ *       - naming style: Image Name Mode: namespace, imageName, 2 tags
+ *       - build args
+ *           - number of build args = 1
+ *           - number of build args w/ put = 1
+ *       - labels
+ *           - number of labels = 1
+ *           - number of labels w/ put = 1
  *       - dockerfile = specify by name
  *   - Tag Features
  *       - number of tags = 1
  *   - Save Features
- *       - save w/ compression type = none
- *       - save w/ no pullIfMissing
+ *       - none
  *   - Publish Features
  *       - publish = 1 tag
  *       - publish to private registry without authentication
+ *       - Image Name Mode: imageName, tag(s)
  */
 
 plugins {
@@ -41,7 +48,7 @@ version = '1.0.0'
 docker {
     images {
         timeServer {
-            imageName.set('scenario2-time-server')
+
             contextTask = tasks.register('prepareScenario2TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -54,14 +61,21 @@ docker {
                 }
                 dependsOn ':app:jar'
             }
-            dockerfileName = 'CustomDockerfile'
-            buildArgs = ['JAR_FILE': "app-${version}.jar"]
+
+            dockerfileName = 'CustomDockerfile' // becomes 'build/docker-context/timeServer/CustomDockerfile'
+
+            buildArgs.put("JAR_FILE", "app-${version}.jar")
+
+            namespace.set('scenario2')
+            imageName.set('scenario2-time-server')
             tags.set(["latest"])
-            save {
-                outputFile = file('build/docker-images/scenario2-time-server-latest.tar')
-                compression = 'none'
-                // 'pullIfMissing' will default to 'false'
-            }
+
+//            save {
+//                outputFile.set(layout.buildDirectory.file("docker-images/scenario2-time-server-latest.tar"))
+//                compression.set(SaveCompression.NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
+//
+//            }
+
             publish {
                 to('testRegistry') {
                     registry.set('localhost:5200')
@@ -89,13 +103,13 @@ withTestRegistry('test-registry-scenario2', 5200) {
 }
 
 // Register Docker image clean and verify tasks for this integration test
-registerBuildWorkflowTasks(project, ['scenario2-time-server:latest'])
+registerBuildWorkflowTasks(project, ['scenario2/scenario2-time-server:latest'])
 
 // Register saved image verification task since this scenario tests save functionality
 registerVerifySavedImagesTask(project, ['build/docker-images/scenario2-time-server-latest.tar'])
 
 // Register registry image verification task since this scenario tests publish functionality
-registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2-time-server:latest'])
+registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2/scenario2-time-server:latest'])
 
 
 // Task that runs complete integration test workflow  

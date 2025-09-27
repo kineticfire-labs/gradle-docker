@@ -24,7 +24,8 @@
  *           - number of build args > 1
  *           - number of build args w/ put > 1
  *       - labels
- *           - labels = none
+ *           - number of labels > 1
+ *           - number of labels w/ put > 1
  *       - dockerfile = default
  *   - Tag Features
  *       - number of tags > 1
@@ -45,7 +46,7 @@ version = '1.0.0'
 docker {
     images {
         timeServer {
-            
+
             contextTask = tasks.register('prepareScenario1TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
@@ -62,10 +63,12 @@ docker {
             buildArgs.put("JAR_FILE", "app-${version}.jar")
             buildArgs.put("BUILD_VERSION", version)
 
+            labels.put("org.opencontainers.image.version", version)
+            labels.put("maintainer", "team@kineticfire.com")
+
+            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'
+
             imageName.set('scenario1-time-server')
-
-            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile' based on image name
-
             tags.set([
                     "1.0.0",
                     "latest"

@@ -90,12 +90,12 @@ docker {
                 dependsOn ':app:jar'
             }
             
-            // Docker nomenclature (Approach 1)
+            // Approach 1: Image Name Mode - registry, namespace, imageName, tag(s)
             registry.set("ghcr.io")                     // Optional registry
             namespace.set("kineticfire/stuff")          // Optional namespace
             imageName.set("time-server")                // Required: image name
             version.set(project.version.toString())     // Defaults to project.version
-            tags.set(["latest", "1.0.0"])              // Tag names only (no registry/namespace)
+            tags.set(["latest", "1.0.0"])               // Required: one or more tags
             
             // optional build arguments - using 'put'
             buildArgs.put("JAR_FILE", "app-${version}.jar")
@@ -122,12 +122,17 @@ docker {
             //          "maintainer": "team@kineticfire.com"
             //  ]
             //})
+           
+            // no dockerfile, so defaults to 'build/docker-context/timeServer/Dockerfile'
+            // or: dockerfileName.set("CustomDockerFile") // specify path to Dockerfile in 'build/docker-context/timeServer/' 
+            // or: dockerfile.set(file("build/docker-context/timeServer/other/CustomDockerfile")) // specify path to Dockerfile
             
             save {
                 compression.set(SaveCompression.GZIP)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
                 outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
             }
             
+            // see section 'Comprehensive Publishing Examples'
             publish {
                 to('localRegistry') {
                     registry.set("localhost:5000")
@@ -148,11 +153,11 @@ docker {
         myApp {
             contextTask = tasks.register('prepareMyAppContext', Copy) { /* ... */ }
             
-            // Docker nomenclature (Approach 2) - mutually exclusive with namespace+imageName
+            // Approach 2: registry (optional) + repository + tag(s)
             registry.set("docker.io")                   // Optional registry  
-            repository.set("acme/my-awesome-app")       // Full repository path
+            repository.set("acme/my-awesome-app")       // Required: full repository path
             version.set("1.2.3")
-            tags.set(["latest", "stable"])
+            tags.set(["latest", "stable"])              // Required: one or more tags
             
             labels.put("description", "My awesome application")
             
