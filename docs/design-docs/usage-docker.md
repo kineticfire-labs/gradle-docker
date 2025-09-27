@@ -85,9 +85,8 @@ docker {
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
-                    include 'app-*.jar'
-                    def projectVersion = version
-                    rename { "app-${projectVersion}.jar" }
+                   include 'app-*.jar'
+                   rename { String fileName -> "app-${project.version}.jar" }
                 }
                 dependsOn ':app:jar'
             }
@@ -100,8 +99,8 @@ docker {
             tags.set(["latest", "1.0.0"])               // Required: one or more tags
             
             // optional build arguments - using 'put'
-            buildArgs.put("JAR_FILE", "app-${version}.jar")
-            buildArgs.put("BUILD_VERSION", version)
+            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
+            buildArgs.put("BUILD_VERSION", project.version)
            
             // optional build arguments - using 'providers.prouider'
             //buildArgs.putAll(providers.provider {
@@ -113,7 +112,7 @@ docker {
             
             // optional custom labels - using 'put'
             labels.put("org.opencontainers.image.revision", gitSha)
-            labels.put("org.opencontainers.image.version", version)
+            labels.put("org.opencontainers.image.version", project.version)
             labels.put("maintainer", "team@kineticfire.com")
 
             // optional custom labels - using 'providers.provider'

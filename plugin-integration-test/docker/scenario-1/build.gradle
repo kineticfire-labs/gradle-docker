@@ -54,16 +54,15 @@ docker {
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    def projectVersion = version
-                    rename { "app-${projectVersion}.jar" }
+                    rename { String fileName -> "app-${project.version}.jar" }
                 }
                 dependsOn ':app:jar'
             }
 
-            buildArgs.put("JAR_FILE", "app-${version}.jar")
-            buildArgs.put("BUILD_VERSION", version)
+            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
+            buildArgs.put("BUILD_VERSION", project.version)
 
-            labels.put("org.opencontainers.image.version", version)
+            labels.put("org.opencontainers.image.version", project.version)
             labels.put("maintainer", "team@kineticfire.com")
 
             // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'

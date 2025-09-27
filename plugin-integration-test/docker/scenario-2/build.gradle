@@ -58,15 +58,16 @@ docker {
                 from('src/main/docker')
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    def projectVersion = version
-                    rename { "app-${projectVersion}.jar" }
+                    rename { String fileName -> "app-${project.version}.jar" }
                 }
                 dependsOn ':app:jar'
             }
 
             dockerfileName = 'CustomDockerfile' // becomes 'build/docker-context/timeServer/CustomDockerfile'
 
-            buildArgs.put("JAR_FILE", "app-${version}.jar")
+            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
+
+            labels.put("org.opencontainers.image.version", project.version)
 
             namespace.set('scenario2')
             imageName.set('scenario2-time-server')
@@ -77,13 +78,13 @@ docker {
                 compression.set(NONE)
             }
 
-//            publish {
-//                to('testRegistry') {
-//                    registry.set('localhost:5200')
-//                    imageName.set('scenario2-time-server')
-//                    publishTags(['latest'])
-//                }
-//            }
+            publish {
+                to('testRegistry') {
+                    registry.set('localhost:5200')
+                    imageName.set('scenario2-time-server')
+                    publishTags(['latest'])
+                }
+            }
         }
     }
 }
