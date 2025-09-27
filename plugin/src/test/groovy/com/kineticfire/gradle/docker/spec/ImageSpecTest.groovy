@@ -216,7 +216,7 @@ class ImageSpecTest extends Specification {
         when:
         imageSpec.publish {
             to('dockerhub') {
-                tags.set(['docker.io/myuser/myapp:latest', 'docker.io/myuser/myapp:v1.0'])
+                tags.set(['latest', 'v1.0'])
                 auth {
                     username.set('myuser')
                     password.set('mypass')
@@ -229,7 +229,7 @@ class ImageSpecTest extends Specification {
         imageSpec.publish.get().to.size() == 1
         
         def target = imageSpec.publish.get().to.getByName('dockerhub')
-        target.tags.get() == ['docker.io/myuser/myapp:latest', 'docker.io/myuser/myapp:v1.0']
+        target.tags.get() == ['latest', 'v1.0']
         target.auth.present
         target.auth.get().username.get() == 'myuser'
         target.auth.get().password.get() == 'mypass'
@@ -241,7 +241,7 @@ class ImageSpecTest extends Specification {
             @Override
             void execute(PublishSpec publishSpec) {
                 publishSpec.to('quay') {
-                    tags.set(['quay.io/myorg/myapp:production'])
+                    tags.set(['production'])
                 }
             }
         })
@@ -251,25 +251,25 @@ class ImageSpecTest extends Specification {
         imageSpec.publish.get().to.size() == 1
         
         def target = imageSpec.publish.get().to.getByName('quay')
-        target.tags.get() == ['quay.io/myorg/myapp:production']
+        target.tags.get() == ['production']
     }
 
     def "publish with multiple targets"() {
         when:
         imageSpec.publish {
             to('dockerhub') {
-                tags.set(['docker.io/myuser/app:latest'])
+                tags.set(['latest'])
             }
             to('ghcr') {
-                tags.set(['ghcr.io/myuser/app:main'])
+                tags.set(['main'])
             }
         }
 
         then:
         imageSpec.publish.present
         imageSpec.publish.get().to.size() == 2
-        imageSpec.publish.get().to.getByName('dockerhub').tags.get() == ['docker.io/myuser/app:latest']
-        imageSpec.publish.get().to.getByName('ghcr').tags.get() == ['ghcr.io/myuser/app:main']
+        imageSpec.publish.get().to.getByName('dockerhub').tags.get() == ['latest']
+        imageSpec.publish.get().to.getByName('ghcr').tags.get() == ['main']
     }
 
     // ===== COMPLETE CONFIGURATION TESTS =====
@@ -292,7 +292,7 @@ class ImageSpecTest extends Specification {
         }
         imageSpec.publish {
             to('production') {
-                tags.set(['prod.registry.com/myapp:1.2.3', 'prod.registry.com/myapp:stable'])
+                tags.set(['1.2.3', 'stable'])
                 auth {
                     registryToken.set('prod-token-123')
                     // serverAddress removed - extracted automatically from image reference

@@ -53,13 +53,13 @@ class PublishTargetTest extends Specification {
 
     // ===== PROPERTY TESTS =====
 
-    def "tags property works correctly with full image references"() {
+    def "tags property works correctly with simple tags"() {
         when:
-        publishTarget.tags.set(['myapp:v1.0', 'registry.com/team/myapp:latest', 'localhost:5000/myapp:stable'])
+        publishTarget.tags.set(['v1.0', 'latest', 'stable'])
 
         then:
         publishTarget.tags.present
-        publishTarget.tags.get() == ['myapp:v1.0', 'registry.com/team/myapp:latest', 'localhost:5000/myapp:stable']
+        publishTarget.tags.get() == ['v1.0', 'latest', 'stable']
     }
 
     def "tags property with empty list"() {
@@ -71,24 +71,24 @@ class PublishTargetTest extends Specification {
         publishTarget.tags.get().isEmpty()
     }
 
-    def "tags property supports various registry formats"() {
+    def "tags property supports various tag formats"() {
         when:
         publishTarget.tags.set([
-            'myapp:latest',                                    // Simple format
-            'docker.io/user/myapp:v1.0',                      // Docker Hub
-            'gcr.io/project/myapp:stable',                     // Google Container Registry
-            'registry.company.com:8080/team/myapp:dev',        // Private registry with port
-            'localhost:5000/namespace/myapp:test'              // Local registry
+            'latest',                                          // Simple latest tag
+            'v1.0',                                           // Version tag
+            'stable',                                         // Environment tag
+            'dev',                                            // Development tag
+            'test'                                            // Test tag
         ])
 
         then:
         publishTarget.tags.present
         publishTarget.tags.get().size() == 5
-        publishTarget.tags.get().contains('myapp:latest')
-        publishTarget.tags.get().contains('docker.io/user/myapp:v1.0')
-        publishTarget.tags.get().contains('gcr.io/project/myapp:stable')
-        publishTarget.tags.get().contains('registry.company.com:8080/team/myapp:dev')
-        publishTarget.tags.get().contains('localhost:5000/namespace/myapp:test')
+        publishTarget.tags.get().contains('latest')
+        publishTarget.tags.get().contains('v1.0')
+        publishTarget.tags.get().contains('stable')
+        publishTarget.tags.get().contains('dev')
+        publishTarget.tags.get().contains('test')
     }
 
     def "tags property is initially empty"() {
@@ -189,7 +189,7 @@ class PublishTargetTest extends Specification {
 
     def "complete configuration with all properties"() {
         when:
-        publishTarget.tags.set(['private.registry.com/myproject/myapp:v1.0.0', 'private.registry.com/myproject/myapp:latest'])
+        publishTarget.tags.set(['v1.0.0', 'latest'])
         publishTarget.auth {
             username.set('deployuser')
             password.set('deploypass')
@@ -198,7 +198,7 @@ class PublishTargetTest extends Specification {
 
         then:
         publishTarget.name == 'testTarget'
-        publishTarget.tags.get() == ['private.registry.com/myproject/myapp:v1.0.0', 'private.registry.com/myproject/myapp:latest']
+        publishTarget.tags.get() == ['v1.0.0', 'latest']
         publishTarget.auth.present
         publishTarget.auth.get().username.get() == 'deployuser'
         publishTarget.auth.get().password.get() == 'deploypass'
@@ -332,12 +332,41 @@ class PublishTargetTest extends Specification {
 
     def "properties can be updated after initial configuration"() {
         given:
-        publishTarget.tags.set(['myapp:v1.0'])
+        publishTarget.tags.set(['v1.0'])
 
         when:
-        publishTarget.tags.set(['myapp:v2.0', 'registry.com/team/myapp:latest'])
+        publishTarget.tags.set(['v2.0', 'latest'])
 
         then:
-        publishTarget.tags.get() == ['myapp:v2.0', 'registry.com/team/myapp:latest']
+        publishTarget.tags.get() == ['v2.0', 'latest']
+    }
+
+    // ===== PUBLISHTAGS VALIDATION TESTS =====
+
+    def "publishTags should accept simple tags only"() {
+        when:
+        publishTarget.publishTags.set(['latest', 'v1.0', 'stable', 'dev'])
+
+        then:
+        publishTarget.publishTags.get() == ['latest', 'v1.0', 'stable', 'dev']
+        noExceptionThrown()
+    }
+
+    def "publishTags accepts semantic version tags"() {
+        when:
+        publishTarget.publishTags.set(['1.0.0', '2.1.3', '1.0.0-alpha', '2.0.0-beta.1'])
+
+        then:
+        publishTarget.publishTags.get() == ['1.0.0', '2.1.3', '1.0.0-alpha', '2.0.0-beta.1']
+        noExceptionThrown()
+    }
+
+    def "publishTags accepts environment and build tags"() {
+        when:
+        publishTarget.publishTags.set(['production', 'staging', 'dev', 'test', 'build-123', 'pr-456'])
+
+        then:
+        publishTarget.publishTags.get() == ['production', 'staging', 'dev', 'test', 'build-123', 'pr-456']
+        noExceptionThrown()
     }
 }
