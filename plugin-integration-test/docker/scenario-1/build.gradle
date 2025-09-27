@@ -52,9 +52,12 @@ docker {
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
+                
+                // Capture project version during configuration time to avoid Task.project deprecation
+                def projectVersion = project.version
                 from(file('../../app/build/libs')) {
                     include 'app-*.jar'
-                    rename { String fileName -> "app-${project.version}.jar" }
+                    rename { String fileName -> "app-${projectVersion}.jar" }
                 }
                 dependsOn ':app:jar'
             }
@@ -99,8 +102,10 @@ tasks.register('integrationTest') {
     dependsOn 'cleanDockerImages'
     dependsOn 'dockerBuild'  
     dependsOn 'verifyDockerImages'
-    
-    // Ensure proper task ordering
-    tasks.dockerBuild.mustRunAfter tasks.cleanDockerImages
-    tasks.verifyDockerImages.mustRunAfter tasks.dockerBuild
+}
+
+// Configure task ordering after registration
+afterEvaluate {
+    tasks.named('dockerBuild') { mustRunAfter 'cleanDockerImages' }
+    tasks.named('verifyDockerImages') { mustRunAfter 'dockerBuild' }
 }
