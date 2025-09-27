@@ -70,19 +70,18 @@ docker {
             imageName.set('scenario2-time-server')
             tags.set(["latest"])
 
-//            save {
-//                outputFile.set(layout.buildDirectory.file("docker-images/scenario2-time-server-latest.tar"))
-//                compression.set(SaveCompression.NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
-//
-//            }
-
-            publish {
-                to('testRegistry') {
-                    registry.set('localhost:5200')
-                    imageName.set('scenario2-time-server')
-                    publishTags(['latest'])
-                }
+            save {
+                outputFile.set(layout.buildDirectory.file("docker-images/scenario2-time-server-latest.tar"))
+                compression.set(com.kineticfire.gradle.docker.model.SaveCompression.NONE)
             }
+
+//            publish {
+//                to('testRegistry') {
+//                    registry.set('localhost:5200')
+//                    imageName.set('scenario2-time-server')
+//                    publishTags(['latest'])
+//                }
+//            }
         }
     }
 }
@@ -109,7 +108,7 @@ registerBuildWorkflowTasks(project, ['scenario2/scenario2-time-server:latest'])
 registerVerifySavedImagesTask(project, ['build/docker-images/scenario2-time-server-latest.tar'])
 
 // Register registry image verification task since this scenario tests publish functionality
-registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2/scenario2-time-server:latest'])
+registerVerifyRegistryImagesTask(project, ['localhost:5200/scenario2-time-server:latest'])
 
 
 // Task that runs complete integration test workflow  

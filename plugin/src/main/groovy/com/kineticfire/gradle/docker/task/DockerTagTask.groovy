@@ -102,10 +102,17 @@ abstract class DockerTagTask extends DefaultTask {
         } else {
             // Build Mode: Tag the built image with additional tags
             def imageReferences = buildImageReferences()
-            if (imageReferences.size() < 2) {
-                throw new IllegalStateException("At least 2 image references needed for tagging (source + target tags)")
+            if (imageReferences.size() < 1) {
+                throw new IllegalStateException("At least one tag must be specified")
+            }
+            
+            if (imageReferences.size() == 1) {
+                // Single tag: no-op since image already has this tag from build
+                logger.info("Image already has tag from build, no additional tagging needed: ${imageReferences[0]}")
+                return
             }
 
+            // Multiple tags: use first tag as source, apply remaining as targets
             def sourceImageRef = imageReferences[0]
             def targetRefs = imageReferences.drop(1)
             def future = service.tagImage(sourceImageRef, targetRefs)

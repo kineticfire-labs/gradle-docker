@@ -41,6 +41,26 @@ class DockerExtensionTest extends Specification {
         extension.images != null
     }
 
+    def "compression helper provides access to SaveCompression enum values"() {
+        when:
+        def compression = extension.getSaveCompression()
+
+        then:
+        compression != null
+        compression.NONE != null
+        compression.GZIP != null
+        compression.BZIP2 != null
+        compression.XZ != null
+        compression.ZIP != null
+        
+        and:
+        compression.NONE == com.kineticfire.gradle.docker.model.SaveCompression.NONE
+        compression.GZIP == com.kineticfire.gradle.docker.model.SaveCompression.GZIP
+        compression.BZIP2 == com.kineticfire.gradle.docker.model.SaveCompression.BZIP2
+        compression.XZ == com.kineticfire.gradle.docker.model.SaveCompression.XZ
+        compression.ZIP == com.kineticfire.gradle.docker.model.SaveCompression.ZIP
+    }
+
     def "can configure single docker image"() {
         when:
         extension.images {

@@ -185,6 +185,31 @@ class ImageSpecTest extends Specification {
         imageSpec.save.get().compression.get() == SaveCompression.NONE  // Default value
     }
 
+    def "SaveCompression enum can be used directly in save configuration"() {
+        given:
+        def myOutputFile = project.file('myapp.tar')
+
+        when:
+        imageSpec.save {
+            outputFile.set(myOutputFile)
+            compression.set(SaveCompression.GZIP)
+        }
+
+        then:
+        imageSpec.save.present
+        imageSpec.save.get().outputFile.get().asFile == myOutputFile
+        imageSpec.save.get().compression.get() == SaveCompression.GZIP
+    }
+
+    def "SaveCompression enum values are accessible"() {
+        expect:
+        SaveCompression.NONE != null
+        SaveCompression.GZIP != null
+        SaveCompression.BZIP2 != null
+        SaveCompression.XZ != null
+        SaveCompression.ZIP != null
+    }
+
     // ===== PUBLISH CONFIGURATION TESTS =====
 
     def "publish(Closure) configures publish spec"() {

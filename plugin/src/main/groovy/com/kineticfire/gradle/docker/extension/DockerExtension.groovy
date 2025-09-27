@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.extension
 
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.model.SaveCompression
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.NamedDomainObjectContainer
@@ -48,6 +49,24 @@ abstract class DockerExtension {
     
     NamedDomainObjectContainer<ImageSpec> getImages() {
         return images
+    }
+    
+    /**
+     * Provides access to SaveCompression enum values for build scripts
+     */
+    static class Compression {
+        static final SaveCompression NONE = SaveCompression.NONE
+        static final SaveCompression GZIP = SaveCompression.GZIP
+        static final SaveCompression BZIP2 = SaveCompression.BZIP2
+        static final SaveCompression XZ = SaveCompression.XZ
+        static final SaveCompression ZIP = SaveCompression.ZIP
+    }
+    
+    /**
+     * Provides access to compression values for build scripts
+     */
+    Compression getSaveCompression() {
+        return new Compression()
     }
     
     void images(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {

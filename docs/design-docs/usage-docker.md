@@ -128,7 +128,7 @@ docker {
             // or: dockerfile.set(file("build/docker-context/timeServer/other/CustomDockerfile")) // specify path to Dockerfile
             
             save {
-                compression.set(SaveCompression.GZIP)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
+                compression.set(docker.compression.NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
                 outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
             }
             
@@ -162,7 +162,7 @@ docker {
             labels.put("description", "My awesome application")
             
             save {
-                compression.set(SaveCompression.ZIP)
+                compression.set(docker.compression.ZIP)
                 outputFile.set(file("build/my-app.zip"))
             }
         }
@@ -201,7 +201,7 @@ docker {
             // defaults to pullIfMissing.set(false)
             
             save {
-                compression.set(SaveCompression.GZIP)
+                compression.set(docker.compression.GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
                 
                 // Optional authentication - only needed if registry requires credentials
@@ -231,7 +231,7 @@ docker {
             
             // Save to file
             save {
-                compression.set(SaveCompression.BZIP2)  // Enum value required
+                compression.set(docker.compression.BZIP2)  // Enum value required
                 outputFile.set(file("build/docker-images/my-app-v1.0.0.tar.bz2"))
             }
             
@@ -277,7 +277,7 @@ docker {
 
             // All operations inherit pullIfMissing behavior
             save {
-                compression.set(SaveCompression.GZIP)
+                compression.set(docker.compression.GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/baseimage.tar.gz"))
             }
 
@@ -552,13 +552,13 @@ docker {
 - `tags.set(List<String>)` - Tag names only (e.g., ["latest", "1.0.0"])
 - `labels.put(String, String)` - Custom Docker labels for build (**NEW!**)
 
-### SaveCompression Enum
+### docker.compression Enum
 Use enum values instead of strings:
-- `SaveCompression.NONE` - No compression
-- `SaveCompression.GZIP` - Gzip compression (.tar.gz)
-- `SaveCompression.BZIP2` - Bzip2 compression (.tar.bz2)  
-- `SaveCompression.XZ` - XZ compression (.tar.xz)
-- `SaveCompression.ZIP` - ZIP compression (.zip)
+- `docker.compression.NONE` - No compression
+- `docker.compression.GZIP` - Gzip compression (.tar.gz)
+- `docker.compression.BZIP2` - Bzip2 compression (.tar.bz2)  
+- `docker.compression.XZ` - XZ compression (.tar.xz)
+- `docker.compression.ZIP` - ZIP compression (.zip)
 
 ### pullIfMissing and SourceRef Properties (Image-Level)
 - `pullIfMissing.set(Boolean)` - Whether to pull source image if missing locally (defaults to false)

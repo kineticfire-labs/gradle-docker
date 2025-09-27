@@ -104,7 +104,7 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         1 * mockDockerService.tagImage("registry.io/app:test", ["registry.io/app:experimental"]) >> CompletableFuture.completedFuture(null)
     }
     
-    def "tagImage with single tag throws exception for insufficient targets"() {
+    def "tagImage with single tag is no-op in build mode"() {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
@@ -115,7 +115,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         task.tagImage()
 
         then:
-        thrown(IllegalStateException)
+        // Should be no-op, no Docker service calls expected
+        0 * mockDockerService.tagImage(_, _)
         verifyNoDockerServiceCalls()
     }
     
@@ -384,5 +385,45 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         null          | null      | "repo/app"   | ["tag"]     | false   // Build mode (repository)
         "src:tag"     | "app"     | null         | ["target"]  | true    // SourceRef takes precedence
         "src:tag"     | null      | "repo/app"   | ["target"]  | true    // SourceRef takes precedence
+    }
+    
+    def "tagImage with single tag in various build configurations is no-op"() {
+        given:
+        def task = project.tasks.create("dockerTagTest", DockerTagTask)
+        task.dockerService.set(mockDockerService)
+        if (registry) task.registry.set(registry)
+        if (namespace) task.namespace.set(namespace)
+        if (imageName) task.imageName.set(imageName)
+        if (repository) task.repository.set(repository)
+        task.tags.set([singleTag])
+
+        when:
+        task.tagImage()
+
+        then:
+        0 * mockDockerService.tagImage(_, _)
+        
+        where:
+        registry    | namespace | imageName | repository   | singleTag
+        null        | null      | "app"     | null         | "latest"
+        "reg.io"    | null      | "app"     | null         | "stable"
+        null        | "ns"      | "app"     | null         | "v1.0"
+        "reg.io"    | "ns"      | "app"     | null         | "test"
+        null        | null      | null      | "repo/app"   | "latest"
+        "reg.io"    | null      | null      | "repo/app"   | "stable"
+    }
+    
+    def "tagImage with multiple tags works correctly in build mode"() {
+        given:
+        def task = project.tasks.create("dockerTagTest", DockerTagTask)
+        task.dockerService.set(mockDockerService)
+        task.imageName.set("testapp")
+        task.tags.set(["primary", "secondary", "tertiary"])
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.tagImage("testapp:primary", ["testapp:secondary", "testapp:tertiary"]) >> CompletableFuture.completedFuture(null)
     }
 }
