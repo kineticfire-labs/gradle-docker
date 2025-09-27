@@ -40,3 +40,9 @@ the-application-project/                  # a project that (1) builds an applica
       ├─ compose-logs/                     # compose logs by task/suite
       └─ compose/                          # compose state files (JSON) per stack
 ```
+
+
+## Gradle 9 and 10 Compatibility
+
+This plugin is fully compatible with Gradle 9 and 10, including configuration cache support. Follow these patterns for
+best compatibility in [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md).

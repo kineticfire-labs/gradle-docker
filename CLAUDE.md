@@ -25,7 +25,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 
 ### Follow Testing Strategy
 - **Achieve 100% code and branch coverage in unit tests, as measured by JaCoCo.**
-  - If any code cannot be unit tested (e.g., direct external service calls), **document the gap** in `docs/design-docs/testing/unit-test-gaps.md`.
+  - If any code cannot be unit tested (e.g., direct external service calls), **document the gap** in 
+    `docs/design-docs/testing/unit-test-gaps.md`.
 - **Achieve 100% coverage in functional tests.**
   - If any code cannot be functionally tested, **document the gap** in the same file.
 - **Achieve 100% coverage in integration tests.**
@@ -97,6 +98,12 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 #todo
 ```
 
+### Adhere to Plugin Usage
+- Follow plugin usage:
+   - for 'docker' DSL (e.g., tasks for build, tag, save, publish): `docs/usage/usage-docker.md`.
+   - for 'dockerOrch' DSL (e.g., using 'docker compose' for image testing): `docs/usage/usage-docker-orch.md`.
+- If necessary to modify the usage, then update these documents.
+
 ### Follow Development Workflow
 1. **Build the plugin**:
     - Run: `cd plugin && ./gradlew clean build publishToMavenLocal`.
@@ -106,12 +113,14 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
     - Do not declare success until every test passes.
     - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 3. **Run usage demo**:
-  - Run: `cd ../plugin-usage-demo && ./gradlew clean dockerBuild`. (todo: this project is still being finished, the target Gradle task will change.)
+  - Run: `cd ../plugin-usage-demo && ./gradlew clean dockerBuild`. (todo: this project is still being finished, the 
+    target Gradle task will change.)
   - Do not declare success until the build is successful.
 
 ## Use Gradle 9 and 10 Standards
 - **Ensure code is compatible with Gradle 9 and 10**; see 
-  `docs/design-docs/gradle-9-and-10-compatibility.md`.
+  `docs/design-docs/gradle-9-and-10-compatibility.md` and specific instructions for the plugin in 
+  `docs/usage/gradle-9-and-10-compatibility-practices.md`.
 - **Declare dependencies in `build.gradle`** and define their module and version in `gradle/libs.versions.toml` (next to 
   `build.gradle`) using Gradle 9’s version catalog.
 - Do not use outdated dependency definition approaches.
@@ -142,7 +151,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 - **The plugin usage demo must work successfully.**
   - Do not declare success until the build completes without errors
-  - Run: `./gradlew clean dockerBuild` (from `plugin-usage-demo` directory) (todo: this project is still being finished, the target Gradle task will change.)
+  - Run: `./gradlew clean dockerBuild` (from `plugin-usage-demo` directory) (todo: this project is still being finished, 
+    the target Gradle task will change.)
 - **No lingering containers may remain.**
   - Do not declare success until `docker ps -a` shows no containers.
   - Do not treat “some leftover containers are acceptable” as valid.
