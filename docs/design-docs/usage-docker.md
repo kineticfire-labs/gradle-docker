@@ -73,6 +73,8 @@ Choose one of two naming approaches:
 ### Approach 1: Registry + Namespace + ImageName + Tag(s)
 
 ```groovy
+import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
+
 docker {
     images {
         timeServer {
@@ -128,7 +130,7 @@ docker {
             // or: dockerfile.set(file("build/docker-context/timeServer/other/CustomDockerfile")) // specify path to Dockerfile
             
             save {
-                compression.set(docker.compression.NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP
+                compression.set(NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP; optional-- if omitted, then defaults to 'NONE'
                 outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
             }
             
@@ -148,6 +150,8 @@ docker {
 ### Approach 2: Registry + Repository + Tag(s)
 
 ```groovy
+import static com.kineticfire.gradle.docker.model.SaveCompression.ZIP
+
 docker {
     images {
         myApp {
@@ -162,7 +166,7 @@ docker {
             labels.put("description", "My awesome application")
             
             save {
-                compression.set(docker.compression.ZIP)
+                compression.set(ZIP)
                 outputFile.set(file("build/my-app.zip"))
             }
         }
@@ -194,6 +198,8 @@ docker {
 ### Scenario 2: Save Existing Image with Pull Support
 
 ```groovy
+import static com.kineticfire.gradle.docker.model.SaveCompression.GZIP
+
 docker {
     images {
         remoteImage {
@@ -201,7 +207,7 @@ docker {
             // defaults to pullIfMissing.set(false)
             
             save {
-                compression.set(docker.compression.GZIP)
+                compression.set(GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
                 
                 // Optional authentication - only needed if registry requires credentials
@@ -220,6 +226,8 @@ docker {
 ### Scenario 3: Tag, Save, and Publish Existing Image
 
 ```groovy
+import static com.kineticfire.gradle.docker.model.SaveCompression.BZIP2
+
 docker {
     images {
         myExistingImage {
@@ -231,7 +239,7 @@ docker {
             
             // Save to file
             save {
-                compression.set(docker.compression.BZIP2)  // Enum value required
+                compression.set(BZIP2)  // Enum value required
                 outputFile.set(file("build/docker-images/my-app-v1.0.0.tar.bz2"))
             }
             
@@ -263,6 +271,8 @@ docker {
 ### Scenario 4: Pull Missing Images Automatically
 
 ```groovy
+import static com.kineticfire.gradle.docker.model.SaveCompression.GZIP
+
 docker {
     images {
         myApp {
@@ -277,7 +287,7 @@ docker {
 
             // All operations inherit pullIfMissing behavior
             save {
-                compression.set(docker.compression.GZIP)
+                compression.set(GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/baseimage.tar.gz"))
             }
 
@@ -316,6 +326,7 @@ docker {
             pullIfMissing.set(true)
 
             save {
+                // compression type defaults to NONE
                 outputFile.set(file("build/alpine-base.tar"))
             }
         }
@@ -368,6 +379,7 @@ docker {
             }
 
             save {
+                // compression type defaults to NONE
                 outputFile.set(file("build/ghcr-app.tar"))
             }
         }
