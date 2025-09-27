@@ -109,9 +109,9 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Run: `cd ../plugin-usage-demo && ./gradlew clean dockerBuild`. (todo: this project is still being finished, the target Gradle task will change.)
   - Do not declare success until the build is successful.
 
-## Use Gradle 9 Standards
-- **Ensure code is compatible with Gradle 9’s build cache**; see 
-  `docs/design-docs/gradle-9-configuration-cache-guidance.md`.
+## Use Gradle 9 and 10 Standards
+- **Ensure code is compatible with Gradle 9 and 10**; see 
+  `docs/design-docs/gradle-9-and-10-compatibility.md`.
 - **Declare dependencies in `build.gradle`** and define their module and version in `gradle/libs.versions.toml` (next to 
   `build.gradle`) using Gradle 9’s version catalog.
 - Do not use outdated dependency definition approaches.
