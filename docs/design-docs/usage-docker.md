@@ -52,6 +52,51 @@ The plugin supports two distinct usage modes:
    2. **Image Name Mode** - registry, namespace, imageName, tag
    3. **Repository Mode** - registry, repository, tag
 
+## Gradle 9 and 10 Compatibility
+
+This plugin is fully compatible with Gradle 9 and 10, including configuration cache support. Follow these patterns for best compatibility:
+
+### Configuration Cache Best Practices
+
+**✅ Recommended Patterns:**
+```groovy
+// Use providers for dynamic values
+version.set(providers.provider { project.version.toString() })
+buildArgs.put("VERSION", providers.provider { project.version.toString() })
+
+// Capture values during configuration for closures
+contextTask = tasks.register('prepareContext', Copy) {
+    def versionString = project.version.toString()  // Capture during configuration
+    from(file('libs')) {
+        rename { "app-${versionString}.jar" }  // Use captured value
+    }
+}
+```
+
+**❌ Avoid These Patterns:**
+```groovy
+// Direct project property access in providers (configuration cache violations)
+buildArgs.put("VERSION", project.version)  // Avoid
+labels.put("version", project.version)     // Avoid
+
+// Accessing providers in execution-time closures
+rename { "app-${providers.provider { project.version }.get()}.jar" }  // Avoid
+```
+
+### Provider API Requirements
+
+- **All dynamic values** must use `providers.provider { }` or be captured during configuration
+- **Environment variables** must use `providers.environmentVariable("VAR_NAME")`
+- **File properties** must use `layout.buildDirectory.file()` or `layout.projectDirectory.file()`
+- **String literals** can be set directly without providers
+
+### Configuration Cache Status
+
+- **scenario-1 (build only)**: ✅ Full configuration cache support
+- **scenario-2 (build + save + publish)**: ⚠️ Limited support due to plugin task serialization issues
+  
+For scenarios using save/publish operations, configuration cache may need to be disabled until plugin task serialization issues are resolved.
+
 ## Build Mode: Building New Docker Images
 
 Use Docker nomenclature properties for building new images. 
@@ -84,9 +129,12 @@ docker {
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
+                
+                // Capture version during configuration for configuration cache compatibility
+                def versionString = project.version.toString()
                 from(file('../../app/build/libs')) {
                    include 'app-*.jar'
-                   rename { String fileName -> "app-${project.version}.jar" }
+                   rename { String fileName -> "app-${versionString}.jar" }
                 }
                 dependsOn ':app:jar'
             }
@@ -95,14 +143,14 @@ docker {
             registry.set("ghcr.io")                     // Optional registry
             namespace.set("kineticfire/stuff")          // Optional namespace
             imageName.set("time-server")                // Required: image name
-            version.set(project.version.toString())     // Defaults to project.version
+            version.set(providers.provider { project.version.toString() })     // Defaults to project.version
             tags.set(["latest", "1.0.0"])               // Required: one or more tags
             
-            // optional build arguments - using 'put'
-            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
-            buildArgs.put("BUILD_VERSION", project.version)
+            // optional build arguments using 'put' w/ provider API (Gradle 9/10 compatible)
+            buildArgs.put("JAR_FILE", providers.provider { "app-${project.version}.jar" })
+            buildArgs.put("BUILD_VERSION", providers.provider { project.version.toString() })
            
-            // optional build arguments - using 'providers.prouider'
+            // optional build arguments using 'putAll' w/ provider
             //buildArgs.putAll(providers.provider {
             //  [
             //          'JAR_FILE': "app-${project.version}.jar",
@@ -110,16 +158,16 @@ docker {
             //  ]
             //})
             
-            // optional custom labels - using 'put'
-            labels.put("org.opencontainers.image.revision", gitSha)
-            labels.put("org.opencontainers.image.version", project.version)
+            // optional custom labels using 'put' w/ provider API (Gradle 9/10 compatible)
+            labels.put("org.opencontainers.image.revision", providers.provider { gitSha })
+            labels.put("org.opencontainers.image.version", providers.provider { project.version.toString() })
             labels.put("maintainer", "team@kineticfire.com")
 
-            // optional custom labels - using 'providers.provider'
+            // optional custom labels using 'putAll' w/ provider
             //labels.putAll(providers.provider {
             //  [
             //          "org.opencontainers.image.revision": gitSha,
-            //          "org.opencontainers.image.version": version,
+            //          "org.opencontainers.image.version": project.version.toString(),
             //          "maintainer": "team@kineticfire.com"
             //  ]
             //})
@@ -159,10 +207,10 @@ docker {
             // Approach 2: registry (optional) + repository + tag(s)
             registry.set("docker.io")                   // Optional registry  
             repository.set("acme/my-awesome-app")       // Required: full repository path
-            version.set("1.2.3")
+            version.set(providers.provider { "1.2.3" })
             tags.set(["latest", "stable"])              // Required: one or more tags
             
-            labels.put("description", "My awesome application")
+            labels.put("description", providers.provider { "My awesome application" })
             
             save {
                 compression.set(ZIP)
@@ -609,8 +657,14 @@ save {
 ### Provider API Properties
 All properties use Gradle's Provider API for configuration cache compatibility:
 - `.set(value)` - Set property value
-- `.convention(defaultValue)` - Set default value
+- `.convention(defaultValue)` - Set default value  
 - `.get()` - Get property value (only in task actions)
+
+**Gradle 9/10 Compatibility Notes:**
+- Use `providers.provider { }` for dynamic values like `project.version`
+- Use `providers.environmentVariable("VAR")` for environment variables
+- Capture dynamic values during configuration phase for use in closures
+- Avoid accessing `project.*` properties directly in provider blocks
 
 ## Running Generated Tasks
 
@@ -674,12 +728,13 @@ The plugin automatically generates tasks based on the DSL block name:
 
 ## Key Benefits
 
-1. **Gradle 9 Compatibility** - Full configuration cache and Provider API support
-2. **Proper Docker Nomenclature** - Separate registry, namespace, imageName, tags
-3. **Custom Labels** - Add metadata to built images
+1. **Gradle 9 & 10 Compatibility** - Full configuration cache and Provider API support with best practices
+2. **Proper Docker Nomenclature** - Separate registry, namespace, imageName, tags following Docker standards
+3. **Custom Labels** - Add metadata to built images using provider-safe patterns
 4. **Enhanced Authentication** - Support for private registries in save operations
-5. **Dual Mode Support** - Build new images OR work with existing images
+5. **Dual Mode Support** - Build new images OR work with existing images seamlessly
 6. **Type Safety** - Enum-based compression options prevent typos
+7. **Configuration Cache Ready** - Optimized for Gradle's configuration cache with proper provider usage
 
 # Available Gradle Tasks
 
