@@ -69,12 +69,14 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ./gradlew clean functionalTest
 
 # Build with unit tests and functional tests
+#   - set 'version' to the plugin version such as '1.0.0'
 #   - produces code coverage report at 'build/reports/jacoco/test/html/index.html'
-./gradlew clean build
+./gradlew -Pplugin_version=<version> clean build
 
 # Build plugin, running unit tests and functional tests, and put plugin in Maven local (necessary for integration tests)
+#   - set 'version' to the plugin version such as '1.0.0'
 #   - produces code coverage report at 'build/reports/jacoco/test/html/index.html'
-./gradlew clean build publishToMavenLocal
+./gradlew -Pplugin_version=<version> clean build publishToMavenLocal
 ```
 
 ### Run Integration Tests (from `plugin-integration-test/` directory)
@@ -93,11 +95,6 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ./gradlew integrationTestSuite
 ```
 
-### Run Usage Demo (from `plugin-demo-usage` directory)
-```bash
-#todo
-```
-
 ### Adhere to Plugin Usage
 - Follow plugin usage:
    - for 'docker' DSL (e.g., tasks for build, tag, save, publish): `docs/usage/usage-docker.md`.
@@ -106,7 +103,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 
 ### Follow Development Workflow
 1. **Build the plugin**:
-    - Run: `cd plugin && ./gradlew clean build publishToMavenLocal`.
+    - Run: `cd plugin && ./gradlew -Pplugin_version=<version> clean build publishToMavenLocal`.
     - Do not declare success until the build completes without errors.
 2. **Run integration tests**:
     - Run: `cd ../plugin-integration-test && ./gradlew clean testAll`.
@@ -142,11 +139,11 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 - **The plugin must build successfully.**
   - Do not declare success until the build completes without errors.
-  - Run: `./gradlew build` (from `plugin/` directory).
+  - Run: `./gradlew -Pplugin_version=<version> build` (from `plugin/` directory).
 - **All integration tests must pass.**
   - Do not declare success until every integration test passes.
   - Run:
-      - Rebuild plugin to Maven local: `./gradlew build publishToMavenLocal` (from `plugin/` directory).
+      - Rebuild plugin to Maven local: `./gradlew -Pplugin_version=<version> build publishToMavenLocal` (from `plugin/` directory).
       - Run tests: `./gradlew clean testAll integrationTestComprehensive` (from `plugin-integration-test/` directory).
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 - **The plugin usage demo must work successfully.**

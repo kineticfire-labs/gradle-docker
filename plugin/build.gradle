@@ -18,11 +18,6 @@
  *     project site: https://github.com/kineticfire-labs/gradle-docker/
  */
 
-import org.gradle.api.DefaultTask
-import org.gradle.api.file.RegularFileProperty
-import org.gradle.api.tasks.InputFile
-import org.gradle.api.tasks.TaskAction
-
 plugins {
     alias(libs.plugins.groovy)
     alias(libs.plugins.javaGradlePlugin)
@@ -30,6 +25,28 @@ plugins {
     alias(libs.plugins.gradle.plugin.publish)
     alias(libs.plugins.jacoco)
     alias(libs.plugins.palantir.idea.test.fix)
+}
+
+import org.gradle.api.DefaultTask
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.tasks.InputFile
+import org.gradle.api.tasks.TaskAction
+
+// Define tasks that require plugin_version property
+def versionRequiredTasks = [
+    'build', 'assemble', 'jar', 'sourcesJar', 'javadocJar',
+    'publish', 'publishToMavenLocal', 'publishPlugins',
+    'generateMetadataFileForPluginMavenPublication',
+    'publishPluginMavenPublicationToMavenLocalRepository',
+    'sign'
+]
+
+// Function to check if version is required for requested tasks
+def isVersionRequiredForRequestedTasks(versionRequiredTasks) {
+    def requestedTasks = gradle.startParameter.taskNames
+    return versionRequiredTasks.any { requiredTask ->
+        requestedTasks.contains(requiredTask)
+    }
 }
 
 java {
@@ -78,7 +95,16 @@ dependencies {
 }
 
 group = 'com.kineticfire.gradle'
-version = '1.0.0'  // todo: not used?
+
+// Validate plugin_version property for tasks that require it
+if (isVersionRequiredForRequestedTasks(versionRequiredTasks)) {
+    if (!findProperty('plugin_version') || findProperty('plugin_version').toString().trim().isEmpty()) {
+        throw new GradleException("Property 'plugin_version' is required for the requested tasks. Use: ./gradlew -Pplugin_version=<version> <task>")
+    }
+}
+
+// Set project version from plugin_version property
+version = (findProperty('plugin_version') ?: '0.0.0-SNAPSHOT').toString()
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
