@@ -4,7 +4,7 @@ Use this file to guide Claude Code (`claude.ai/code`) when working with code in 
 
 ## STATE THE PURPOSE
 Create and publish a Gradle 9 plugin that provides Docker integration for:
-- Building, tagging, saving, and publishing Docker images with multiple compression formats (none, gzip, bzip2, xz, zip)
+- Building, tagging, saving, and publishing Docker images
 - Orchestrating Docker Compose (`up` / `down`) for container-based testing
 - Performing health checks and waiting for containers to reach `RUNNING` or `HEALTHY` states
 - Integrating with JUnit 5 via extensions for test lifecycle and Docker Compose
@@ -44,18 +44,10 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 - **Integration Tests**
   - **Build file for 'plugin-integration-test' subproject**: `plugin-integration-test/build.gradle`
   - **Example executable (used in image under test)**: `plugin-integration-test/app/`
-  - **Example image under test**: `plugin-integration-test/app-image/src/main/`
-  - **Functional tests**: `plugin-integration-test/app-image/functionalTest/`
-  - **Integration tests**: `plugin-integration-test/app-image/integrationTest/`
+  - **Integration tests for `docker` task**: `plugin-integration-test/app-image/integrationTest/docker/`
+  - **Integration tests for `dockerOrch` task**: `plugin-integration-test/app-image/integrationTest/compose/`
 - **Re-usable Integration Test Verification Functionality**
   - **buildSrc**: `plugin-integration-test/buildSrc/`
-- **Example usage demo**
-  - **Build file for 'plugin-usage-demo' subproject**: `plugin-usage-demo/build.gradle`
-  - **Example executable (used in image under test)**: `plugin-usage-demo/app/`
-  - **Build file for 'plugin-usage-demo/app' subproject**: `plugin-usage-demo/app/build.gradle`
-  - **Example image under test**: `plugin-usage-demo/app-image/src/main/`
-  - **Integration tests**: `plugin-usage-demo/app-image/integrationTest/`
-  - **Build file for 'plugin-usage-demo/app-image' subproject**: `plugin-usage-demo/app-image/build.gradle`
 
 ## USE DEVELOPMENT COMMANDS
 
@@ -68,31 +60,28 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 # Run functional tests only  
 ./gradlew clean functionalTest
 
-# Build with unit tests and functional tests
+# Build with unit tests
 #   - set 'version' to the plugin version such as '1.0.0'
 #   - produces code coverage report at 'build/reports/jacoco/test/html/index.html'
 ./gradlew -Pplugin_version=<version> clean build
 
-# Build plugin, running unit tests and functional tests, and put plugin in Maven local (necessary for integration tests)
+# Build plugin, running unit tests and putting the plugin in Maven local (necessary for integration tests)
 #   - set 'version' to the plugin version such as '1.0.0'
 #   - produces code coverage report at 'build/reports/jacoco/test/html/index.html'
 ./gradlew -Pplugin_version=<version> clean build publishToMavenLocal
+
+# Run integration tests: building the plugin, running unit tests, and putting the plugin in Maven local (necessary for 
+# integration tests) 
+#   - set 'version' to the plugin version such as '1.0.0'
+#   - produces code coverage report at 'build/reports/jacoco/test/html/index.html'
+./gradlew -Pplugin_version=<version> clean build publishToMavenLocal cleanIntegrationTest integrationTest
 ```
 
 ### Run Integration Tests (from `plugin-integration-test/` directory)
 ```bash
-# NOTE: if changes were made to plugin source, then it must be re-built and published to maven local!  See the 'plugin'
-# project above!
-
-# Full integration test with smoke + integration tests
-./gradlew clean testAll integrationTestComprehensive
-
-# Build application and Docker image
-./gradlew clean buildAll
-
-# Individual test suites
-./gradlew smokeTest
-./gradlew integrationTestSuite
+# NOTE: if changes were made to plugin source, then it must be re-built and published to maven local using!  See the 
+# 'plugin' project above!
+./gradlew -Pplugin_version=<version> cleanAll integrationTest
 ```
 
 ### Adhere to Plugin Usage
@@ -106,13 +95,9 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
     - Run: `cd plugin && ./gradlew -Pplugin_version=<version> clean build publishToMavenLocal`.
     - Do not declare success until the build completes without errors.
 2. **Run integration tests**:
-    - Run: `cd ../plugin-integration-test && ./gradlew clean testAll`.
+    - Run: `cd ../plugin-integration-test && ./gradlew cleanAll integrationTest`.
     - Do not declare success until every test passes.
     - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
-3. **Run usage demo**:
-  - Run: `cd ../plugin-usage-demo && ./gradlew clean dockerBuild`. (todo: this project is still being finished, the 
-    target Gradle task will change.)
-  - Do not declare success until the build is successful.
 
 ## Use Gradle 9 and 10 Standards
 - **Ensure code is compatible with Gradle 9 and 10**; see 
@@ -144,12 +129,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Do not declare success until every integration test passes.
   - Run:
       - Rebuild plugin to Maven local: `./gradlew -Pplugin_version=<version> build publishToMavenLocal` (from `plugin/` directory).
-      - Run tests: `./gradlew clean testAll integrationTestComprehensive` (from `plugin-integration-test/` directory).
+      - Run tests: `./gradlew cleanAll integrationTest` (from `plugin-integration-test/` directory).
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
-- **The plugin usage demo must work successfully.**
-  - Do not declare success until the build completes without errors
-  - Run: `./gradlew clean dockerBuild` (from `plugin-usage-demo` directory) (todo: this project is still being finished, 
-    the target Gradle task will change.)
 - **No lingering containers may remain.**
   - Do not declare success until `docker ps -a` shows no containers.
   - Do not treat “some leftover containers are acceptable” as valid.
@@ -217,18 +198,21 @@ Write **real, end-to-end** integration tests that exercise the Gradle Docker/Com
    registry).
 4. **Fail fast with clear messages** and leave **zero** residual containers, images, or networks on success.
 
-### Follow Usage Demo Requirements
+### Follow Integration Test Requirements
 
-Write real demonstration code that uses the Gradle Docker/Compose plugin exactly like a user of the plugin would (not a
-developer of the plugin).  **Do not** test DSL or internals here.
-- Write demonstration build code (in the `plugin-usage-demo/app-image/build.gradle`) that use the plugin's Gradle tasks 
-  to build, tag, save, and publish a Docker image by actually calling the Docker engine
-- Write demonstration build code in (in the `plugin-usage-demo/app-image/build.gradle`) and integration test code (in 
-  `plugin-usage-demo/app-image/src/integrationTest`) to bring up actual containers with `composeUp` and removes 
-  containers with `composeDown` that actually calls Docker Compose.
+Write real integration test code that uses the Gradle Docker/Compose plugin exactly like a user of the plugin would (not 
+a developer of the plugin).  These double as demonstrations of the plugin to its user base.  **Do not** test DSL or 
+internals here.
 - **No mocks/stubs/fakes** for Docker, Compose, filesystem, or network. Use the real stack.
-- Do not write verification code here since this project is to demonstrate how a user would normally use the plugin;
-  verification code goes in `plugin-integration-test/`.
+- Follow the directions and integration test layout at [README](plugin-integration-test/README.md).
+- For 'docker' type tasks (build, tag, save, and publish) using the `docker` Gradle DSL task:
+   - Follow the [README](plugin-integration-test/docker/README.md) for tracking integration test scenarios for the 
+     `docker` task against the plugin aspects tested
+   - Write integration test scenarios for the `docker` task at `plugin-integration-test/docker/scenario-<number>/`
+- For 'docker compose' type tasks (using `composeUp` and `composeDown`) that test Docker images: 
+   - Follow the [README](plugin-integration-test/compose/README.md) for tracking integration test scenarios for the
+     `dockerORch` task against the plugin aspects tested
+  - Write integration test scenarios for the `dockerOrch` task at `plugin-integration-test/docker/scenario-<number>/`
 
 Write concise, clear comments to explain the demonstration code to a user.
 - Explain non-obvious settings or configurations not fully shown, such as optional settings, default values, and

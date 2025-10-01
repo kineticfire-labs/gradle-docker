@@ -38,10 +38,16 @@ tasks.register('integrationTest') {
     description = 'Run integration tests for all Docker projects'
     group = 'verification'
     
-    // Configure dependencies using provider-based configuration
-    dependsOn providers.provider { project(':docker:images-a').tasks.named('integrationTest') }
-    dependsOn providers.provider { project(':docker:scenario-1').tasks.named('integrationTest') }
-    dependsOn providers.provider { project(':docker:scenario-2').tasks.named('integrationTest') }
+    // Configure dependencies using provider-based configuration with context-aware project references
+    if (rootProject.name == 'plugin-integration-test') {
+        // When running from parent project, use full paths
+        dependsOn providers.provider { project(':docker:scenario-1').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':docker:scenario-2').tasks.named('integrationTest') }
+    } else {
+        // When running from docker directory, use relative paths
+        dependsOn providers.provider { project(':scenario-1').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':scenario-2').tasks.named('integrationTest') }
+    }
     
     // Future subprojects can be added here:
     // dependsOn providers.provider { project(':multi-stage-dockerfile').tasks.named('integrationTest') }
@@ -53,8 +59,16 @@ tasks.register('cleanAll') {
     description = 'Clean all Docker integration test projects'
     group = 'build'
     
-    // Configure cleanup dependencies using provider-based configuration
-    dependsOn providers.provider { project(':docker:images-a').tasks.named('clean') }
+    // Configure cleanup dependencies using provider-based configuration with context-aware project references
+    if (rootProject.name == 'plugin-integration-test') {
+        // When running from parent project, use full paths
+        dependsOn providers.provider { project(':docker:scenario-1').tasks.named('clean') }
+        dependsOn providers.provider { project(':docker:scenario-2').tasks.named('clean') }
+    } else {
+        // When running from docker directory, use relative paths
+        dependsOn providers.provider { project(':scenario-1').tasks.named('clean') }
+        dependsOn providers.provider { project(':scenario-2').tasks.named('clean') }
+    }
     
     // Future subprojects can be added here:
     // dependsOn providers.provider { project(':multi-stage-dockerfile').tasks.named('clean') }

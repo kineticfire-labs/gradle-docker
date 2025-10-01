@@ -38,7 +38,7 @@ def versionRequiredTasks = [
     'publish', 'publishToMavenLocal', 'publishPlugins',
     'generateMetadataFileForPluginMavenPublication',
     'publishPluginMavenPublicationToMavenLocalRepository',
-    'sign'
+    'sign', 'integrationTest'
 ]
 
 // Function to check if version is required for requested tasks
@@ -348,4 +348,24 @@ test {
     if ( project.hasProperty( 'excludeTests' ) ) {
         exclude project.property( 'excludeTests' )
     }
+}
+
+// Clean integration test task that cleans all integration test projects
+tasks.register('cleanIntegrationTest', Exec) {
+    description = 'Clean all integration test projects'
+    group = 'build'
+
+    workingDir '../plugin-integration-test'
+    commandLine './gradlew', 'cleanAll', "-Pplugin_version=${project.version}"
+}
+
+// Integration test task that runs after publishing plugin to Maven local
+tasks.register('integrationTest', Exec) {
+    description = 'Run integration tests after publishing plugin to Maven local'
+    group = 'verification'
+    dependsOn 'publishToMavenLocal'
+    dependsOn 'cleanIntegrationTest'
+
+    workingDir '../plugin-integration-test'
+    commandLine './gradlew', 'integrationTest', "-Pplugin_version=${project.version}"
 }

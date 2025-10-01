@@ -19,25 +19,10 @@ pluginManagement {
         id 'com.kineticfire.gradle.gradle-docker' version "${providers.gradleProperty('plugin_version').get()}"
     }
     repositories {
-        mavenLocal()  // Use local Maven repository for gradle-docker plugin
+        mavenLocal()
         gradlePluginPortal()
         mavenCentral()
     }
 }
 
-plugins {
-    id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
-}
-
-rootProject.name = 'plugin-integration-test'
-
-// Include the app subproject (builds the Java application)
-include 'app'
-
-// Include Docker integration tests
-include 'docker'
-include 'docker:scenario-1'
-include 'docker:scenario-2'
-
-// Future: Include Compose integration tests
-// include 'compose'
+rootProject.name = 'scenario-1'

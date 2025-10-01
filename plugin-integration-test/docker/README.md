@@ -1,8 +1,15 @@
-# Integration Test Coverage
+# Integration Test Coverage - 'docker' Task
 
-This document provides a matrix to track features against integration test coverage.
+This document provides a matrix to track features against integration test coverage for the `docker` task.
 
-Note that these tests run in parallel, so operations based on image or file names require unique ones per test.
+
+## De-conflict Integration Tests
+
+Integration tests run in parallel, including those from `compose`.  Shared resources must be manually de-conflicted:
+- Docker images must have unique names per integration test, such as `scenario-<number>-<image name>` or
+  `scenario-<number>/<image name>`
+- Ports must be unique, such as those used for exposed services (e.g., the `TimeServer`) or for Docker private
+  registries
 
 
 ## Build Mode
