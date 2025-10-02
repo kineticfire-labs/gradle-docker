@@ -18,27 +18,29 @@
  * Integration test that tests:
  *   - Build Image Features
  *       - number of images = 1
- *       - build image only vs follow-on: build image only
- *       - naming style: Image Name Mode: imageName, tag(s)
+ *       - build image + follow-on save and/or publish
+ *       - naming style: Image Name Mode: registry, namespace, imageName, 1 tag
  *       - build args
- *           - number of build args > 1
- *           - number of build args w/ put > 1
+ *           - none
  *       - labels
- *           - number of labels > 1
- *           - number of labels w/ put > 1
- *       - dockerfile = default
+ *           - none
+ *       - dockerfile = specify by path/name
  *   - Tag Features
- *       - number of tags > 1
+ *       - number of tags = 1
  *   - Save Features
- *       - save compression = none
+ *       - save compression = gzip
  *   - Publish Features
- *       - publish = none
+ *       - publish same image > 1 tags, same registry
+ *       - publish to private registry without authentication
+ *       - Image Name Mode: namespace, imageName, 2 tags
  */
 
 plugins {
     id 'groovy'
     id 'com.kineticfire.gradle.gradle-docker'
 }
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.GZIP
 
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
@@ -47,7 +49,7 @@ docker {
     images {
         timeServer {
 
-            contextTask = tasks.register('prepareScenario1TimeServerContext', Copy) {
+            contextTask = tasks.register('prepareScenario3TimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
@@ -75,22 +77,25 @@ docker {
                 }
             }
 
-            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
-            buildArgs.put("BUILD_VERSION", project.version.toString())
+            dockerfile.set(file("build/docker-context/timeServer/custom/Dockerfile"))
 
-            labels.put("org.opencontainers.image.version", project.version.toString())
-            labels.put("maintainer", "team@kineticfire.com")
+            registry.set('localhost:5000')
+            namespace.set('scenario3')
+            imageName.set('scenario3-time-server')
+            tags.set(["latest"])
 
-            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'
+            save {
+                outputFile.set(layout.buildDirectory.file("docker-images/scenario3-time-server-latest.tar.gz"))
+                compression.set(GZIP)
+            }
 
-            imageName.set('scenario1-time-server')
-            tags.set([
-                    "1.0.0",
-                    "latest"
-            ])
-
-            // no save
-            // no publish
+            publish {
+                to('testRegistry') {
+                    registry.set('localhost:5031')
+                    imageName.set('scenario3-time-server')
+                    publishTags(['latest', '1.0.0'])
+                }
+            }
         }
     }
 }
@@ -99,38 +104,54 @@ docker {
 // INTEGRATION TEST VERIFICATION TASKS
 // ============================================================================
 
-// Apply buildSrc components only when running from parent project (where buildSrc is available)
+// Apply buildSrc components only when running from top-level integration test project (where buildSrc is available)
 if (rootProject.name == 'plugin-integration-test') {
     // Apply the reusable Docker image testing plugin from buildSrc
     apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
-    // Register Docker image clean and verify tasks for this integration test
-    registerBuildWorkflowTasks(project, [
-        'scenario1-time-server:1.0.0',
-        'scenario1-time-server:latest'
-    ])
+    // Apply the registry management plugin from buildSrc
+    apply plugin: RegistryManagementPlugin
 
-    // Task that runs complete integration test workflow
-    tasks.register('integrationTest') {
-        description = 'Run complete Docker integration test: clean → build → verify'
-        group = 'verification'
-        dependsOn 'cleanDockerImages'
-        dependsOn 'dockerBuild'
-        dependsOn 'verifyDockerImages'
-
-        // Configure task ordering using provider-based configuration
-        doFirst {
-            // Ensure proper task ordering without afterEvaluate
-        }
+    // Configure test registry using the plugin
+    withTestRegistry('test-registry-scenario3', 5031) {
+        // Registry will be configured with default settings
     }
 
-    // Configure task ordering immediately without afterEvaluate
-    tasks.named('dockerBuild') { mustRunAfter 'cleanDockerImages' }
-    tasks.named('verifyDockerImages') { mustRunAfter 'dockerBuild' }
+    // Register Docker image clean and verify tasks for this integration test
+    registerBuildWorkflowTasks(project, ['localhost:5000/scenario3/scenario3-time-server:latest'])
+
+    // Register saved image verification task since this scenario tests save functionality
+    registerVerifySavedImagesTask(project, ['build/docker-images/scenario3-time-server-latest.tar.gz'])
+
+    // Register registry image verification task since this scenario tests publish functionality
+    registerVerifyRegistryImagesTask(project, ['localhost:5031/scenario3-time-server:latest'])
 }
 
 // Task that runs integration test workflow (different behavior based on execution context)
-if (rootProject.name != 'plugin-integration-test') {
+if (rootProject.name == 'plugin-integration-test') {
+    // When running from parent project, use full integration test workflow
+    tasks.register('integrationTest') {
+        description = 'Run complete Docker integration test: clean → build → save → publish → verify'
+        group = 'verification'
+
+        // Dependencies
+        dependsOn 'startTestRegistries'
+        dependsOn 'cleanDockerImages'
+        dependsOn 'dockerImages'
+        dependsOn 'verifyDockerImages'
+        dependsOn 'verifySavedDockerImages'
+        dependsOn 'verifyRegistryDockerImages'
+        dependsOn 'stopTestRegistries'
+    }
+
+    // Configure task ordering without direct task references
+    tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+    tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+    tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+} else {
     // When running standalone, create a simplified integrationTest task for plugin verification
     tasks.register('integrationTest') {
         description = 'Run simplified integration test to verify plugin version resolution'

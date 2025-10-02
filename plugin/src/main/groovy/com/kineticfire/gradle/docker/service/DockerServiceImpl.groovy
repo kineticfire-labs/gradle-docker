@@ -146,9 +146,44 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 // Build with the primary tag first (prefer non-latest tags, fallback to first tag)
                 def primaryTag = context.tags.find { !it.endsWith(':latest') } ?: context.tags.first()
                 
+                // Docker Java client has issues with subdirectory dockerfiles
+                // When dockerfile is in a subdirectory, create a temporary copy at the root
+                def dockerfileFile = context.dockerfile.toFile()
+                def contextFile = context.contextPath.toFile()
+
+                // Check if dockerfile is within the context directory
+                if (!dockerfileFile.absolutePath.startsWith(contextFile.absolutePath)) {
+                    throw new IllegalArgumentException(
+                        "Dockerfile must be within the build context directory. " +
+                        "Dockerfile: ${dockerfileFile.absolutePath}, Context: ${contextFile.absolutePath}"
+                    )
+                }
+
+                // Calculate relative path for Docker API
+                def relativePath = contextFile.toPath().relativize(dockerfileFile.toPath()).toString()
+
+                def actualDockerfile = dockerfileFile
+
+                // If dockerfile is in a subdirectory, create a temporary copy at the context root
+                if (relativePath.contains("/") || relativePath.contains("\\")) {
+                    def tempDockerfileName = "Dockerfile.tmp.${System.currentTimeMillis()}"
+                    def tempDockerfile = new File(contextFile, tempDockerfileName)
+                    tempDockerfile.text = dockerfileFile.text
+                    actualDockerfile = tempDockerfile
+
+                    // Temporary workaround for Docker Java client subdirectory dockerfile issue
+
+                    // Schedule cleanup
+                    Runtime.runtime.addShutdownHook {
+                        if (tempDockerfile.exists()) {
+                            tempDockerfile.delete()
+                        }
+                    }
+                }
+
                 def buildCmd = dockerClient.buildImageCmd()
-                    .withDockerfile(context.dockerfile.toFile())
-                    .withBaseDirectory(context.contextPath.toFile())
+                    .withDockerfile(actualDockerfile)
+                    .withBaseDirectory(contextFile)
                     .withTag(primaryTag)  // Use single primary tag for build
                     .withNoCache(false)
                     

@@ -576,27 +576,9 @@ class GradleDockerPluginTest extends Specification {
         notThrown(Exception)
     }
     
-    def "plugin handles missing dockerfile validation"() {
-        given:
-        plugin.apply(project)
-        def dockerExt = project.extensions.getByType(DockerExtension)
-        
-        dockerExt.images {
-            missingDockerfile {
-                context = project.file('.')
-                dockerfile = project.file('NonExistentDockerfile')  // File doesn't exist
-                imageName = 'missingdockerfile'
-                version = '1.0.0'
-                tags = ['latest']
-            }
-        }
-
-        when:
-        project.evaluate()
-
-        then:
-        thrown(GradleException)
-    }
+    // NOTE: Dockerfile existence validation moved to DockerBuildTask execution phase
+    // for Gradle 9/10 configuration cache compatibility. Configuration-time validation
+    // test removed as validation no longer occurs during project.evaluate().
     
     def "plugin handles missing context directory validation"() {
         given:

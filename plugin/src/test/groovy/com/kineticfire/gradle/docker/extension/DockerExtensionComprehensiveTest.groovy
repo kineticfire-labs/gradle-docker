@@ -275,25 +275,9 @@ class DockerExtensionComprehensiveTest extends Specification {
         ex.message.contains("Docker context directory does not exist")
     }
 
-    def "validateImageSpec validates dockerfile exists when specified"() {
-        given:
-        def contextDir = tempDir.resolve("docker-context").toFile()
-        contextDir.mkdirs()
-        def nonExistentDockerfile = new File(contextDir, "NonExistent")
-        
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
-        imageSpec.context.set(contextDir)
-        imageSpec.dockerfile.set(nonExistentDockerfile)
-        imageSpec.imageName.set("name")
-        imageSpec.tags.set(["tag"])
-
-        when:
-        extension.validateImageSpec(imageSpec)
-
-        then:
-        def ex = thrown(GradleException)
-        ex.message.contains("Dockerfile does not exist")
-    }
+    // NOTE: Dockerfile existence validation moved to DockerBuildTask execution phase
+    // for Gradle 9/10 configuration cache compatibility. Test removed as validation
+    // no longer occurs during configuration phase.
 
     def "validateImageSpec skips validation for sourceRef images"() {
         given:

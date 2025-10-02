@@ -29,3 +29,4 @@ rootProject.name = 'docker-integration-tests'
 
 include 'scenario-1'
 include 'scenario-2'
+include 'scenario-3'

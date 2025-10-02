@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
 import org.gradle.api.DefaultTask
+import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -119,6 +120,8 @@ abstract class DockerBuildTask extends DefaultTask {
         if (!contextFile || !dockerfileFile) {
             throw new IllegalStateException("contextPath and dockerfile must be provided")
         }
+
+        // Note: Dockerfile existence validation now handled by BuildContext constructor
 
         def context = new com.kineticfire.gradle.docker.model.BuildContext(
             contextFile.toPath(),

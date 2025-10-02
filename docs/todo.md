@@ -1,5 +1,10 @@
 # todo
 
+I can see the problem! The plugin is always creating a dockerBuild${capitalizedName} task on line 189, even when sourceRef is set. For sourceRef mode,
+there should be no build task since we're just referencing an existing image. This is causing the functional test to fail because it's trying to run
+a build task that shouldn't exist for sourceRef images.
+
+
 ## Clean-up
 1. remove temp/debug/backup files/dirs
 2. Look for deprecated methods

@@ -214,4 +214,25 @@ class DockerBuildTaskTest extends Specification {
         then:
         references == []
     }
+
+    def "buildImage validates dockerfile exists at execution time via BuildContext"() {
+        given:
+        // Set up minimal required configuration
+        def contextDir = project.layout.buildDirectory.dir('docker-context').get().asFile
+        contextDir.mkdirs()
+        def nonExistentDockerfile = new File(contextDir, 'NonExistentDockerfile')
+
+        task.contextPath.set(contextDir)
+        task.dockerfile.set(nonExistentDockerfile)
+        task.imageName.set('test-image')
+        task.tags.set(['latest'])
+
+        when:
+        task.buildImage()
+
+        then:
+        def ex = thrown(IllegalArgumentException)
+        ex.message.contains("Dockerfile does not exist")
+        ex.message.contains(nonExistentDockerfile.absolutePath)
+    }
 }

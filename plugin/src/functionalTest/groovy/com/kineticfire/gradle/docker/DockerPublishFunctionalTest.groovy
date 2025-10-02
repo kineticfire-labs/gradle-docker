@@ -727,9 +727,8 @@ class DockerPublishFunctionalTest extends Specification {
             docker {
                 images {
                     missingImageApp {
-                        imageName.set('nonexistent-image')
-                        tags.set(['latest'])
-                        
+                        sourceRef.set('nonexistent-image:latest')
+
                         publish {
                             to('local') {
                                 registry.set('localhost:5555')

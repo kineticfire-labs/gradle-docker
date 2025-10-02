@@ -157,16 +157,9 @@ abstract class DockerExtension {
             }
         }
         
-        // Validate dockerfile exists (but not for sourceRef images)
-        if (imageSpec.dockerfile.isPresent() && !hasSourceRef) {
-            def dockerfileFile = imageSpec.dockerfile.get().asFile
-            if (!dockerfileFile.exists()) {
-                throw new GradleException(
-                    "Dockerfile does not exist: ${dockerfileFile.absolutePath}\\n" +
-                    "Suggestion: Create the Dockerfile or update the dockerfile path in image '${imageSpec.name}'"
-                )
-            }
-        }
+        // NOTE: Dockerfile existence validation moved to task execution phase (DockerBuildTask)
+        // to support Gradle 9/10 configuration cache and proper phase separation.
+        // Configuration phase should not access files that don't exist until execution phase.
         
         // Validate publish configuration if present
         if (imageSpec.publish.isPresent()) {
