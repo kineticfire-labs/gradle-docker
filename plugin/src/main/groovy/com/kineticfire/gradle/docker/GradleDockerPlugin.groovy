@@ -185,9 +185,11 @@ class GradleDockerPlugin implements Plugin<Project> {
             // Defer tags validation to task execution time for TestKit compatibility
             // Tags will be validated when tasks actually execute
             
-            // Build task
-            project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-                configureDockerBuildTask(task, imageSpec, dockerService, project)
+            // Build task (only for build mode, not sourceRef mode)
+            if (!isSourceRefMode(imageSpec)) {
+                project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
+                    configureDockerBuildTask(task, imageSpec, dockerService, project)
+                }
             }
             
             // Save task
@@ -214,8 +216,11 @@ class GradleDockerPlugin implements Plugin<Project> {
                 task.group = 'docker'
                 task.description = "Run all configured Docker operations for image: ${imageSpec.name}"
                 
-                // Always depend on build and tag
-                task.dependsOn("dockerBuild${capitalizedName}")
+                // Conditionally depend on build (only for build mode)
+                if (!isSourceRefMode(imageSpec)) {
+                    task.dependsOn("dockerBuild${capitalizedName}")
+                }
+                // Always depend on tag
                 task.dependsOn("dockerTag${capitalizedName}")
                 
                 // Conditionally depend on save and publish
@@ -273,9 +278,9 @@ class GradleDockerPlugin implements Plugin<Project> {
             def capitalizedName = imageName.capitalize()
             def buildTaskName = "dockerBuild${capitalizedName}"
             
-            // If image has build context, save/publish depend on build
+            // If image has build context AND is not in sourceRef mode, save/publish depend on build
             def hasBuildContext = imageSpec.context.isPresent() || imageSpec.contextTask != null
-            if (hasBuildContext) {
+            if (hasBuildContext && !isSourceRefMode(imageSpec)) {
                 project.tasks.findByName("dockerSave${capitalizedName}")?.dependsOn(buildTaskName)
                 project.tasks.findByName("dockerPublish${capitalizedName}")?.dependsOn(buildTaskName)
             }
@@ -283,7 +288,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure aggregate task dependencies
         project.tasks.named('dockerBuild') {
-            dependsOn dockerExt.images.names.collect { "dockerBuild${it.capitalize()}" }
+            // Only depend on build tasks for images that are in build mode (not sourceRef mode)
+            def buildTaskNames = dockerExt.images.findAll { !isSourceRefMode(it) }.collect { "dockerBuild${it.name.capitalize()}" }
+            if (buildTaskNames) {
+                dependsOn buildTaskNames
+            }
         }
         
         project.tasks.named('dockerSave') {
@@ -633,5 +642,24 @@ class GradleDockerPlugin implements Plugin<Project> {
         project.logger.debug("Test integration extension methods configured")
     }
 
+    /**
+     * Determines if an ImageSpec is configured for sourceRef mode (working with existing images)
+     * rather than build mode (building new images from source)
+     */
+    private static boolean isSourceRefMode(ImageSpec imageSpec) {
+        // Check direct sourceRef
+        if (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) {
+            return true
+        }
+
+        // Check sourceRef components
+        def hasRepository = imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()
+        def hasImageName = imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()
+        def hasNamespace = imageSpec.sourceRefNamespace.isPresent() && !imageSpec.sourceRefNamespace.get().isEmpty()
+        def hasRegistry = imageSpec.sourceRefRegistry.isPresent() && !imageSpec.sourceRefRegistry.get().isEmpty()
+
+        // If any sourceRef component is specified, it's sourceRef mode
+        return hasRepository || hasImageName || hasNamespace || hasRegistry
+    }
 
 }

@@ -1360,16 +1360,12 @@ class GradleDockerPluginTest extends Specification {
         project.evaluate()
 
         then: "Properties flow correctly to tasks"
-        def buildTask = project.tasks.getByName("dockerBuildTestImage")
+        // Build task should NOT exist because sourceRef is set (sourceRef mode)
+        !project.tasks.findByName("dockerBuildTestImage")
+
         def tagTask = project.tasks.getByName("dockerTagTestImage")
 
-        // Verify nomenclature properties are configured
-        buildTask.registry.get() == "ghcr.io"
-        buildTask.namespace.get() == "myorg"
-        buildTask.imageName.get() == "myapp"
-        buildTask.version.get() == "1.0.0"
-        buildTask.tags.get() == ["latest", "v1.0.0"]
-
+        // Verify nomenclature properties are configured in tag task
         tagTask.registry.get() == "ghcr.io"
         tagTask.namespace.get() == "myorg"
         tagTask.imageName.get() == "myapp"
