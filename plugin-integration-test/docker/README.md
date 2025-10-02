@@ -58,8 +58,8 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | 2 | Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag | <ol><li>scenario-5</li></ol> |
 | 2 | Repository Mode: sourceRefRepository, sourceRefTag                                       | todo                         |
 | 2 | Repository Mode: sourceRefRegistry, sourceRefRepository, sourceRefTag                    | todo                         |
-| 2 | pullIfMissing = not set                                                                  | todo                         |
-| 2 | pullIfMissing = false                                                                    | todo                         |
+| 2 | pullIfMissing = not set && image IS local                                                | <ol><li>scenario-5</li></ol> |
+| 2 | pullIfMissing = false && image IS local                                                  | todo                         |
 | 2 | pullIfMissing = true && image IS local so no pull                                        | todo                         |
 | 2 | pullIfMissing = true && image is NOT local so must pull                                  | todo                         |
 | 2 | with 'save'                                                                              | todo                         |
@@ -68,11 +68,11 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 
 ## Tag Features
 
-| # | Tested Feature        | Test Scenario                                                      | 
-|---|-----------------------|--------------------------------------------------------------------|
-| 2 | number of tags = none | <ol><li>scenario-5</li></ol>                                       |
-| 1 | number of tags = 1    | <ol><li>scenario-2</li><li>scenario-3</li><li>scenario-4</li></ol> |
-| 2 | number of tags > 1    | <ol><li>scenario-1</li></ol>                                       |
+| # | Tested Feature                                          | Test Scenario                                                      | 
+|---|---------------------------------------------------------|--------------------------------------------------------------------|
+| 2 | number of tags = none (using 'sourceRef' or components) | <ol><li>scenario-5</li></ol>                                       |
+| 1 | number of tags = 1                                      | <ol><li>scenario-2</li><li>scenario-3</li><li>scenario-4</li></ol> |
+| 2 | number of tags > 1                                      | <ol><li>scenario-1</li></ol>                                       |
 
 
 ## Save Features
@@ -110,6 +110,6 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | 2  | inherit sourceRef: namespace, imageName                             | <ol><li>scenario-5</li></ol>                                                          |
 | 2  | Image Name Mode: registry, namespace, imageName, 1 tag              | todo                                                                                  |
 | 2  | Image Name Mode: namespace, imageName, 2 tags                       | <ol><li>scenario-3</li></ol>                                                          |
-| 2  | Image Name Mode: imageName, tag(s)                                  | <ol><li>scenario-2</li></ol>                                                          |
+| 2  | Image Name Mode: registry, (inherit namespace), imageName, tag(s)   | <ol><li>scenario-2</li></ol>                                                          |
 | 2  | Repository Mode: registry, repository, 1 tag                        | todo                                                                                  |
 | 2  | Repository Mode: repository, 2 tags                                 | todo                                                                                  |

@@ -34,6 +34,28 @@ plugins {
     id 'com.kineticfire.gradle.gradle-docker'
 }
 
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-5 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-5:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
 
@@ -63,55 +85,45 @@ docker {
 // INTEGRATION TEST VERIFICATION TASKS
 // ============================================================================
 
-// Apply buildSrc components only when running from top-level integration test project (where buildSrc is available)
-if (rootProject.name == 'plugin-integration-test') {
-    // Apply the reusable Docker image testing plugin from buildSrc
-    apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
-    // Apply the registry management plugin from buildSrc
-    apply plugin: RegistryManagementPlugin
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
 
-    // Configure test registry using the plugin
-    withTestRegistry('test-registry-scenario5', 5051) {
-        // Registry will be configured with default settings
-    }
-
-    // No build workflow tasks since this uses existing image (sourceRef mode)
-
-    // Register registry image verification task since this scenario tests publish functionality
-    registerVerifyRegistryImagesTask(project, ['localhost:5051/library/nginx:test'])
+// Configure test registry using the plugin
+withTestRegistry('test-registry-scenario5', 5051) {
+    // Registry will be configured with default settings
 }
 
-// Task that runs integration test workflow (different behavior based on execution context)
-if (rootProject.name == 'plugin-integration-test') {
-    // When running from parent project, use integration test workflow for sourceRef mode
-    tasks.register('integrationTest') {
-        description = 'Run sourceRef integration test: pull → publish → verify (sourceRef component inheritance)'
-        group = 'verification'
-
-        // Dependencies for sourceRef mode (no build needed)
-        dependsOn 'startTestRegistries'
-        dependsOn 'dockerImages'  // This will handle pull and publish
-        dependsOn 'verifyRegistryDockerImages'
-        dependsOn 'stopTestRegistries'
-    }
-
-    // Configure task ordering without direct task references
-    tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
-    tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
-    tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
-} else {
-    // When running standalone, create a simplified integrationTest task for plugin verification
-    tasks.register('integrationTest') {
-        description = 'Run simplified integration test to verify plugin version resolution'
-        group = 'verification'
-        dependsOn 'dockerPublish'
-
-        // Capture task names during configuration for configuration cache compatibility
-        def dockerTaskNames = tasks.findAll { it.name.startsWith('docker') }.collect { it.name }
-        doFirst {
-            println "✅ Plugin version resolved successfully for standalone execution!"
-            println "✅ Available docker tasks: ${dockerTaskNames}"
-        }
-    }
+// Ensure the source image exists locally for sourceRef testing
+tasks.register('ensureSourceImage', EnsureDockerImageTask) {
+    imageRef.set('docker.io/library/nginx:1.21')
+    reason.set('Required for sourceRef component inheritance testing')
+    description = 'Ensure source image exists locally for sourceRef test'
+    group = 'docker'
 }
+
+// No build workflow tasks since this uses existing image (sourceRef mode)
+
+// Register registry image verification task since this scenario tests publish functionality
+registerVerifyRegistryImagesTask(project, ['localhost:5051/library/nginx:test'])
+
+// Task that runs integration test workflow (sourceRef mode)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef integration test: pull → publish → verify (sourceRef component inheritance)'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode (no build needed)
+    dependsOn 'ensureSourceImage'      // Ensure source image exists locally
+    dependsOn 'startTestRegistries'
+    dependsOn 'dockerImages'           // This will handle publish (no build)
+    dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'stopTestRegistries'
+}
+
+// Configure task ordering without direct task references
+tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
+tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }

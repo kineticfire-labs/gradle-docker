@@ -27,6 +27,22 @@
  * Each subproject represents a specific Docker integration test scenario.
  */
 
+// Ensure Docker integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    throw new GradleException("""
+❌ Docker integration tests must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('..').canonicalPath}
+   ./gradlew docker:integrationTest
+
+   Or run specific scenario:
+   ./gradlew docker:scenario-1:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+}
+
 // No plugins needed at root level - subprojects handle their own builds
 
 group = 'com.kineticfire.gradle.docker.integration.docker'
@@ -37,44 +53,24 @@ version = '1.0.0'
 tasks.register('integrationTest') {
     description = 'Run integration tests for all Docker projects'
     group = 'verification'
-    
-    // Configure dependencies using provider-based configuration with context-aware project references
-    if (rootProject.name == 'plugin-integration-test') {
-        // When running from parent project, use full paths
-        dependsOn providers.provider { project(':docker:scenario-1').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':docker:scenario-2').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':docker:scenario-3').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':docker:scenario-4').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':docker:scenario-5').tasks.named('integrationTest') }
-    } else {
-        // When running from docker directory, use relative paths
-        dependsOn providers.provider { project(':scenario-1').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':scenario-2').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':scenario-3').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':scenario-4').tasks.named('integrationTest') }
-        dependsOn providers.provider { project(':scenario-5').tasks.named('integrationTest') }
-    }
+
+    // Only runs from top-level, so use full paths
+    dependsOn providers.provider { project(':docker:scenario-1').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-2').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-3').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-4').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-5').tasks.named('integrationTest') }
 }
 
 // Aggregate cleanup task
 tasks.register('cleanAll') {
     description = 'Clean all Docker integration test projects'
     group = 'build'
-    
-    // Configure cleanup dependencies using provider-based configuration with context-aware project references
-    if (rootProject.name == 'plugin-integration-test') {
-        // When running from parent project, use full paths
-        dependsOn providers.provider { project(':docker:scenario-1').tasks.named('clean') }
-        dependsOn providers.provider { project(':docker:scenario-2').tasks.named('clean') }
-        dependsOn providers.provider { project(':docker:scenario-3').tasks.named('clean') }
-        dependsOn providers.provider { project(':docker:scenario-4').tasks.named('clean') }
-        dependsOn providers.provider { project(':docker:scenario-5').tasks.named('clean') }
-    } else {
-        // When running from docker directory, use relative paths
-        dependsOn providers.provider { project(':scenario-1').tasks.named('clean') }
-        dependsOn providers.provider { project(':scenario-2').tasks.named('clean') }
-        dependsOn providers.provider { project(':scenario-3').tasks.named('clean') }
-        dependsOn providers.provider { project(':scenario-4').tasks.named('clean') }
-        dependsOn providers.provider { project(':scenario-5').tasks.named('clean') }
-    }
+
+    // Only runs from top-level, so use full paths
+    dependsOn providers.provider { project(':docker:scenario-1').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-2').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-3').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-4').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-5').tasks.named('clean') }
 }

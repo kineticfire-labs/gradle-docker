@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.model.EffectiveImageProperties
 import org.gradle.api.DefaultTask
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -50,7 +51,7 @@ abstract class DockerTagTask extends DefaultTask {
     @Input
     @Optional
     abstract Property<String> getSourceRef()
-    
+
     // Docker Image Nomenclature Properties (for building new images)
     @Input
     @Optional
@@ -83,23 +84,30 @@ abstract class DockerTagTask extends DefaultTask {
         def sourceRefValue = sourceRef.getOrElse("")
         def tagsValue = tags.getOrElse([])
 
-        if (tagsValue.isEmpty()) {
-            throw new IllegalStateException("At least one tag must be specified")
-        }
-
         def service = dockerService.get()
         if (!service) {
             throw new IllegalStateException("dockerService must be provided")
         }
 
-        if (!sourceRefValue.isEmpty()) {
+        // Use EffectiveImageProperties to detect sourceRef mode (like DockerPublishTask does)
+        def imageSpec = this.imageSpec.get()
+        def isSourceRefMode = isInSourceRefMode(imageSpec)
+
+        if (isSourceRefMode) {
             // SourceRef Mode: Tag existing image with new tags
             if (!tagsValue.isEmpty()) {
-                def future = service.tagImage(sourceRefValue, tagsValue)
+                def effectiveSourceRef = getEffectiveSourceRef(imageSpec)
+                def future = service.tagImage(effectiveSourceRef, tagsValue)
                 future.get()
+            } else {
+                // If no tags provided in sourceRef mode, it's a no-op
+                logger.info("No additional tags specified for sourceRef mode, skipping tag operation")
             }
-            // If no tags provided in sourceRef mode, it's a no-op
         } else {
+            // Build Mode: Validate tags are provided
+            if (tagsValue.isEmpty()) {
+                throw new IllegalStateException("At least one tag must be specified")
+            }
             // Build Mode: Tag the built image with additional tags
             def imageReferences = buildImageReferences()
             if (imageReferences.size() < 1) {
@@ -119,7 +127,29 @@ abstract class DockerTagTask extends DefaultTask {
             future.get()
         }
     }
-    
+
+    /**
+     * Check if imageSpec is in sourceRef mode (like GradleDockerPlugin.isSourceRefMode)
+     */
+    private boolean isInSourceRefMode(imageSpec) {
+        // Check direct sourceRef
+        if (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) {
+            return true
+        }
+        // Check sourceRef components
+        def hasRepository = imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()
+        def hasImageName = imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()
+        return hasRepository || hasImageName
+    }
+
+    /**
+     * Get the effective source reference for sourceRef mode using EffectiveImageProperties
+     */
+    private String getEffectiveSourceRef(imageSpec) {
+        def effectiveProps = EffectiveImageProperties.fromImageSpec(imageSpec)
+        return effectiveProps.buildFullReference()
+    }
+
     /**
      * Build all image references from dual-mode properties (SourceRef vs Build Mode)
      */

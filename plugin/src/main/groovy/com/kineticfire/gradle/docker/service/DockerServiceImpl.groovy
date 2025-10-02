@@ -236,7 +236,13 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 
                 tags.each { tag ->
                     def parts = ImageRefParts.parse(tag)
-                    dockerClient.tagImageCmd(sourceImage, parts.fullRepository, parts.tag).exec()
+
+                    // Build full repository path including registry for Docker Java client
+                    def fullRepoPath = parts.isRegistryQualified() ?
+                        "${parts.registry}/${parts.fullRepository}" :
+                        parts.fullRepository
+
+                    dockerClient.tagImageCmd(sourceImage, fullRepoPath, parts.tag).exec()
                     // Debug: Tagged ${sourceImage} as ${tag}
                 }
                 

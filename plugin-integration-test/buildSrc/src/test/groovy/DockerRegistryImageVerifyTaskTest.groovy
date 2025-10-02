@@ -74,13 +74,12 @@ class DockerRegistryImageVerifyTaskTest extends Specification {
     def "task configuration is lazy"() {
         given:
         def imageProvider = project.provider { ['localhost:5000/lazy-image:1.0'] }
-        
+
         when:
         task.imageReferences.set(imageProvider)
-        
+
         then:
         task.imageReferences.get() == ['localhost:5000/lazy-image:1.0']
-    }
     }
 
     def "task accepts different registry formats"() {
@@ -146,26 +145,6 @@ class DockerRegistryImageVerifyTaskTest extends Specification {
         
         when:
         task.imageReferences.set(dynamicImageRefs)
-        
-        then:
-        task.imageReferences.get().size() == 3
-        task.imageReferences.get().size() > 0
-    }
-        
-        when:
-        task.imageReferences.set(dynamicImageRefs)
-        
-        then:
-        task.imageReferences.get().size() == 3
-        task.imageReferences.get().size() > 0
-    }
-        def dynamicRegistry = project.provider {
-            project.findProperty('registry.url') ?: 'localhost:5000'
-        }
-        
-        when:
-        task.imageNames.set(dynamicImages)
-        task.registryUrl.set(dynamicRegistry)
         
         then:
         task.imageReferences.get().size() == 3

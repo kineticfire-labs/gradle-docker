@@ -191,6 +191,41 @@ class EffectiveImageProperties {
         return hasRepository || hasImageName
     }
 
+    /**
+     * Create EffectiveImageProperties from sourceRef components
+     */
+    static EffectiveImageProperties fromSourceRefComponents(String registry, String namespace, String imageName, String repository, String tag) {
+        // Use existing buildFromSourceRefComponents method with default tags
+        def effectiveProps = buildFromSourceRefComponents(registry, namespace, imageName, repository, tag)
+        return effectiveProps
+    }
+
+    /**
+     * Build full image reference from these effective properties
+     */
+    String buildFullReference() {
+        def primaryTag = tags.isEmpty() ? "latest" : tags[0]
+
+        if (!repository.isEmpty()) {
+            // Repository mode
+            def baseRef = registry.isEmpty() ? repository : "${registry}/${repository}"
+            return "${baseRef}:${primaryTag}"
+        } else if (!imageName.isEmpty()) {
+            // Namespace + imageName mode
+            def baseRef = ""
+            if (!registry.isEmpty()) {
+                baseRef += "${registry}/"
+            }
+            if (!namespace.isEmpty()) {
+                baseRef += "${namespace}/"
+            }
+            baseRef += imageName
+            return "${baseRef}:${primaryTag}"
+        } else {
+            throw new IllegalStateException("Cannot build reference: neither repository nor imageName is set")
+        }
+    }
+
     @Override
     String toString() {
         return "EffectiveImageProperties{registry='${registry}', namespace='${namespace}', imageName='${imageName}', repository='${repository}', tags=${tags}}"

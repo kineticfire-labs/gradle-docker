@@ -37,6 +37,28 @@ plugins {
     id 'com.kineticfire.gradle.gradle-docker'
 }
 
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-4 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-4:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
 import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
 
 group = 'com.kineticfire.gradle.docker.integration'
@@ -81,8 +103,10 @@ docker {
 
             publish {
                 to('emptyTarget') {
-                    // COMPLETELY EMPTY - should inherit everything!
-                    // Expected result: scenario4/inheritance-test:latest
+                    // Test inheritance: only specify registry, everything else should inherit
+                    registry.set('localhost:5041')
+                    // Should inherit: namespace=scenario4, imageName=inheritance-test, tags=[latest]
+                    // Expected result: localhost:5041/scenario4/inheritance-test:latest
                 }
             }
         }
@@ -93,61 +117,83 @@ docker {
 // INTEGRATION TEST VERIFICATION TASKS
 // ============================================================================
 
-// Apply buildSrc components only when running from top-level integration test project (where buildSrc is available)
-if (rootProject.name == 'plugin-integration-test') {
-    // Apply the reusable Docker image testing plugin from buildSrc
-    apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
 
-    // Apply the registry management plugin from buildSrc
-    apply plugin: RegistryManagementPlugin
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
 
-    // Configure test registry using the plugin
-    withTestRegistry('test-registry-scenario4', 5041) {
-        // Registry will be configured with default settings
-    }
-
-    // Register Docker image clean and verify tasks for this integration test
-    registerBuildWorkflowTasks(project, ['scenario4/inheritance-test:latest'])
-
-    // Register registry image verification task since this scenario tests publish functionality
-    // Empty target should inherit and publish to the same image reference
-    registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
+// Configure test registry using the plugin
+withTestRegistry('test-registry-scenario4', 5041) {
+    // Registry will be configured with default settings
 }
 
-// Task that runs integration test workflow (different behavior based on execution context)
-if (rootProject.name == 'plugin-integration-test') {
-    // When running from parent project, use full integration test workflow
-    tasks.register('integrationTest') {
-        description = 'Run complete Docker integration test: clean → build → publish → verify (empty target inheritance)'
-        group = 'verification'
+// Register Docker image clean and verify tasks for this integration test
+registerBuildWorkflowTasks(project, ['scenario4/inheritance-test:latest'])
 
-        // Dependencies
-        dependsOn 'startTestRegistries'
-        dependsOn 'cleanDockerImages'
-        dependsOn 'dockerImages'
-        dependsOn 'verifyDockerImages'
-        dependsOn 'verifyRegistryDockerImages'
-        dependsOn 'stopTestRegistries'
+// Register registry image verification task since this scenario tests publish functionality
+// Empty target should inherit and publish to the same image reference
+registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
+
+// Task that runs complete integration test workflow
+tasks.register('integrationTest') {
+    description = 'Run complete Docker integration test: clean → build → publish → verify (empty target inheritance)'
+    group = 'verification'
+
+    // Dependencies
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerImages'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'stopTestRegistries'
+}
+
+// Configure task ordering without direct task references
+tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+
+// Configure task ordering and force rebuild after clean
+tasks.named('dockerImages') {
+    // Force task to always run when cleanDockerImages has run
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario4/inheritance-test:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                    .redirectErrorStream(true)
+                    .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
     }
+}
 
-    // Configure task ordering without direct task references
-    tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
-    tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
-    tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
-    tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
-    tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
-} else {
-    // When running standalone, create a simplified integrationTest task for plugin verification
-    tasks.register('integrationTest') {
-        description = 'Run simplified integration test to verify plugin version resolution'
-        group = 'verification'
-        dependsOn 'dockerBuild'
-
-        // Capture task names during configuration for configuration cache compatibility
-        def dockerTaskNames = tasks.findAll { it.name.startsWith('docker') }.collect { it.name }
-        doFirst {
-            println "✅ Plugin version resolved successfully for standalone execution!"
-            println "✅ Available docker tasks: ${dockerTaskNames}"
+// Apply the same logic to tasks that start with "dockerBuild"
+tasks.matching { it.name.startsWith('dockerBuild') }.configureEach {
+    mustRunAfter 'cleanDockerImages'
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario4/inheritance-test:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                    .redirectErrorStream(true)
+                    .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
         }
     }
 }

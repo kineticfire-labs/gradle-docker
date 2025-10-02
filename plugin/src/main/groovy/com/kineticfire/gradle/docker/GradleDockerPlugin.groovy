@@ -295,13 +295,20 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
         }
         
+        project.tasks.named('dockerTag') {
+            def tagTaskNames = dockerExt.images.collect { "dockerTag${it.name.capitalize()}" }
+            if (tagTaskNames) {
+                dependsOn tagTaskNames
+            }
+        }
+
         project.tasks.named('dockerSave') {
             def saveTaskNames = dockerExt.images.findAll { it.save.isPresent() }.collect { "dockerSave${it.name.capitalize()}" }
             if (saveTaskNames) {
                 dependsOn saveTaskNames
             }
         }
-        
+
         project.tasks.named('dockerPublish') {
             def publishTaskNames = dockerExt.images.findAll { it.publish.isPresent() }.collect { "dockerPublish${it.name.capitalize()}" }
             if (publishTaskNames) {
@@ -480,10 +487,10 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
 
-        // Configure SourceRef Mode property
+        // Configure SourceRef Mode properties
         task.sourceRef.set(imageSpec.sourceRef)
     }
-    
+
     private void configureDockerPublishTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Publish Docker image: ${imageSpec.name}"

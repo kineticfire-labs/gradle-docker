@@ -54,20 +54,46 @@ plugin-integration-test/    # all integration tests:  top-level aggregator
 - `verification` group contains Docker verification tasks (`cleanDockerImages`, `verifyDockerImages`)
 - `build` group contains cleanup tasks (`cleanAll`)
 
-## Running Specific Tests
+## Integration Test Execution Requirements
+
+**⚠️ IMPORTANT: All integration tests must be run from this top-level directory (`plugin-integration-test/`).**
+
+**Why this requirement?**
+- Integration tests use shared functionality from `buildSrc/` directory
+- Gradle's buildSrc mechanism only works within the project where it's defined
+- This ensures single source of truth for all Docker testing functionality
+- Prevents code duplication and maintains consistency
+
+## Running Integration Tests
+
+**All commands must be run from `/plugin-integration-test/` directory:**
 
 ```bash
-# Run specific Docker project integration test
-#   - set 'version' to the plugin version such as '1.0.0'
-./gradlew -Pplugin_version=<version> :docker:scenario-1:integrationTest
-
-# Run with clean for that project only
-#   - set 'version' to the plugin version such as '1.0.0'
-./gradlew -Pplugin_version=<version> :docker:scenario-1:clean :docker:scenario-1:integrationTest
-
-# Run all integration tests (from any directory in project)
-#   - set 'version' to the plugin version such as '1.0.0'
+# Run all integration tests
 ./gradlew -Pplugin_version=<version> cleanAll integrationTest
+
+# Run all Docker integration tests
+./gradlew -Pplugin_version=<version> docker:integrationTest
+
+# Run specific Docker scenario
+./gradlew -Pplugin_version=<version> docker:scenario-1:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-2:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-3:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-4:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-5:integrationTest
+
+# Run with clean for specific scenario
+./gradlew -Pplugin_version=<version> docker:scenario-1:clean docker:scenario-1:integrationTest
+
+# Run all Docker tests with clean
+./gradlew -Pplugin_version=<version> docker:cleanAll docker:integrationTest
+```
+
+**❌ What will NOT work:**
+```bash
+# These will fail with helpful error messages
+cd docker && ./gradlew scenario-1:integrationTest
+cd docker/scenario-1 && ./gradlew integrationTest
 ```
 
 ## Requirements
