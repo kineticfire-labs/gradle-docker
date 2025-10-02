@@ -163,7 +163,7 @@ abstract class DockerExtension {
         
         // Validate publish configuration if present
         if (imageSpec.publish.isPresent()) {
-            validatePublishConfiguration(imageSpec.publish.get(), imageSpec.name)
+            validatePublishConfiguration(imageSpec.publish.get(), imageSpec)
         }
 
         // Validate save configuration if present
@@ -358,7 +358,7 @@ abstract class DockerExtension {
     }
 
     /**
-     * Validates publish configuration for an image
+     * Validates publish configuration for an image (overload for backward compatibility with tests)
      */
     void validatePublishConfiguration(def publishSpec, String imageName) {
         def targets = publishSpec.to
@@ -367,14 +367,30 @@ abstract class DockerExtension {
                 "Publish configuration for image '${imageName}' must specify at least one target using 'to()'"
             )
         }
-        
+
         targets.each { target ->
             validatePublishTarget(target, imageName)
         }
     }
+
+    /**
+     * Validates publish configuration for an image
+     */
+    void validatePublishConfiguration(def publishSpec, ImageSpec imageSpec) {
+        def targets = publishSpec.to
+        if (!targets || targets.isEmpty()) {
+            throw new GradleException(
+                "Publish configuration for image '${imageSpec.name}' must specify at least one target using 'to()'"
+            )
+        }
+
+        targets.each { target ->
+            validatePublishTarget(target, imageSpec)
+        }
+    }
     
     /**
-     * Validates a single publish target
+     * Validates a single publish target (overload for backward compatibility with tests)
      */
     void validatePublishTarget(def publishTarget, String imageName) {
         // Validate publish target name
@@ -383,13 +399,56 @@ abstract class DockerExtension {
                 "Publish target in image '${imageName}' must have a name"
             )
         }
-        
-        // Validate publishTags - with careful exception handling for TestKit compatibility
+
+        // Validate publishTags - legacy behavior (no inheritance support)
         try {
             if (!publishTarget.getPublishTags().isPresent() || publishTarget.getPublishTags().get().isEmpty()) {
                 throw new GradleException(
                     "Publish target '${publishTarget.name}' in image '${imageName}' must specify at least one tag"
                 )
+            }
+
+            // Validate each tag - publishTags should be tag names (not full image references)
+            publishTarget.getPublishTags().get().each { publishTag ->
+                // Publish tags should be valid tag names, not full image references
+                if (!isValidTagFormat(publishTag)) {
+                    throw new GradleException(
+                        "Invalid tag format '${publishTag}' in publish target '${publishTarget.name}' for image '${imageName}'. " +
+                        "Tags must be alphanumeric with dots, hyphens, underscores, cannot start with '.' or '-', and be ≤128 chars"
+                    )
+                }
+            }
+        } catch (IllegalStateException e) {
+            // Handle TestKit Provider API issues gracefully
+            // When TestKit has issues reading Provider values during test execution,
+            // we should not fail validation but log a warning instead
+            logger?.warn("Unable to validate publishTags for target '${publishTarget.name}' in image '${imageName}' due to TestKit Provider API issue: ${e.message}")
+        }
+    }
+
+    /**
+     * Validates a single publish target
+     */
+    void validatePublishTarget(def publishTarget, ImageSpec imageSpec) {
+        // Validate publish target name
+        if (publishTarget.name == null || publishTarget.name.isEmpty()) {
+            throw new GradleException(
+                "Publish target in image '${imageSpec.name}' must have a name"
+            )
+        }
+
+        // Validate publishTags - with careful exception handling for TestKit compatibility
+        try {
+            if (!publishTarget.getPublishTags().isPresent() || publishTarget.getPublishTags().get().isEmpty()) {
+                // Check if source image has tags that can be inherited
+                def sourceTags = getSourceTags(imageSpec)
+                if (sourceTags.isEmpty()) {
+                    throw new GradleException(
+                        "Publish target '${publishTarget.name}' in image '${imageSpec.name}' must specify at least one tag (no source tags available for inheritance)"
+                    )
+                }
+                // Empty target with source tags available - allow for inheritance
+                return
             }
             
             // Validate each tag - publishTags should be tag names (not full image references)
@@ -475,5 +534,31 @@ abstract class DockerExtension {
         }
         
         return imageRef.substring(0, colonIndex)
+    }
+
+    /**
+     * Get source tags from ImageSpec for inheritance validation
+     */
+    List<String> getSourceTags(ImageSpec imageSpec) {
+        // Check direct sourceRef first
+        if (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) {
+            // Parse tag from sourceRef
+            def sourceRef = imageSpec.sourceRef.get()
+            def colonIndex = sourceRef.lastIndexOf(':')
+            if (colonIndex != -1) {
+                return [sourceRef.substring(colonIndex + 1)]
+            }
+            return ['latest'] // Default if no tag in sourceRef
+        }
+
+        // Check for sourceRef components
+        if (!imageSpec.sourceRefRepository.getOrElse("").isEmpty() ||
+            !imageSpec.sourceRefImageName.getOrElse("").isEmpty()) {
+            def tag = imageSpec.sourceRefTag.getOrElse("latest")
+            return [tag]
+        }
+
+        // Build mode - use tags property
+        return imageSpec.tags.getOrElse([])
     }
 }

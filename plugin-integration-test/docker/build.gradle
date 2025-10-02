@@ -44,11 +44,15 @@ tasks.register('integrationTest') {
         dependsOn providers.provider { project(':docker:scenario-1').tasks.named('integrationTest') }
         dependsOn providers.provider { project(':docker:scenario-2').tasks.named('integrationTest') }
         dependsOn providers.provider { project(':docker:scenario-3').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':docker:scenario-4').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':docker:scenario-5').tasks.named('integrationTest') }
     } else {
         // When running from docker directory, use relative paths
         dependsOn providers.provider { project(':scenario-1').tasks.named('integrationTest') }
         dependsOn providers.provider { project(':scenario-2').tasks.named('integrationTest') }
         dependsOn providers.provider { project(':scenario-3').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':scenario-4').tasks.named('integrationTest') }
+        dependsOn providers.provider { project(':scenario-5').tasks.named('integrationTest') }
     }
 }
 
@@ -63,10 +67,14 @@ tasks.register('cleanAll') {
         dependsOn providers.provider { project(':docker:scenario-1').tasks.named('clean') }
         dependsOn providers.provider { project(':docker:scenario-2').tasks.named('clean') }
         dependsOn providers.provider { project(':docker:scenario-3').tasks.named('clean') }
+        dependsOn providers.provider { project(':docker:scenario-4').tasks.named('clean') }
+        dependsOn providers.provider { project(':docker:scenario-5').tasks.named('clean') }
     } else {
         // When running from docker directory, use relative paths
         dependsOn providers.provider { project(':scenario-1').tasks.named('clean') }
         dependsOn providers.provider { project(':scenario-2').tasks.named('clean') }
         dependsOn providers.provider { project(':scenario-3').tasks.named('clean') }
+        dependsOn providers.provider { project(':scenario-4').tasks.named('clean') }
+        dependsOn providers.provider { project(':scenario-5').tasks.named('clean') }
     }
 }

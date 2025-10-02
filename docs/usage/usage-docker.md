@@ -430,6 +430,58 @@ docker {
 
 ### Basic Registry Examples
 
+
+#### Private Registry
+```groovy
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
+            
+            publish {
+                to('privateRegistry') {
+                    registry.set("my-company.com:5000")
+                    repository.set("team/myapp")
+                    publishTags.set(["latest", "beta"])
+                    // No auth block - registry allows anonymous push
+                }
+            }
+        }
+    }
+}
+```
+
+
+#### Private Registry & Inherit Image Properties
+```groovy
+docker {
+    images {
+        myApp {
+
+            // build a new image
+            contextTask = ...
+
+            registry.set('my-company.com:5000')
+            namespace.set('library')
+            imageName.set('my-image')
+            tags.set('1.21')
+           
+            // use 'sourceRef' for existing image
+            //sourceRefRegistry.set('my-company.com:5000')
+            //sourceRefNamespace.set('library')
+            //sourceRefImageName.set('nginx')
+            //sourceRefTag.set('1.21')
+            
+            publish {
+                to('privateRegistry') {
+                }
+            }
+        }
+    }
+}
+```
+
+
 #### Docker Hub Publishing
 ```groovy
 docker {

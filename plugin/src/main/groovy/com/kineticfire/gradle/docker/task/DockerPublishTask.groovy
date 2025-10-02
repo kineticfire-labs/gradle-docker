@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.exception.DockerServiceException
 import com.kineticfire.gradle.docker.model.AuthConfig
+import com.kineticfire.gradle.docker.model.EffectiveImageProperties
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.PublishTarget
 import com.kineticfire.gradle.docker.spec.ImageSpec
@@ -48,6 +49,13 @@ abstract class DockerPublishTask extends DefaultTask {
         tags.convention([])
         publishTargets.convention([])
         sourceRef.convention("")
+
+        // SourceRef component conventions
+        sourceRefRegistry.convention("")
+        sourceRefNamespace.convention("")
+        sourceRefImageName.convention("")
+        sourceRefRepository.convention("")
+        sourceRefTag.convention("")
 
         // Map publishSpec.to to publishTargets
         publishSpec.convention(null)
@@ -87,7 +95,28 @@ abstract class DockerPublishTask extends DefaultTask {
     @Input
     @Optional
     abstract Property<String> getSourceRef()
-    
+
+    // SourceRef component properties
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRegistry()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefNamespace()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefImageName()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRepository()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefTag()
+
     @Input
     abstract ListProperty<PublishTarget> getPublishTargets()
 
@@ -221,12 +250,30 @@ abstract class DockerPublishTask extends DefaultTask {
      * Build source image reference from nomenclature properties (use first tag)
      */
     String buildSourceImageReference() {
+        // Use ImageSpec for comprehensive source resolution (handles all sourceRef modes)
+        def imageSpecValue = imageSpec.orNull
+        if (imageSpecValue) {
+            // Only call getEffectiveSourceRef() if there are actual sourceRef components
+            if (imageSpecValue.sourceRef.isPresent() && !imageSpecValue.sourceRef.get().isEmpty()) {
+                return imageSpecValue.sourceRef.get()
+            }
+            // Check for sourceRef components
+            def hasComponents = hasSourceRefComponents(imageSpecValue)
+            if (hasComponents) {
+                def effectiveSourceRef = imageSpecValue.getEffectiveSourceRef()
+                if (effectiveSourceRef && !effectiveSourceRef.isEmpty()) {
+                    return effectiveSourceRef
+                }
+            }
+        }
+
+        // Fallback to direct task properties for backward compatibility
         // Check for SourceRef Mode first (existing/pre-built images)
         def sourceRefValue = sourceRef.getOrElse("")
         if (!sourceRefValue.isEmpty()) {
             return sourceRefValue
         }
-        
+
         // Build Mode (building new images) - use nomenclature properties
         def registryValue = registry.getOrElse("")
         def namespaceValue = namespace.getOrElse("")
@@ -234,13 +281,13 @@ abstract class DockerPublishTask extends DefaultTask {
         def imageNameValue = imageName.getOrElse("")
         def versionValue = version.getOrElse("")
         def tagsValue = tags.getOrElse([])
-        
+
         if (tagsValue.isEmpty()) {
             return null
         }
-        
+
         def primaryTag = tagsValue[0]
-        
+
         if (!repositoryValue.isEmpty()) {
             // Using repository format
             def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
@@ -255,60 +302,82 @@ abstract class DockerPublishTask extends DefaultTask {
                 baseRef += "${namespaceValue}/"
             }
             baseRef += imageNameValue
-            
+
             return "${baseRef}:${primaryTag}"
         }
-        
+
         return null
     }
     
     /**
-     * Build target image references for a publish target
+     * Build target image references for a publish target using inheritance
      */
     List<String> buildTargetImageReferences(PublishTarget target) {
-        def targetRefs = []
-        
-        def targetRegistryValue = target.registry.getOrElse("")
-        def targetNamespaceValue = target.namespace.getOrElse("")
-        def targetRepositoryValue = target.repository.getOrElse("")
-        def targetImageNameValue = target.imageName.getOrElse("")
-        def targetPublishTags = target.publishTags.getOrElse([])
-        
-        if (targetPublishTags.isEmpty()) {
-            return targetRefs
+        // Step 1: Get effective source properties
+        def sourceProps = getEffectiveSourceProperties()
+
+        // Step 2: Apply target overrides with inheritance
+        def effectiveProps = sourceProps.applyTargetOverrides(target)
+
+        // Step 3: Validate we have required properties
+        def effectiveTags = effectiveProps.tags
+        if (effectiveTags.isEmpty()) {
+            // Default to ["latest"] if no tags available
+            effectiveTags = ["latest"]
         }
-        
-        if (!targetRepositoryValue.isEmpty()) {
+
+        // Step 4: Build target references with effective properties
+        def targetRefs = []
+
+        if (!effectiveProps.repository.isEmpty()) {
             // Using repository format
-            def baseRef = targetRegistryValue.isEmpty() ? targetRepositoryValue : "${targetRegistryValue}/${targetRepositoryValue}"
-            targetPublishTags.each { tag ->
+            def baseRef = effectiveProps.registry.isEmpty() ?
+                effectiveProps.repository :
+                "${effectiveProps.registry}/${effectiveProps.repository}"
+            effectiveTags.each { tag ->
+                targetRefs.add("${baseRef}:${tag}")
+            }
+        } else if (!effectiveProps.imageName.isEmpty()) {
+            // Using namespace + imageName format
+            def baseRef = ""
+            if (!effectiveProps.registry.isEmpty()) {
+                baseRef += "${effectiveProps.registry}/"
+            }
+            if (!effectiveProps.namespace.isEmpty()) {
+                baseRef += "${effectiveProps.namespace}/"
+            }
+            baseRef += effectiveProps.imageName
+
+            effectiveTags.each { tag ->
                 targetRefs.add("${baseRef}:${tag}")
             }
         } else {
-            // Using namespace + imageName format
-            def baseRef = ""
-            if (!targetRegistryValue.isEmpty()) {
-                baseRef += "${targetRegistryValue}/"
-            }
-            if (!targetNamespaceValue.isEmpty()) {
-                baseRef += "${targetNamespaceValue}/"
-            }
-            
-            // Use target imageName if provided, otherwise fall back to source imageName
-            def targetImageName = targetImageNameValue.isEmpty() ? imageName.getOrElse("") : targetImageNameValue
-            if (targetImageName.isEmpty()) {
-                return targetRefs
-            }
-            baseRef += targetImageName
-            
-            targetPublishTags.each { tag ->
-                targetRefs.add("${baseRef}:${tag}")
-            }
+            // No valid image reference can be built
+            logger.warn("Cannot build target image reference: missing imageName and repository")
+            return []
         }
-        
+
         return targetRefs
     }
-    
+
+    /**
+     * Get effective source properties for inheritance calculations
+     */
+    private EffectiveImageProperties getEffectiveSourceProperties() {
+        def imageSpecValue = imageSpec.orNull
+        if (imageSpecValue) {
+            return EffectiveImageProperties.fromImageSpec(imageSpecValue)
+        } else {
+            return EffectiveImageProperties.fromTaskProperties(this)
+        }
+    }
+
+    private static boolean hasSourceRefComponents(ImageSpec imageSpec) {
+        def hasRepository = !imageSpec.sourceRefRepository.getOrElse("").isEmpty()
+        def hasImageName = !imageSpec.sourceRefImageName.getOrElse("").isEmpty()
+        return hasRepository || hasImageName
+    }
+
     /**
      * Validate authentication credentials with registry-specific suggestions
      */

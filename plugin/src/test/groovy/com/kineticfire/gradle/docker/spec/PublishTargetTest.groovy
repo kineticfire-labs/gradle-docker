@@ -247,8 +247,17 @@ class PublishTargetTest extends Specification {
         publishTarget.validateRegistry() // Should not throw
     }
 
-    def "validateRegistry fails when neither registry nor fully qualified repository is set"() {
+    def "validateRegistry succeeds when target is completely empty (inheritance mode)"() {
         when:
+        publishTarget.validateRegistry()
+
+        then:
+        noExceptionThrown() // Empty targets should be allowed for inheritance
+    }
+
+    def "validateRegistry fails when target has properties but no registry"() {
+        when:
+        publishTarget.imageName.set('myapp')  // Set a property to make it non-empty
         publishTarget.validateRegistry()
 
         then:
@@ -257,6 +266,7 @@ class PublishTargetTest extends Specification {
         exception.message.contains("registry.set('docker.io') for Docker Hub")
         exception.message.contains("registry.set('localhost:5000') for local registry")
         exception.message.contains("registry.set('<other-target-registry>') for other registries")
+        exception.message.contains("leave the target completely empty to inherit")
     }
 
     def "validateRegistry fails when repository contains slash but is not fully qualified"() {

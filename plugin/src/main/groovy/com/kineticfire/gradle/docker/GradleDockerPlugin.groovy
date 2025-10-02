@@ -496,7 +496,14 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure SourceRef Mode property
         task.sourceRef.set(imageSpec.sourceRef)
-        
+
+        // Configure SourceRef component properties
+        task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
+        task.sourceRefNamespace.set(imageSpec.sourceRefNamespace)
+        task.sourceRefImageName.set(imageSpec.sourceRefImageName)
+        task.sourceRefRepository.set(imageSpec.sourceRefRepository)
+        task.sourceRefTag.set(imageSpec.sourceRefTag)
+
         // Configure publish targets from DSL
         if (imageSpec.publish.present) {
             def publishSpec = imageSpec.publish.get()

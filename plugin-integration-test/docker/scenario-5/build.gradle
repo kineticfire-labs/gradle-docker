@@ -1,0 +1,117 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - SourceRef Component Mode
+ *       - sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag
+ *   - Tag Features
+ *       - none
+ *   - Save Features
+ *       - none
+ *   - Publish Features
+ *       - SOURCEREF COMPONENT INHERITANCE TEST
+ *       - publish to private registry without authentication
+ *       - Partial override (registry + publishTags)
+ *       - Should inherit namespace and imageName from sourceRef components
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        sourceRefTest {
+            // SourceRef component mode - specify existing image components
+            sourceRefRegistry.set('docker.io')
+            sourceRefNamespace.set('library')
+            sourceRefImageName.set('nginx')
+            sourceRefTag.set('1.21')
+            // Effective sourceRef: docker.io/library/nginx:1.21
+
+            publish {
+                to('partialOverride') {
+                    registry.set('localhost:5051')  // Override registry
+                    publishTags(['test'])          // Override tags
+                    // Should inherit: namespace=library, imageName=nginx
+                    // Expected result: localhost:5051/library/nginx:test
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply buildSrc components only when running from top-level integration test project (where buildSrc is available)
+if (rootProject.name == 'plugin-integration-test') {
+    // Apply the reusable Docker image testing plugin from buildSrc
+    apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+    // Apply the registry management plugin from buildSrc
+    apply plugin: RegistryManagementPlugin
+
+    // Configure test registry using the plugin
+    withTestRegistry('test-registry-scenario5', 5051) {
+        // Registry will be configured with default settings
+    }
+
+    // No build workflow tasks since this uses existing image (sourceRef mode)
+
+    // Register registry image verification task since this scenario tests publish functionality
+    registerVerifyRegistryImagesTask(project, ['localhost:5051/library/nginx:test'])
+}
+
+// Task that runs integration test workflow (different behavior based on execution context)
+if (rootProject.name == 'plugin-integration-test') {
+    // When running from parent project, use integration test workflow for sourceRef mode
+    tasks.register('integrationTest') {
+        description = 'Run sourceRef integration test: pull → publish → verify (sourceRef component inheritance)'
+        group = 'verification'
+
+        // Dependencies for sourceRef mode (no build needed)
+        dependsOn 'startTestRegistries'
+        dependsOn 'dockerImages'  // This will handle pull and publish
+        dependsOn 'verifyRegistryDockerImages'
+        dependsOn 'stopTestRegistries'
+    }
+
+    // Configure task ordering without direct task references
+    tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+    tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+} else {
+    // When running standalone, create a simplified integrationTest task for plugin verification
+    tasks.register('integrationTest') {
+        description = 'Run simplified integration test to verify plugin version resolution'
+        group = 'verification'
+        dependsOn 'dockerPublish'
+
+        // Capture task names during configuration for configuration cache compatibility
+        def dockerTaskNames = tasks.findAll { it.name.startsWith('docker') }.collect { it.name }
+        doFirst {
+            println "✅ Plugin version resolved successfully for standalone execution!"
+            println "✅ Available docker tasks: ${dockerTaskNames}"
+        }
+    }
+}

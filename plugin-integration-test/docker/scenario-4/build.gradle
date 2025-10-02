@@ -1,0 +1,153 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images = 1
+ *       - build image + follow-on publish
+ *       - naming style: Image Name Mode: namespace, imageName, 1 tag
+ *       - build args = none
+ *       - labels = none
+ *       - dockerfile = default
+ *   - Tag Features
+ *       - number of tags = 1
+ *   - Save Features
+ *       - none
+ *   - Publish Features
+ *       - inherit all from build (empty target should inherit ALL properties from source)
+ *       - publish to private registry without authentication
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        inheritanceTest {
+
+            contextTask = tasks.register('prepareScenario4InheritanceTestContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for inheritance test image'
+                into layout.buildDirectory.dir('docker-context/inheritanceTest')
+                from('src/main/docker')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                } else {
+                    // For standalone execution, create a dummy JAR file for testing
+                    // Capture version during configuration for configuration cache compatibility
+                    def versionString = project.version.toString()
+                    doFirst {
+                        def jarFile = new File(destinationDir, "app-${versionString}.jar")
+                        jarFile.parentFile.mkdirs()
+                        jarFile.createNewFile()
+                        jarFile.text = "dummy jar for standalone testing"
+                    }
+                }
+            }
+
+            // Source image configuration - will be inherited by empty publish target
+            namespace.set('scenario4')
+            imageName.set('inheritance-test')
+            tags.set(['latest'])
+
+            publish {
+                to('emptyTarget') {
+                    // COMPLETELY EMPTY - should inherit everything!
+                    // Expected result: scenario4/inheritance-test:latest
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply buildSrc components only when running from top-level integration test project (where buildSrc is available)
+if (rootProject.name == 'plugin-integration-test') {
+    // Apply the reusable Docker image testing plugin from buildSrc
+    apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+    // Apply the registry management plugin from buildSrc
+    apply plugin: RegistryManagementPlugin
+
+    // Configure test registry using the plugin
+    withTestRegistry('test-registry-scenario4', 5041) {
+        // Registry will be configured with default settings
+    }
+
+    // Register Docker image clean and verify tasks for this integration test
+    registerBuildWorkflowTasks(project, ['scenario4/inheritance-test:latest'])
+
+    // Register registry image verification task since this scenario tests publish functionality
+    // Empty target should inherit and publish to the same image reference
+    registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
+}
+
+// Task that runs integration test workflow (different behavior based on execution context)
+if (rootProject.name == 'plugin-integration-test') {
+    // When running from parent project, use full integration test workflow
+    tasks.register('integrationTest') {
+        description = 'Run complete Docker integration test: clean → build → publish → verify (empty target inheritance)'
+        group = 'verification'
+
+        // Dependencies
+        dependsOn 'startTestRegistries'
+        dependsOn 'cleanDockerImages'
+        dependsOn 'dockerImages'
+        dependsOn 'verifyDockerImages'
+        dependsOn 'verifyRegistryDockerImages'
+        dependsOn 'stopTestRegistries'
+    }
+
+    // Configure task ordering without direct task references
+    tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+    tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+    tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+    tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+} else {
+    // When running standalone, create a simplified integrationTest task for plugin verification
+    tasks.register('integrationTest') {
+        description = 'Run simplified integration test to verify plugin version resolution'
+        group = 'verification'
+        dependsOn 'dockerBuild'
+
+        // Capture task names during configuration for configuration cache compatibility
+        def dockerTaskNames = tasks.findAll { it.name.startsWith('docker') }.collect { it.name }
+        doFirst {
+            println "✅ Plugin version resolved successfully for standalone execution!"
+            println "✅ Available docker tasks: ${dockerTaskNames}"
+        }
+    }
+}

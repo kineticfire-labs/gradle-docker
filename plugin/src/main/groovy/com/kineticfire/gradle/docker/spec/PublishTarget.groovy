@@ -106,12 +106,26 @@ abstract class PublishTarget {
     }
     
     /**
-     * Validate that registry is explicitly specified
+     * Validate that registry is explicitly specified or target inherits from source
      */
     void validateRegistry() {
         def registryValue = registry.getOrElse("")
         def repositoryValue = repository.getOrElse("")
+        def publishTagsValue = publishTags.getOrElse([])
 
+        // Allow completely empty targets (will inherit everything from source)
+        def hasAnyTargetProperty = !registryValue.isEmpty() ||
+                                  !namespace.getOrElse("").isEmpty() ||
+                                  !imageName.getOrElse("").isEmpty() ||
+                                  !repositoryValue.isEmpty() ||
+                                  !publishTagsValue.isEmpty()
+
+        if (!hasAnyTargetProperty) {
+            // Empty target is valid - will inherit all properties from source
+            return
+        }
+
+        // For non-empty targets, validate registry specification
         // Check if repository is fully qualified (basic detection)
         def isFullyQualified = repositoryValue.contains("/") &&
                               (repositoryValue.contains(".") || repositoryValue.contains(":"))
@@ -120,7 +134,8 @@ abstract class PublishTarget {
             throw new org.gradle.api.GradleException(
                 "Registry must be explicitly specified for publish target '${name}'. " +
                 "Use registry.set('docker.io') for Docker Hub, registry.set('localhost:5000') for local registry, " +
-                "or registry.set('<other-target-registry>') for other registries."
+                "registry.set('<other-target-registry>') for other registries, " +
+                "or leave the target completely empty to inherit from source image."
             )
         }
 
