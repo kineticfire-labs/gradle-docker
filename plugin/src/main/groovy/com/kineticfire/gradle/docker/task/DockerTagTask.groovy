@@ -80,9 +80,6 @@ abstract class DockerTagTask extends DefaultTask {
     void tagImage() {
         // Pull source image if needed
         pullSourceRefIfNeeded()
-        
-        def sourceRefValue = sourceRef.getOrElse("")
-        def tagsValue = tags.getOrElse([])
 
         def service = dockerService.get()
         if (!service) {
@@ -91,6 +88,8 @@ abstract class DockerTagTask extends DefaultTask {
 
         // Use EffectiveImageProperties to detect sourceRef mode (like DockerPublishTask does)
         def imageSpec = this.imageSpec.get()
+        def sourceRefValue = imageSpec.sourceRef.getOrElse("")
+        def tagsValue = imageSpec.tags.getOrElse([])
         def isSourceRefMode = isInSourceRefMode(imageSpec)
 
         if (isSourceRefMode) {
@@ -151,12 +150,17 @@ abstract class DockerTagTask extends DefaultTask {
     }
 
     /**
-     * Build all image references from dual-mode properties (SourceRef vs Build Mode)
+     * Build all image references from ImageSpec (dual-mode properties: SourceRef vs Build Mode)
      */
     List<String> buildImageReferences() {
         def references = []
-        def sourceRefValue = sourceRef.getOrElse("")
-        def tagsValue = tags.getOrElse([])
+        def imageSpecValue = imageSpec.orNull
+        if (!imageSpecValue) {
+            throw new IllegalStateException("imageSpec must be provided")
+        }
+
+        def sourceRefValue = imageSpecValue.sourceRef.getOrElse("")
+        def tagsValue = imageSpecValue.tags.getOrElse([])
 
         if (!sourceRefValue.isEmpty()) {
             // SourceRef Mode: Use sourceRef as source, apply tags as targets
@@ -170,16 +174,16 @@ abstract class DockerTagTask extends DefaultTask {
                 throw new IllegalStateException("At least one tag must be specified")
             }
 
-            def registryValue = registry.getOrElse("")
-            def namespaceValue = namespace.getOrElse("")
-            def repositoryValue = repository.getOrElse("")
-            def imageNameValue = imageName.getOrElse("")
-            def versionValue = version.getOrElse("")
-            
+            def registryValue = imageSpecValue.registry.getOrElse("")
+            def namespaceValue = imageSpecValue.namespace.getOrElse("")
+            def repositoryValue = imageSpecValue.repository.getOrElse("")
+            def imageNameValue = imageSpecValue.imageName.getOrElse("")
+            def versionValue = imageSpecValue.version.getOrElse("")
+
             if (repositoryValue.isEmpty() && imageNameValue.isEmpty()) {
                 throw new IllegalStateException("Either repository OR imageName must be specified when not using sourceRef")
             }
-            
+
             if (!repositoryValue.isEmpty()) {
                 // Using repository format
                 def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
@@ -196,13 +200,13 @@ abstract class DockerTagTask extends DefaultTask {
                     baseRef += "${namespaceValue}/"
                 }
                 baseRef += imageNameValue
-                
+
                 tagsValue.each { tag ->
                     references.add("${baseRef}:${tag}")
                 }
             }
         }
-        
+
         return references
     }
     

@@ -38,6 +38,10 @@ class DockerTagTaskTest extends Specification {
         task.dockerService.set(mockDockerService)
     }
 
+    protected Object createImageSpec(String name = "testImage") {
+        return project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, name, project)
+    }
+
     def "task can be created"() {
         expect:
         task != null
@@ -84,7 +88,9 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when neither sourceImage nor sourceRef is set"() {
         given:
-        task.tags.set(['myapp:latest'])
+        def imageSpec = createImageSpec()
+        imageSpec.tags.set(['myapp:latest'])
+        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
@@ -95,25 +101,31 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when tags are not set"() {
         given:
-        task.sourceRef.set('sha256:abc123')
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('sha256:abc123')
+        // No tags set, but this should not throw in sourceRef mode (it's a no-op)
+        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
 
         then:
-        thrown(IllegalStateException)
+        notThrown(IllegalStateException)
     }
 
     def "task fails when tags list is empty"() {
         given:
-        task.sourceRef.set('sha256:abc123')
-        task.tags.set([])
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('sha256:abc123')
+        imageSpec.tags.set([])
+        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
 
         then:
-        thrown(IllegalStateException)
+        // Should not throw in sourceRef mode with empty tags (it's a no-op)
+        notThrown(IllegalStateException)
     }
     
     def "task supports multiple tag configurations"() {

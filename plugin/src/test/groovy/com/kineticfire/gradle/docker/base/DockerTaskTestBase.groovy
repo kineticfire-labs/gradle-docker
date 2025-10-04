@@ -135,4 +135,8 @@ abstract class DockerTaskTestBase extends Specification {
         publishSpec.to.add(target)
         return publishSpec
     }
+
+    protected Object createImageSpec(String name = "testImage") {
+        return project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, name, project)
+    }
 }
