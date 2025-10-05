@@ -272,65 +272,73 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
-        // Configure per-image task dependencies
+        // Configure per-image task dependencies using configuration cache compatible approach
         dockerExt.images.all { imageSpec ->
             def imageName = imageSpec.name
             def capitalizedName = imageName.capitalize()
             def buildTaskName = "dockerBuild${capitalizedName}"
-            
+
             // If image has build context AND is not in sourceRef mode, save/publish depend on build
             def hasBuildContext = imageSpec.context.isPresent() || imageSpec.contextTask != null
             if (hasBuildContext && !isSourceRefMode(imageSpec)) {
-                project.tasks.findByName("dockerSave${capitalizedName}")?.dependsOn(buildTaskName)
-                project.tasks.findByName("dockerPublish${capitalizedName}")?.dependsOn(buildTaskName)
-            }
-        }
-        
-        // Configure aggregate task dependencies
-        project.tasks.named('dockerBuild') {
-            // Only depend on build tasks for images that are in build mode (not sourceRef mode)
-            def buildTaskNames = dockerExt.images.findAll { !isSourceRefMode(it) }.collect { "dockerBuild${it.name.capitalize()}" }
-            if (buildTaskNames) {
-                dependsOn buildTaskNames
-            }
-        }
-        
-        project.tasks.named('dockerTag') {
-            def tagTaskNames = dockerExt.images.collect { "dockerTag${it.name.capitalize()}" }
-            if (tagTaskNames) {
-                dependsOn tagTaskNames
+                // Use configuration cache compatible approach with task providers
+                if (imageSpec.save.isPresent()) {
+                    project.tasks.named("dockerSave${capitalizedName}").configure { task ->
+                        task.dependsOn(buildTaskName)
+                    }
+                }
+                if (imageSpec.publish.isPresent()) {
+                    project.tasks.named("dockerPublish${capitalizedName}").configure { task ->
+                        task.dependsOn(buildTaskName)
+                    }
+                }
             }
         }
 
-        project.tasks.named('dockerSave') {
-            def saveTaskNames = dockerExt.images.findAll { it.save.isPresent() }.collect { "dockerSave${it.name.capitalize()}" }
-            if (saveTaskNames) {
-                dependsOn saveTaskNames
-            }
+        // Configure aggregate task dependencies using configuration cache compatible approach
+        project.tasks.named('dockerBuild').configure { aggregateTask ->
+            // Use provider-based dependency configuration
+            aggregateTask.dependsOn(project.provider {
+                dockerExt.images.findAll { !isSourceRefMode(it) }.collect { "dockerBuild${it.name.capitalize()}" }
+            })
         }
 
-        project.tasks.named('dockerPublish') {
-            def publishTaskNames = dockerExt.images.findAll { it.publish.isPresent() }.collect { "dockerPublish${it.name.capitalize()}" }
-            if (publishTaskNames) {
-                dependsOn publishTaskNames
-            }
+        project.tasks.named('dockerTag').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerExt.images.collect { "dockerTag${it.name.capitalize()}" }
+            })
         }
-        
+
+        project.tasks.named('dockerSave').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerExt.images.findAll { it.save.isPresent() }.collect { "dockerSave${it.name.capitalize()}" }
+            })
+        }
+
+        project.tasks.named('dockerPublish').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerExt.images.findAll { it.publish.isPresent() }.collect { "dockerPublish${it.name.capitalize()}" }
+            })
+        }
+
         // Configure compose aggregate dependencies
-        project.tasks.named('composeUp') {
-            dependsOn dockerOrchExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
+        project.tasks.named('composeUp').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerOrchExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
+            })
         }
-        
-        project.tasks.named('composeDown') {
-            dependsOn dockerOrchExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
+
+        project.tasks.named('composeDown').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerOrchExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
+            })
         }
-        
+
         // Configure global dockerImages aggregate task dependencies
-        project.tasks.named('dockerImages') {
-            def imageTaskNames = dockerExt.images.names.collect { "dockerImage${it.capitalize()}" }
-            if (imageTaskNames) {
-                dependsOn imageTaskNames
-            }
+        project.tasks.named('dockerImages').configure { aggregateTask ->
+            aggregateTask.dependsOn(project.provider {
+                dockerExt.images.names.collect { "dockerImage${it.capitalize()}" }
+            })
         }
     }
     
@@ -437,7 +445,8 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
         }
     }
-    
+
+
     private void configureDockerSaveTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Save Docker image to file: ${imageSpec.name}"
@@ -462,10 +471,11 @@ class GradleDockerPlugin implements Plugin<Project> {
             def saveSpec = imageSpec.save.get()
             task.outputFile.set(saveSpec.outputFile)
             task.compression.set(saveSpec.compression)  // Now using SaveCompression enum directly
-            
-            // pullIfMissing and auth now handled at image level via imageSpec
-            task.imageSpec.set(imageSpec)
         }
+
+        // Configure imageSpec for pullIfMissing support
+        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
+        task.imageSpec.set(imageSpec)
     }
     
     private void configureDockerTagTask(task, imageSpec, dockerService) {
@@ -475,8 +485,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-        
-        // Configure image spec for pullIfMissing support
+
+        // Configure imageSpec for pullIfMissing support
+        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
         task.imageSpec.set(imageSpec)
 
         // Configure Docker nomenclature properties
@@ -494,14 +505,15 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerPublishTask(task, imageSpec, dockerService) {
         task.group = 'docker'
         task.description = "Publish Docker image: ${imageSpec.name}"
-        
+
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-        
-        // Configure image spec for pullIfMissing support
+
+        // Configure imageSpec for pullIfMissing support
+        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
         task.imageSpec.set(imageSpec)
-        
+
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
