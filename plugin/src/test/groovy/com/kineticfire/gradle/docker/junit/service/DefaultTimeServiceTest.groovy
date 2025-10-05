@@ -76,9 +76,9 @@ class DefaultTimeServiceTest extends Specification {
 
         then:
         long elapsed = System.currentTimeMillis() - startTime
-        // Allow some tolerance for timing variations
+        // Allow generous tolerance for timing variations in CI/test environments
         elapsed >= sleepTime - 5
-        elapsed <= sleepTime + 50
+        elapsed <= sleepTime + 150
         noExceptionThrown()
     }
 

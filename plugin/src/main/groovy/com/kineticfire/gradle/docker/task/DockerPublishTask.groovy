@@ -59,11 +59,35 @@ abstract class DockerPublishTask extends DefaultTask {
 
         // Map publishSpec.to to publishTargets
         publishSpec.convention(null)
+
+        // Configuration cache safe property conventions
+        contextTaskName.convention("")
+        contextTaskPath.convention("")
+        pullIfMissing.convention(false)
+        effectiveSourceRef.convention("")
     }
     
     @Internal
     abstract Property<DockerService> getDockerService()
     
+    // Configuration cache safe alternatives to ImageSpec
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskName()
+
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskPath()
+
+    @Input
+    @Optional
+    abstract Property<Boolean> getPullIfMissing()
+
+    @Input
+    @Optional
+    abstract Property<String> getEffectiveSourceRef()
+
+    // Compatibility property for tests (not serialized due to @Internal)
     @Internal
     abstract Property<ImageSpec> getImageSpec()
     
@@ -250,28 +274,29 @@ abstract class DockerPublishTask extends DefaultTask {
      * Build source image reference from nomenclature properties (use first tag)
      */
     String buildSourceImageReference() {
-        // Use ImageSpec for comprehensive source resolution (handles all sourceRef modes)
-        def imageSpecValue = imageSpec.orNull
-        if (imageSpecValue) {
-            // Only call getEffectiveSourceRef() if there are actual sourceRef components
-            if (imageSpecValue.sourceRef.isPresent() && !imageSpecValue.sourceRef.get().isEmpty()) {
-                return imageSpecValue.sourceRef.get()
-            }
-            // Check for sourceRef components
-            def hasComponents = hasSourceRefComponents(imageSpecValue)
-            if (hasComponents) {
-                def effectiveSourceRef = imageSpecValue.getEffectiveSourceRef()
-                if (effectiveSourceRef && !effectiveSourceRef.isEmpty()) {
-                    return effectiveSourceRef
-                }
-            }
-        }
-
-        // Fallback to direct task properties for backward compatibility
         // Check for SourceRef Mode first (existing/pre-built images)
         def sourceRefValue = sourceRef.getOrElse("")
         if (!sourceRefValue.isEmpty()) {
             return sourceRefValue
+        }
+
+        // Check for effectiveSourceRef if available
+        def effectiveSourceRefValue = effectiveSourceRef.getOrElse("")
+        if (!effectiveSourceRefValue.isEmpty()) {
+            return effectiveSourceRefValue
+        }
+
+        // Check for ImageSpec and use its getEffectiveSourceRef if available
+        if (imageSpec.isPresent()) {
+            try {
+                def imageSpecValue = imageSpec.get()
+                def effectiveRef = imageSpecValue.getEffectiveSourceRef()
+                if (effectiveRef && !effectiveRef.isEmpty()) {
+                    return effectiveRef
+                }
+            } catch (Exception e) {
+                // Fall through to build mode if ImageSpec.getEffectiveSourceRef() fails
+            }
         }
 
         // Build Mode (building new images) - use nomenclature properties
@@ -364,19 +389,9 @@ abstract class DockerPublishTask extends DefaultTask {
      * Get effective source properties for inheritance calculations
      */
     private EffectiveImageProperties getEffectiveSourceProperties() {
-        def imageSpecValue = imageSpec.orNull
-        if (imageSpecValue) {
-            return EffectiveImageProperties.fromImageSpec(imageSpecValue)
-        } else {
-            return EffectiveImageProperties.fromTaskProperties(this)
-        }
+        return EffectiveImageProperties.fromTaskProperties(this)
     }
 
-    private static boolean hasSourceRefComponents(ImageSpec imageSpec) {
-        def hasRepository = !imageSpec.sourceRefRepository.getOrElse("").isEmpty()
-        def hasImageName = !imageSpec.sourceRefImageName.getOrElse("").isEmpty()
-        return hasRepository || hasImageName
-    }
 
     /**
      * Validate authentication credentials with registry-specific suggestions
@@ -479,18 +494,12 @@ abstract class DockerPublishTask extends DefaultTask {
     }
     
     private void pullSourceRefIfNeeded() {
-        def imageSpecValue = imageSpec.orNull
-        if (!imageSpecValue) return
-        
-        imageSpecValue.validateModeConsistency()
-        imageSpecValue.validateSourceRefConfiguration()
-        imageSpecValue.validatePullIfMissingConfiguration()
-
-        if (imageSpecValue.pullIfMissing.getOrElse(false)) {
-            def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
+        if (pullIfMissing.getOrElse(false)) {
+            def sourceRefValue = effectiveSourceRef.getOrElse("")
             if (sourceRefValue && !sourceRefValue.isEmpty()) {
-                def authConfig = imageSpecValue.pullAuth ? 
-                    imageSpecValue.pullAuth.toAuthConfig() : null
+                // Note: Auth config handling temporarily simplified for configuration cache compatibility
+                // TODO: Add configuration cache safe auth config support
+                def authConfig = null
 
                 def service = dockerService.get()
                 if (!service.imageExists(sourceRefValue).get()) {

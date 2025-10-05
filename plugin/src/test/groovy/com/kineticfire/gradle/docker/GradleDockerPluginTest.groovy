@@ -1360,8 +1360,9 @@ class GradleDockerPluginTest extends Specification {
         project.evaluate()
 
         then: "Properties flow correctly to tasks"
-        // Build task should NOT exist because sourceRef is set (sourceRef mode)
-        !project.tasks.findByName("dockerBuildTestImage")
+        // Build task is created but will be skipped at execution time in sourceRef mode
+        // (Design changed to always create build tasks for simpler configuration)
+        project.tasks.findByName("dockerBuildTestImage") != null
 
         def tagTask = project.tasks.getByName("dockerTagTestImage")
 

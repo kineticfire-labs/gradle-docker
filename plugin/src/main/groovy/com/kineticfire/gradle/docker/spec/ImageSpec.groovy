@@ -62,6 +62,10 @@ abstract class ImageSpec {
         sourceRefTag.convention("")
         sourceRefRepository.convention("")
         
+        // Configuration cache safe context task properties
+        contextTaskName.convention("")
+        contextTaskPath.convention("")
+        
         // Set context convention
         context.convention(layout.projectDirectory.dir("src/main/docker"))
     }
@@ -103,6 +107,15 @@ abstract class ImageSpec {
     
     @Internal
     TaskProvider<Task> contextTask
+    
+    // Configuration cache safe alternatives to contextTask
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskName()
+    
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskPath()
     
     @Input
     @Optional
@@ -247,6 +260,9 @@ abstract class ImageSpec {
             closure.call()
         }
         this.contextTask = copyTask
+        // Set configuration cache safe properties
+        this.contextTaskName.set("prepare${name.capitalize()}Context")
+        this.contextTaskPath.set(":prepare${name.capitalize()}Context")
     }
     
     /**
@@ -261,6 +277,9 @@ abstract class ImageSpec {
             action.execute(task)
         }
         this.contextTask = copyTask
+        // Set configuration cache safe properties
+        this.contextTaskName.set("prepare${name.capitalize()}Context")
+        this.contextTaskPath.set(":prepare${name.capitalize()}Context")
     }
     
     // DSL methods for pullAuth configuration

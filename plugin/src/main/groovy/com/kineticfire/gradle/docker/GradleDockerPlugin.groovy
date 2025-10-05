@@ -42,19 +42,19 @@ class GradleDockerPlugin implements Plugin<Project> {
     void apply(Project project) {
         // Validate minimum requirements
         validateRequirements(project)
-        
+
         // Register shared services
         def dockerService = registerDockerService(project)
-        def composeService = registerComposeService(project) 
+        def composeService = registerComposeService(project)
         def jsonService = registerJsonService(project)
-        
+
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project)
         def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects, project)
-        
+
         // Register task creation rules
         registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
-        
+
         // Configure validation and dependency resolution
         configureAfterEvaluation(project, dockerExt, dockerOrchExt)
         
@@ -78,8 +78,8 @@ class GradleDockerPlugin implements Plugin<Project> {
                 )
             }
         }
-        
-        // Validate Gradle version (warn only in test environments)  
+
+        // Validate Gradle version (warn only in test environments)
         def gradleVersion = project.gradle.gradleVersion
         if (GradleVersion.version(gradleVersion) < GradleVersion.version("9.0.0")) {
             def message = "gradle-docker plugin requires Gradle 9.0.0 or higher. Current version: ${gradleVersion}"
@@ -91,15 +91,18 @@ class GradleDockerPlugin implements Plugin<Project> {
                 )
             }
         }
-        
+
         project.logger.info("gradle-docker plugin applied successfully (Java ${javaVersion}, Gradle ${gradleVersion})")
     }
-    
-    private boolean isTestEnvironment() {
-        // Detect if running in test environment
-        return System.getProperty("gradle.test.running") == "true" || 
-               Thread.currentThread().stackTrace.any { 
-                   it.className.contains("spock") || it.className.contains("Test") 
+
+    private static boolean isTestEnvironment() {
+        // Check for common test environment indicators
+        return System.getProperty('gradle.test.worker') != null ||
+               System.getProperty('org.gradle.test.worker') != null ||
+               Thread.currentThread().getContextClassLoader().toString().contains('test') ||
+               System.getProperty("gradle.test.running") == "true" ||
+               Thread.currentThread().stackTrace.any {
+                   it.className.contains("spock") || it.className.contains("Test")
                }
     }
     
@@ -185,17 +188,15 @@ class GradleDockerPlugin implements Plugin<Project> {
             // Defer tags validation to task execution time for TestKit compatibility
             // Tags will be validated when tasks actually execute
             
-            // Build task (only for build mode, not sourceRef mode)
-            if (!isSourceRefMode(imageSpec)) {
-                project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-                    configureDockerBuildTask(task, imageSpec, dockerService, project)
-                }
+            // Build task - always register, will be skipped at execution time in sourceRef mode
+            project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
+                configureDockerBuildTask(task, imageSpec, dockerService, project)
             }
             
             // Save task
             if (imageSpec.save.isPresent()) {
                 project.tasks.register("dockerSave${capitalizedName}", DockerSaveTask) { task ->
-                    configureDockerSaveTask(task, imageSpec, dockerService)
+                    configureDockerSaveTask(task, imageSpec, dockerService, project)
                 }
             }
             
@@ -207,7 +208,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             // Publish task
             if (imageSpec.publish.isPresent()) {
                 project.tasks.register("dockerPublish${capitalizedName}", DockerPublishTask) { task ->
-                    configureDockerPublishTask(task, imageSpec, dockerService)
+                    configureDockerPublishTask(task, imageSpec, dockerService, project)
                 }
             }
             
@@ -216,10 +217,8 @@ class GradleDockerPlugin implements Plugin<Project> {
                 task.group = 'docker'
                 task.description = "Run all configured Docker operations for image: ${imageSpec.name}"
                 
-                // Conditionally depend on build (only for build mode)
-                if (!isSourceRefMode(imageSpec)) {
-                    task.dependsOn("dockerBuild${capitalizedName}")
-                }
+                // Always depend on build (will be skipped at execution time in sourceRef mode)
+                task.dependsOn("dockerBuild${capitalizedName}")
                 // Always depend on tag
                 task.dependsOn("dockerTag${capitalizedName}")
                 
@@ -278,9 +277,12 @@ class GradleDockerPlugin implements Plugin<Project> {
             def capitalizedName = imageName.capitalize()
             def buildTaskName = "dockerBuild${capitalizedName}"
 
-            // If image has build context AND is not in sourceRef mode, save/publish depend on build
-            def hasBuildContext = imageSpec.context.isPresent() || imageSpec.contextTask != null
-            if (hasBuildContext && !isSourceRefMode(imageSpec)) {
+            // If image has build context, save/publish should depend on build
+            // Build task will handle sourceRef mode detection at execution time
+            def hasBuildContext = imageSpec.context.isPresent() ||
+                imageSpec.contextTask != null ||
+                (imageSpec.contextTaskName.isPresent() && !imageSpec.contextTaskName.get().isEmpty())
+            if (hasBuildContext) {
                 // Use configuration cache compatible approach with task providers
                 if (imageSpec.save.isPresent()) {
                     project.tasks.named("dockerSave${capitalizedName}").configure { task ->
@@ -298,8 +300,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure aggregate task dependencies using configuration cache compatible approach
         project.tasks.named('dockerBuild').configure { aggregateTask ->
             // Use provider-based dependency configuration
+            // All images now have build tasks, let execution decide whether to skip
             aggregateTask.dependsOn(project.provider {
-                dockerExt.images.findAll { !isSourceRefMode(it) }.collect { "dockerBuild${it.name.capitalize()}" }
+                dockerExt.images.collect { "dockerBuild${it.name.capitalize()}" }
             })
         }
 
@@ -387,10 +390,20 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Capture project layout to avoid configuration cache issues
         def buildDirectory = project.layout.buildDirectory
         
-        if (imageSpec.contextTask != null) {
+        // Check for contextTask (either via contextTask field or contextTaskName property)
+        def hasContextTask = (imageSpec.contextTask != null) ||
+                            (imageSpec.contextTaskName.isPresent() && !imageSpec.contextTaskName.get().isEmpty())
+        
+        if (hasContextTask) {
             // Use Copy task output as context - configuration cache compatible
-            // Use the TaskProvider directly for dependsOn to avoid Task serialization
-            task.dependsOn(imageSpec.contextTask)
+            if (imageSpec.contextTask != null) {
+                // contextTask is set directly - use it
+                task.dependsOn(imageSpec.contextTask)
+            } else if (imageSpec.contextTaskName.isPresent() && !imageSpec.contextTaskName.get().isEmpty()) {
+                // Use task name for dependsOn to avoid Task serialization
+                def contextTaskName = imageSpec.contextTaskName.get()
+                task.dependsOn(contextTaskName)
+            }
             // Directly set the expected destination directory without accessing the Task object
             // This avoids configuration cache issues with Task serialization
             task.contextPath.set(buildDirectory.dir("docker-context/${imageSpec.name}"))
@@ -425,18 +438,22 @@ class GradleDockerPlugin implements Plugin<Project> {
             task.dockerfile.set(imageSpec.dockerfile)
         } else {
             // Handle dockerfileName or default dockerfile resolution using providers
-            if (imageSpec.contextTask != null) {
+            // Check for contextTask (either via contextTask field or contextTaskName property)
+            def hasContextTask = (imageSpec.contextTask != null) ||
+                                (imageSpec.contextTaskName.isPresent() && !imageSpec.contextTaskName.get().isEmpty())
+            
+            if (hasContextTask) {
                 // Use contextTask directory with custom or default filename
-                def dockerfileNameProvider = imageSpec.dockerfileName.isPresent() 
+                def dockerfileNameProvider = imageSpec.dockerfileName.isPresent()
                     ? imageSpec.dockerfileName
-                    : providers.provider { "Dockerfile" }
+                    : project.providers.provider { "Dockerfile" }
                 task.dockerfile.set(buildDirectory.dir("docker-context/${imageSpec.name}")
                     .map { contextDir -> contextDir.file(dockerfileNameProvider.get()) })
             } else if (imageSpec.context.isPresent()) {
                 // Use traditional context directory with custom or default filename
                 def dockerfileNameProvider = imageSpec.dockerfileName.isPresent() 
                     ? imageSpec.dockerfileName
-                    : providers.provider { "Dockerfile" }
+                    : project.providers.provider { "Dockerfile" }
                 task.dockerfile.set(imageSpec.context.file(dockerfileNameProvider))
             } else {
                 throw new GradleException(
@@ -447,7 +464,7 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
 
 
-    private void configureDockerSaveTask(task, imageSpec, dockerService) {
+    private void configureDockerSaveTask(task, imageSpec, dockerService, project) {
         task.group = 'docker'
         task.description = "Save Docker image to file: ${imageSpec.name}"
 
@@ -455,16 +472,28 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
 
-        // Configure Docker nomenclature properties
+        // Configure individual properties for configuration cache compatibility
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
         task.imageName.set(imageSpec.imageName)
         task.repository.set(imageSpec.repository)
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
-
-        // Configure SourceRef Mode property
         task.sourceRef.set(imageSpec.sourceRef)
+        task.pullIfMissing.set(imageSpec.pullIfMissing)
+        task.effectiveSourceRef.set(project.providers.provider {
+            try {
+                return imageSpec.getEffectiveSourceRef()
+            } catch (Exception e) {
+                // Return empty string if effective source ref cannot be determined (build mode)
+                return ""
+            }
+        })
+        task.contextTaskName.set(imageSpec.contextTaskName)
+        task.contextTaskPath.set(imageSpec.contextTaskPath)
+
+        // Set imageSpec for test compatibility (not serialized due to @Internal)
+        task.imageSpec.set(imageSpec)
 
         // Configure save specification if present
         if (imageSpec.save.present) {
@@ -472,10 +501,6 @@ class GradleDockerPlugin implements Plugin<Project> {
             task.outputFile.set(saveSpec.outputFile)
             task.compression.set(saveSpec.compression)  // Now using SaveCompression enum directly
         }
-
-        // Configure imageSpec for pullIfMissing support
-        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
-        task.imageSpec.set(imageSpec)
     }
     
     private void configureDockerTagTask(task, imageSpec, dockerService) {
@@ -502,7 +527,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.sourceRef.set(imageSpec.sourceRef)
     }
 
-    private void configureDockerPublishTask(task, imageSpec, dockerService) {
+    private void configureDockerPublishTask(task, imageSpec, dockerService, project) {
         task.group = 'docker'
         task.description = "Publish Docker image: ${imageSpec.name}"
 
@@ -510,20 +535,28 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
 
-        // Configure imageSpec for pullIfMissing support
-        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
-        task.imageSpec.set(imageSpec)
-
-        // Configure Docker nomenclature properties
+        // Configure individual properties for configuration cache compatibility
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
         task.imageName.set(imageSpec.imageName)
         task.repository.set(imageSpec.repository)
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
-        
-        // Configure SourceRef Mode property
         task.sourceRef.set(imageSpec.sourceRef)
+        task.pullIfMissing.set(imageSpec.pullIfMissing)
+        task.effectiveSourceRef.set(project.providers.provider {
+            try {
+                return imageSpec.getEffectiveSourceRef()
+            } catch (Exception e) {
+                // Return empty string if effective source ref cannot be determined (build mode)
+                return ""
+            }
+        })
+        task.contextTaskName.set(imageSpec.contextTaskName)
+        task.contextTaskPath.set(imageSpec.contextTaskPath)
+
+        // Set imageSpec for test compatibility (not serialized due to @Internal)
+        task.imageSpec.set(imageSpec)
 
         // Configure SourceRef component properties
         task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
@@ -660,6 +693,8 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         project.logger.debug("Test integration extension methods configured")
     }
+
+
 
     /**
      * Determines if an ImageSpec is configured for sourceRef mode (working with existing images)

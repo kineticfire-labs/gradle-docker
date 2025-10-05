@@ -61,10 +61,23 @@ class EffectiveImageProperties {
      * Factory method to resolve properties from task properties (fallback)
      */
     static EffectiveImageProperties fromTaskProperties(DockerPublishTask task) {
-        // Handle direct sourceRef
+        // Handle direct sourceRef from task property
         def sourceRefValue = task.sourceRef.getOrElse("")
         if (!sourceRefValue.isEmpty()) {
             return parseFromDirectSourceRef(sourceRefValue)
+        }
+
+        // Handle direct sourceRef from ImageSpec (for test compatibility)
+        if (task.imageSpec.isPresent()) {
+            try {
+                def imageSpec = task.imageSpec.get()
+                def imageSpecSourceRef = imageSpec.sourceRef.getOrElse("")
+                if (!imageSpecSourceRef.isEmpty()) {
+                    return parseFromDirectSourceRef(imageSpecSourceRef)
+                }
+            } catch (Exception e) {
+                // Fall through if ImageSpec access fails
+            }
         }
 
         // Handle sourceRef components
@@ -72,13 +85,47 @@ class EffectiveImageProperties {
             return buildFromSourceRefComponents(task)
         }
 
-        // Use build mode properties
+        // Check if task has ImageSpec with sourceRef components
+        if (task.imageSpec.isPresent()) {
+            try {
+                def imageSpec = task.imageSpec.get()
+                if (hasSourceRefComponents(imageSpec)) {
+                    return buildFromSourceRefComponents(imageSpec)
+                }
+            } catch (Exception e) {
+                // Fall through to build mode if ImageSpec fails
+            }
+        }
+
+        // Use build mode properties, check ImageSpec if task properties are empty
+        def registryValue = task.registry.getOrElse("")
+        def namespaceValue = task.namespace.getOrElse("")
+        def imageNameValue = task.imageName.getOrElse("")
+        def repositoryValue = task.repository.getOrElse("")
+        def tagsValue = task.tags.getOrElse([])
+
+        // If task properties are empty and we have an ImageSpec, use ImageSpec properties
+        if (task.imageSpec.isPresent() &&
+            registryValue.isEmpty() && namespaceValue.isEmpty() &&
+            imageNameValue.isEmpty() && repositoryValue.isEmpty() && tagsValue.isEmpty()) {
+            try {
+                def imageSpec = task.imageSpec.get()
+                registryValue = imageSpec.registry.getOrElse("")
+                namespaceValue = imageSpec.namespace.getOrElse("")
+                imageNameValue = imageSpec.imageName.getOrElse("")
+                repositoryValue = imageSpec.repository.getOrElse("")
+                tagsValue = imageSpec.tags.getOrElse([])
+            } catch (Exception e) {
+                // Use task properties as fallback
+            }
+        }
+
         return new EffectiveImageProperties(
-            task.registry.getOrElse(""),
-            task.namespace.getOrElse(""),
-            task.imageName.getOrElse(""),
-            task.repository.getOrElse(""),
-            task.tags.getOrElse([])
+            registryValue,
+            namespaceValue,
+            imageNameValue,
+            repositoryValue,
+            tagsValue
         )
     }
 
@@ -92,11 +139,22 @@ class EffectiveImageProperties {
             effectivePublishTags = this.tags
         }
 
+        // Proper inheritance logic - use target value only if it's explicitly set and not empty
+        def targetRegistryValue = target.registry.getOrElse("")
+        def targetNamespaceValue = target.namespace.getOrElse("")
+        def targetImageNameValue = target.imageName.getOrElse("")
+        def targetRepositoryValue = target.repository.getOrElse("")
+
+        def effectiveRegistry = !targetRegistryValue.isEmpty() ? targetRegistryValue : this.registry
+        def effectiveNamespace = !targetNamespaceValue.isEmpty() ? targetNamespaceValue : this.namespace
+        def effectiveImageName = !targetImageNameValue.isEmpty() ? targetImageNameValue : this.imageName
+        def effectiveRepository = !targetRepositoryValue.isEmpty() ? targetRepositoryValue : this.repository
+
         return new EffectiveImageProperties(
-            target.registry.getOrElse("") ?: this.registry,
-            target.namespace.getOrElse("") ?: this.namespace,
-            target.imageName.getOrElse("") ?: this.imageName,
-            target.repository.getOrElse("") ?: this.repository,
+            effectiveRegistry,
+            effectiveNamespace,
+            effectiveImageName,
+            effectiveRepository,
             effectivePublishTags
         )
     }

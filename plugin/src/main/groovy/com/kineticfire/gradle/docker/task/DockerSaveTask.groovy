@@ -44,11 +44,23 @@ abstract class DockerSaveTask extends DefaultTask {
         sourceRef.convention("")
         pullIfMissing.convention(false)
         effectiveSourceRef.convention("")
+        contextTaskName.convention("")
+        contextTaskPath.convention("")
     }
     
     @Internal
     abstract Property<DockerService> getDockerService()
     
+    // Configuration cache safe alternative to ImageSpec
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskName()
+
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskPath()
+
+    // Compatibility property for tests (not serialized due to @Internal)
     @Internal
     abstract Property<ImageSpec> getImageSpec()
 
