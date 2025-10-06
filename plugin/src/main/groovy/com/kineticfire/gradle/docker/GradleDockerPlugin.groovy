@@ -355,11 +355,14 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureDockerBuildTask(task, imageSpec, dockerService, project) {
         task.group = 'docker'
         task.description = "Build Docker image: ${imageSpec.name}"
-        
+
         // Configure service dependency - ensure configuration cache compatibility
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-        
+
+        // Set sourceRef mode - skip build task execution in sourceRef mode
+        task.sourceRefMode.set(isSourceRefMode(imageSpec))
+
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
         task.namespace.set(imageSpec.namespace)
@@ -368,19 +371,22 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.version.set(imageSpec.version)
         task.tags.set(imageSpec.tags)
         task.labels.set(imageSpec.labels)
-        
-        // Configure build context - support multiple context types
-        configureContextPath(task, imageSpec, project)
-        
-        // Configure dockerfile - support dockerfile, dockerfileName, or default
-        configureDockerfile(task, imageSpec, project)
-        
-        // Configure build arguments
-        task.buildArgs.set(imageSpec.buildArgs)
-        
-        // Configure output image ID file
-        def outputDir = project.layout.buildDirectory.dir("docker/${imageSpec.name}")
-        task.imageId.set(outputDir.map { it.file('image-id.txt') })
+
+        // Configure build context only if not in sourceRef mode
+        if (!isSourceRefMode(imageSpec)) {
+            // Configure build context - support multiple context types
+            configureContextPath(task, imageSpec, project)
+
+            // Configure dockerfile - support dockerfile, dockerfileName, or default
+            configureDockerfile(task, imageSpec, project)
+
+            // Configure build arguments
+            task.buildArgs.set(imageSpec.buildArgs)
+
+            // Configure output image ID file
+            def outputDir = project.layout.buildDirectory.dir("docker/${imageSpec.name}")
+            task.imageId.set(outputDir.map { it.file('image-id.txt') })
+        }
     }
     
     /**

@@ -42,6 +42,10 @@ abstract class DockerBuildTask extends DefaultTask {
         imageName.convention("")
         repository.convention("")
         version.convention("")
+        sourceRefMode.convention(false)
+
+        // Skip execution in sourceRef mode
+        onlyIf { !sourceRefMode.get() }
     }
     
     @Internal
@@ -75,16 +79,23 @@ abstract class DockerBuildTask extends DefaultTask {
     
     // Build Configuration
     @InputFile
+    @Optional
     abstract RegularFileProperty getDockerfile()
-    
+
     @InputDirectory
+    @Optional
     abstract DirectoryProperty getContextPath()
-    
+
     @Input
     @Optional
     abstract MapProperty<String, String> getBuildArgs()
 
+    // SourceRef mode indicator
+    @Input
+    abstract Property<Boolean> getSourceRefMode()
+
     @OutputFile
+    @Optional
     abstract RegularFileProperty getImageId()
     
     @TaskAction
