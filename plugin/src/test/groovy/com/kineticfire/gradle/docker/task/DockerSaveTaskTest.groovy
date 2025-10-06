@@ -284,10 +284,10 @@ class DockerSaveTaskTest extends Specification {
     def "task properly handles file path configurations"() {
         when:
         task.outputFile.set(project.file(filePath))
-        
+
         then:
         task.outputFile.get().asFile.name == expectedName
-        
+
         where:
         filePath           | expectedName
         'test.tar'         | 'test.tar'
@@ -295,6 +295,287 @@ class DockerSaveTaskTest extends Specification {
         'image.tar.bz2'    | 'image.tar.bz2'
         'docker.tar.xz'    | 'docker.tar.xz'
         'backup.zip'       | 'backup.zip'
+    }
+
+    // ===== BUILDPRIMARYIMAGEREFERENCE TESTS =====
+
+    def "buildPrimaryImageReference returns sourceRef when sourceRef is set"() {
+        given:
+        task.sourceRef.set('myregistry.com/myapp:1.2.3')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myregistry.com/myapp:1.2.3'
+    }
+
+    def "buildPrimaryImageReference builds from repository when set"() {
+        given:
+        task.repository.set('myorg/myapp')
+        task.tags.set(['v1.0.0'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myorg/myapp:v1.0.0'
+    }
+
+    def "buildPrimaryImageReference builds from repository with registry"() {
+        given:
+        task.registry.set('myregistry.com')
+        task.repository.set('myorg/myapp')
+        task.tags.set(['latest'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myregistry.com/myorg/myapp:latest'
+    }
+
+    def "buildPrimaryImageReference builds from imageName when set"() {
+        given:
+        task.imageName.set('webapp')
+        task.tags.set(['dev'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'webapp:dev'
+    }
+
+    def "buildPrimaryImageReference builds from imageName with namespace"() {
+        given:
+        task.namespace.set('myorg')
+        task.imageName.set('webapp')
+        task.tags.set(['v2.0'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myorg/webapp:v2.0'
+    }
+
+    def "buildPrimaryImageReference builds from imageName with registry and namespace"() {
+        given:
+        task.registry.set('registry.example.com')
+        task.namespace.set('team')
+        task.imageName.set('myapp')
+        task.tags.set(['stable'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'registry.example.com/team/myapp:stable'
+    }
+
+    def "buildPrimaryImageReference builds from imageName with registry only"() {
+        given:
+        task.registry.set('localhost:5000')
+        task.imageName.set('testimage')
+        task.tags.set(['test'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'localhost:5000/testimage:test'
+    }
+
+    def "buildPrimaryImageReference returns null when tags are empty"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set([])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == null
+    }
+
+    def "buildPrimaryImageReference returns null when neither sourceRef nor imageName/repository set"() {
+        given:
+        task.tags.set(['latest'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == null
+    }
+
+    def "buildPrimaryImageReference prefers sourceRef over build mode"() {
+        given:
+        task.sourceRef.set('source:1.0')
+        task.imageName.set('built')
+        task.tags.set(['2.0'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'source:1.0'
+    }
+
+    // ===== PULLSOURCEREFIFNEEDED TESTS (using reflection for private method) =====
+
+    private void invokePullSourceRefIfNeeded() {
+        def method = DockerSaveTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+    }
+
+    def "pullSourceRefIfNeeded does nothing when pullIfMissing is false"() {
+        given:
+        task.pullIfMissing.set(false)
+        task.effectiveSourceRef.set('someimage:tag')
+
+        when:
+        invokePullSourceRefIfNeeded()
+
+        then:
+        0 * mockDockerService._
+    }
+
+    def "pullSourceRefIfNeeded does nothing when effectiveSourceRef is empty"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('')
+
+        when:
+        invokePullSourceRefIfNeeded()
+
+        then:
+        0 * mockDockerService._
+    }
+
+    def "pullSourceRefIfNeeded pulls image when missing"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+
+        when:
+        invokePullSourceRefIfNeeded()
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "pullSourceRefIfNeeded does not pull when image exists"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('ubuntu:22.04')
+        mockDockerService.imageExists('ubuntu:22.04') >> CompletableFuture.completedFuture(true)
+
+        when:
+        invokePullSourceRefIfNeeded()
+
+        then:
+        1 * mockDockerService.imageExists('ubuntu:22.04') >> CompletableFuture.completedFuture(true)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    // ===== SAVEIMAGE EXECUTION TESTS =====
+
+    def "saveImage executes successfully with sourceRef"() {
+        given:
+        task.sourceRef.set('alpine:3.16')
+        task.tags.set(['latest'])
+        task.outputFile.set(project.file('output.tar'))
+        task.compression.set(SaveCompression.NONE)
+        mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        1 * mockDockerService.saveImage('alpine:3.16', _, SaveCompression.NONE) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "saveImage executes successfully with repository"() {
+        given:
+        task.repository.set('myorg/app')
+        task.tags.set(['v1.0.0'])
+        task.outputFile.set(project.file('app.tar.gz'))
+        task.compression.set(SaveCompression.GZIP)
+        mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        1 * mockDockerService.saveImage('myorg/app:v1.0.0', _, SaveCompression.GZIP) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "saveImage executes successfully with imageName"() {
+        given:
+        task.imageName.set('webapp')
+        task.tags.set(['dev'])
+        task.outputFile.set(project.file('webapp.tar'))
+        task.compression.set(SaveCompression.BZIP2)
+        mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        1 * mockDockerService.saveImage('webapp:dev', _, SaveCompression.BZIP2) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "saveImage fails when dockerService is null"() {
+        given:
+        task.sourceRef.set('alpine:latest')
+        task.tags.set(['latest'])
+        task.outputFile.set(project.file('output.tar'))
+        task.dockerService.set(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "saveImage fails when outputFile returns null"() {
+        given:
+        task.sourceRef.set('alpine:latest')
+        task.tags.set(['latest'])
+        task.outputFile.set(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "saveImage pulls source if needed before saving"() {
+        given:
+        task.sourceRef.set('alpine:3.16')
+        task.tags.set(['latest'])
+        task.outputFile.set(project.file('output.tar'))
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.saveImage(_, _, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.saveImage()
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+        1 * mockDockerService.saveImage('alpine:3.16', _, SaveCompression.NONE) >> CompletableFuture.completedFuture(null)
     }
 
 }

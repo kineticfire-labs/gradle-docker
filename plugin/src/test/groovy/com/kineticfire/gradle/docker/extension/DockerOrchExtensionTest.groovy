@@ -1399,6 +1399,94 @@ class DockerOrchExtensionTest extends Specification {
     }
 
     // =========================
+    // Action Parameter Tests
+    // =========================
+
+    def "composeStacks method accepts Action parameter"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+
+        when:
+        extension.composeStacks({ container ->
+            container.create('actionStack') { stackSpec ->
+                stackSpec.files.from(project.file('docker-compose.yml'))
+            }
+        } as org.gradle.api.Action)
+
+        then:
+        extension.composeStacks.size() == 1
+        extension.composeStacks.getByName('actionStack') != null
+    }
+
+    def "composeConfigs method accepts Action parameter"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+
+        when:
+        extension.composeConfigs({ container ->
+            container.create('configActionStack') { stackSpec ->
+                stackSpec.files.from(project.file('docker-compose.yml'))
+            }
+        } as org.gradle.api.Action)
+
+        then:
+        extension.composeConfigs.size() == 1
+        extension.composeConfigs.getByName('configActionStack') != null
+    }
+
+    // =========================
+    // Environment File Validation Tests
+    // =========================
+
+    def "validate fails when env file is not readable"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        def envFile = project.file('test.env')
+        envFile.text = 'VAR=value'
+        // Make file not readable (on Unix systems)
+        envFile.setReadable(false)
+
+        extension.composeStacks {
+            unreadableEnv {
+                files.from(project.file('docker-compose.yml'))
+                envFiles.from(envFile)
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Environment file is not readable") || ex.message.contains("Environment file does not exist")
+        ex.message.contains('unreadableEnv')
+
+        cleanup:
+        // Restore permissions for cleanup
+        envFile.setReadable(true)
+    }
+
+    def "validate passes with readable env file"() {
+        given:
+        project.file('docker-compose.yml').text = 'version: "3.8"'
+        def envFile = project.file('readable.env')
+        envFile.text = 'VAR=value'
+
+        extension.composeStacks {
+            readableEnv {
+                files.from(project.file('docker-compose.yml'))
+                envFiles.from(envFile)
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // =========================
     // Helper Methods
     // =========================
 
