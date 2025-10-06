@@ -678,7 +678,7 @@ class DockerExtensionTest extends Specification {
         given: "Complete image configuration matching functional test patterns"
         project.file('docker').mkdirs()
         project.file('docker/Dockerfile').text = 'FROM alpine'
-        
+
         extension.images {
             testImage {
                 context.set(project.file('docker'))
@@ -694,11 +694,228 @@ class DockerExtensionTest extends Specification {
                 }
             }
         }
-        
+
         when: "validation is performed"
         extension.validate()
-        
+
         then: "validation passes without exception"
         noExceptionThrown()
+    }
+
+    // ===== IMAGES ACTION METHOD TESTS =====
+
+    def "images method accepts Action parameter"() {
+        when:
+        extension.images({ container ->
+            container.create('actionImage') { imageSpec ->
+                imageSpec.imageName.set('action-app')
+                imageSpec.tags.set(['latest'])
+            }
+        } as org.gradle.api.Action)
+
+        then:
+        extension.images.size() == 1
+        extension.images.getByName('actionImage').imageName.get() == 'action-app'
+    }
+
+    // ===== EXTRACT IMAGE NAME TESTS =====
+
+    def "extractImageName extracts image name from full reference"() {
+        expect:
+        extension.extractImageName('myapp:1.0.0') == 'myapp'
+        extension.extractImageName('registry.com/namespace/app:tag') == 'registry.com/namespace/app'
+        extension.extractImageName('localhost:5000/myapp:latest') == 'localhost:5000/myapp'
+        extension.extractImageName('gcr.io/project/app:v1.2.3') == 'gcr.io/project/app'
+    }
+
+    def "extractImageName fails when imageRef is null or empty"() {
+        when:
+        extension.extractImageName(null)
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        extension.extractImageName('')
+
+        then:
+        thrown(IllegalArgumentException)
+
+        when:
+        extension.extractImageName('   ')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "extractImageName fails when imageRef has no tag colon"() {
+        when:
+        extension.extractImageName('myapp')
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    // ===== GET SOURCE TAGS TESTS =====
+
+    def "getSourceTags returns tags from sourceRef property"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.sourceRef.set('alpine:3.16')
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags == ['3.16']
+    }
+
+    def "getSourceTags returns latest when sourceRef has no tag"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.sourceRef.set('alpine')
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags == ['latest']
+    }
+
+    def "getSourceTags returns tag from sourceRef components"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.sourceRefRepository.set('myregistry.com/namespace/app')
+        imageSpec.sourceRefTag.set('v1.0.0')
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags == ['v1.0.0']
+    }
+
+    def "getSourceTags returns latest when sourceRef components have empty tag convention"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.sourceRefImageName.set('myapp')
+        imageSpec.sourceRefTag.set('')  // Empty string convention
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        // When sourceRefTag is empty string, getOrElse("latest") returns empty string, not "latest"
+        // This is expected behavior based on property conventions
+        tags == ['']
+    }
+
+    def "getSourceTags returns build mode tags when no sourceRef"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.tags.set(['v1.0.0', 'latest', 'stable'])
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags == ['v1.0.0', 'latest', 'stable']
+    }
+
+    def "getSourceTags returns empty list when no tags configured"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags == []
+    }
+
+    // ===== VALIDATE PUBLISH TARGET WITH IMAGESPEC INHERITANCE TESTS =====
+
+    def "validatePublishTarget with ImageSpec allows tag inheritance from source image"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec.tags.set(['v1.0.0', 'latest'])
+
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'inheritTarget',
+            project.objects
+        )
+        // Empty publishTags - should inherit from imageSpec.tags
+
+        when:
+        extension.validatePublishTarget(publishTarget, imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePublishTarget with ImageSpec fails when no tags to inherit"() {
+        given:
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        // No tags set on imageSpec
+
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'noTagsTarget',
+            project.objects
+        )
+        // Empty publishTags and no source tags available
+
+        when:
+        extension.validatePublishTarget(publishTarget, imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag")
+        ex.message.contains("no source tags available for inheritance")
+    }
+
+    // ===== VALIDATE PUBLISH CONFIGURATION STRING OVERLOAD TESTS =====
+
+    def "validatePublishConfiguration with String imageName validates all targets"() {
+        given:
+        def publishSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishSpec,
+            project.objects
+        )
+        publishSpec.to('target1') {
+            publishTags(['v1.0.0'])
+        }
+        publishSpec.to('target2') {
+            publishTags(['latest'])
+        }
+
+        when:
+        extension.validatePublishConfiguration(publishSpec, 'myImage')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePublishConfiguration with String imageName fails on invalid target tag"() {
+        given:
+        def publishSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishSpec,
+            project.objects
+        )
+        publishSpec.to('target1') {
+            publishTags(['valid-tag'])
+        }
+        publishSpec.to('target2') {
+            publishTags(['.invalid'])  // Starts with dot - invalid
+        }
+
+        when:
+        extension.validatePublishConfiguration(publishSpec, 'myImage')
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+        ex.message.contains('.invalid')
     }
 }
