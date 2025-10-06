@@ -16,11 +16,13 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.model.ComposeConfig
 import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
+import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -214,6 +216,174 @@ class ComposeDownTaskTest extends Specification {
         noExceptionThrown()
     }
 
+    // ===== COMPOSE FILES CONFIGURATION PATH TESTS =====
+
+    def "composeDown with compose files uses ComposeConfig path"() {
+        given:
+        task.projectName.set('test-project')
+        task.stackName.set('test-stack')
+        
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = '''services:
+  web:
+    image: nginx'''
+        task.composeFiles.setFrom(composeFile)
+        
+        and:
+        1 * mockComposeService.downStack(_ as ComposeConfig) >> { ComposeConfig config ->
+            assert config.projectName == 'test-project'
+            assert config.stackName == 'test-stack'
+            assert config.composeFiles.size() == 1
+            assert config.composeFiles[0].fileName.toString() == 'docker-compose.yml'
+            assert config.envFiles.isEmpty()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "composeDown with compose files and env files handles both collections"() {
+        given:
+        task.projectName.set('test-project')
+        task.stackName.set('test-stack')
+        
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = '''services:
+  web:
+    image: nginx'''
+        task.composeFiles.setFrom(composeFile)
+        
+        def envFile = project.file('.env')
+        envFile.text = 'TEST_VAR=value'
+        task.envFiles.setFrom(envFile)
+        
+        and:
+        1 * mockComposeService.downStack(_ as ComposeConfig) >> { ComposeConfig config ->
+            assert config.projectName == 'test-project'
+            assert config.stackName == 'test-stack'
+            assert config.composeFiles.size() == 1
+            assert config.envFiles.size() == 1
+            assert config.envFiles[0].fileName.toString() == '.env'
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "composeDown with multiple compose files"() {
+        given:
+        task.projectName.set('multi-compose-project')
+        task.stackName.set('multi-compose-stack')
+        
+        def composeFile1 = project.file('docker-compose.yml')
+        composeFile1.parentFile.mkdirs()
+        composeFile1.text = '''services:
+  web:
+    image: nginx'''
+        
+        def composeFile2 = project.file('docker-compose.override.yml')
+        composeFile2.text = '''services:
+  web:
+    ports:
+      - "8080:80"'''
+        
+        task.composeFiles.setFrom(composeFile1, composeFile2)
+        
+        and:
+        1 * mockComposeService.downStack(_ as ComposeConfig) >> { ComposeConfig config ->
+            assert config.composeFiles.size() == 2
+            def fileNames = config.composeFiles.collect { it.fileName.toString() }
+            assert 'docker-compose.yml' in fileNames
+            assert 'docker-compose.override.yml' in fileNames
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "composeDown with compose files but no env files handles null envFiles gracefully"() {
+        given:
+        task.projectName.set('test-project')
+        task.stackName.set('test-stack')
+        
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = '''services:
+  web:
+    image: nginx'''
+        task.composeFiles.setFrom(composeFile)
+        // envFiles is not set (null)
+        
+        and:
+        1 * mockComposeService.downStack(_ as ComposeConfig) >> { ComposeConfig config ->
+            assert config.envFiles.isEmpty()
+            return CompletableFuture.completedFuture(null)
+        }
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "composeDown with compose files handles service failure"() {
+        given:
+        task.projectName.set('test-project')
+        task.stackName.set('test-stack')
+        
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = '''services:
+  web:
+    image: nginx'''
+        task.composeFiles.setFrom(composeFile)
+        
+        and:
+        def exception = new RuntimeException("Compose down failed")
+        def failedFuture = CompletableFuture.failedFuture(exception)
+        1 * mockComposeService.downStack(_ as ComposeConfig) >> failedFuture
+
+        when:
+        task.composeDown()
+
+        then:
+        def thrownException = thrown(RuntimeException)
+        thrownException.message.contains("Failed to stop compose stack 'test-stack'")
+        thrownException.cause != null
+    }
+
+    def "composeDown with empty compose files falls back to project name path"() {
+        given:
+        task.projectName.set('test-project')
+        task.stackName.set('test-stack')
+        // composeFiles is set but empty
+        task.composeFiles.setFrom([])
+        
+        and:
+        1 * mockComposeService.downStack('test-project') >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+    }
+
     // ===== INTEGRATION-STYLE TESTS =====
 
     def "task can be configured through Gradle DSL"() {
@@ -237,5 +407,7 @@ class ComposeDownTaskTest extends Specification {
         task.composeService != null
         task.projectName != null
         task.stackName != null
+        task.composeFiles != null
+        task.envFiles != null
     }
 }

@@ -235,4 +235,121 @@ class DockerBuildTaskTest extends Specification {
         ex.message.contains("Dockerfile does not exist")
         ex.message.contains(nonExistentDockerfile.absolutePath)
     }
+
+    // ===== ERROR PATH TESTS =====
+
+    def "buildImage fails when dockerService is null"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        task.dockerService.set(null)
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when contextPath is null"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set((File) null)
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when imageId is null"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        task.imageId.set((File) null)
+        mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when using both repository and namespace/imageName"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.repository.set('myrepo/myapp')
+        task.namespace.set('mycompany')
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+
+        when:
+        task.buildImage()
+
+        then:
+        def ex = thrown(IllegalStateException)
+        ex.message.contains("Cannot use both 'repository' and 'namespace/imageName' nomenclature simultaneously")
+    }
+
+    def "buildImage fails when using both repository and imageName only"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.repository.set('myrepo/myapp')
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+
+        when:
+        task.buildImage()
+
+        then:
+        def ex = thrown(IllegalStateException)
+        ex.message.contains("Cannot use both 'repository' and 'namespace/imageName' nomenclature simultaneously")
+    }
+
+    // ===== SOURCEREFOMODE TESTS =====
+
+    def "task is skipped when sourceRefMode is true"() {
+        given:
+        task.sourceRefMode.set(true)
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+
+        when:
+        def result = task.onlyIf.isSatisfiedBy(task)
+
+        then:
+        !result
+    }
+
+    def "task executes when sourceRefMode is false"() {
+        given:
+        task.sourceRefMode.set(false)
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+
+        when:
+        def result = task.onlyIf.isSatisfiedBy(task)
+
+        then:
+        result
+    }
 }

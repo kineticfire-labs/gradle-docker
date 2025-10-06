@@ -216,4 +216,121 @@ class DockerTagTaskTest extends Specification {
             'quay.io/namespace/image:tag'
         ]
     }
+
+    // ===== ERROR PATH TESTS =====
+
+    def "tagImage fails when dockerService is null"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.imageName.set('myapp')
+        imageSpec.tags.set(['latest', 'stable'])
+        task.imageSpec.set(imageSpec)
+        task.dockerService.set(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "tagImage fails when imageSpec is not provided"() {
+        given:
+        // imageSpec is not set
+        task.dockerService.set(mockDockerService)
+
+        when:
+        task.tagImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "tagImage fails in build mode when no tags specified"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.imageName.set('myapp')
+        imageSpec.tags.set([])  // Empty tags in build mode
+        task.imageSpec.set(imageSpec)
+        mockDockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "tagImage handles pullIfMissing with image exists"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.tags.set(['myapp:latest'])
+        imageSpec.pullIfMissing.set(true)
+        task.imageSpec.set(imageSpec)
+
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(true)
+        mockDockerService.tagImage('alpine:3.16', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.tagImage('alpine:3.16', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    def "tagImage handles pullIfMissing with image missing"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.tags.set(['myapp:latest'])
+        imageSpec.pullIfMissing.set(true)
+        task.imageSpec.set(imageSpec)
+
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('alpine:3.16', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+        1 * mockDockerService.tagImage('alpine:3.16', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "tagImage handles pullIfMissing with pullAuth"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('private.registry.com/myapp:1.0.0')
+        imageSpec.tags.set(['myapp:latest'])
+        imageSpec.pullIfMissing.set(true)
+
+        def authSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.AuthSpec)
+        authSpec.username.set('testuser')
+        authSpec.password.set('testpass')
+        imageSpec.pullAuth = authSpec
+
+        task.imageSpec.set(imageSpec)
+
+        mockDockerService.imageExists('private.registry.com/myapp:1.0.0') >> CompletableFuture.completedFuture(false)
+        mockDockerService.pullImage(_, _) >> CompletableFuture.completedFuture(null)
+        mockDockerService.tagImage('private.registry.com/myapp:1.0.0', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.imageExists('private.registry.com/myapp:1.0.0') >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage('private.registry.com/myapp:1.0.0', _) >> { String ref, auth ->
+            assert auth != null
+            assert auth.username == 'testuser'
+            assert auth.password == 'testpass'
+            return CompletableFuture.completedFuture(null)
+        }
+        1 * mockDockerService.tagImage('private.registry.com/myapp:1.0.0', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
+    }
 }

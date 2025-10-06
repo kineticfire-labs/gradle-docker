@@ -680,4 +680,156 @@ class DockerPublishTaskTest extends Specification {
         target.publishTags.set(publishTags)
         return target
     }
+
+    // ===== PULLSOURCEREF TESTS =====
+
+    def "pullSourceRefIfNeeded does nothing when pullIfMissing is false"() {
+        given:
+        task.pullIfMissing.set(false)
+        task.effectiveSourceRef.set('alpine:3.16')
+
+        when:
+        def method = DockerPublishTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        0 * mockDockerService.imageExists(_)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    def "pullSourceRefIfNeeded pulls image when missing"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+
+        when:
+        def method = DockerPublishTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
+        1 * mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "pullSourceRefIfNeeded skips pull when image exists"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
+        mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(true)
+
+        when:
+        def method = DockerPublishTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        1 * mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(true)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    def "pullSourceRefIfNeeded does nothing when effectiveSourceRef is empty"() {
+        given:
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('')
+
+        when:
+        def method = DockerPublishTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        0 * mockDockerService.imageExists(_)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    // ===== ADDITIONAL AUTH VALIDATION TESTS =====
+
+    def "validateAuthenticationCredentials skips when authSpec is null"() {
+        given:
+        def target = createPublishTarget(['latest'])
+
+        when:
+        task.validateAuthenticationCredentials(target, null)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "getEffectiveRegistry returns registry from target when present"() {
+        given:
+        def target = createPublishTarget(['latest'])
+        target.registry.set('my-registry.com')
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'my-registry.com'
+    }
+
+    def "getEffectiveRegistry extracts registry from repository with port"() {
+        given:
+        def target = createPublishTarget(['latest'])
+        target.registry.set('')
+        target.repository.set('localhost:5000/myapp')
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'localhost:5000'
+    }
+
+    def "getEffectiveRegistry returns unknown-registry when cannot be determined"() {
+        given:
+        def target = createPublishTarget(['latest'])
+        target.registry.set('')
+        target.repository.set('myapp')
+
+        when:
+        def registry = task.getEffectiveRegistry(target)
+
+        then:
+        registry == 'unknown-registry'
+    }
+
+    def "getExampleEnvironmentVariables returns Docker Hub examples"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('docker.io')
+
+        then:
+        examples.username.contains('DOCKERHUB_USERNAME')
+        examples.password.contains('DOCKERHUB_TOKEN')
+    }
+
+    def "getExampleEnvironmentVariables returns GitHub Container Registry examples"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('ghcr.io')
+
+        then:
+        examples.username.contains('GHCR_USERNAME')
+        examples.password.contains('GHCR_TOKEN')
+    }
+
+    def "getExampleEnvironmentVariables returns localhost examples"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('localhost:5000')
+
+        then:
+        examples.username.contains('REGISTRY_USERNAME')
+        examples.password.contains('REGISTRY_PASSWORD')
+    }
+
+    def "getExampleEnvironmentVariables returns generic examples for unknown registry"() {
+        when:
+        def examples = task.getExampleEnvironmentVariables('my-custom-registry.com')
+
+        then:
+        examples.username.contains('MY_CUSTOM_REGISTRY_COM_USERNAME')
+        examples.password.contains('MY_CUSTOM_REGISTRY_COM_TOKEN')
+    }
 }
