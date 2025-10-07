@@ -127,4 +127,137 @@ class ImageRefPartsTest extends Specification {
         parts.repository == 'nginx'
         parts.tag == '1.25.3'
     }
+
+    // ===== ISREGISTRYQUALIFIED TESTS =====
+
+    def "isRegistryQualified returns true for qualified reference"() {
+        when:
+        def parts = ImageRefParts.parse('docker.io/library/nginx:1.21')
+
+        then:
+        parts.isRegistryQualified()
+    }
+
+    def "isRegistryQualified returns true for custom registry"() {
+        when:
+        def parts = ImageRefParts.parse('ghcr.io/myorg/myapp:latest')
+
+        then:
+        parts.isRegistryQualified()
+    }
+
+    def "isRegistryQualified returns false for unqualified reference"() {
+        when:
+        def parts = ImageRefParts.parse('nginx:latest')
+
+        then:
+        !parts.isRegistryQualified()
+    }
+
+    def "isRegistryQualified returns false for namespace only reference"() {
+        when:
+        def parts = ImageRefParts.parse('myorg/myapp:v1.0')
+
+        then:
+        !parts.isRegistryQualified()
+    }
+
+    // ===== ISDOCKERHUB TESTS =====
+
+    def "isDockerHub returns true for unqualified reference"() {
+        when:
+        def parts = ImageRefParts.parse('nginx:latest')
+
+        then:
+        parts.isDockerHub()
+    }
+
+    def "isDockerHub returns true for docker.io registry"() {
+        when:
+        def parts = ImageRefParts.parse('docker.io/library/nginx:1.21')
+
+        then:
+        parts.isDockerHub()
+    }
+
+    def "isDockerHub returns false for non-Docker Hub registry"() {
+        when:
+        def parts = ImageRefParts.parse('ghcr.io/company/app:v1.0')
+
+        then:
+        !parts.isDockerHub()
+    }
+
+    def "isDockerHub returns false for custom registry"() {
+        when:
+        def parts = ImageRefParts.parse('registry.company.com/team/service:2.1.0')
+
+        then:
+        !parts.isDockerHub()
+    }
+
+    // ===== EQUALS METHOD TESTS =====
+
+    def "equals returns true for same reference"() {
+        when:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = parts1
+
+        then:
+        parts1.equals(parts2)
+    }
+
+    def "equals returns true for equal objects"() {
+        when:
+        def parts1 = ImageRefParts.parse('docker.io/library/nginx:1.21')
+        def parts2 = ImageRefParts.parse('docker.io/library/nginx:1.21')
+
+        then:
+        parts1.equals(parts2)
+    }
+
+    def "equals returns false for different tags"() {
+        when:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = ImageRefParts.parse('nginx:1.21')
+
+        then:
+        !parts1.equals(parts2)
+    }
+
+    def "equals returns false for different repositories"() {
+        when:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = ImageRefParts.parse('httpd:latest')
+
+        then:
+        !parts1.equals(parts2)
+    }
+
+    def "equals returns false for different namespaces"() {
+        when:
+        def parts1 = ImageRefParts.parse('org1/app:latest')
+        def parts2 = ImageRefParts.parse('org2/app:latest')
+
+        then:
+        !parts1.equals(parts2)
+    }
+
+    def "equals returns false for different registries"() {
+        when:
+        def parts1 = ImageRefParts.parse('docker.io/library/nginx:latest')
+        def parts2 = ImageRefParts.parse('ghcr.io/library/nginx:latest')
+
+        then:
+        !parts1.equals(parts2)
+    }
+
+    def "equals returns false for non-ImageRefParts object"() {
+        when:
+        def parts = ImageRefParts.parse('nginx:latest')
+
+        then:
+        !parts.equals("nginx:latest")
+        !parts.equals(null)
+    }
 }

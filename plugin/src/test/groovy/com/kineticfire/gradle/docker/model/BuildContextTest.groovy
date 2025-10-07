@@ -116,7 +116,7 @@ class BuildContextTest extends Specification {
         def dockerfile = contextPath.resolve('Dockerfile')
         Files.createDirectories(contextPath)
         Files.createFile(dockerfile)
-        
+
         def context = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
 
         when:
@@ -127,5 +127,119 @@ class BuildContextTest extends Specification {
         string.contains('Dockerfile')
         string.contains('[app:latest]')
         string.contains('1 args')
+    }
+
+    // ===== EQUALS METHOD TESTS =====
+
+    def "equals returns true for equal BuildContext objects"() {
+        given:
+        def contextPath = tempDir.resolve('app')
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createDirectories(contextPath)
+        Files.createFile(dockerfile)
+
+        def context1 = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
+        def context2 = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
+
+        expect:
+        context1.equals(context2)
+    }
+
+    def "equals returns false for different context paths"() {
+        given:
+        def contextPath1 = tempDir.resolve('app1')
+        def contextPath2 = tempDir.resolve('app2')
+        def dockerfile1 = contextPath1.resolve('Dockerfile')
+        def dockerfile2 = contextPath2.resolve('Dockerfile')
+        Files.createDirectories(contextPath1)
+        Files.createDirectories(contextPath2)
+        Files.createFile(dockerfile1)
+        Files.createFile(dockerfile2)
+
+        def context1 = new BuildContext(contextPath1, dockerfile1, [VERSION: '1.0'], ['app:latest'])
+        def context2 = new BuildContext(contextPath2, dockerfile2, [VERSION: '1.0'], ['app:latest'])
+
+        expect:
+        !context1.equals(context2)
+    }
+
+    def "equals returns false for different dockerfiles"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile1 = contextPath.resolve('Dockerfile')
+        def dockerfile2 = contextPath.resolve('Dockerfile.alt')
+        Files.createFile(dockerfile1)
+        Files.createFile(dockerfile2)
+
+        def context1 = new BuildContext(contextPath, dockerfile1, [:], ['app:latest'])
+        def context2 = new BuildContext(contextPath, dockerfile2, [:], ['app:latest'])
+
+        expect:
+        !context1.equals(context2)
+    }
+
+    def "equals returns false for different build args"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createFile(dockerfile)
+
+        def context1 = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
+        def context2 = new BuildContext(contextPath, dockerfile, [VERSION: '2.0'], ['app:latest'])
+
+        expect:
+        !context1.equals(context2)
+    }
+
+    def "equals returns false for different tags"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createFile(dockerfile)
+
+        def context1 = new BuildContext(contextPath, dockerfile, [:], ['app:latest'])
+        def context2 = new BuildContext(contextPath, dockerfile, [:], ['app:v1.0'])
+
+        expect:
+        !context1.equals(context2)
+    }
+
+    def "equals returns false for different labels"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createFile(dockerfile)
+
+        def context1 = new BuildContext(contextPath, dockerfile, [:], ['app:latest'], [version: '1.0'])
+        def context2 = new BuildContext(contextPath, dockerfile, [:], ['app:latest'], [version: '2.0'])
+
+        expect:
+        !context1.equals(context2)
+    }
+
+    def "equals returns false for non-BuildContext object"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createFile(dockerfile)
+
+        def context = new BuildContext(contextPath, dockerfile, [:], ['app:latest'])
+
+        expect:
+        !context.equals("not a BuildContext")
+        !context.equals(null)
+    }
+
+    def "hashCode returns same value for equal objects"() {
+        given:
+        def contextPath = tempDir
+        def dockerfile = contextPath.resolve('Dockerfile')
+        Files.createFile(dockerfile)
+
+        def context1 = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
+        def context2 = new BuildContext(contextPath, dockerfile, [VERSION: '1.0'], ['app:latest'])
+
+        expect:
+        context1.hashCode() == context2.hashCode()
     }
 }

@@ -277,4 +277,125 @@ class EffectiveImagePropertiesTest extends Specification {
         result.contains("nginx")
         result.contains("1.21")
     }
+
+    // ===== BUILDFULLREFERENCE TESTS =====
+
+    def "buildFullReference handles namespace + imageName mode"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "docker.io",
+            "library",
+            "nginx",
+            "",
+            ["1.21", "latest"]
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "docker.io/library/nginx:1.21"
+    }
+
+    def "buildFullReference handles repository mode"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "ghcr.io",
+            "",
+            "",
+            "myorg/myapp",
+            ["v1.0"]
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "ghcr.io/myorg/myapp:v1.0"
+    }
+
+    def "buildFullReference handles repository mode without registry"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "",
+            "",
+            "",
+            "myorg/myapp",
+            ["latest"]
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "myorg/myapp:latest"
+    }
+
+    def "buildFullReference handles imageName without registry"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "",
+            "myorg",
+            "myapp",
+            "",
+            ["v2.0"]
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "myorg/myapp:v2.0"
+    }
+
+    def "buildFullReference handles imageName without namespace"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "docker.io",
+            "",
+            "nginx",
+            "",
+            ["latest"]
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "docker.io/nginx:latest"
+    }
+
+    def "buildFullReference defaults to latest when tags empty"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "",
+            "",
+            "myapp",
+            "",
+            []
+        )
+
+        when:
+        def result = props.buildFullReference()
+
+        then:
+        result == "myapp:latest"
+    }
+
+    def "buildFullReference throws exception when neither repository nor imageName is set"() {
+        given:
+        def props = new EffectiveImageProperties(
+            "docker.io",
+            "library",
+            "",
+            "",
+            ["latest"]
+        )
+
+        when:
+        props.buildFullReference()
+
+        then:
+        thrown(IllegalStateException)
+    }
 }

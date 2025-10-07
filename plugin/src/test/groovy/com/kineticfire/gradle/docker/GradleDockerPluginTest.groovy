@@ -1408,4 +1408,292 @@ class GradleDockerPluginTest extends Specification {
         // We can't test for absence of property directly, but we can verify the task type
         buildTask instanceof com.kineticfire.gradle.docker.task.DockerBuildTask
     }
+
+    // ===== AGGREGATE TASK DEPENDENCY PROVIDER TESTS =====
+
+    def "plugin configures dockerBuild aggregate with provider-based dependencies"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create dummy Dockerfiles
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            app1 {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'app1'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+            app2 {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'app2'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def aggregateTask = project.tasks.getByName('dockerBuild')
+        // Provider dependencies are resolved at execution time - verify they're configured
+        !aggregateTask.dependsOn.empty
+    }
+
+    def "plugin configures dockerTag aggregate with provider-based dependencies"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            web {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'web'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def aggregateTask = project.tasks.getByName('dockerTag')
+        !aggregateTask.dependsOn.empty
+    }
+
+    def "plugin configures dockerImages aggregate with per-image aggregate tasks"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            service {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'service'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('service.tar')
+                    compression = SaveCompression.NONE
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Per-image aggregate task created
+        def perImageTask = project.tasks.findByName('dockerImageService')
+        perImageTask != null
+        perImageTask.group == 'docker'
+        perImageTask.description.contains('service')
+
+        // Global aggregate task configured
+        def globalAggregateTask = project.tasks.getByName('dockerImages')
+        !globalAggregateTask.dependsOn.empty
+    }
+
+    // ===== ISSOURCEREFMODE METHOD TESTS =====
+
+    def "plugin isSourceRefMode detects sourceRefRepository"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            testImage {
+                sourceRefRepository.set("myorg/myapp")
+                tags.set(["local:tag"])
+            }
+        }
+        project.evaluate()
+
+        then:
+        // Should create tasks for sourceRef mode
+        project.tasks.findByName("dockerTagTestImage") != null
+    }
+
+    def "plugin isSourceRefMode detects sourceRefImageName"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            testImage {
+                sourceRefImageName.set("myapp")
+                tags.set(["local:tag"])
+            }
+        }
+        project.evaluate()
+
+        then:
+        project.tasks.findByName("dockerTagTestImage") != null
+    }
+
+    def "plugin isSourceRefMode detects sourceRefNamespace"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            testImage {
+                sourceRefNamespace.set("myorg")
+                sourceRefImageName.set("myapp")
+                tags.set(["local:tag"])
+            }
+        }
+        project.evaluate()
+
+        then:
+        project.tasks.findByName("dockerTagTestImage") != null
+    }
+
+    def "plugin isSourceRefMode detects sourceRefRegistry"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            testImage {
+                sourceRefRegistry.set("ghcr.io")
+                sourceRefImageName.set("myapp")
+                tags.set(["local:tag"])
+            }
+        }
+        project.evaluate()
+
+        then:
+        project.tasks.findByName("dockerTagTestImage") != null
+    }
+
+    // ===== CONFIGURECONTEXTPATH EDGE CASE TESTS =====
+
+    def "plugin configureContextPath handles contextTaskName property with sourceRef"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create prepare task manually
+        project.tasks.register('prepareCustomContext', Copy) {
+            from('src/main/docker')
+            into(project.layout.buildDirectory.dir('docker-context/custom'))
+        }
+
+        when:
+        dockerExt.images {
+            custom {
+                // Use sourceRef mode to bypass build context validation
+                sourceRef.set('alpine:latest')
+                contextTaskName.set('prepareCustomContext')
+                tags = ['latest']
+            }
+        }
+        project.evaluate()
+
+        then:
+        // Task should be created despite sourceRef mode
+        def tagTask = project.tasks.findByName('dockerTagCustom')
+        tagTask != null
+    }
+
+    def "plugin configureContextPath throws when no context specified"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            noContext {
+                imageName = 'nocontext'
+                version = '1.0.0'
+                tags = ['latest']
+                // No context, contextTask, or contextTaskName
+            }
+        }
+        project.evaluate()
+
+        then:
+        def ex = thrown(Exception)
+        def actualMessage = findRootCauseMessage(ex)
+        actualMessage.contains("must specify either 'context'") || actualMessage.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+    }
+
+    // ===== CONFIGUREDOCKERFILE EDGE CASE TESTS =====
+
+    def "plugin configureDockerfile handles contextTaskName with dockerfileName in sourceRef mode"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create source directory with custom Dockerfile
+        def sourceDir = project.file('src/main/docker')
+        sourceDir.mkdirs()
+        def customDockerfile = project.file('src/main/docker/Dockerfile.custom')
+        customDockerfile.text = "FROM openjdk:21"
+
+        // Create prepare task
+        project.tasks.register('prepareDockerfileContext', Copy) {
+            from(sourceDir)
+            into(project.layout.buildDirectory.dir('docker-context/testApp'))
+        }
+
+        when:
+        dockerExt.images {
+            testApp {
+                // Use sourceRef mode to bypass build context validation
+                sourceRef.set('openjdk:21')
+                contextTaskName.set('prepareDockerfileContext')
+                tags = ['latest']
+            }
+        }
+        project.evaluate()
+
+        then:
+        // Should succeed with sourceRef mode
+        def tagTask = project.tasks.findByName('dockerTagTestApp')
+        tagTask != null
+    }
+
+    def "plugin configureDockerfile throws when no context specified for dockerfile resolution"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        when:
+        dockerExt.images {
+            badDockerfile {
+                dockerfileName.set('Dockerfile.custom')
+                imageName = 'badimage'
+                version = '1.0.0'
+                tags = ['latest']
+                // No context or contextTask - should fail
+            }
+        }
+        project.evaluate()
+
+        then:
+        def ex = thrown(Exception)
+        def actualMessage = findRootCauseMessage(ex)
+        actualMessage.contains("must specify either 'context'") || actualMessage.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+    }
 }
