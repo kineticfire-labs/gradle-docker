@@ -176,6 +176,33 @@ ext.registerVerifyBuildArgsTask = { Project project, Map<String, Map<String, Str
 }
 
 /**
+ * Register Docker labels verification task.
+ *
+ * Verifies that Docker images contain expected labels set via the plugin DSL.
+ * Uses subset matching - verifies expected labels are present but allows
+ * additional labels from base images and Dockerfile LABEL instructions.
+ *
+ * @param project The Gradle project to register tasks on
+ * @param labelsPerImage Map of image references to their expected labels
+ *                       Format: ['image:tag': ['label.key': 'value', ...]]
+ *                       Empty map for an image means skip verification (no custom labels)
+ */
+ext.registerVerifyLabelsTask = { Project project, Map<String, Map<String, String>> labelsPerImage ->
+    if (labelsPerImage == null || labelsPerImage.isEmpty()) {
+        throw new IllegalArgumentException("labelsPerImage cannot be null or empty")
+    }
+
+    project.tasks.register('verifyDockerLabels', DockerLabelsVerifyTask) {
+        it.imageNames.set(labelsPerImage.keySet().toList())
+        it.expectedLabels.set(labelsPerImage)
+        it.group = 'verification'
+        it.description = 'Verify Docker images contain expected labels'
+    }
+
+    project.logger.info("Registered labels verification for images: ${labelsPerImage.keySet()}")
+}
+
+/**
  * Note: Advanced registry testing workflow is available via RegistryManagementPlugin.
  * See registry-integration-example.gradle in test resources for usage patterns.
  */
