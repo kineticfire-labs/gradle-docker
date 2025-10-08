@@ -111,6 +111,13 @@ tasks.register('ensureSourceImage', EnsureDockerImageTask) {
 // Register registry image verification task since this scenario tests publish functionality
 registerVerifyRegistryImagesTask(project, ['localhost:5051/library/nginx:test'])
 
+// Register build args verification for this integration test
+// SourceRef mode uses existing image (nginx), which has no build args
+// Verify zero build args for the source image
+registerVerifyBuildArgsTask(project, [
+    'docker.io/library/nginx:1.21': [:]  // Empty map = expect zero build args
+])
+
 // Task that runs integration test workflow (sourceRef mode)
 tasks.register('integrationTest') {
     description = 'Run sourceRef integration test: pull → publish → verify (sourceRef component inheritance)'
@@ -121,6 +128,7 @@ tasks.register('integrationTest') {
     dependsOn 'startTestRegistries'
     dependsOn 'dockerImages'           // This will handle publish (no build)
     dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
     dependsOn 'stopTestRegistries'
 }
 
@@ -128,4 +136,8 @@ tasks.register('integrationTest') {
 tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
 tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }

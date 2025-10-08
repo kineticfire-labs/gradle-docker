@@ -192,6 +192,18 @@ registerVerifyRegistryImagesTask(
         'localhost:5060' // server
 )
 
+// Register build args verification for this integration test
+registerVerifyBuildArgsTask(project, [
+    'scenario-6/time-server:1.0.0': [
+        'JAR_FILE': 'app-1.0.0.jar',
+        'BUILD_VERSION': '1.0.0'
+    ],
+    'scenario-6/time-server:latest': [
+        'JAR_FILE': 'app-1.0.0.jar',
+        'BUILD_VERSION': '1.0.0'
+    ]
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify (authenticated registry)'
@@ -204,6 +216,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifyDockerImages'
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
     dependsOn 'stopTestRegistries'
 }
 
@@ -213,6 +226,10 @@ tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
 
 // Configure task ordering and force rebuild after clean

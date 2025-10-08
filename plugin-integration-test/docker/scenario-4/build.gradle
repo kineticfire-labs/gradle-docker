@@ -155,6 +155,13 @@ registerVerifySavedImagesTask(project, ['build/docker-images/scenario4-time-serv
 // Empty target should inherit and publish to the same image reference
 registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
 
+// Register build args verification for this integration test
+// Note: Even though buildArgs are configured, the Dockerfile doesn't use ARG instructions,
+// so build args won't appear in docker history. Verify zero build args.
+registerVerifyBuildArgsTask(project, [
+    'scenario4/inheritance-test:latest': [:]  // Empty map = expect zero build args
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → publish → verify (empty target inheritance)'
@@ -167,6 +174,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifyDockerImages'
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
     dependsOn 'stopTestRegistries'
 }
 
@@ -176,6 +184,10 @@ tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
 
 // Configure task ordering and force rebuild after clean
