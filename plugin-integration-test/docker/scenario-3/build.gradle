@@ -146,6 +146,12 @@ registerVerifySavedImagesTask(project, ['build/docker-images/scenario3-time-serv
 // Register registry image verification task since this scenario tests publish functionality
 registerVerifyRegistryImagesTask(project, ['localhost:5031/scenario3/scenario3-time-server:latest', 'localhost:5031/scenario3/scenario3-time-server:1.0.0'])
 
+// Register build args verification for this integration test
+// Empty map indicates we expect ZERO build args
+registerVerifyBuildArgsTask(project, [
+    'localhost:5000/scenario3/scenario3-time-server:latest': [:]
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify'
@@ -158,6 +164,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifyDockerImages'
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
     dependsOn 'stopTestRegistries'
 }
 
@@ -167,6 +174,10 @@ tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
 
 // Configure task ordering and force rebuild after clean

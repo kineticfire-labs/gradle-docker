@@ -151,6 +151,13 @@ registerVerifySavedImagesTask(project, ['build/docker-images/scenario2-time-serv
 // Register registry image verification task since this scenario tests publish functionality
 registerVerifyRegistryImagesTask(project, ['localhost:5021/scenario2/scenario2-time-server:latest'])
 
+// Register build args verification for this integration test
+registerVerifyBuildArgsTask(project, [
+    'scenario2/scenario2-time-server:latest': [
+        'JAR_FILE': 'app-1.0.0.jar'
+    ]
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify'
@@ -163,6 +170,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifyDockerImages'
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
     dependsOn 'stopTestRegistries'
 }
 
@@ -172,4 +180,8 @@ tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }

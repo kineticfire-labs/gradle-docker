@@ -158,6 +158,77 @@ registerVerifyRegistryImagesTask(project, [
 ], 'docker.io')
 ```
 
+### registerVerifyBuildArgsTask
+
+Verifies that Docker images were built with expected build arguments.
+
+```groovy
+registerVerifyBuildArgsTask(project, buildArgsPerImage)
+```
+
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `buildArgsPerImage`: Map of image references to their expected build args
+
+**Format:**
+```groovy
+[
+    'image:tag': ['ARG_NAME': 'expected_value', ...],
+    'another:tag': [:]  // Empty map = expect zero build args
+]
+```
+
+**Creates Task:** `verifyDockerBuildArgs` in the `verification` group
+
+**How It Works:**
+- Executes `docker history` to extract build arg values from image layers
+- Parses the history output for build arg annotations (pattern: `|N ARG=value`)
+- Compares extracted args against expected values
+- Supports verification of zero build args (no annotation found)
+
+**Example:**
+```groovy
+// Verify multiple build args
+registerVerifyBuildArgsTask(project, [
+    'my-app:1.0.0': [
+        'JAR_FILE': 'app-1.0.0.jar',
+        'BUILD_VERSION': '1.0.0'
+    ],
+    'my-app:latest': [
+        'JAR_FILE': 'app-1.0.0.jar',
+        'BUILD_VERSION': '1.0.0'
+    ]
+])
+
+// Verify single build arg
+registerVerifyBuildArgsTask(project, [
+    'my-service:dev': [
+        'ENV': 'development'
+    ]
+])
+
+// Verify zero build args (empty map)
+registerVerifyBuildArgsTask(project, [
+    'base-image:latest': [:]
+])
+```
+
+**Task Ordering:**
+The verification task must run after build and tag operations:
+
+```groovy
+tasks.register('integrationTest') {
+    dependsOn 'dockerBuild'
+    dependsOn 'dockerTag'
+    dependsOn 'verifyDockerBuildArgs'
+}
+
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerBuild'
+    mustRunAfter 'dockerTag'
+}
+```
+
 ### registerBuildWorkflowTasks
 
 Convenience function that registers both clean and verify built image tasks for the common Docker build workflow.

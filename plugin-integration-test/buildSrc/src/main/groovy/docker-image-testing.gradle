@@ -148,6 +148,34 @@ ext.registerBuildWorkflowTasks = { Project project, List<String> imageNames ->
 }
 
 /**
+ * Register Docker build args verification task.
+ *
+ * Verifies that Docker images were built with expected build arguments by parsing
+ * the docker history output. Supports verification of images with zero, one, or
+ * multiple build args.
+ *
+ * @param project The Gradle project to register tasks on
+ * @param buildArgsPerImage Map of image references to their expected build args
+ *                          Format: ['image:tag': ['ARG_NAME': 'value', ...]]
+ *                          Empty map for an image means expect zero build args
+ */
+ext.registerVerifyBuildArgsTask = { Project project, Map<String, Map<String, String>> buildArgsPerImage ->
+    if (buildArgsPerImage == null || buildArgsPerImage.isEmpty()) {
+        throw new IllegalArgumentException("buildArgsPerImage cannot be null or empty")
+    }
+
+    project.tasks.register('verifyDockerBuildArgs', DockerBuildArgsVerifyTask) {
+        it.imageNames.set(buildArgsPerImage.keySet().toList())
+        it.expectedBuildArgs.set(buildArgsPerImage)
+        it.strictMode.set(true)  // Default to exact match
+        it.group = 'verification'
+        it.description = 'Verify Docker images were built with expected build arguments'
+    }
+
+    project.logger.info("Registered build args verification for images: ${buildArgsPerImage.keySet()}")
+}
+
+/**
  * Note: Advanced registry testing workflow is available via RegistryManagementPlugin.
  * See registry-integration-example.gradle in test resources for usage patterns.
  */

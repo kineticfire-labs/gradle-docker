@@ -48,3 +48,36 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
           - 2 tags, different than what was defined at build such as 'edge' and 'test'
        - for the registry, pick a port that doesn't conflict with other tests.  the naming convention is to use a 4-digit port number, and the 'tens' digit is the number of the
     integration test so a port might be 5060.
+
+
+
+
+ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+ Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+ the @CLAUDE.md file to understand the project and follow the guidelines exactly.  Your task is to create helpers for the integration tests that check that build args, if
+ configured in the image build DSL, were actually set in the resultant image.
+
+ Your code edits must be compatible with Gradle 9 and 10 per @docs/design-docs/gradle-9-and-10-compatibility.md , follow that document exactly.
+
+ Your helpers support integration tests for the 'docker' DSL task related to image tasks like: build, sourceRef (and its components), tag, save, and publish.  See the usage for
+ these at @docs/usage/usage-docker.md .
+
+ Your task is to write integration test helpers, that is common code to be re-used, to test that build args set for image build are actually present in the resultant image.  The
+ integration tests are at @plugin-integration-test/ and the build source helpers common code is at @plugin-integration-test/buildSrc/ .
+
+ See integration test scenarios @plugin-integration-test/docker/scenario-1/ and @plugin-integration-test/docker/scenario-2/ as examples for integration tests that set build args.
+ Note that an may not have any build args.
+
+ Your integration test helper to check build args
+ - must run after the image is (1) built and (2) tagged, including if multiple tags are applied
+ - must check that 1 or more build args are present, and must check that for multiple image tags
+
+ I don't think it is possible to check an image that 0 build args are set, I think you must query for a specific build arg?  Please investigate that.  If it is possible, then your
+ helper must have the ability to check that no build args were set.
+
+ Demonstrate that your integration test helper for build args works by implementing it for these integration test scenarios, and prove that the tests pass:
+ (1) @plugin-integration-test/docker/scenario-2/ -- 1 build arg
+ (2) @plugin-integration-test/docker/scenario-1/ -- 2 build args
+ (3) @plugin-integration-test/docker/scenario-3/ -- no build args; only do this one if is indeed possible to check that an image has no build args
+
+ Analyze, investigate, and plan and recommend.  Do NOT edit any files.
