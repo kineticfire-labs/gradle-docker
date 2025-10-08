@@ -25,11 +25,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = 'docker-integration-tests'
-
-include 'scenario-1'
-include 'scenario-2'
-include 'scenario-3'
-include 'scenario-4'
-include 'scenario-5'
-include 'scenario-6'
+rootProject.name = 'scenario-6'

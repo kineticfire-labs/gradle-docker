@@ -37,47 +37,131 @@ abstract class DockerRegistryImageVerifyTask extends DefaultTask {
     @Input
     abstract ListProperty<String> getImageReferences()
 
+    @Input
+    @org.gradle.api.tasks.Optional
+    abstract Property<String> getRegistryUsername()
+
+    @Input
+    @org.gradle.api.tasks.Optional
+    abstract Property<String> getRegistryPassword()
+
+    @Input
+    @org.gradle.api.tasks.Optional
+    abstract Property<String> getRegistryServer()
+
     @TaskAction
     void verifyRegistryImages() {
         def imageReferences = getImageReferences().get()
-        
+
         if (imageReferences.isEmpty()) {
             logger.info('No registry image references to verify')
             return
         }
 
-        def missingImages = []
-        def verifiedImages = []
+        // Login to registry if credentials are provided
+        boolean loggedIn = false
+        if (getRegistryUsername().isPresent() && getRegistryPassword().isPresent()) {
+            loggedIn = loginToRegistry()
+        }
 
-        for (String imageRef : imageReferences) {
-            try {
-                // Use docker pull to check if image exists in registry
-                // This actually pulls the image but is more reliable than manifest inspect
-                def process = new ProcessBuilder(['docker', 'pull', imageRef])
+        try {
+            def missingImages = []
+            def verifiedImages = []
+
+            for (String imageRef : imageReferences) {
+                try {
+                    // Use docker pull to check if image exists in registry
+                    // This actually pulls the image but is more reliable than manifest inspect
+                    def process = new ProcessBuilder(['docker', 'pull', imageRef])
+                            .redirectErrorStream(true)
+                            .start()
+
+                    def exitCode = process.waitFor()
+                    def output = process.inputStream.text.trim()
+
+                    if (exitCode == 0) {
+                        logger.info("✓ Verified registry image exists: ${imageRef}")
+                        verifiedImages.add(imageRef)
+                    } else {
+                        logger.error("✗ Registry image not found: ${imageRef}")
+                        logger.debug("Docker output: ${output}")
+                        missingImages.add(imageRef)
+                    }
+                } catch (Exception e) {
+                    logger.error("✗ Failed to verify registry image: ${imageRef}", e)
+                    missingImages.add(imageRef)
+                }
+            }
+
+            if (!missingImages.isEmpty()) {
+                throw new RuntimeException("Expected images were not found: ${missingImages}")
+            }
+
+            logger.lifecycle("Successfully verified ${verifiedImages.size()} Docker image(s) in registry")
+        } finally {
+            // Logout from registry if we logged in
+            if (loggedIn) {
+                logoutFromRegistry()
+            }
+        }
+    }
+
+    private boolean loginToRegistry() {
+        try {
+            def server = getRegistryServer().isPresent() ? getRegistryServer().get() : null
+            def loginCommand = ['docker', 'login']
+
+            if (server) {
+                loginCommand.add(server)
+            }
+
+            loginCommand.addAll(['-u', getRegistryUsername().get(), '--password-stdin'])
+
+            def process = new ProcessBuilder(loginCommand)
                     .redirectErrorStream(true)
                     .start()
 
-                def exitCode = process.waitFor()
-                def output = process.inputStream.text.trim()
+            // Write password to stdin
+            process.outputStream.write(getRegistryPassword().get().bytes)
+            process.outputStream.close()
 
-                if (exitCode == 0) {
-                    logger.info("✓ Verified registry image exists: ${imageRef}")
-                    verifiedImages.add(imageRef)
-                } else {
-                    logger.error("✗ Registry image not found: ${imageRef}")
-                    logger.debug("Docker output: ${output}")
-                    missingImages.add(imageRef)
-                }
-            } catch (Exception e) {
-                logger.error("✗ Failed to verify registry image: ${imageRef}", e)
-                missingImages.add(imageRef)
+            def exitCode = process.waitFor()
+            def output = process.inputStream.text.trim()
+
+            if (exitCode == 0) {
+                logger.info("Successfully logged in to registry")
+                return true
+            } else {
+                logger.warn("Failed to login to registry: ${output}")
+                return false
             }
+        } catch (Exception e) {
+            logger.warn("Failed to login to registry", e)
+            return false
         }
+    }
 
-        if (!missingImages.isEmpty()) {
-            throw new RuntimeException("Expected images were not found: ${missingImages}")
+    private void logoutFromRegistry() {
+        try {
+            def server = getRegistryServer().isPresent() ? getRegistryServer().get() : null
+            def logoutCommand = ['docker', 'logout']
+
+            if (server) {
+                logoutCommand.add(server)
+            }
+
+            def process = new ProcessBuilder(logoutCommand)
+                    .redirectErrorStream(true)
+                    .start()
+
+            def exitCode = process.waitFor()
+            if (exitCode == 0) {
+                logger.info("Successfully logged out from registry")
+            } else {
+                logger.warn("Failed to logout from registry")
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to logout from registry", e)
         }
-
-        logger.lifecycle("Successfully verified ${verifiedImages.size()} Docker image(s) in registry")
     }
 }

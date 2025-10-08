@@ -97,26 +97,38 @@ ext.registerVerifySavedImagesTask = { Project project, List<String> filePaths ->
 
 /**
  * Register Docker registry image verification task for checking images exist in registry.
- * 
+ *
  * Registry Support:
  * - Can check image existence without authentication for public registries like Docker Hub
- * - Will need authentication support for checking images in registries that require authentication
+ * - Supports authentication for private registries (optional parameters)
  * - Will need authentication support for publishing to public registries like Docker Hub
- * 
+ *
  * @param project The Gradle project to register tasks on
  * @param imageReferences List of full Docker image references in format "registry/image-name:tag"
+ * @param username Optional registry username for authentication
+ * @param password Optional registry password for authentication
+ * @param server Optional registry server for authentication
  */
-ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageReferences ->
+ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageReferences, String username = null, String password = null, String server = null ->
     if (imageReferences == null || imageReferences.isEmpty()) {
         throw new IllegalArgumentException("imageReferences cannot be null or empty")
     }
-    
+
     project.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
         it.imageReferences.set(imageReferences)
+        if (username != null) {
+            it.registryUsername.set(username)
+        }
+        if (password != null) {
+            it.registryPassword.set(password)
+        }
+        if (server != null) {
+            it.registryServer.set(server)
+        }
         it.group = 'verification'
         it.description = "Verify Docker images exist in registry"
     }
-    
+
     project.logger.info("Registered verify registry images task for image references: ${imageReferences}")
 }
 

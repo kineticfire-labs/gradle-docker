@@ -1,3 +1,50 @@
 You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
 Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.
+
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.
+
+  You will write a specific, new integration test to test and prove and demonstrate aspects of the plugin.  Your integration test must be compatible with Gradle and 10, especially
+  the build cache configuration, per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Your integration test will cover aspects related to 'docker' DSL task so functionality like: build, tag, save, and publish.  Analyze the existing integration tests for the
+  'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
+  test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
+
+  Your task is to write a new integration test, called 'scenario-6' at @plugin-integration-test/docker/scenario-6/ , that must provide an integration test using a build.gradle file
+  for these aspects:
+
+
+
+
+
+  You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+    Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+    the @CLAUDE.md file to understand the project and follow the guidelines exactly.
+
+    You will write a specific, new integration test to test and prove and demonstrate aspects of the plugin.  Your integration test must be compatible with Gradle and 10, especially
+    the build cache configuration, per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+    Your integration test will cover aspects related to 'docker' DSL task so functionality like: build, tag, save, and publish.  Analyze the existing integration tests for the
+    'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
+    test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
+
+    Your task is to write a new integration test, called 'scenario-6' at @plugin-integration-test/docker/scenario-6/ , that must provide an integration test using a build.gradle file
+    for these aspects:
+    - build 1 image, using the common 'app' JAR as the executable. verify the image was built.
+       - as part of the build, add 2 build args using the 'putAll' configuration method
+       - as part of the build, add 2 labels using the 'putAll' configuration method
+       - use the "repository mode" from naming the image, and use: repository (do NOT use 'registry')
+       - the image must have a name so as not conflict with other images.  since this is scenario-6, then prefix the image name with 'scenario-6'
+    - create 2 tags for the image such as 'latest' and '1.0.0', and verify the tagged images are present
+    - save the image using compression type 'xz', and verify the image was saved to the filesystem
+    - publish the image to the same registry that uses authentication.  use a local registry.
+       - use the "repository mode" when defining the images to publish and specify:
+          - registry
+          - repository
+          - 2 tags, different than what was defined at build such as 'edge' and 'test'
+       - for the registry, pick a port that doesn't conflict with other tests.  the naming convention is to use a 4-digit port number, and the 'tens' digit is the number of the
+    integration test so a port might be 5060.

@@ -74,6 +74,7 @@ dependencies {
     
     // Compression libraries
     implementation libs.commons.compress
+    implementation libs.xz  // Required for XZ compression support in commons-compress
     
     // JUnit 5 for lifecycle extensions (provided as implementation for downstream consumers)
     implementation libs.junit.jupiter.api

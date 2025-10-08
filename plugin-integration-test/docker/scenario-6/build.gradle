@@ -1,0 +1,258 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images = 1
+ *       - build image + follow-on save and publish
+ *       - naming style: Repository Mode: repository, 2 tags
+ *       - build args
+ *           - number of build args > 1
+ *           - number of build args w/ putAll > 1
+ *       - labels
+ *           - number of labels > 1
+ *           - number of labels w/ putAll > 1
+ *       - dockerfile = default
+ *   - Tag Features
+ *       - number of tags > 1
+ *   - Save Features
+ *       - save compression = xz
+ *   - Publish Features
+ *       - publish same image > 1 tags, same registry
+ *       - publish to private registry w/ authentication
+ *       - Repository Mode: registry, repository, 2 tags
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-6 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-6:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.XZ
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        timeServer {
+
+            contextTask = tasks.register('prepareScenario6TimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for time server image'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                } else {
+                    // For standalone execution, create a dummy JAR file for testing
+                    // Capture version during configuration for configuration cache compatibility
+                    def versionString = project.version.toString()
+                    doFirst {
+                        def jarFile = new File(destinationDir, "app-${versionString}.jar")
+                        jarFile.parentFile.mkdirs()
+                        jarFile.createNewFile()
+                        jarFile.text = "dummy jar for standalone testing"
+                    }
+                }
+            }
+
+            // Repository Mode: Use 'repository' instead of 'namespace + imageName'
+            // This demonstrates the alternative naming approach for Docker images
+            repository.set('scenario-6/time-server')
+            tags.set([
+                    "1.0.0",
+                    "latest"
+            ])
+
+            // Use putAll to add multiple build args in one call (Gradle 9/10 Provider API compatible)
+            buildArgs.putAll(providers.provider {
+                [
+                        'JAR_FILE': "app-${project.version}.jar",
+                        'BUILD_VERSION': project.version.toString()
+                ]
+            })
+
+            // Use putAll to add multiple labels in one call (Gradle 9/10 Provider API compatible)
+            labels.putAll(providers.provider {
+                [
+                        "org.opencontainers.image.version": project.version.toString(),
+                        "maintainer": "team@kineticfire.com"
+                ]
+            })
+
+            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'
+
+            save {
+                compression.set(XZ)
+                outputFile.set(layout.buildDirectory.file("docker-images/scenario6-time-server.tar.xz"))
+            }
+
+            // Publish to authenticated registry (demonstrates authentication support)
+            // Use Repository Mode for publish configuration
+            // Note: publishTags are different from build tags ('edge', 'test' vs '1.0.0', 'latest')
+            //       to demonstrate tag override capability
+            publish {
+                to('authenticatedRegistry') {
+                    registry.set('localhost:5060')
+                    repository.set('scenario-6/time-server')
+                    publishTags.set(['edge', 'test'])
+
+                    // Authentication required for this registry
+                    auth {
+                        username.set('testuser')
+                        password.set('testpass')
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure authenticated test registry using the plugin
+// Port 5060 follows naming convention: 50 (base) + 6 (scenario number in tens digit)
+withAuthenticatedRegistry('test-registry-scenario6', 5060, 'testuser', 'testpass') {
+    // Registry will be configured with authentication
+}
+
+// Register Docker image clean and verify tasks for this integration test
+registerBuildWorkflowTasks(project, [
+        'scenario-6/time-server:1.0.0',
+        'scenario-6/time-server:latest'
+])
+
+// Register saved image verification task since this scenario tests save functionality
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario6-time-server.tar.xz'])
+
+// Register registry image verification task since this scenario tests publish functionality
+// Note: Registry images use different tags ('edge', 'test') than build tags ('1.0.0', 'latest')
+// This registry requires authentication, so pass the credentials
+registerVerifyRegistryImagesTask(
+        project,
+        [
+                'localhost:5060/scenario-6/time-server:edge',
+                'localhost:5060/scenario-6/time-server:test'
+        ],
+        'testuser',      // username
+        'testpass',      // password
+        'localhost:5060' // server
+)
+
+// Task that runs complete integration test workflow
+tasks.register('integrationTest') {
+    description = 'Run complete Docker integration test: clean → build → save → publish → verify (authenticated registry)'
+    group = 'verification'
+
+    // Dependencies
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerImages'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'stopTestRegistries'
+}
+
+// Configure task ordering without direct task references
+tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+
+// Configure task ordering and force rebuild after clean
+tasks.named('dockerImages') {
+    // Force task to always run when cleanDockerImages has run
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario-6/time-server:1.0.0', 'scenario-6/time-server:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}
+
+// Apply the same logic to tasks that start with "dockerBuild"
+tasks.matching { it.name.startsWith('dockerBuild') }.configureEach {
+    mustRunAfter 'cleanDockerImages'
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario-6/time-server:1.0.0', 'scenario-6/time-server:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}

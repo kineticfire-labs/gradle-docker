@@ -89,7 +89,7 @@ class RegistryTestFixture {
                 runningContainers[config.name] = containerId
 
                 // Wait for registry to be ready
-                waitForRegistryHealth(config.name, config.port)
+                waitForRegistryHealth(config)
 
                 registries[config.name] = new RegistryInfo(
                     name: config.name,
@@ -139,10 +139,13 @@ class RegistryTestFixture {
             command.addAll(['--label', "${key}=${value}"])
         }
 
+        // Declare htpasswdContent at method scope
+        String htpasswdContent = null
+
         // Configure authentication if required
         if (config.requiresAuth) {
             // Create htpasswd file for authentication
-            String htpasswdContent = generateHtpasswd(config.username, config.password)
+            htpasswdContent = generateHtpasswd(config.username, config.password)
 
             // Use environment variables for auth config
             command.addAll([
@@ -202,17 +205,26 @@ class RegistryTestFixture {
     /**
      * Wait for registry to be healthy and ready
      */
-    private void waitForRegistryHealth(String registryName, int port) {
+    private void waitForRegistryHealth(RegistryConfig config) {
         int maxAttempts = 30
         int attempt = 0
 
         while (attempt < maxAttempts) {
             try {
-                def process = ['curl', '-f', '-s', "http://localhost:${port}/v2/"].execute()
+                List<String> curlCommand = ['curl', '-f', '-s']
+
+                // Add authentication if required
+                if (config.requiresAuth) {
+                    curlCommand.addAll(['-u', "${config.username}:${config.password}"])
+                }
+
+                curlCommand.add("http://localhost:${config.port}/v2/")
+
+                def process = curlCommand.execute()
                 def exitCode = process.waitFor()
 
                 if (exitCode == 0) {
-                    logger.debug("Registry ${registryName} is healthy")
+                    logger.debug("Registry ${config.name} is healthy")
                     return
                 }
             } catch (Exception e) {
@@ -223,7 +235,7 @@ class RegistryTestFixture {
             Thread.sleep(1000) // Wait 1 second between attempts
         }
 
-        throw new RuntimeException("Registry ${registryName} failed to become healthy after ${maxAttempts} attempts")
+        throw new RuntimeException("Registry ${config.name} failed to become healthy after ${maxAttempts} attempts")
     }
 
     /**
