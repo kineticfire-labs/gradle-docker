@@ -1010,4 +1010,192 @@ class ImageSpecTest extends Specification {
         imageSpec.sourceRefTag.get() == "stable"
         imageSpec.getEffectiveSourceRef() == "myuser/myproject:stable"
     }
+
+    // ===== NULL HANDLING TESTS =====
+
+    def "label helper method handles null value"() {
+        when:
+        imageSpec.label('MY_LABEL', (String) null)
+
+        then:
+        imageSpec.labels.get().isEmpty()
+    }
+
+    def "labels provider helper method handles null provider"() {
+        when:
+        imageSpec.labels((org.gradle.api.provider.Provider) null)
+
+        then:
+        imageSpec.labels.get().isEmpty()
+    }
+
+    def "buildArg helper method handles null value"() {
+        when:
+        imageSpec.buildArg('MY_ARG', (String) null)
+
+        then:
+        imageSpec.buildArgs.get().isEmpty()
+    }
+
+    def "buildArgs provider helper method handles null provider"() {
+        when:
+        imageSpec.buildArgs((org.gradle.api.provider.Provider) null)
+
+        then:
+        imageSpec.buildArgs.get().isEmpty()
+    }
+
+    // ===== PULLAUTH EDGE CASES =====
+
+    def "pullAuth closure creates AuthSpec when null"() {
+        given:
+        imageSpec.pullAuth == null
+
+        when:
+        imageSpec.pullAuth {
+            username.set "testuser"
+            password.set "testpass"
+        }
+
+        then:
+        imageSpec.pullAuth != null
+        imageSpec.pullAuth.username.get() == "testuser"
+        imageSpec.pullAuth.password.get() == "testpass"
+    }
+
+    def "pullAuth action creates AuthSpec when null"() {
+        given:
+        imageSpec.pullAuth == null
+
+        when:
+        imageSpec.pullAuth(new Action<AuthSpec>() {
+            void execute(AuthSpec spec) {
+                spec.username.set("actionuser")
+                spec.password.set("actionpass")
+            }
+        })
+
+        then:
+        imageSpec.pullAuth != null
+        imageSpec.pullAuth.username.get() == "actionuser"
+        imageSpec.pullAuth.password.get() == "actionpass"
+    }
+
+    // ===== GETEFFECTIVESOURCEREF ERROR CASES =====
+
+    def "getEffectiveSourceRef throws when neither repository nor imageName specified"() {
+        when:
+        imageSpec.sourceRefRegistry.set("docker.io")
+        imageSpec.sourceRefNamespace.set("library")
+        // Neither repository nor imageName set
+        def result = imageSpec.getEffectiveSourceRef()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Either sourceRef, sourceRefRepository, or sourceRefImageName must be specified")
+        ex.message.contains("testImage")
+    }
+
+    // ===== VALIDATEPULLIMISSING WITH CONTEXT TASK =====
+
+    def "validatePullIfMissingConfiguration throws when pullIfMissing=true with contextTask"() {
+        when:
+        imageSpec.contextTask = project.tasks.register("customContextTask")
+        imageSpec.pullIfMissing.set(true)
+        imageSpec.validatePullIfMissingConfiguration()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot set pullIfMissing=true when build context is configured")
+        ex.message.contains("testImage")
+    }
+
+    // ===== VALIDATEMMODECONSISTENCY EDGE CASES =====
+
+    def "validateModeConsistency succeeds when only imageName is set without sourceRef components"() {
+        when:
+        imageSpec.imageName.set("myimage")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds when only namespace is set without sourceRef components"() {
+        when:
+        imageSpec.namespace.set("myorg")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds when only repository is set without sourceRef components"() {
+        when:
+        imageSpec.repository.set("myorg/myapp")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds when only registry is set without sourceRef components"() {
+        when:
+        imageSpec.registry.set("docker.io")
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency succeeds when only labels are set"() {
+        when:
+        imageSpec.labels.set(['app.version': '1.0'])
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateModeConsistency throws when using only sourceRefImageName without namespace"() {
+        when:
+        imageSpec.sourceRefImageName.set("alpine")
+        // Missing sourceRefNamespace makes this invalid
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+    }
+
+    def "validateModeConsistency throws when using labels with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("alpine:latest")
+        imageSpec.labels.set(['version': '1.0'])
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    }
+
+    def "validateModeConsistency throws when using buildArgs with sourceRef"() {
+        when:
+        imageSpec.sourceRef.set("nginx:latest")
+        imageSpec.buildArgs.set(['VERSION': '2.0'])
+        imageSpec.validateModeConsistency()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    }
+
+    def "validateModeConsistency succeeds with context path using default convention"() {
+        when:
+        // Default context convention is src/main/docker, which should not trigger build mode
+        imageSpec.validateModeConsistency()
+
+        then:
+        noExceptionThrown()
+    }
 }

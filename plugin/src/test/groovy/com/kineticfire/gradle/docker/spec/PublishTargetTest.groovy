@@ -379,4 +379,17 @@ class PublishTargetTest extends Specification {
         publishTarget.publishTags.get() == ['production', 'staging', 'dev', 'test', 'build-123', 'pr-456']
         noExceptionThrown()
     }
+
+    // ===== PROVIDER-BASED PUBLISHTAGS TESTS =====
+
+    def "publishTags accepts provider"() {
+        given:
+        def tagProvider = project.provider { ['v1.0', 'latest'] }
+
+        when:
+        publishTarget.publishTags(tagProvider)
+
+        then:
+        publishTarget.publishTags.get() == ['v1.0', 'latest']
+    }
 }
