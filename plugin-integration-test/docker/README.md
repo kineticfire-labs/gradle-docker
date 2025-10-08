@@ -26,22 +26,20 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | 2 | Image Name Mode: imageName, tag(s)                     | <ol><li>scenario-1</li></ol>                                                          |
 | 2 | Repository Mode: registry, repository, 1 tag           | todo                                                                                  |
 | 2 | Repository Mode: repository, 2 tags                    | todo                                                                                  |
-| 3 | number of build args = none                            | <ol><li>scenario-3</li><li>scenario-4</li></ol>                                       |
+| 3 | number of build args = none                            | <ol><li>scenario-3</li></ol>                                                          |
 | 4 | number of build args = 1                               | <ol><li>scenario-2</li></ol>                                                          |
 | 5 | number of build args > 1                               | <ol><li>scenario-1</li></ol>                                                          |
 | 4 | number of build args w/ put = 1                        | <ol><li>scenario-2</li></ol>                                                          |
 | 4 | number of build args w/ put > 1                        | <ol><li>scenario-1</li></ol>                                                          |
-| 4 | number of build args w/ providers.provider = 1         | todo                                                                                  |
-| 4 | number of build args w/ providers.provider > 1         | todo                                                                                  |
-| 4 | number of build args w/ put & providers.provider > 1   | todo                                                                                  |
+| 4 | number of build args w/ putAll = 1                     | <ol><li>scenario-4</li></ol>                                                          |
+| 4 | number of build args w/ putAll > 1                     | todo                                                                                  |
 | 3 | number of labels = none                                | <ol><li>scenario-3</li><li>scenario-4</li></ol>                                       |
 | 4 | number of labels = 1                                   | <ol><li>scenario-2</li></ol>                                                          |
 | 5 | number of labels > 1                                   | <ol><li>scenario-1</li></ol>                                                          |
 | 4 | number of labels w/ put = 1                            | <ol><li>scenario-2</li></ol>                                                          |
 | 4 | number of labels w/ put > 1                            | <ol><li>scenario-1</li></ol>                                                          |
-| 4 | number of labels w/ providers.provider = 1             | todo                                                                                  |
-| 4 | number of labels w/ providers.provider > 1             | todo                                                                                  |
-| 4 | number of labels w/ put & providers.provider > 1       | todo                                                                                  |
+| 4 | number of labels w/ putAll = 1                         | <ol><li>scenario-4</li></ol>                                                          |
+| 4 | number of labels w/ putAll > 1                         | todo                                                                                  |
 | 6 | dockerfile = default                                   | <ol><li>scenario-1</li><li>scenario-4</li></ol>                                       |
 | 7 | dockerfile = specify by name                           | <ol><li>scenario-2</li></ol>                                                          |
 | 8 | dockerfile = specify by path/name                      | <ol><li>scenario-3</li></ol>                                                          |
@@ -62,6 +60,7 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | 2 | pullIfMissing = false && image IS local                                                  | todo                         |
 | 2 | pullIfMissing = true && image IS local so no pull                                        | todo                         |
 | 2 | pullIfMissing = true && image is NOT local so must pull                                  | todo                         |
+| 2 | without 'save' or 'publish'                                                              | <ol><li>scenario-5</li></ol> |
 | 2 | with 'save'                                                                              | todo                         |
 | 2 | with 'publish'                                                                           | todo                         |
 
@@ -82,7 +81,7 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | 1 | save = none                      | <ol><li>scenario-1</li><li>scenario-4</li><li>scenario-5</li></ol> |
 | 2 | save w/ compression type = none  | <ol><li>scenario-2</li></ol>                                       |
 | 3 | save w/ compression type = gzip  | <ol><li>scenario-3</li></ol>                                       |
-| 4 | save w/ compression type = bzip2 | todo                                                               |
+| 4 | save w/ compression type = bzip2 | <ol><li>scenario-4</li></ol>                                       |
 | 5 | save w/ compression type = xz    | todo                                                               |
 | 6 | save w/ compression type = zip   | todo                                                               |
 

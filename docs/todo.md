@@ -25,6 +25,9 @@ a build task that shouldn't exist for sourceRef images.
 10. tests that are *.disabled
 11. todo statements in CLAUDE.md
 12. there are disabled functional tests
+13. These are probably not needed:
+   1. old-plugin-integration-test
+   2. plugin-usage-demo
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it

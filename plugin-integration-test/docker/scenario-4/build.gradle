@@ -20,13 +20,13 @@
  *       - number of images = 1
  *       - build image + follow-on publish
  *       - naming style: Image Name Mode: namespace, imageName, 1 tag
- *       - build args = none
- *       - labels = none
+ *       - build args = number of build args w/ putAll = 1
+ *       - labels = number of labels w/ putAll = 1
  *       - dockerfile = default
  *   - Tag Features
  *       - number of tags = 1
  *   - Save Features
- *       - none
+ *       - save w/ compression type = bzip2
  *   - Publish Features
  *       - inherit all from build (empty target should inherit ALL properties from source)
  *       - publish to private registry without authentication
@@ -59,7 +59,7 @@ if (rootProject.name != 'plugin-integration-test') {
     return
 }
 
-import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
+import static com.kineticfire.gradle.docker.model.SaveCompression.BZIP2
 
 group = 'com.kineticfire.gradle.docker.integration'
 version = '1.0.0'
@@ -96,10 +96,27 @@ docker {
                 }
             }
 
+            buildArgs.putAll(providers.provider {
+              [
+                      'JAR_FILE': "app-${project.version}.jar"
+              ]
+            })
+
+            labels.putAll(providers.provider {
+              [
+                      "org.opencontainers.image.version": project.version.toString()
+              ]
+            })
+
             // Source image configuration - will be inherited by empty publish target
             namespace.set('scenario4')
             imageName.set('inheritance-test')
             tags.set(['latest'])
+
+            save {
+                outputFile.set(layout.buildDirectory.file("docker-images/scenario4-time-server-latest.tar.bzip2"))
+                compression.set(BZIP2)
+            }
 
             publish {
                 to('emptyTarget') {
@@ -131,6 +148,9 @@ withTestRegistry('test-registry-scenario4', 5041) {
 // Register Docker image clean and verify tasks for this integration test
 registerBuildWorkflowTasks(project, ['scenario4/inheritance-test:latest'])
 
+// Register saved image verification task since this scenario tests save functionality
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario4-time-server-latest.tar.bzip2'])
+
 // Register registry image verification task since this scenario tests publish functionality
 // Empty target should inherit and publish to the same image reference
 registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
@@ -145,6 +165,7 @@ tasks.register('integrationTest') {
     dependsOn 'cleanDockerImages'
     dependsOn 'dockerImages'
     dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'stopTestRegistries'
 }
@@ -153,6 +174,7 @@ tasks.register('integrationTest') {
 tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
 tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
 

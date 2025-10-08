@@ -27,6 +27,8 @@
  *       - publish to private registry without authentication
  *       - Partial override (registry + publishTags)
  *       - Should inherit namespace and imageName from sourceRef components
+ *   - with 'save' or 'publish'
+ *       - neither
  */
 
 plugins {
