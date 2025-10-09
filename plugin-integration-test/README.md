@@ -81,9 +81,12 @@ plugin-integration-test/    # all integration tests:  top-level aggregator
 ./gradlew -Pplugin_version=<version> docker:scenario-3:integrationTest
 ./gradlew -Pplugin_version=<version> docker:scenario-4:integrationTest
 ./gradlew -Pplugin_version=<version> docker:scenario-5:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-6:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-7:integrationTest
 
 # Run with clean for specific scenario
 ./gradlew -Pplugin_version=<version> docker:scenario-1:clean docker:scenario-1:integrationTest
+./gradlew -Pplugin_version=<version> docker:scenario-7:clean docker:scenario-7:integrationTest
 
 # Run all Docker tests with clean
 ./gradlew -Pplugin_version=<version> docker:cleanAll docker:integrationTest

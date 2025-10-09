@@ -1,0 +1,253 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images = 1
+ *       - build image + follow-on save and publish
+ *       - naming style: Image Name Mode: imageName, 1 tag (minimal config)
+ *       - build args: none (test zero build args)
+ *       - labels: none (test zero labels)
+ *       - dockerfile = default
+ *   - Tag Features
+ *       - number of tags = 1
+ *   - Save Features
+ *       - save w/ compression type = zip (fills testing gap)
+ *   - Publish Features
+ *       - publish same image to 2+ different registries (NEW - fills testing gap)
+ *       - publish same image with 2 tags to each registry
+ *       - publish to multiple private registries without authentication
+ *       - Image Name Mode override: registry, namespace, imageName, 2 tags
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-7 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-7:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.ZIP
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        timeServer {
+
+            contextTask = tasks.register('prepareScenario7TimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for time server image'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                } else {
+                    // For standalone execution, create a dummy JAR file for testing
+                    // Capture version during configuration for configuration cache compatibility
+                    def versionString = project.version.toString()
+                    doFirst {
+                        def jarFile = new File(destinationDir, "app-${versionString}.jar")
+                        jarFile.parentFile.mkdirs()
+                        jarFile.createNewFile()
+                        jarFile.text = "dummy jar for standalone testing"
+                    }
+                }
+            }
+
+            // Minimal Image Name Mode: just imageName and tag (no registry, no namespace)
+            // Use 'scenario-7' prefix to avoid conflicts with other integration tests
+            imageName.set('scenario-7-time-server')
+            tags.set(['latest'])
+
+            // No build args (test zero build args)
+            // No labels (test zero labels)
+
+            // dockerfile will default to 'build/docker-context/timeServer/Dockerfile'
+
+            save {
+                compression.set(ZIP)  // Tests ZIP compression (fills testing gap)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario7-time-server.zip'))
+            }
+
+            // Publish to MULTIPLE registries (NEW - fills testing gap)
+            // Each registry gets the same image with 2 tags
+            publish {
+                // First registry on port 5070
+                to('registry1') {
+                    registry.set('localhost:5070')
+                    namespace.set('scenario7')
+                    imageName.set('published-timeserver')
+                    publishTags.set(['1.0.0', 'latest'])
+                    // No authentication (registry allows anonymous push)
+                }
+
+                // Second registry on port 5071
+                to('registry2') {
+                    registry.set('localhost:5071')
+                    namespace.set('scenario7')
+                    imageName.set('published-timeserver')
+                    publishTags.set(['1.0.0', 'latest'])
+                    // No authentication (registry allows anonymous push)
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure TWO test registries using the plugin
+// Port convention: 5070 and 5071 (tens digit = scenario number)
+registryManagement {
+    registry('registry1', 5070)  // First registry
+    registry('registry2', 5071)  // Second registry
+}
+
+// Register Docker image clean and verify tasks for this integration test
+registerBuildWorkflowTasks(project, ['scenario-7-time-server:latest'])
+
+// Register saved image verification task since this scenario tests save functionality with ZIP
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario7-time-server.zip'])
+
+// Register MULTI-REGISTRY verification using the UNIFIED function
+// Each registry should have 2 tags of the published image
+registerVerifyRegistryImagesTask(project, [
+    'registry1': [
+        'localhost:5070/scenario7/published-timeserver:1.0.0',
+        'localhost:5070/scenario7/published-timeserver:latest'
+    ],
+    'registry2': [
+        'localhost:5071/scenario7/published-timeserver:1.0.0',
+        'localhost:5071/scenario7/published-timeserver:latest'
+    ]
+])
+
+// Register build args verification - expect ZERO build args (empty map)
+registerVerifyBuildArgsTask(project, [
+    'scenario-7-time-server:latest': [:]  // Empty map = expect zero build args
+])
+
+// Note: We skip labels verification for this scenario since we have no custom labels
+// and the Dockerfile has no LABEL instructions
+
+// Task that runs complete integration test workflow
+tasks.register('integrationTest') {
+    description = 'Run complete Docker integration test: clean → build → save → publish to 2 registries → verify'
+    group = 'verification'
+
+    // Dependencies
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerImages'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'  // Aggregate task for both registries
+    dependsOn 'verifyDockerBuildArgs'
+    dependsOn 'stopTestRegistries'
+}
+
+// Configure task ordering without direct task references
+tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+
+// Configure task ordering and force rebuild after clean
+tasks.named('dockerImages') {
+    // Force task to always run when cleanDockerImages has run
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario-7-time-server:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}
+
+// Apply the same logic to tasks that start with "dockerBuild"
+tasks.matching { it.name.startsWith('dockerBuild') }.configureEach {
+    mustRunAfter 'cleanDockerImages'
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = ['scenario-7-time-server:latest']
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}

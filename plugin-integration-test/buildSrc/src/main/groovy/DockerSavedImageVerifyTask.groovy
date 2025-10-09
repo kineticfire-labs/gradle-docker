@@ -89,6 +89,7 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
         def loadFailures = []
 
         for (String filePath : verifiedFiles) {
+            File tempDir = null
             try {
                 // Resolve relative paths
                 Path path = Paths.get(filePath)
@@ -96,7 +97,40 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
                     path = layout.projectDirectory.asFile.toPath().resolve(path)
                 }
 
-                def process = ['docker', 'load', '-i', path.toString()].execute()
+                File imageFile = path.toFile()
+                File fileToLoad = imageFile
+
+                // If it's a ZIP file, extract it first
+                if (imageFile.name.toLowerCase().endsWith('.zip')) {
+                    logger.info("Extracting ZIP file before load: ${filePath}")
+                    
+                    // Create temporary directory for extraction
+                    tempDir = Files.createTempDirectory('docker-load-').toFile()
+                    
+                    // Extract ZIP using unzip command
+                    def unzipProcess = ['unzip', '-q', imageFile.absolutePath, '-d', tempDir.absolutePath].execute()
+                    def unzipExitCode = unzipProcess.waitFor()
+                    
+                    if (unzipExitCode != 0) {
+                        def unzipStderr = unzipProcess.errorStream.text.trim()
+                        throw new RuntimeException("Failed to extract ZIP file: ${unzipStderr}")
+                    }
+                    
+                    // Find the extracted tar file (should be only file in temp dir)
+                    def extractedFiles = tempDir.listFiles()
+                    if (extractedFiles == null || extractedFiles.length == 0) {
+                        throw new RuntimeException("No files found after extracting ZIP")
+                    }
+                    if (extractedFiles.length > 1) {
+                        throw new RuntimeException("Multiple files found after extracting ZIP: ${extractedFiles.collect { it.name }}")
+                    }
+                    
+                    fileToLoad = extractedFiles[0]
+                    logger.info("Extracted tar file: ${fileToLoad.name}")
+                }
+
+                // Load the image (either original tar or extracted tar from ZIP)
+                def process = ['docker', 'load', '-i', fileToLoad.absolutePath].execute()
                 def exitCode = process.waitFor()
                 def stdout = process.inputStream.text.trim()
                 def stderr = process.errorStream.text.trim()
@@ -110,6 +144,11 @@ abstract class DockerSavedImageVerifyTask extends DefaultTask {
             } catch (Exception e) {
                 logger.error("✗ Docker load exception: ${filePath} → ${e.message}")
                 loadFailures.add("${filePath}: ${e.message}")
+            } finally {
+                // Clean up temporary directory if created
+                if (tempDir != null && tempDir.exists()) {
+                    tempDir.deleteDir()
+                }
             }
         }
 

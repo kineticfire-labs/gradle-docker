@@ -42,6 +42,7 @@ include 'docker:scenario-3'
 include 'docker:scenario-4'
 include 'docker:scenario-5'
 include 'docker:scenario-6'
+include 'docker:scenario-7'
 
 // Future: Include Compose integration tests
 // include 'compose'

@@ -96,40 +96,125 @@ ext.registerVerifySavedImagesTask = { Project project, List<String> filePaths ->
 }
 
 /**
- * Register Docker registry image verification task for checking images exist in registry.
+ * Register Docker registry image verification task.
+ * 
+ * Supports two modes:
+ * 1. Single Registry: Verify images in one registry (List parameter)
+ * 2. Multiple Registries: Verify images across multiple registries (Map parameter)
  *
- * Registry Support:
- * - Can check image existence without authentication for public registries like Docker Hub
- * - Supports authentication for private registries (optional parameters)
- * - Will need authentication support for publishing to public registries like Docker Hub
+ * Mode detection is automatic based on parameter type.
  *
- * @param project The Gradle project to register tasks on
- * @param imageReferences List of full Docker image references in format "registry/image-name:tag"
- * @param username Optional registry username for authentication
- * @param password Optional registry password for authentication
- * @param server Optional registry server for authentication
+ * SINGLE REGISTRY MODE:
+ * @param project The Gradle project
+ * @param imageReferences List<String> - Image references for single registry
+ * @param username Optional username for authentication
+ * @param password Optional password for authentication
+ * @param server Optional server for authentication
+ *
+ * MULTIPLE REGISTRY MODE:
+ * @param project The Gradle project
+ * @param imageReferencesByRegistry Map<String, List<String>> - Registry names to image references
+ * @param authByRegistry Optional Map<String, Map<String, String>> - Registry auth credentials
+ *
+ * Examples:
+ *   // Single registry
+ *   registerVerifyRegistryImagesTask(project, ['localhost:5000/app:latest'])
+ *
+ *   // Single registry with auth
+ *   registerVerifyRegistryImagesTask(project, ['localhost:5000/app:latest'], 'user', 'pass', 'localhost:5000')
+ *
+ *   // Multiple registries
+ *   registerVerifyRegistryImagesTask(project, [
+ *       'registry1': ['localhost:5070/app:latest'],
+ *       'registry2': ['localhost:5071/app:latest']
+ *   ])
+ *
+ *   // Multiple registries with auth
+ *   registerVerifyRegistryImagesTask(
+ *       project,
+ *       ['registry1': ['localhost:5070/app:latest'], 'registry2': ['localhost:5071/app:latest']],
+ *       ['registry2': [username: 'user', password: 'pass', server: 'localhost:5071']]
+ *   )
  */
-ext.registerVerifyRegistryImagesTask = { Project project, List<String> imageReferences, String username = null, String password = null, String server = null ->
-    if (imageReferences == null || imageReferences.isEmpty()) {
-        throw new IllegalArgumentException("imageReferences cannot be null or empty")
-    }
+ext.registerVerifyRegistryImagesTask = { Project project, def imageReferencesOrMap, def usernameOrAuth = null, String password = null, String server = null ->
+    
+    if (imageReferencesOrMap instanceof List) {
+        // SINGLE REGISTRY MODE (existing behavior)
+        def imageReferences = imageReferencesOrMap as List<String>
+        
+        if (imageReferences == null || imageReferences.isEmpty()) {
+            throw new IllegalArgumentException("imageReferences cannot be null or empty")
+        }
 
-    project.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
-        it.imageReferences.set(imageReferences)
-        if (username != null) {
-            it.registryUsername.set(username)
+        project.tasks.register('verifyRegistryDockerImages', DockerRegistryImageVerifyTask) {
+            it.imageReferences.set(imageReferences)
+            if (usernameOrAuth != null && usernameOrAuth instanceof String) {
+                it.registryUsername.set(usernameOrAuth as String)
+            }
+            if (password != null) {
+                it.registryPassword.set(password)
+            }
+            if (server != null) {
+                it.registryServer.set(server)
+            }
+            it.group = 'verification'
+            it.description = "Verify Docker images exist in registry"
         }
-        if (password != null) {
-            it.registryPassword.set(password)
-        }
-        if (server != null) {
-            it.registryServer.set(server)
-        }
-        it.group = 'verification'
-        it.description = "Verify Docker images exist in registry"
-    }
 
-    project.logger.info("Registered verify registry images task for image references: ${imageReferences}")
+        project.logger.info("Registered single-registry verification task for images: ${imageReferences}")
+        
+    } else if (imageReferencesOrMap instanceof Map) {
+        // MULTIPLE REGISTRY MODE (new behavior)
+        def imageReferencesByRegistry = imageReferencesOrMap as Map<String, List<String>>
+        def authByRegistry = (usernameOrAuth instanceof Map) ? (usernameOrAuth as Map<String, Map<String, String>>) : [:]
+        
+        if (imageReferencesByRegistry == null || imageReferencesByRegistry.isEmpty()) {
+            throw new IllegalArgumentException("imageReferencesByRegistry cannot be null or empty")
+        }
+
+        // Create a verification task for each registry
+        imageReferencesByRegistry.each { registryName, imageReferences ->
+            def taskName = "verifyRegistryDockerImages${registryName.capitalize()}"
+            
+            def auth = authByRegistry[registryName]
+            
+            project.tasks.register(taskName, DockerRegistryImageVerifyTask) {
+                it.imageReferences.set(imageReferences)
+                
+                if (auth != null) {
+                    if (auth.username != null) {
+                        it.registryUsername.set(auth.username)
+                    }
+                    if (auth.password != null) {
+                        it.registryPassword.set(auth.password)
+                    }
+                    if (auth.server != null) {
+                        it.registryServer.set(auth.server)
+                    }
+                }
+                
+                it.group = 'verification'
+                it.description = "Verify Docker images exist in ${registryName} registry"
+            }
+            
+            project.logger.info("Registered registry verification task '${taskName}' for ${registryName}: ${imageReferences}")
+        }
+        
+        // Create an aggregate task that depends on all individual registry verification tasks
+        project.tasks.register('verifyRegistryDockerImages') {
+            it.group = 'verification'
+            it.description = 'Verify Docker images exist in all configured registries'
+            
+            imageReferencesByRegistry.each { registryName, _ ->
+                it.dependsOn "verifyRegistryDockerImages${registryName.capitalize()}"
+            }
+        }
+        
+        project.logger.info("Registered multi-registry aggregate verification task for ${imageReferencesByRegistry.size()} registries")
+        
+    } else {
+        throw new IllegalArgumentException("First parameter must be either List<String> or Map<String, List<String>>")
+    }
 }
 
 /**

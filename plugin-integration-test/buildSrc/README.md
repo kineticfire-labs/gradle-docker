@@ -126,36 +126,105 @@ registerVerifySavedImagesTask(project, [
 
 ### registerVerifyRegistryImagesTask
 
-Verifies that Docker images exist in a specified Docker registry.
+Verifies that Docker images exist in one or more Docker registries. Supports both single-registry and multi-registry
+modes with automatic detection based on parameter type.
 
 ```groovy
-registerVerifyRegistryImagesTask(project, imageNames, registryUrl)
+// Single registry mode
+registerVerifyRegistryImagesTask(project, imageReferences, username, password, server)
+
+// Multiple registries mode
+registerVerifyRegistryImagesTask(project, imageReferencesByRegistry, authByRegistry)
 ```
 
-**Parameters:**
+**Parameters (Single Registry Mode):**
 - `project`: The Gradle project to register tasks on
-- `imageNames`: List of Docker image names in format `"image-name:tag"`
-- `registryUrl`: The registry URL (e.g., `"localhost:5000"`, `"docker.io"`)
+- `imageReferences`: List of Docker image references in format `"registry/image-name:tag"`
+- `username`: Optional registry username for authentication
+- `password`: Optional registry password for authentication
+- `server`: Optional registry server for authentication
 
-**Registry Support:**
-- ✅ Can check image existence without authentication for public registries like Docker Hub
-- 🚧 Will need authentication support for checking images in registries that require authentication
-- 🚧 Will need authentication support for publishing to public registries like Docker Hub
+**Parameters (Multiple Registries Mode):**
+- `project`: The Gradle project to register tasks on
+- `imageReferencesByRegistry`: Map of registry names to their image reference lists
+- `authByRegistry`: Optional map of registry names to authentication credentials
 
-**Creates Task:** `verifyRegistryDockerImages` in the `verification` group
+**Creates Tasks:**
+- Single mode: `verifyRegistryDockerImages` in the `verification` group
+- Multiple mode:
+  - `verifyRegistryDockerImages<RegistryName>` per registry (e.g., `verifyRegistryDockerImagesRegistry1`)
+  - `verifyRegistryDockerImages` aggregate task
 
-**Example:**
+**Example - Single Registry:**
 ```groovy
-// Local private registry for testing
 registerVerifyRegistryImagesTask(project, [
-    'my-app:1.0.0',
-    'my-app:latest'
-], 'localhost:5000')
+    'localhost:5000/my-app:1.0.0',
+    'localhost:5000/my-app:latest'
+])
 
-// Public Docker Hub registry
+// With authentication
+registerVerifyRegistryImagesTask(
+    project,
+    ['localhost:5001/secure-app:latest'],
+    'testuser',
+    'testpass',
+    'localhost:5001'
+)
+```
+
+**Example - Multiple Registries:**
+```groovy
+// Configure multiple registries
+registryManagement {
+    registry('registry1', 5070)
+    registry('registry2', 5071)
+}
+
+// Verify same images in multiple registries
 registerVerifyRegistryImagesTask(project, [
-    'alpine:latest'
-], 'docker.io')
+    'registry1': [
+        'localhost:5070/my-app:1.0.0',
+        'localhost:5070/my-app:latest'
+    ],
+    'registry2': [
+        'localhost:5071/my-app:1.0.0',
+        'localhost:5071/my-app:latest'
+    ]
+])
+
+// With mixed authentication (some registries need auth, others don't)
+registerVerifyRegistryImagesTask(
+    project,
+    [
+        'public': ['localhost:5070/my-app:latest'],
+        'private': ['localhost:5071/secure-app:latest']
+    ],
+    [
+        'private': [
+            username: 'testuser',
+            password: 'testpass',
+            server: 'localhost:5071'
+        ]
+    ]
+)
+```
+
+**Task Ordering:**
+```groovy
+// Single registry mode
+tasks.named('verifyRegistryDockerImages') {
+    mustRunAfter 'dockerPublish'
+}
+
+// Multiple registry mode - aggregate task
+tasks.named('verifyRegistryDockerImages') {
+    mustRunAfter 'dockerPublish'
+}
+
+// Multiple registry mode - individual registry tasks
+tasks.named('verifyRegistryDockerImagesRegistry1') {
+    mustRunAfter 'dockerPublish'
+}
 ```
 
 ### registerVerifyBuildArgsTask
