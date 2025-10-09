@@ -162,6 +162,14 @@ registerVerifyBuildArgsTask(project, [
     'scenario4/inheritance-test:latest': [:]  // Empty map = expect zero build args
 ])
 
+// Register labels verification for this integration test
+// Verify DSL-configured label (no Dockerfile labels in this scenario)
+registerVerifyLabelsTask(project, [
+    'scenario4/inheritance-test:latest': [
+        'org.opencontainers.image.version': '1.0.0'  // From DSL: labels.putAll()
+    ]
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → publish → verify (empty target inheritance)'
@@ -175,6 +183,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'verifyDockerBuildArgs'
+    dependsOn 'verifyDockerLabels'
     dependsOn 'stopTestRegistries'
 }
 
@@ -185,6 +194,10 @@ tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('verifyDockerLabels') {
     mustRunAfter 'dockerImages'
     mustRunAfter 'verifyDockerImages'
 }

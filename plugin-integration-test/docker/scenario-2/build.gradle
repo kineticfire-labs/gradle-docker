@@ -159,13 +159,12 @@ registerVerifyBuildArgsTask(project, [
 ])
 
 // Register labels verification for this integration test
-// NOTE: The plugin DSL label (org.opencontainers.image.version) is configured but
-// NOT being applied to the image. This appears to be a plugin implementation gap.
-// For now, we verify the labels that ARE actually in the image (from Dockerfile LABEL instructions).
+// Verify DSL-configured label and Dockerfile LABEL instructions
 registerVerifyLabelsTask(project, [
     'scenario2/scenario2-time-server:latest': [
-        'version': '',              // From Dockerfile: LABEL version="${BUILD_VERSION}" (empty in scenario-2)
-        'build-time': ''            // From Dockerfile: LABEL build-time="${BUILD_TIME}" (empty value)
+        'org.opencontainers.image.version': '1.0.0',  // From DSL: labels.put()
+        'version': '',                                  // From Dockerfile: LABEL version="${BUILD_VERSION}" (empty)
+        'build-time': ''                                // From Dockerfile: LABEL build-time="${BUILD_TIME}" (empty)
     ]
 ])
 

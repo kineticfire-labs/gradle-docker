@@ -204,6 +204,23 @@ registerVerifyBuildArgsTask(project, [
     ]
 ])
 
+// Register labels verification for this integration test
+// Verify DSL-configured labels and Dockerfile LABEL instructions
+registerVerifyLabelsTask(project, [
+    'scenario-6/time-server:1.0.0': [
+        'org.opencontainers.image.version': '1.0.0',  // From DSL: labels.putAll()
+        'maintainer': 'team@kineticfire.com',          // From DSL: labels.putAll()
+        'version': '1.0.0',                             // From Dockerfile: LABEL version="${BUILD_VERSION}"
+        'build-time': ''                                // From Dockerfile: LABEL build-time="${BUILD_TIME}" (empty)
+    ],
+    'scenario-6/time-server:latest': [
+        'org.opencontainers.image.version': '1.0.0',
+        'maintainer': 'team@kineticfire.com',
+        'version': '1.0.0',
+        'build-time': ''
+    ]
+])
+
 // Task that runs complete integration test workflow
 tasks.register('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify (authenticated registry)'
@@ -217,6 +234,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'verifyDockerBuildArgs'
+    dependsOn 'verifyDockerLabels'
     dependsOn 'stopTestRegistries'
 }
 
@@ -227,6 +245,10 @@ tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('verifyDockerLabels') {
     mustRunAfter 'dockerImages'
     mustRunAfter 'verifyDockerImages'
 }

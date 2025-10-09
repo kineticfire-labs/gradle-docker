@@ -118,6 +118,15 @@ registerVerifyBuildArgsTask(project, [
     'docker.io/library/nginx:1.21': [:]  // Empty map = expect zero build args
 ])
 
+// Register labels verification for this integration test
+// SourceRef mode uses existing image (nginx:1.21), which has labels from the official nginx image
+// Verify the labels that exist in the nginx:1.21 base image
+registerVerifyLabelsTask(project, [
+    'docker.io/library/nginx:1.21': [
+        'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
+    ]
+])
+
 // Task that runs integration test workflow (sourceRef mode)
 tasks.register('integrationTest') {
     description = 'Run sourceRef integration test: pull → publish → verify (sourceRef component inheritance)'
@@ -129,6 +138,7 @@ tasks.register('integrationTest') {
     dependsOn 'dockerImages'           // This will handle publish (no build)
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'verifyDockerBuildArgs'
+    dependsOn 'verifyDockerLabels'
     dependsOn 'stopTestRegistries'
 }
 
@@ -137,6 +147,10 @@ tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
 tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}
+tasks.named('verifyDockerLabels') {
     mustRunAfter 'ensureSourceImage'
     mustRunAfter 'dockerImages'
 }

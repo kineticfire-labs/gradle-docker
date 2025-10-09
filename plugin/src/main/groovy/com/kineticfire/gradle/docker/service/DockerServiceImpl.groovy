@@ -191,7 +191,12 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 context.buildArgs.each { key, value ->
                     buildCmd.withBuildArg(key, value)
                 }
-                
+
+                // Add labels as a map
+                if (!context.labels.isEmpty()) {
+                    buildCmd.withLabels(context.labels)
+                }
+
                 def result = buildCmd.exec(buildImageResultCallback)
                 println "Build command executed, awaiting image ID..."
                 
