@@ -33,9 +33,12 @@ import java.util.concurrent.ExecutionException
 
 /**
  * Comprehensive unit tests for DockerServiceImpl
- * NOTE: Temporarily disabled due to Spock mocking issues with Docker Java API classes
+ * NOTE: Temporarily disabled due to Spock CannotCreateMockException with Docker Java API classes.
+ * The issue is that Spock cannot create mocks for certain Docker Java API command classes.
+ * Alternative: DockerServiceLabelsTest provides label-specific unit tests without this limitation.
+ * TODO: Investigate Spock mock-maker configuration or alternative mocking approach
  */
-@spock.lang.Ignore("Docker Java API mocking issues - will be re-enabled after fixing mock infrastructure")
+@spock.lang.Ignore("Spock CannotCreateMockException - see DockerServiceLabelsTest for label tests")
 class DockerServiceImplComprehensiveTest extends DockerServiceTestBase {
 
     @TempDir
@@ -43,22 +46,23 @@ class DockerServiceImplComprehensiveTest extends DockerServiceTestBase {
 
     def "buildImage with all nomenclature parameters"() {
         given:
-        def context = DockerTestDataFactory.createBuildContext()
+        def context = DockerTestDataFactory.createBuildContext(tempDir)
         def buildCmd = Mock(BuildImageCmd)
         def buildCallback = Mock(BuildImageResultCallback)
-        
+
         mockDockerClient.buildImageCmd() >> buildCmd
         buildCmd.withDockerfile(_) >> buildCmd
         buildCmd.withBaseDirectory(_) >> buildCmd
         buildCmd.withTag(_) >> buildCmd
         buildCmd.withNoCache(_) >> buildCmd
         buildCmd.withBuildArg(_, _) >> buildCmd
+        buildCmd.withLabels(_) >> buildCmd
         buildCmd.exec(_) >> buildCallback
         buildCallback.awaitImageId() >> "sha256:12345abcdef"
-        
+
         when:
         def result = service.buildImage(context).get()
-        
+
         then:
         result == "sha256:12345abcdef"
         1 * buildCmd.withDockerfile(context.dockerfile.toFile())
@@ -66,6 +70,7 @@ class DockerServiceImplComprehensiveTest extends DockerServiceTestBase {
         context.buildArgs.each { key, value ->
             1 * buildCmd.withBuildArg(key, value)
         }
+        1 * buildCmd.withLabels(context.labels)
     }
     
     def "buildImage with multiple tags applies additional tags"() {
@@ -120,7 +125,71 @@ class DockerServiceImplComprehensiveTest extends DockerServiceTestBase {
         ex.cause.errorType == DockerServiceException.ErrorType.BUILD_FAILED
         ex.cause.message.contains("Build failed")
     }
-    
+
+    def "buildImage applies labels when provided"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def labels = [
+            "org.opencontainers.image.version": "1.0.0",
+            "maintainer": "team@example.com",
+            "custom.label": "value"
+        ]
+        def context = new BuildContext(
+            tempDir,
+            dockerfile,
+            [:],  // no build args
+            ["test:latest"],
+            labels
+        )
+        def buildCmd = Mock(BuildImageCmd)
+        def buildCallback = Mock(BuildImageResultCallback)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag(_) >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.withLabels(_) >> buildCmd
+        buildCmd.exec(_) >> buildCallback
+        buildCallback.awaitImageId() >> "sha256:test123"
+
+        when:
+        def result = service.buildImage(context).get()
+
+        then:
+        result == "sha256:test123"
+        1 * buildCmd.withLabels(labels)
+    }
+
+    def "buildImage skips labels when empty map provided"() {
+        given:
+        def dockerfile = Files.write(tempDir.resolve("Dockerfile"), "FROM alpine:latest".bytes)
+        def context = new BuildContext(
+            tempDir,
+            dockerfile,
+            [:],  // no build args
+            ["test:latest"],
+            [:]   // EMPTY LABELS
+        )
+        def buildCmd = Mock(BuildImageCmd)
+        def buildCallback = Mock(BuildImageResultCallback)
+
+        mockDockerClient.buildImageCmd() >> buildCmd
+        buildCmd.withDockerfile(_) >> buildCmd
+        buildCmd.withBaseDirectory(_) >> buildCmd
+        buildCmd.withTag(_) >> buildCmd
+        buildCmd.withNoCache(_) >> buildCmd
+        buildCmd.exec(_) >> buildCallback
+        buildCallback.awaitImageId() >> "sha256:test456"
+
+        when:
+        def result = service.buildImage(context).get()
+
+        then:
+        result == "sha256:test456"
+        0 * buildCmd.withLabels(_)  // Should NOT be called for empty labels
+    }
+
     def "tagImage tags all provided tags"() {
         given:
         def sourceImage = "source:latest"

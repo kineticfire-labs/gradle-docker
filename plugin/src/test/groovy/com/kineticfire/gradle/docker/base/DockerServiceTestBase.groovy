@@ -122,81 +122,26 @@ abstract class DockerServiceTestBase extends Specification {
     
     /**
      * Test implementation of DockerServiceImpl that allows dependency injection
+     * Extends actual DockerServiceImpl to test real implementation logic
      */
-    static class TestDockerServiceImpl implements DockerService {
-        private final DockerClient injectedClient
-        private final ExecutorService injectedExecutor
+    static class TestDockerServiceImpl extends DockerServiceImpl {
 
         TestDockerServiceImpl(DockerClient client, ExecutorService executor) {
-            this.injectedClient = client
-            this.injectedExecutor = executor
+            // Initialize without calling super() constructor to avoid Docker daemon connection
+            // Manually set the protected fields that parent would have initialized
+            this.dockerClient = client
+            this.executorService = executor
         }
 
         @Override
-        java.util.concurrent.CompletableFuture<String> buildImage(com.kineticfire.gradle.docker.model.BuildContext context) {
-            return java.util.concurrent.CompletableFuture.supplyAsync({
-                try {
-                    // Mock implementation for testing
-                    return "sha256:test-image-id"
-                } catch (Exception e) {
-                    throw new RuntimeException(e)
-                }
-            }, injectedExecutor)
+        protected DockerClient createDockerClient() {
+            // Skip Docker client creation - use injected mock
+            return null
         }
 
         @Override
-        java.util.concurrent.CompletableFuture<Void> tagImage(String sourceImageRef, List<String> targetTags) {
-            return java.util.concurrent.CompletableFuture.runAsync({
-                // Mock implementation for testing
-            }, injectedExecutor)
-        }
-
-        @Override
-        java.util.concurrent.CompletableFuture<Void> saveImage(String imageRef, java.nio.file.Path outputPath, com.kineticfire.gradle.docker.model.SaveCompression compression) {
-            return java.util.concurrent.CompletableFuture.runAsync({
-                // Mock implementation for testing
-                try {
-                    java.nio.file.Files.createDirectories(outputPath.parent)
-                    java.nio.file.Files.write(outputPath, "mock image data".bytes)
-                } catch (Exception e) {
-                    throw new RuntimeException(e)
-                }
-            }, injectedExecutor)
-        }
-
-        @Override
-        java.util.concurrent.CompletableFuture<Void> pullImage(String imageRef, com.kineticfire.gradle.docker.model.AuthConfig authConfig) {
-            return java.util.concurrent.CompletableFuture.runAsync({
-                // Mock implementation for testing
-            }, injectedExecutor)
-        }
-
-        @Override
-        java.util.concurrent.CompletableFuture<Void> pushImage(String imageRef, com.kineticfire.gradle.docker.model.AuthConfig authConfig) {
-            return java.util.concurrent.CompletableFuture.runAsync({
-                // Mock implementation for testing
-            }, injectedExecutor)
-        }
-
-        @Override
-        java.util.concurrent.CompletableFuture<Boolean> imageExists(String imageRef) {
-            return java.util.concurrent.CompletableFuture.supplyAsync({
-                // Mock implementation for testing - assume image exists
-                return true
-            }, injectedExecutor)
-        }
-
-        @Override
-        void close() {
-            // Mock implementation for testing
-        }
-
-        protected DockerClient getDockerClient() {
-            return injectedClient
-        }
-
-        protected ExecutorService getExecutorService() {
-            return injectedExecutor
+        BuildServiceParameters.None getParameters() {
+            return null // Not needed for testing
         }
     }
 }
