@@ -29,21 +29,25 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
     'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
     test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
 
-    Your task is to write a new integration test, called 'scenario-11' at @plugin-integration-test/docker/scenario-11/ , that must provide an integration test using a build.gradle
+    Your task is to write a new integration test, called 'scenario-12' at @plugin-integration-test/docker/scenario-12/ , that must provide an integration test using a build.gradle
   file
     for these aspects:
   - We are going to test the "Source Ref Mode" to define an image.  You can see an examples:
        - using "Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag" at @plugin-integration-test/docker/scenario-5/ .
        - using the full image reference 'sourceRef' at @plugin-integration-test/docker/scenario-9/ .
-  - Define the image using the "Repository Mode: sourceRefRegistry, sourceRefRepository, sourceRefTag"
+  - Define the image using the "Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag"
+      - since we are not defining the registry, then the image must exist local.  so there should be a check that the image is local else pull it.  There are integration test helpers
+        in build source (buildSrc) that can probably help with this.
       - pick a tag like "latest", because picking a specific version like "1.27" could be aged off and no longer available
-  - Explicitly set 'pullIfMissing' to 'true' and ensure that the image is NOT local.  There is an integration test helper in buildSrc to ensure an image IS local i'm not sure if there
-    is one for NOT local... check and, if not, then you will need to add that functionality to the build source.
-  - Tag the image locally with two different tags such as "my-local" and "my-edge" or something to separate it clearly from the original image tag
-  - Save the image to the filesystem using compression type of 'xz'
+  - Omit 'pullingIfMissing' which will default to 'false'.  If the image isn't local, then it can't be pulled since there is no registry.
+  - Do not create additional tags for the image
+  - Save the image to the filesystem using compression type of 'zip'
   - Publish the image to a local, private registry that DOES require authentication
-      - Use "Image Name Mode: registry, namespace, imageName, and tag" mode to define the image to publish
-      - Use port 5110 for the registry so as not conflict with other tests
+      - Use "Repository Mode: repository, 1 tag" mode to define the image to publish
+      - Use port 5120 for the registry so as not conflict with other tests
+  - I should be able to run the integration test from the @plugin-integration-test/ directory using:
+     - ./gradlew -Pplugin_version=1.0.0  cleanAll integrationTest
+     - ./gradlew -Pplugin_version=1.0.0 docker:scenario-12:clean docker:scenario-12:integrationTest
 
   Acceptance criteria is that the integration test passes.
 

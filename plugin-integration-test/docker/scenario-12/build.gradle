@@ -1,0 +1,184 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Source Ref Mode
+ *       - Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag (no registry)
+ *   - Tag Features
+ *       - number of tags = none
+ *   - Save Features
+ *       - save w/ compression type = zip
+ *   - Publish Features
+ *       - publish = 1 tag
+ *       - publish to private registry with authentication
+ *       - Repository Mode: repository, 1 tag
+ *   - pullIfMissing
+ *       - not set (defaults to false) - image must exist locally
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-12 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-12:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.ZIP
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        alpineTest {
+            // Source Ref Mode - Image Name Mode (namespace + imageName + tag)
+            // No registry specified - image must exist locally
+            // Tests component assembly without registry
+            sourceRefNamespace.set('library')
+            sourceRefImageName.set('alpine')
+            sourceRefTag.set('latest')
+            // Effective sourceRef: library/alpine:latest
+
+            // pullIfMissing is OMITTED (defaults to false)
+            // Since no registry is specified in sourceRef, the image must exist locally
+            // The ensureSourceImage task below ensures alpine:latest is available
+
+            // NO tags property - no additional local tags created
+            // This tests save and publish working directly with the source image
+
+            // Save the image with ZIP compression
+            save {
+                compression.set(ZIP)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario12-alpine.zip'))
+            }
+
+            // Publish to authenticated registry using Repository Mode
+            // This demonstrates publishing a sourceRef image to a new location
+            publish {
+                to('authenticatedRegistry') {
+                    registry.set('localhost:5120')
+                    repository.set('scenario-12/alpine')
+                    publishTags.set(['published'])
+
+                    // Authentication required for this registry
+                    auth {
+                        username.set('scenario12user')
+                        password.set('scenario12pass')
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure authenticated test registry using the plugin
+// Port 5120 follows convention: 51 (scenario-12 tens digit) + 20
+withAuthenticatedRegistry('test-registry-scenario12', 5120, 'scenario12user', 'scenario12pass') {
+    // Registry will be configured with authentication
+}
+
+// Ensure the source image exists locally for sourceRef testing
+// This task will pull alpine:latest if it doesn't exist
+// Since pullIfMissing is not set (defaults to false) and no registry is specified,
+// the image MUST be local for the plugin to work
+tasks.register('ensureSourceImage', EnsureDockerImageTask) {
+    imageRef.set('library/alpine:latest')
+    reason.set('Required for sourceRef testing without registry (image must be local)')
+    description = 'Ensure library/alpine:latest exists locally for sourceRef test'
+    group = 'docker'
+}
+
+// No build workflow tasks since this uses existing image (sourceRef mode)
+
+// Register saved image verification task since this scenario tests save functionality with ZIP
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario12-alpine.zip'])
+
+// Register registry image verification task since this scenario tests publish functionality
+// This registry requires authentication, so pass the credentials
+registerVerifyRegistryImagesTask(
+    project,
+    ['localhost:5120/scenario-12/alpine:published'],
+    'scenario12user',
+    'scenario12pass',
+    'localhost:5120'
+)
+
+// Register build args verification for this integration test
+// SourceRef mode uses existing image (alpine:latest), which has no build args
+// Verify zero build args for the source image
+registerVerifyBuildArgsTask(project, [
+    'library/alpine:latest': [:]  // Empty map = expect zero build args
+])
+
+// Note: Alpine has no labels (Labels: null in docker inspect), so we skip label verification
+// The verifyDockerLabels task doesn't handle null labels properly
+
+// Task that runs integration test workflow (sourceRef mode without registry)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef integration test: ensure local → save → publish → verify'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode (no build needed)
+    dependsOn 'ensureSourceImage'         // Ensure alpine:latest exists locally
+    dependsOn 'startTestRegistries'       // Start authenticated registry
+    dependsOn 'dockerImages'              // Save and publish (no build, no tag)
+    dependsOn 'verifySavedDockerImages'   // Verify ZIP compressed file exists
+    dependsOn 'verifyRegistryDockerImages' // Verify published image in authenticated registry
+    dependsOn 'verifyDockerBuildArgs'     // Verify no build args in source image
+    dependsOn 'stopTestRegistries'        // Stop authenticated registry
+}
+
+// Configure task ordering without direct task references
+tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
+tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
