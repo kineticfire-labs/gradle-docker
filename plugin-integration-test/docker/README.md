@@ -48,30 +48,30 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 
 ## Source Ref Mode
 
-| #  | Tested Feature                                                                           | Test Scenario                | 
-|----|------------------------------------------------------------------------------------------|------------------------------|
-| 1  | sourceRef                                                                                | <ol><li>scenario-9</li></ol> |
-| 2  | Image Name Mode: sourceRefImageName, sourceRefTag                                        | todo                         |
-| 3  | Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag                    | todo                         |
-| 4  | Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag | <ol><li>scenario-5</li></ol> |
-| 5  | Repository Mode: sourceRefRepository, sourceRefTag                                       | todo                         |
-| 6  | Repository Mode: sourceRefRegistry, sourceRefRepository, sourceRefTag                    | todo                         |
-| 7  | pullIfMissing = not set && image IS local                                                | <ol><li>scenario-5</li></ol> |
-| 8  | pullIfMissing = false && image IS local                                                  | <ol><li>scenario-9</li></ol> |
-| 9  | pullIfMissing = true && image IS local so no pull                                        | todo                         |
-| 10 | pullIfMissing = true && image is NOT local so must pull                                  | todo                         |
-| 11 | without 'save' or 'publish'                                                              | <ol><li>scenario-5</li></ol> |
-| 12 | with 'save'                                                                              | <ol><li>scenario-9</li></ol> |
-| 13 | with 'publish'                                                                           | <ol><li>scenario-9</li></ol> |
+| #  | Tested Feature                                                                           | Test Scenario                 | 
+|----|------------------------------------------------------------------------------------------|-------------------------------|
+| 1  | sourceRef                                                                                | <ol><li>scenario-9</li></ol>  |
+| 2  | Image Name Mode: sourceRefImageName, sourceRefTag                                        | <ol><li>scenario-10</li></ol> |
+| 3  | Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag                    | todo                          |
+| 4  | Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag | <ol><li>scenario-5</li></ol>  |
+| 5  | Repository Mode: sourceRefRepository, sourceRefTag                                       | todo                          |
+| 6  | Repository Mode: sourceRefRegistry, sourceRefRepository, sourceRefTag                    | todo                          |
+| 7  | pullIfMissing = not set && image IS local                                                | <ol><li>scenario-5</li></ol>  |
+| 8  | pullIfMissing = false && image IS local                                                  | <ol><li>scenario-9</li></ol>  |
+| 9  | pullIfMissing = true && image IS local so no pull                                        | <ol><li>scenario-10</li></ol>                          |
+| 10 | pullIfMissing = true && image is NOT local so must pull                                  | todo                          |
+| 11 | without 'save' or 'publish'                                                              | <ol><li>scenario-5</li></ol>  |
+| 12 | with 'save'                                                                              | <ol><li>scenario-9</li></ol>  |
+| 13 | with 'publish'                                                                           | <ol><li>scenario-9</li></ol>  |
 
 
 ## Tag Features
 
-| # | Tested Feature        | Test Scenario                                                                         | 
-|---|-----------------------|---------------------------------------------------------------------------------------|
-| 1 | number of tags = none | <ol><li>scenario-5</li><li>scenario-8</li></ol>                                       |
-| 2 | number of tags = 1    | <ol><li>scenario-2</li><li>scenario-3</li><li>scenario-4</li><li>scenario-7</li></ol> |
-| 3 | number of tags > 1    | <ol><li>scenario-1</li><li>scenario-6</li></ol>                                       |
+| # | Tested Feature        | Test Scenario                                                                                             | 
+|---|-----------------------|-----------------------------------------------------------------------------------------------------------|
+| 1 | number of tags = none | <ol><li>scenario-5</li><li>scenario-8</li><li>scenario-9</li></ol>                                        |
+| 2 | number of tags = 1    | <ol><li>scenario-2</li><li>scenario-3</li><li>scenario-4</li><li>scenario-7</li><li>scenario-10</li></ol> |
+| 3 | number of tags > 1    | <ol><li>scenario-1</li><li>scenario-6</li></ol>                                                           |
 
 
 ## Save Features
@@ -79,7 +79,7 @@ Integration tests run in parallel, including those from `compose`.  Shared resou
 | # | Tested Feature                   | Test Scenario                                   |
 |---|----------------------------------|-------------------------------------------------|
 | 1 | save = none                      | <ol><li>scenario-1</li><li>scenario-5</li></ol> |
-| 2 | save w/ compression type = none  | <ol><li>scenario-2</li></ol>                    |
+| 2 | save w/ compression type = none  | <ol><li>scenario-2</li><li>scenario-10</li></ol>                    |
 | 3 | save w/ compression type = gzip  | <ol><li>scenario-3</li><li>scenario-8</li></ol> |
 | 4 | save w/ compression type = bzip2 | <ol><li>scenario-4</li><li>scenario-9</li></ol> |
 | 5 | save w/ compression type = xz    | <ol><li>scenario-6</li></ol>                    |

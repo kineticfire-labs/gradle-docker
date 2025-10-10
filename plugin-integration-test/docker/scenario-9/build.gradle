@@ -66,7 +66,7 @@ docker {
     images {
         nginxTest {
             // SourceRef mode - use full image reference for existing image
-            sourceRef.set('docker.io/library/nginx:1.27')
+            sourceRef.set('docker.io/library/nginx:latest')
 
             // Explicitly set pullIfMissing to false - image must exist locally
             // (ensured by ensureSourceImage task below)
@@ -121,11 +121,11 @@ registryManagement {
 }
 
 // Ensure the source image exists locally for sourceRef testing with pullIfMissing=false
-// This task will pull nginx:1.27 if it doesn't exist, ensuring the test can run
+// This task will pull nginx:latest if it doesn't exist, ensuring the test can run
 tasks.register('ensureSourceImage', EnsureDockerImageTask) {
-    imageRef.set('docker.io/library/nginx:1.27')
+    imageRef.set('docker.io/library/nginx:latest')
     reason.set('Required for sourceRef testing with pullIfMissing=false')
-    description = 'Ensure nginx:1.27 exists locally for sourceRef test'
+    description = 'Ensure nginx:latest exists locally for sourceRef test'
     group = 'docker'
 }
 
@@ -148,17 +148,17 @@ registerVerifyRegistryImagesTask(project, [
 ])
 
 // Register build args verification for this integration test
-// SourceRef mode uses existing image (nginx:1.27), which has no build args
+// SourceRef mode uses existing image (nginx:latest), which has no build args
 // Verify zero build args for the source image
 registerVerifyBuildArgsTask(project, [
-    'docker.io/library/nginx:1.27': [:]  // Empty map = expect zero build args
+    'docker.io/library/nginx:latest': [:]  // Empty map = expect zero build args
 ])
 
 // Register labels verification for this integration test
-// SourceRef mode uses existing image (nginx:1.27), which has labels from the official nginx image
-// Verify the maintainer label that exists in the nginx:1.27 base image
+// SourceRef mode uses existing image (nginx:latest), which has labels from the official nginx image
+// Verify the maintainer label that exists in the nginx:latest base image
 registerVerifyLabelsTask(project, [
-    'docker.io/library/nginx:1.27': [
+    'docker.io/library/nginx:latest': [
         'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
     ]
 ])
