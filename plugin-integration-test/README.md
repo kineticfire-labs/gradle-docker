@@ -107,11 +107,65 @@ cd docker/scenario-1 && ./gradlew integrationTest
 
 ## De-conflict Integration Tests
 
-Integration tests run in parallel.  Shared resources must be manually deconflicted:
-- Docker images must have unique names per integration test, such as `scenario-<number>-<image name>` or 
-  `scenario-<number>/<image name>`
-- Ports must be unique, such as those used for exposed services (e.g., the `TimeServer`) or for Docker private 
-  registries
+Integration tests run in parallel.  Shared resources must be manually de-conflicted according to the following sections.
+
+### Image Names - De-conflict
+Docker images must have unique names per integration test, such as `scenario-<number>-<image name>` or 
+`scenario-<number>/<image name>`.
+
+#### Public Image Names & Tags - De-conflict
+
+When using public images (e.g., those from Docker Hub), integration tests must use:
+- tags like `latest` or `edge`, as available, instead of `1.27` because the numeric version could be aged-off and no
+  longer available
+- do NOT use images from Bitnami, VMware, or Broadcom as public images could be temporarily or permanently made 
+  unavailable as evidenced by the
+  [Bitnami image brownout and shift to paid images](https://github.com/bitnami/containers/issues/83267) 
+- unique registry:repository:image:tag combinations per integration test such as one test uses `alpine:latest` and 
+  another test uses `haproxy:latest`.  Note that DockerHub images do not have an explicit registry. These must be 
+  recorded in the table below to track.
+
+| Registry | Repository | Image Name | Image Tag | `docker` or `dockerOrch` | Integration Test |
+|----------|------------|------------|-----------|--------------------------|------------------|
+|          |            | httpd      | latest    | `docker`                 | scenario-5       |
+|          |            | nginx      | latest    | `docker`                 | scenario-9       |
+|          |            | alpine     | latest    | `docker`                 | scenario-10      |
+|          |            | php        | latest    | `docker`                 | scenario-11      |
+|          |            | haproxy    | latest    | `docker`                 | scenario-12      |
+
+
+
+### Ports - De-conflict
+
+Ports must be unique, such as those used for exposed services (e.g., the `TimeServer`) or for Docker private 
+registries.
+
+#### Registry Ports - De-conflict
+
+Registry ports must be chosen from the following convention to ensure uniqueness:
+- `docker` registry integration tests: use registry ports `5ssr` where `ss` indicates the integration test scenario  
+  number and the `r` is used and allocated by the test itself, usually starting at 0.
+  - Example:
+     - For `scenario-5`: ports `5050` and `5051`
+     - For `scenario-12`: ports `5120` and `5121`
+  - Ports `6xxx` are reserved for future `docker` registry integration tests, if needed
+- `dockerOrch` registry  integration tests: use registry ports `7ssr` where `ss` indicates the integration test scenario
+  number and the `r` is used and allocated by the test itself, usually starting at 0.
+  - Example:
+    - For `scenario-5`: ports `7050` and `7051`
+    - For `scenario-12`: ports `7120` and `7121`
+  - Ports `8xxx` are reserved for future `dockerOrch` registry integration tests, if needed
+
+#### Server/Service Ports - De-conflict
+
+Ports `9ssp` are reserved for servers/services during integration tests for `dockerOrch` (`docker` does not spin-up
+servers/services, aside from registries, as part of its tests).
+- `dockerOrch` integration tests using a server/service: use ports `9ssp` where `ss` indicates the integration test 
+  scenario number and the `p` is used and allocated by the test itself, usually starting at 0.
+  - Example:
+    - For `scenario-5`: ports `9050` and `9051`
+    - For `scenario-12`: ports `9120` and `9121`
+
 
 ## Troubleshooting
 

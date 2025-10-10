@@ -64,18 +64,18 @@ version = '1.0.0'
 
 docker {
     images {
-        alpineTest {
+        haproxyTest {
             // Source Ref Mode - Image Name Mode (namespace + imageName + tag)
             // No registry specified - image must exist locally
             // Tests component assembly without registry
             sourceRefNamespace.set('library')
-            sourceRefImageName.set('alpine')
+            sourceRefImageName.set('haproxy')
             sourceRefTag.set('latest')
-            // Effective sourceRef: library/alpine:latest
+            // Effective sourceRef: library/haproxy:latest
 
             // pullIfMissing is OMITTED (defaults to false)
             // Since no registry is specified in sourceRef, the image must exist locally
-            // The ensureSourceImage task below ensures alpine:latest is available
+            // The ensureSourceImage task below ensures haproxy:latest is available
 
             // NO tags property - no additional local tags created
             // This tests save and publish working directly with the source image
@@ -83,7 +83,7 @@ docker {
             // Save the image with ZIP compression
             save {
                 compression.set(ZIP)
-                outputFile.set(layout.buildDirectory.file('docker-images/scenario12-alpine.zip'))
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario12-haproxy.zip'))
             }
 
             // Publish to authenticated registry using Repository Mode
@@ -91,7 +91,7 @@ docker {
             publish {
                 to('authenticatedRegistry') {
                     registry.set('localhost:5120')
-                    repository.set('scenario-12/alpine')
+                    repository.set('scenario-12/haproxy')
                     publishTags.set(['published'])
 
                     // Authentication required for this registry
@@ -122,39 +122,39 @@ withAuthenticatedRegistry('test-registry-scenario12', 5120, 'scenario12user', 's
 }
 
 // Ensure the source image exists locally for sourceRef testing
-// This task will pull alpine:latest if it doesn't exist
+// This task will pull haproxy:latest if it doesn't exist
 // Since pullIfMissing is not set (defaults to false) and no registry is specified,
 // the image MUST be local for the plugin to work
 tasks.register('ensureSourceImage', EnsureDockerImageTask) {
-    imageRef.set('library/alpine:latest')
+    imageRef.set('library/haproxy:latest')
     reason.set('Required for sourceRef testing without registry (image must be local)')
-    description = 'Ensure library/alpine:latest exists locally for sourceRef test'
+    description = 'Ensure library/haproxy:latest exists locally for sourceRef test'
     group = 'docker'
 }
 
 // No build workflow tasks since this uses existing image (sourceRef mode)
 
 // Register saved image verification task since this scenario tests save functionality with ZIP
-registerVerifySavedImagesTask(project, ['build/docker-images/scenario12-alpine.zip'])
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario12-haproxy.zip'])
 
 // Register registry image verification task since this scenario tests publish functionality
 // This registry requires authentication, so pass the credentials
 registerVerifyRegistryImagesTask(
     project,
-    ['localhost:5120/scenario-12/alpine:published'],
+    ['localhost:5120/scenario-12/haproxy:published'],
     'scenario12user',
     'scenario12pass',
     'localhost:5120'
 )
 
 // Register build args verification for this integration test
-// SourceRef mode uses existing image (alpine:latest), which has no build args
+// SourceRef mode uses existing image (haproxy:latest), which has no build args
 // Verify zero build args for the source image
 registerVerifyBuildArgsTask(project, [
-    'library/alpine:latest': [:]  // Empty map = expect zero build args
+    'library/haproxy:latest': [:]  // Empty map = expect zero build args
 ])
 
-// Note: Alpine has no labels (Labels: null in docker inspect), so we skip label verification
+// Note: haproxy has no labels (Labels: null in docker inspect), so we skip label verification
 // The verifyDockerLabels task doesn't handle null labels properly
 
 // Task that runs integration test workflow (sourceRef mode without registry)
@@ -163,7 +163,7 @@ tasks.register('integrationTest') {
     group = 'verification'
 
     // Dependencies for sourceRef mode (no build needed)
-    dependsOn 'ensureSourceImage'         // Ensure alpine:latest exists locally
+    dependsOn 'ensureSourceImage'         // Ensure haproxy:latest exists locally
     dependsOn 'startTestRegistries'       // Start authenticated registry
     dependsOn 'dockerImages'              // Save and publish (no build, no tag)
     dependsOn 'verifySavedDockerImages'   // Verify ZIP compressed file exists
