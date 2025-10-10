@@ -867,7 +867,7 @@ class ImageSpecTest extends Specification {
 
         then:
         def ex = thrown(org.gradle.api.GradleException)
-        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+        ex.message.contains("When using sourceRefNamespace, sourceRefImageName must also be specified")
         ex.message.contains("testImage")
     }
 
@@ -1157,15 +1157,14 @@ class ImageSpecTest extends Specification {
         noExceptionThrown()
     }
 
-    def "validateModeConsistency throws when using only sourceRefImageName without namespace"() {
+    def "validateModeConsistency succeeds when using only sourceRefImageName without namespace"() {
         when:
         imageSpec.sourceRefImageName.set("alpine")
-        // Missing sourceRefNamespace makes this invalid
+        // Namespace is optional - allows references like "alpine:latest"
         imageSpec.validateModeConsistency()
 
         then:
-        def ex = thrown(org.gradle.api.GradleException)
-        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+        noExceptionThrown()
     }
 
     def "validateModeConsistency throws when using labels with sourceRef"() {

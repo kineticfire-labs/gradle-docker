@@ -1,0 +1,147 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - SourceRef Mode
+ *       - Image Name Mode: sourceRefImageName + sourceRefTag (component form)
+ *   - Tag Features
+ *       - number of tags = 1
+ *   - Save Features
+ *       - save w/ compression type = none
+ *   - Publish Features
+ *       - none
+ *   - pullIfMissing
+ *       - pullIfMissing = true && image IS local (no actual pull occurs)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-10 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-10:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        alpineTest {
+            // SourceRef mode using component form
+            // Tests Image Name Mode: sourceRefImageName + sourceRefTag (minimal components)
+            sourceRefImageName.set('alpine')  // Use 'alpine' for long-term stability
+            sourceRefTag.set('latest')        // Explicit tag for clarity
+            // Effective sourceRef: alpine:latest (Docker Hub implied)
+
+            // pullIfMissing = true, but image will be local (ensured by ensureSourceImage task)
+            // This tests the scenario where pullIfMissing is enabled but no pull occurs
+            pullIfMissing.set(true)
+
+            // Tag with 1 new tag
+            tags.set(['scenario10-test'])
+
+            // Save with compression NONE
+            save {
+                compression.set(NONE)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario10-alpine.tar'))
+            }
+
+            // NO publish block - this scenario does not test publishing
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Ensure the source image exists locally for sourceRef testing with pullIfMissing=true
+// This task will pull alpine:latest if it doesn't exist, ensuring the test can run
+// Since pullIfMissing=true and the image is local, no pull should occur during dockerImages
+tasks.register('ensureSourceImage', EnsureDockerImageTask) {
+    imageRef.set('alpine:latest')
+    reason.set('Required for sourceRef testing with pullIfMissing=true (image must be local)')
+    description = 'Ensure alpine:latest exists locally for sourceRef test'
+    group = 'docker'
+}
+
+// No build workflow tasks since this uses existing image (sourceRef mode)
+
+// Register saved image verification task since this scenario tests save functionality with NONE compression
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario10-alpine.tar'])
+
+// Register tagged image verification - verify the new tag was created
+// The tag is just 'scenario10-test:latest' (not library/alpine:scenario10-test)
+registerVerifyBuiltImagesTask(project, ['scenario10-test:latest'])
+
+// Register build args verification for this integration test
+// SourceRef mode uses existing image (alpine:latest), which has no build args
+// Verify zero build args for the source image
+registerVerifyBuildArgsTask(project, [
+    'alpine:latest': [:]  // Empty map = expect zero build args
+])
+
+// Note: Alpine has no labels (Labels: null in docker inspect), so we skip label verification
+// The verifyDockerLabels task doesn't handle null labels properly
+
+// Task that runs integration test workflow (sourceRef mode)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef integration test: ensure local → tag → save → verify (pullIfMissing=true, no pull)'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode (no build needed)
+    dependsOn 'ensureSourceImage'         // Ensure source image exists locally
+    dependsOn 'dockerImages'              // This will handle tag and save (no build, no pull)
+    dependsOn 'verifySavedDockerImages'   // Verify uncompressed tar file exists
+    dependsOn 'verifyDockerImages'        // Verify new tag exists
+    dependsOn 'verifyDockerBuildArgs'     // Verify no build args in source image
+    // Skip verifyDockerLabels - alpine has null labels
+}
+
+// Configure task ordering without direct task references
+tasks.named('dockerImages') { mustRunAfter 'ensureSourceImage' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}

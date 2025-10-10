@@ -498,6 +498,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.contextTaskName.set(imageSpec.contextTaskName)
         task.contextTaskPath.set(imageSpec.contextTaskPath)
 
+        // Configure SourceRef component properties
+        task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
+        task.sourceRefNamespace.set(imageSpec.sourceRefNamespace)
+        task.sourceRefImageName.set(imageSpec.sourceRefImageName)
+        task.sourceRefRepository.set(imageSpec.sourceRefRepository)
+        task.sourceRefTag.set(imageSpec.sourceRefTag)
+
         // Set imageSpec for test compatibility (not serialized due to @Internal)
         task.imageSpec.set(imageSpec)
 

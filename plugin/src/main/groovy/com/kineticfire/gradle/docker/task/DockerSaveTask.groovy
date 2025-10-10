@@ -42,6 +42,11 @@ abstract class DockerSaveTask extends DefaultTask {
         version.convention("")
         tags.convention([])
         sourceRef.convention("")
+        sourceRefRegistry.convention("")
+        sourceRefNamespace.convention("")
+        sourceRefImageName.convention("")
+        sourceRefRepository.convention("")
+        sourceRefTag.convention("")
         pullIfMissing.convention(false)
         effectiveSourceRef.convention("")
         contextTaskName.convention("")
@@ -77,9 +82,27 @@ abstract class DockerSaveTask extends DefaultTask {
     @Input
     @Optional
     abstract Property<String> getSourceRef()
-    
 
-    
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRegistry()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefNamespace()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefImageName()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRepository()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefTag()
+
     // Docker Image Nomenclature Properties (for building new images)
     @Input
     @Optional
@@ -165,45 +188,81 @@ abstract class DockerSaveTask extends DefaultTask {
      * Build primary image reference from dual-mode properties (SourceRef vs Build Mode)
      */
     String buildPrimaryImageReference() {
+        // Priority 1: Direct sourceRef string
         def sourceRefValue = sourceRef.getOrElse("")
-        
         if (!sourceRefValue.isEmpty()) {
-            // SourceRef Mode: Use sourceRef directly
             return sourceRefValue
-        } else {
-            // Build Mode: Use nomenclature to build image reference
-            def registryValue = registry.getOrElse("")
-            def namespaceValue = namespace.getOrElse("")
-            def repositoryValue = repository.getOrElse("")
-            def imageNameValue = imageName.getOrElse("")
-            def versionValue = version.getOrElse("")
-            def tagsValue = tags.getOrElse([])
-            
-            if (tagsValue.isEmpty()) {
-                return null
+        }
+
+        // Priority 2: SourceRef components
+        def sourceRefRegistryValue = sourceRefRegistry.getOrElse("")
+        def sourceRefNamespaceValue = sourceRefNamespace.getOrElse("")
+        def sourceRefRepositoryValue = sourceRefRepository.getOrElse("")
+        def sourceRefImageNameValue = sourceRefImageName.getOrElse("")
+        def sourceRefTagValue = sourceRefTag.getOrElse("")
+
+        // Check if we have sourceRef components
+        if (!sourceRefRepositoryValue.isEmpty() || !sourceRefImageNameValue.isEmpty()) {
+            // Default tag to "latest" if not specified
+            if (sourceRefTagValue.isEmpty()) {
+                sourceRefTagValue = "latest"
             }
-            
-            def primaryTag = tagsValue[0]
-            
-            if (!repositoryValue.isEmpty()) {
-                // Using repository format
-                def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
-                return "${baseRef}:${primaryTag}"
-            } else if (!imageNameValue.isEmpty()) {
-                // Using namespace + imageName format
-                def baseRef = ""
-                if (!registryValue.isEmpty()) {
-                    baseRef += "${registryValue}/"
-                }
-                if (!namespaceValue.isEmpty()) {
-                    baseRef += "${namespaceValue}/"
-                }
-                baseRef += imageNameValue
-                
-                return "${baseRef}:${primaryTag}"
+
+            // Repository approach takes precedence
+            if (!sourceRefRepositoryValue.isEmpty()) {
+                def baseRef = sourceRefRegistryValue.isEmpty() ?
+                    sourceRefRepositoryValue :
+                    "${sourceRefRegistryValue}/${sourceRefRepositoryValue}"
+                return "${baseRef}:${sourceRefTagValue}"
             }
-            
+
+            // Fall back to namespace + imageName approach
+            if (!sourceRefImageNameValue.isEmpty()) {
+                def reference = ""
+                if (!sourceRefRegistryValue.isEmpty()) {
+                    reference += sourceRefRegistryValue + "/"
+                }
+                if (!sourceRefNamespaceValue.isEmpty()) {
+                    reference += sourceRefNamespaceValue + "/"
+                }
+                reference += sourceRefImageNameValue
+                reference += ":" + sourceRefTagValue
+                return reference
+            }
+        }
+
+        // Priority 3: Build Mode - Use nomenclature to build image reference
+        def registryValue = registry.getOrElse("")
+        def namespaceValue = namespace.getOrElse("")
+        def repositoryValue = repository.getOrElse("")
+        def imageNameValue = imageName.getOrElse("")
+        def versionValue = version.getOrElse("")
+        def tagsValue = tags.getOrElse([])
+
+        if (tagsValue.isEmpty()) {
             return null
         }
+
+        def primaryTag = tagsValue[0]
+
+        if (!repositoryValue.isEmpty()) {
+            // Using repository format
+            def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
+            return "${baseRef}:${primaryTag}"
+        } else if (!imageNameValue.isEmpty()) {
+            // Using namespace + imageName format
+            def baseRef = ""
+            if (!registryValue.isEmpty()) {
+                baseRef += "${registryValue}/"
+            }
+            if (!namespaceValue.isEmpty()) {
+                baseRef += "${namespaceValue}/"
+            }
+            baseRef += imageNameValue
+
+            return "${baseRef}:${primaryTag}"
+        }
+
+        return null
     }
 }

@@ -453,12 +453,13 @@ abstract class ImageSpec {
         }
 
         // Validate incomplete namespace approach
+        // If namespace is specified, imageName must also be specified
+        // But imageName can be specified alone (e.g., "alpine:latest")
         def hasOnlyNamespace = !sourceRefNamespace.getOrElse("").isEmpty() && sourceRefImageName.getOrElse("").isEmpty()
-        def hasOnlyImageName = sourceRefNamespace.getOrElse("").isEmpty() && !sourceRefImageName.getOrElse("").isEmpty()
-        
-        if (hasOnlyNamespace || hasOnlyImageName) {
+
+        if (hasOnlyNamespace) {
             throw new GradleException(
-                "When using namespace+imageName approach, both namespace and imageName are required for image '${name}'. " +
+                "When using sourceRefNamespace, sourceRefImageName must also be specified for image '${name}'. " +
                 "Either specify both sourceRefNamespace and sourceRefImageName, or use sourceRefRepository instead."
             )
         }

@@ -423,6 +423,124 @@ class DockerSaveTaskTest extends Specification {
         result == 'source:1.0'
     }
 
+    // ===== SOURCEREF COMPONENT MODE TESTS =====
+
+    def "buildPrimaryImageReference builds from sourceRefImageName and sourceRefTag"() {
+        given:
+        task.sourceRefImageName.set('alpine')
+        task.sourceRefTag.set('latest')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'alpine:latest'
+    }
+
+    def "buildPrimaryImageReference builds from sourceRefNamespace, sourceRefImageName, and sourceRefTag"() {
+        given:
+        task.sourceRefNamespace.set('myorg')
+        task.sourceRefImageName.set('myapp')
+        task.sourceRefTag.set('v1.0.0')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myorg/myapp:v1.0.0'
+    }
+
+    def "buildPrimaryImageReference builds from sourceRefRegistry, sourceRefNamespace, sourceRefImageName, and sourceRefTag"() {
+        given:
+        task.sourceRefRegistry.set('registry.example.com')
+        task.sourceRefNamespace.set('team')
+        task.sourceRefImageName.set('webapp')
+        task.sourceRefTag.set('stable')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'registry.example.com/team/webapp:stable'
+    }
+
+    def "buildPrimaryImageReference builds from sourceRefRepository and sourceRefTag"() {
+        given:
+        task.sourceRefRepository.set('myorg/myapp')
+        task.sourceRefTag.set('v2.0.0')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myorg/myapp:v2.0.0'
+    }
+
+    def "buildPrimaryImageReference builds from sourceRefRegistry, sourceRefRepository, and sourceRefTag"() {
+        given:
+        task.sourceRefRegistry.set('localhost:5000')
+        task.sourceRefRepository.set('internal/service')
+        task.sourceRefTag.set('test')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'localhost:5000/internal/service:test'
+    }
+
+    def "buildPrimaryImageReference prefers sourceRef string over components"() {
+        given:
+        task.sourceRef.set('direct:1.0')
+        task.sourceRefImageName.set('component')
+        task.sourceRefTag.set('2.0')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'direct:1.0'
+    }
+
+    def "buildPrimaryImageReference prefers sourceRef components over build mode"() {
+        given:
+        task.sourceRefImageName.set('sourceapp')
+        task.sourceRefTag.set('1.0')
+        task.imageName.set('buildapp')
+        task.tags.set(['2.0'])
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'sourceapp:1.0'
+    }
+
+    def "buildPrimaryImageReference defaults to latest when sourceRefTag is missing"() {
+        given:
+        task.sourceRefImageName.set('myapp')
+        // Missing sourceRefTag - should default to "latest"
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myapp:latest'
+    }
+
+    def "buildPrimaryImageReference with sourceRefRegistry only and imageName/tag"() {
+        given:
+        task.sourceRefRegistry.set('myregistry.com')
+        task.sourceRefImageName.set('alpine')
+        task.sourceRefTag.set('3.16')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myregistry.com/alpine:3.16'
+    }
+
     // ===== PULLSOURCEREFIFNEEDED TESTS (using reflection for private method) =====
 
     private void invokePullSourceRefIfNeeded() {

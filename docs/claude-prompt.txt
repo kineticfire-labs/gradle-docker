@@ -17,3 +17,31 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
   Your task is to write a new integration test, called 'scenario-6' at @plugin-integration-test/docker/scenario-6/ , that must provide an integration test using a build.gradle file
   for these aspects:
 
+
+  You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+    Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+    the @CLAUDE.md file to understand the project and follow the guidelines exactly.
+
+    You will write a specific, new integration test to test and prove and demonstrate aspects of the plugin.  Your integration test must be compatible with Gradle and 10, especially
+    the build cache configuration, per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+    Your integration test will cover aspects related to 'docker' DSL task so functionality like: build, tag, save, and publish.  Analyze the existing integration tests for the
+    'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
+    test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
+
+    Your task is to write a new integration test, called 'scenario-10' at @plugin-integration-test/docker/scenario-10/ , that must provide an integration test using a build.gradle
+  file
+    for these aspects:
+  - We are going to test the "Source Ref Mode" to define an image.  You can see an examples:
+       - using "Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag" at @plugin-integration-test/docker/scenario-5/ .
+       - using the full image reference 'sourceRef' at @plugin-integration-test/docker/scenario-9/ .
+  - Define the image using the "Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag"
+  - Explicitly set 'pullIfMissing' to 'true' and ensure that the image is local (there is an integration test helper in buildSrc for this)
+  - Tag the image locally with a different tag (just 1 tag)
+  - Save the image to the filesystem using compression type of 'none'
+  - Do NOT publish the image to a registry
+
+  Acceptance criteria is that the integration test passes.
+
+  Create a plan, but do NOT update any files.
+
