@@ -68,8 +68,8 @@ docker {
             sourceRefRegistry.set('docker.io')
             sourceRefNamespace.set('library')
             sourceRefImageName.set('nginx')
-            sourceRefTag.set('1.21')
-            // Effective sourceRef: docker.io/library/nginx:1.21
+            sourceRefTag.set('latest')
+            // Effective sourceRef: docker.io/library/nginx:latest
 
             publish {
                 to('partialOverride') {
@@ -100,7 +100,7 @@ withTestRegistry('test-registry-scenario5', 5051) {
 
 // Ensure the source image exists locally for sourceRef testing
 tasks.register('ensureSourceImage', EnsureDockerImageTask) {
-    imageRef.set('docker.io/library/nginx:1.21')
+    imageRef.set('docker.io/library/nginx:latest')
     reason.set('Required for sourceRef component inheritance testing')
     description = 'Ensure source image exists locally for sourceRef test'
     group = 'docker'
@@ -115,14 +115,14 @@ registerVerifyRegistryImagesTask(project, ['localhost:5051/library/nginx:test'])
 // SourceRef mode uses existing image (nginx), which has no build args
 // Verify zero build args for the source image
 registerVerifyBuildArgsTask(project, [
-    'docker.io/library/nginx:1.21': [:]  // Empty map = expect zero build args
+    'docker.io/library/nginx:latest': [:]  // Empty map = expect zero build args
 ])
 
 // Register labels verification for this integration test
-// SourceRef mode uses existing image (nginx:1.21), which has labels from the official nginx image
-// Verify the labels that exist in the nginx:1.21 base image
+// SourceRef mode uses existing image (nginx:latest), which has labels from the official nginx image
+// Verify the labels that exist in the nginx:latest base image
 registerVerifyLabelsTask(project, [
-    'docker.io/library/nginx:1.21': [
+    'docker.io/library/nginx:latest': [
         'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
     ]
 ])
