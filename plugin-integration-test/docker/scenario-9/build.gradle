@@ -1,0 +1,195 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - SourceRef Mode
+ *       - sourceRef (full image reference)
+ *   - Tag Features
+ *       - none
+ *   - Save Features
+ *       - save w/ compression type = bzip2
+ *   - Publish Features
+ *       - publish same image > 1 tags, different registries (2 registries)
+ *       - publish to private registry without authentication
+ *       - Image Name Mode: registry, namespace, imageName, 2 tags (for each registry)
+ *   - pullIfMissing
+ *       - pullIfMissing = false && image IS local
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-9 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-9:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.BZIP2
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        nginxTest {
+            // SourceRef mode - use full image reference for existing image
+            sourceRef.set('docker.io/library/nginx:1.27')
+
+            // Explicitly set pullIfMissing to false - image must exist locally
+            // (ensured by ensureSourceImage task below)
+            pullIfMissing.set(false)
+
+            // Save the image with BZIP2 compression
+            save {
+                compression.set(BZIP2)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario9-nginx.tar.bz2'))
+            }
+
+            // Publish to TWO different registries
+            // Each registry gets the image with 2 tags: 1.0.0 and latest
+            publish {
+                // First registry on port 5090
+                to('registry1') {
+                    registry.set('localhost:5090')
+                    namespace.set('scenario9')
+                    imageName.set('published-nginx')
+                    publishTags.set(['1.0.0', 'latest'])
+                    // No authentication (registry allows anonymous push)
+                }
+
+                // Second registry on port 5091 with different namespace/imageName
+                to('registry2') {
+                    registry.set('localhost:5091')
+                    namespace.set('scenario9-alt')
+                    imageName.set('nginx-mirror')
+                    publishTags.set(['1.0.0', 'latest'])
+                    // No authentication (registry allows anonymous push)
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure TWO test registries using the plugin
+// Port convention: 5090 and 5091 (tens digit = scenario number)
+registryManagement {
+    registry('registry1', 5090)  // First registry
+    registry('registry2', 5091)  // Second registry
+}
+
+// Ensure the source image exists locally for sourceRef testing with pullIfMissing=false
+// This task will pull nginx:1.27 if it doesn't exist, ensuring the test can run
+tasks.register('ensureSourceImage', EnsureDockerImageTask) {
+    imageRef.set('docker.io/library/nginx:1.27')
+    reason.set('Required for sourceRef testing with pullIfMissing=false')
+    description = 'Ensure nginx:1.27 exists locally for sourceRef test'
+    group = 'docker'
+}
+
+// No build workflow tasks since this uses existing image (sourceRef mode)
+
+// Register saved image verification task since this scenario tests save functionality with BZIP2
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario9-nginx.tar.bz2'])
+
+// Register MULTI-REGISTRY verification using the unified function
+// Each registry should have 2 tags of the published image
+registerVerifyRegistryImagesTask(project, [
+    'registry1': [
+        'localhost:5090/scenario9/published-nginx:1.0.0',
+        'localhost:5090/scenario9/published-nginx:latest'
+    ],
+    'registry2': [
+        'localhost:5091/scenario9-alt/nginx-mirror:1.0.0',
+        'localhost:5091/scenario9-alt/nginx-mirror:latest'
+    ]
+])
+
+// Register build args verification for this integration test
+// SourceRef mode uses existing image (nginx:1.27), which has no build args
+// Verify zero build args for the source image
+registerVerifyBuildArgsTask(project, [
+    'docker.io/library/nginx:1.27': [:]  // Empty map = expect zero build args
+])
+
+// Register labels verification for this integration test
+// SourceRef mode uses existing image (nginx:1.27), which has labels from the official nginx image
+// Verify the maintainer label that exists in the nginx:1.27 base image
+registerVerifyLabelsTask(project, [
+    'docker.io/library/nginx:1.27': [
+        'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
+    ]
+])
+
+// Task that runs integration test workflow (sourceRef mode)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef integration test: ensure local → save → publish to 2 registries → verify'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode (no build needed)
+    dependsOn 'ensureSourceImage'         // Ensure source image exists locally
+    dependsOn 'startTestRegistries'       // Start both test registries
+    dependsOn 'dockerImages'              // This will handle save and publish (no build)
+    dependsOn 'verifySavedDockerImages'   // Verify BZIP2 compressed file exists
+    dependsOn 'verifyRegistryDockerImages' // Verify images in both registries (aggregate task)
+    dependsOn 'verifyDockerBuildArgs'     // Verify no build args in source image
+    dependsOn 'verifyDockerLabels'        // Verify nginx maintainer label
+    dependsOn 'stopTestRegistries'        // Stop both test registries
+}
+
+// Configure task ordering without direct task references
+tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
+tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}
+tasks.named('verifyDockerLabels') {
+    mustRunAfter 'ensureSourceImage'
+    mustRunAfter 'dockerImages'
+}
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
