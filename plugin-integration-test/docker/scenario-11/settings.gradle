@@ -14,27 +14,4 @@
  * limitations under the License.
  */
 
-pluginManagement {
-    plugins {
-        id 'com.kineticfire.gradle.gradle-docker' version "${providers.gradleProperty('plugin_version').get()}"
-    }
-    repositories {
-        mavenLocal()
-        gradlePluginPortal()
-        mavenCentral()
-    }
-}
-
-rootProject.name = 'docker-integration-tests'
-
-include 'scenario-1'
-include 'scenario-2'
-include 'scenario-3'
-include 'scenario-4'
-include 'scenario-5'
-include 'scenario-6'
-include 'scenario-7'
-include 'scenario-8'
-include 'scenario-9'
-include 'scenario-10'
-include 'scenario-11'
+rootProject.name = 'scenario-11'

@@ -298,6 +298,54 @@ tasks.named('verifyDockerBuildArgs') {
 }
 ```
 
+### registerRemoveDockerImageTask
+
+Removes a Docker image if it exists locally to ensure it is NOT available for testing.
+
+```groovy
+registerRemoveDockerImageTask(project, imageRef, reason)
+```
+
+**Parameters:**
+- `project`: The Gradle project to register tasks on
+- `imageRef`: Docker image reference to remove (e.g., "nginx:latest", "docker.io/library/nginx:latest")
+- `reason`: Optional description of why this image needs to be removed (defaults to "Required for integration test")
+
+**Creates Task:** `removeSourceImage` in the `docker` group
+
+**Purpose:**
+This is the inverse of `EnsureDockerImageTask` and is useful for testing `pullIfMissing` behavior in sourceRef mode where
+you want to verify that the plugin correctly pulls an image when it's not available locally.
+
+**Example:**
+```groovy
+// Remove source image to test pullIfMissing=true behavior
+registerRemoveDockerImageTask(
+    project,
+    'docker.io/library/nginx:latest',
+    'Ensure image is NOT local to test pullIfMissing=true behavior'
+)
+```
+
+**Task Ordering:**
+The removal task should run before any operations that depend on the image being absent:
+
+```groovy
+tasks.register('integrationTest') {
+    dependsOn 'removeSourceImage'
+    dependsOn 'dockerImages'  // This will trigger pullIfMissing
+}
+
+tasks.named('dockerImages') {
+    mustRunAfter 'removeSourceImage'
+}
+```
+
+**Use Cases:**
+- Testing pullIfMissing=true when image is NOT local
+- Ensuring clean state for pull-based integration tests
+- Verifying plugin handles missing images correctly
+
 ### registerBuildWorkflowTasks
 
 Convenience function that registers both clean and verify built image tasks for the common Docker build workflow.

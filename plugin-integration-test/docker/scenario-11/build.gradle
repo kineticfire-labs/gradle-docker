@@ -1,0 +1,205 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Source Ref Mode
+ *       - Repository Mode: sourceRefRegistry, sourceRefRepository, sourceRefTag
+ *   - pullIfMissing = true && image is NOT local (must pull from registry)
+ *   - Tag Features
+ *       - number of tags > 1 (2 local tags: my-local, my-edge)
+ *   - Save Features
+ *       - save w/ compression type = xz
+ *   - Publish Features
+ *       - publish to private registry WITH authentication
+ *       - Image Name Mode: registry, namespace, imageName, tag
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-11 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-11:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.XZ
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        nginxSourceRef {
+            // Repository Mode component assembly for sourceRef
+            // This combines namespace and imageName into a single repository property
+            sourceRefRegistry.set('docker.io')
+            sourceRefRepository.set('library/nginx')  // Combines namespace + imageName
+            sourceRefTag.set('latest')                // Use 'latest' (won't be aged off)
+            // Effective sourceRef: docker.io/library/nginx:latest
+
+            // CRITICAL: Set pullIfMissing=true to enable pull if image not local
+            // The removeSourceImage task ensures the image is NOT local, forcing a pull
+            pullIfMissing.set(true)
+
+            // Tag with 2 different local tags to distinguish from source tag
+            tags.set(['my-local', 'my-edge'])
+
+            // Save the image with XZ compression
+            save {
+                compression.set(XZ)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario11-nginx.tar.xz'))
+            }
+
+            // Publish to authenticated registry using Image Name Mode
+            // This demonstrates using Image Name Mode for publish while using Repository Mode for sourceRef
+            publish {
+                to('authenticatedRegistry') {
+                    registry.set('localhost:5110')
+                    namespace.set('scenario-11')
+                    imageName.set('published-nginx')
+                    publishTags.set(['published'])
+
+                    // Authentication required for this registry
+                    auth {
+                        username.set('scenario11user')
+                        password.set('scenario11pass')
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure authenticated test registry using the plugin
+// Port 5110 follows convention: 51 (base for scenario-11) + 10
+withAuthenticatedRegistry('test-registry-scenario11', 5110, 'scenario11user', 'scenario11pass') {
+    // Registry will be configured with authentication
+}
+
+// Register task to remove source image (ensure NOT local for pullIfMissing test)
+// This uses the new buildSrc helper function to ensure the image is NOT available locally,
+// which forces pullIfMissing=true to actually pull the image from Docker Hub
+registerRemoveDockerImageTask(
+    project,
+    'docker.io/library/nginx:latest',
+    'Ensure image is NOT local to test pullIfMissing=true behavior'
+)
+
+// Register verification for the two local tags created by the plugin
+registerVerifyBuiltImagesTask(project, [
+    'my-local',
+    'my-edge'
+])
+
+// Register saved image verification task since this scenario tests save functionality with XZ compression
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario11-nginx.tar.xz'])
+
+// Register registry image verification task since this scenario tests publish functionality
+// This registry requires authentication, so pass the credentials
+registerVerifyRegistryImagesTask(
+    project,
+    ['localhost:5110/scenario-11/published-nginx:published'],
+    'scenario11user',
+    'scenario11pass',
+    'localhost:5110'
+)
+
+// Register build args verification for this integration test
+// SourceRef mode uses existing image (nginx:latest), which has no build args
+// Verify zero build args for the source image and all tagged variants
+registerVerifyBuildArgsTask(project, [
+    'nginx:latest': [:],     // Empty map = expect zero build args
+    'my-local': [:],         // Inherits from source (zero build args)
+    'my-edge': [:]           // Inherits from source (zero build args)
+])
+
+// Register labels verification for this integration test
+// SourceRef mode uses existing image (nginx:latest), which has labels from the official nginx image
+// Verify the maintainer label that exists in the nginx:latest base image
+registerVerifyLabelsTask(project, [
+    'nginx:latest': [
+        'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
+    ],
+    'my-local': [
+        'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
+    ],
+    'my-edge': [
+        'maintainer': 'NGINX Docker Maintainers <docker-maint@nginx.com>'
+    ]
+])
+
+// Task that runs integration test workflow (sourceRef mode with pullIfMissing=true)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef integration test: remove → pull → tag → save → publish → verify'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode with pullIfMissing test
+    dependsOn 'removeSourceImage'          // Remove source image first (ensure NOT local)
+    dependsOn 'startTestRegistries'        // Start authenticated registry
+    dependsOn 'dockerImages'               // Pull (via pullIfMissing), tag, save, publish
+    dependsOn 'verifyDockerImages'         // Verify local tags exist (my-local, my-edge)
+    dependsOn 'verifySavedDockerImages'    // Verify XZ compressed file exists
+    dependsOn 'verifyRegistryDockerImages' // Verify published image in authenticated registry
+    dependsOn 'verifyDockerBuildArgs'      // Verify no build args (nginx has none)
+    dependsOn 'verifyDockerLabels'         // Verify nginx maintainer label
+    dependsOn 'stopTestRegistries'         // Stop authenticated registry
+}
+
+// Configure task ordering without direct task references
+tasks.named('startTestRegistries') { mustRunAfter 'removeSourceImage' }
+tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('verifyDockerLabels') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }

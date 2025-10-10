@@ -288,6 +288,32 @@ ext.registerVerifyLabelsTask = { Project project, Map<String, Map<String, String
 }
 
 /**
+ * Register Docker image removal task for ensuring an image does NOT exist locally.
+ *
+ * This is the inverse of EnsureDockerImageTask and is useful for testing pullIfMissing
+ * behavior in sourceRef mode where you want to verify that the plugin correctly pulls
+ * an image when it's not available locally.
+ *
+ * @param project The Gradle project to register tasks on
+ * @param imageRef Docker image reference to remove (e.g., "nginx:latest", "docker.io/library/nginx:latest")
+ * @param reason Optional description of why this image needs to be removed (for logging)
+ */
+ext.registerRemoveDockerImageTask = { Project project, String imageRef, String reason = "Required for integration test" ->
+    if (imageRef == null || imageRef.isEmpty()) {
+        throw new IllegalArgumentException("imageRef cannot be null or empty")
+    }
+
+    project.tasks.register('removeSourceImage', RemoveDockerImageTask) {
+        it.imageRef.set(imageRef)
+        it.reason.set(reason)
+        it.group = 'docker'
+        it.description = "Remove Docker image to ensure pullIfMissing behavior can be tested"
+    }
+
+    project.logger.info("Registered remove Docker image task for image: ${imageRef}")
+}
+
+/**
  * Note: Advanced registry testing workflow is available via RegistryManagementPlugin.
  * See registry-integration-example.gradle in test resources for usage patterns.
  */
