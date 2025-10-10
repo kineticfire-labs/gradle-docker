@@ -1,0 +1,328 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Build Image Features
+ *       - number of images > 1 (TWO different images)
+ *       - build image + follow-on publish
+ *       - naming style: Repository Mode: registry, repository, 1 tag
+ *       - build args: 1 arg per image using 'put'
+ *       - labels: none for app-server, 1 for web-server using 'put'
+ *       - dockerfile = default
+ *   - Tag Features
+ *       - number of tags = 1 per image
+ *   - Save Features
+ *       - save w/ compression type = gzip (for app-server only)
+ *   - Publish Features
+ *       - publish different images > 1 tags, same registry (BOTH images to localhost:5080)
+ *       - publish to private registry without authentication
+ *       - Repository Mode: registry, repository, 2 tags
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-8 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-8:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import static com.kineticfire.gradle.docker.model.SaveCompression.GZIP
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        // ========================================================================
+        // IMAGE 1: app-server
+        // ========================================================================
+        appServer {
+
+            contextTask = tasks.register('prepareScenario8AppServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for app-server image'
+                into layout.buildDirectory.dir('docker-context/appServer')
+                from('src/main/docker/app-server')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                } else {
+                    // For standalone execution, create a dummy JAR file for testing
+                    // Capture version during configuration for configuration cache compatibility
+                    def versionString = project.version.toString()
+                    doFirst {
+                        def jarFile = new File(destinationDir, "app-${versionString}.jar")
+                        jarFile.parentFile.mkdirs()
+                        jarFile.createNewFile()
+                        jarFile.text = "dummy jar for standalone testing"
+                    }
+                }
+            }
+
+            // Repository Mode: registry + repository + 1 tag
+            // This tests: "Repository Mode: registry, repository, 1 tag"
+            registry.set('localhost:5080')
+            repository.set('scenario-8/app-server')
+            tags.set(['1.0.0'])
+
+            // Single build arg using 'put' (Gradle 9/10 Provider API compatible)
+            buildArgs.put('JAR_FILE', "app-${project.version}.jar")
+
+            // No labels for this image (tests zero labels scenario)
+
+            // dockerfile will default to 'build/docker-context/appServer/Dockerfile'
+
+            save {
+                compression.set(GZIP)
+                outputFile.set(layout.buildDirectory.file('docker-images/scenario8-app-server.tar.gz'))
+            }
+
+            // Publish to same registry with 2 tags (overriding build tag)
+            // This demonstrates tag override: builds with '1.0.0' but publishes with '1.0.0' and 'stable'
+            publish {
+                to('sharedRegistry') {
+                    registry.set('localhost:5080')
+                    repository.set('scenario-8/app-server')
+                    publishTags.set(['1.0.0', 'stable'])
+                    // No authentication (registry allows anonymous push)
+                }
+            }
+        }
+
+        // ========================================================================
+        // IMAGE 2: web-server
+        // ========================================================================
+        webServer {
+
+            contextTask = tasks.register('prepareScenario8WebServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for web-server image'
+                into layout.buildDirectory.dir('docker-context/webServer')
+                from('src/main/docker/web-server')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                } else {
+                    // For standalone execution, create a dummy JAR file for testing
+                    // Capture version during configuration for configuration cache compatibility
+                    def versionString = project.version.toString()
+                    doFirst {
+                        def jarFile = new File(destinationDir, "app-${versionString}.jar")
+                        jarFile.parentFile.mkdirs()
+                        jarFile.createNewFile()
+                        jarFile.text = "dummy jar for standalone testing"
+                    }
+                }
+            }
+
+            // Repository Mode: repository + 1 tag (no registry in build config)
+            // The registry will be added during publish
+            repository.set('scenario-8/web-server')
+            tags.set(['2.0.0'])
+
+            // Single build arg using 'put' (Gradle 9/10 Provider API compatible)
+            buildArgs.put('VERSION', project.version.toString())
+
+            // Single label using 'put' (Gradle 9/10 Provider API compatible)
+            labels.put('scenario', 'integration-test-8')
+
+            // dockerfile will default to 'build/docker-context/webServer/Dockerfile'
+
+            // No save for this image (tests different save configurations)
+
+            // Publish to same registry with 2 tags
+            // This demonstrates: different images to same registry
+            publish {
+                to('sharedRegistry') {
+                    registry.set('localhost:5080')
+                    repository.set('scenario-8/web-server')
+                    publishTags.set(['2.0.0', 'latest'])
+                    // No authentication (registry allows anonymous push)
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure single test registry for both images using the plugin
+// Port 5080 follows naming convention: 50 (base) + 80 (scenario number in tens digit)
+registryManagement {
+    registry('testRegistry', 5080)
+}
+
+// Register Docker image clean and verify tasks for this integration test
+// We have TWO different images to verify
+registerBuildWorkflowTasks(project, [
+        'localhost:5080/scenario-8/app-server:1.0.0',
+        'scenario-8/web-server:2.0.0'
+])
+
+// Register saved image verification task since app-server tests save functionality with GZIP
+registerVerifySavedImagesTask(project, ['build/docker-images/scenario8-app-server.tar.gz'])
+
+// Register registry image verification task for BOTH images
+// Both images published to same registry (localhost:5080) with 2 tags each
+// Total of 4 image references to verify
+registerVerifyRegistryImagesTask(project, [
+        'localhost:5080/scenario-8/app-server:1.0.0',
+        'localhost:5080/scenario-8/app-server:stable',
+        'localhost:5080/scenario-8/web-server:2.0.0',
+        'localhost:5080/scenario-8/web-server:latest'
+])
+
+// Register build args verification for BOTH images
+registerVerifyBuildArgsTask(project, [
+    'localhost:5080/scenario-8/app-server:1.0.0': [
+        'JAR_FILE': 'app-1.0.0.jar'
+    ],
+    'scenario-8/web-server:2.0.0': [
+        'VERSION': '1.0.0'
+    ]
+])
+
+// Register labels verification for web-server only (app-server has no labels)
+registerVerifyLabelsTask(project, [
+    'scenario-8/web-server:2.0.0': [
+        'scenario': 'integration-test-8',         // From DSL: labels.put()
+        'app-version': '1.0.0'                    // From Dockerfile: LABEL app-version="${VERSION}"
+    ]
+])
+
+// Task that runs complete integration test workflow
+tasks.register('integrationTest') {
+    description = 'Run complete Docker integration test: clean → build 2 images → save → publish to shared registry → verify'
+    group = 'verification'
+
+    // Dependencies
+    dependsOn 'startTestRegistries'
+    dependsOn 'cleanDockerImages'
+    dependsOn 'dockerImages'
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+    dependsOn 'verifyDockerBuildArgs'
+    dependsOn 'verifyDockerLabels'
+    dependsOn 'stopTestRegistries'
+}
+
+// Configure task ordering without direct task references
+tasks.named('cleanDockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { mustRunAfter 'cleanDockerImages' }
+tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
+tasks.named('verifyDockerBuildArgs') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('verifyDockerLabels') {
+    mustRunAfter 'dockerImages'
+    mustRunAfter 'verifyDockerImages'
+}
+tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
+
+// Configure task ordering and force rebuild after clean
+tasks.named('dockerImages') {
+    // Force task to always run when cleanDockerImages has run
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = [
+            'localhost:5080/scenario-8/app-server:1.0.0',
+            'scenario-8/web-server:2.0.0'
+        ]
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}
+
+// Apply the same logic to tasks that start with "dockerBuild"
+tasks.matching { it.name.startsWith('dockerBuild') }.configureEach {
+    mustRunAfter 'cleanDockerImages'
+    outputs.upToDateWhen {
+        // Check if any of our target images exist
+        def imageNames = [
+            'localhost:5080/scenario-8/app-server:1.0.0',
+            'scenario-8/web-server:2.0.0'
+        ]
+        return imageNames.every { imageName ->
+            try {
+                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+                        .redirectErrorStream(true)
+                        .start()
+                def output = process.inputStream.text.trim()
+                process.waitFor()
+                return process.exitValue() == 0 && !output.isEmpty()
+            } catch (Exception e) {
+                return false
+            }
+        }
+    }
+}
