@@ -53,6 +53,18 @@ include 'docker:scenario-99'
 
 // Include DockerOrch integration tests
 include 'dockerOrch'
+
+// Verification tests (plugin mechanics validation)
+include 'dockerOrch:verification:basic'
+include 'dockerOrch:verification:basic:app'
+include 'dockerOrch:verification:basic:app-image'
+
+// Example tests (user-facing demonstrations)
+include 'dockerOrch:examples:web-app'
+include 'dockerOrch:examples:web-app:app'
+include 'dockerOrch:examples:web-app:app-image'
+
+// Legacy scenario directories (to be removed or migrated)
 include 'dockerOrch:scenario-1'
 include 'dockerOrch:scenario-1:app'
 include 'dockerOrch:scenario-1:app-image'

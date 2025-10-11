@@ -35,13 +35,63 @@ The `integrationTest` task runs integration tests from all subprojects:
 plugin-integration-test/    # all integration tests:  top-level aggregator
 ├── app/                    # Sample Java application (builds JAR for Docker images)
 ├── dockerOrch/             # Docker Compose integration tests for `dockerOrch` task: mid-level aggregator
-│   └── scenario-1/         # individual integration test '1'
-│   └── scenario-n/         # individual integration test 'n'
+│   ├── verification/       # Plugin mechanics validation (for developers)
+│   │   ├── basic/          # Basic up/down, state files, cleanup
+│   │   ├── wait-healthy/   # Wait for healthy functionality
+│   │   ├── wait-running/   # Wait for running functionality
+│   │   └── ...             # Additional verification scenarios
+│   └── examples/           # User-facing demonstrations (for users)
+│       ├── web-app/        # Simple REST API testing
+│       ├── database-app/   # App with PostgreSQL
+│       └── ...             # Additional example scenarios
 ├── docker/                 # Docker integration tests for `docker` task: mid-level aggregator
 │   └── scenario-1/         # individual integration test '1'
 │   └── scenario-n/         # individual integration test 'n'
 └── buildSrc/               # Reusable Docker testing library
 ```
+
+## dockerOrch Test Organization
+
+The `dockerOrch/` tests are organized into two distinct categories:
+
+### Verification Tests (`dockerOrch/verification/`)
+
+**Purpose**: Validate plugin mechanics (for plugin developers)
+
+These tests use internal validators from `buildSrc/` to verify the plugin infrastructure works correctly. They test
+features that users typically wouldn't test directly.
+
+**⚠️ Important**: Do NOT copy these tests for your own projects. See `dockerOrch/examples/` for user-facing
+demonstrations.
+
+| Scenario | Location | Status | Plugin Features Tested |
+|----------|----------|--------|------------------------|
+| Basic | `verification/basic/` | ✅ Complete | composeUp, composeDown, state files, port mapping, cleanup |
+| Wait Healthy | `verification/wait-healthy/` | ⏳ Planned | waitForHealthy, health check timing, timeout handling |
+| Wait Running | `verification/wait-running/` | ⏳ Planned | waitForRunning, running state detection |
+| Mixed Wait | `verification/mixed-wait/` | ⏳ Planned | Both wait types together (app + database) |
+| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned | Class-level lifecycle (suite), setupSpec/cleanupSpec |
+| Lifecycle Test | `verification/lifecycle-test/` | ⏳ Planned | Method-level lifecycle (test), setup/cleanup |
+| Logs Capture | `verification/logs-capture/` | ⏳ Planned | Log capture configuration, file generation |
+| Multi Service | `verification/multi-service/` | ⏳ Planned | Complex orchestration (3+ services) |
+| Existing Images | `verification/existing-images/` | ⏳ Planned | Public images (nginx, redis), sourceRef pattern |
+
+### Example Tests (`dockerOrch/examples/`)
+
+**Purpose**: Demonstrate real-world usage (for plugin users)
+
+These tests show how real users would test their applications using standard testing libraries. Each example serves as
+living documentation and a copy-paste template.
+
+**✅ Recommended**: Copy and adapt these for your own projects!
+
+| Example | Location | Status | Use Case | Testing Libraries |
+|---------|----------|--------|----------|-------------------|
+| Web App | `examples/web-app/` | ✅ Complete | REST API testing | RestAssured, HTTP client |
+| Database App | `examples/database-app/` | ⏳ Planned | Database integration | JDBC, JPA, Spring Data |
+| Microservices | `examples/microservices/` | ⏳ Planned | Service orchestration | RestAssured, service discovery |
+| Kafka App | `examples/kafka-app/` | ⏳ Planned | Event-driven architecture | Kafka client, TestProducer/Consumer |
+| Batch Job | `examples/batch-job/` | ⏳ Planned | Scheduled processing | Spring Batch, JDBC |
 
 ## Task Organization
 
