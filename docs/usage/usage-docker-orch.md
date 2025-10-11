@@ -16,7 +16,9 @@ plugins {
 ## Recommended Directory Layout
 
 ```
-the-application-project/                  # a project that (1) builds an application and (2) puts the application in a Linux image
+the-application-project/                  # a project that (1) builds an application and tests it, and (2) puts the 
+│                                           application in a Linux image and tests the unit of delivery by spinning up 
+│                                           the container and testing it
 ├─ app/                                   # builds the application, such as a JAR (or other artifact)
 │  ├─ build.gradle
 │  └─ src/

@@ -4,6 +4,99 @@ the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 
 
 
+## Exploring dockerOrch
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.
+
+The goal of this project is to (1) build a new container or reference a pre-existing Linux image then (2) test that
+image by creating a container (or more) and running tests against it.  The mantra is that we should test exactly what
+we deliver.
+
+It is envisioned that we will be testing:
+(1) primarily web services, such as HTTP.  But it could be any remote service like SSH, telnet, ftp, database connections, etc.
+(2) or any "service" provided by a container, which could be simply exec-ing a command getting output or having the container
+output data to the container or host filesystem
+
+In all of those cases above, this plugin needs to provide the means to enable that testing.
+
+The testing approach is generally:
+1. Get a reference to an image, which could be build a new image or reference a pre-existing image
+2. Start the image using 'docker compose' on a Docker Compose file.  This makes it easier to start and stop the image and
+also start and stop groups of images if the container under test depends on other containers running.  This also enables
+"system" type testing.
+3. Wait for the container or groups of containers to be ready before starting the tests.  Ready could mean 'RUNNING'
+were the container has hit that state, or 'HEALTHY' were the container health check has indicated it is healthy (if it
+has a health check).
+   1. We must allow waiting for groups of containers to be ready for testing, were some containers will have health
+   checks and others will not.  So this needs to be configurable to say "I have these containers, wait for this set to be
+   'RUNNING' and this set to be 'HEALTHY' then say the containers are ready for testing."
+4. We need to then execute the tests.  Tests should be able to be written in Groovy or Java or both.
+5. Tests need to be run against a known and controlled container (or group thereof) under test
+   1. Some containers may be able to be spun-up once and have all tests run against them, without reseting the container
+   between tests
+   2. Some containers (or maybe types of test) may require the container to be reset (so it's at a known-good state) before
+   the next test
+   3. We can think of these as lifecycle tests: create and use for the test suite, the class, or the method
+6. We need good clean-up of containers after tests finish and especially if errors occur, so that there aren't dangling
+containers which can impact other tests and be a chore for the user to manually clean-up
+7. We need good output to tell the user what's happening, and especially error output to tell the user why a test failed;
+ideally, logs would be good and centralizing those for ease of use
+
+This project defined the recommended Directory Layout as follows:
+
+```
+the-application-project/                  # a project that (1) builds an application and tests it, and (2) puts the
+│                                           application in a Linux image and tests the unit of delivery by spinning up
+│                                           the container and testing it
+├─ app/                                   # builds the application, such as a JAR (or other artifact)
+│  ├─ build.gradle
+│  └─ src/
+│     ├─ main/java/...
+│     └─ test/java/...
+└─ app-image/                              # builds the Linux image + tests it
+   ├─ build.gradle
+   ├─ src/
+   │  ├─ main/docker/                      # Dockerfile + build assets (image context)
+   │  │  ├─ Dockerfile
+   │  │  └─ ...                            # scripts, config, .dockerignore, etc.
+   │  ├─ integrationTest/groovy/           # Groovy/Spock integration tests
+   │  ├─ integrationTest/java/             # Java/JUnit integration tests
+   │  ├─ integrationTest/resources/
+   │  │  ├─ compose/                       # compose files for integration tests
+   │  │  └─ docker/                        # optional: test-only wrapper image assets
+   │  └─ testFixtures/                     # (optional) shared test helpers/utilities
+   ├─ docs/                                # (optional) runbooks, diagrams for tests
+   └─ build/                               # outputs: transcripts, logs, saved tars, state JSON, etc.
+      ├─ docker/                           # image tars (from dockerSave*)
+      ├─ compose-logs/                     # compose logs by task/suite
+      └─ compose/                          # compose state files (JSON) per stack
+```
+
+In many projects, the Dockerfile is just a file within the application build and even at the top-level.  This project
+explicitly makes the Dockerfile (really, the image build/reference and testing) a separate project from the application
+build (e.g., a JAR file) is for Separation of Concerns.  With the testing applied by the plugin, the project is larger,
+ there are more parts (image build, tests, logs/output, etc) and it is better to separate those.
+
+The approach the project has taken for implementation is:
+- the `docker` Gradle DSL task handles the image:  build or reference, tag, save, and publish
+- the `dockerOrch` Gradle DSL task handle the testing of the image
+
+The implementation for the `docker` task is completed and is located in @plugin/src/main .  Understand how the plugin
+is applied through its integration tests @plugin-integration-test (although note that the 'app' project is not a peer
+to the integration tests in this case so it can be re-used across the tests so it doesn't have to be duplicated).
+
+The implementation for the `dockerOrch` task is located in @plugin/src/main .  Integration tests were started for the
+`dockerOrch` task, however these are not very good and mostly ended up being more like functional tests.  The best
+example for what these integration tests SHOULD be and how this task should work is at @old-plugin-integration-test/build.gradle
+lines 184 to 219 which show the lifecycle tests (integrationSuite, integrationClass, integrationMethod).
+
+I want you to evaluate the current state of the code supporting image testing using `dockerOrch` task and report your findings.
+Does the implementation support the stated project goals and approach?  What is the state of the implementation (done or more work to do)?
+Is there sufficient unit test coverage?  Are there are gaps?  recommendations?  Analyze and report only, do NOT edit files.
+
+
 
 
 ## Integration Tests
