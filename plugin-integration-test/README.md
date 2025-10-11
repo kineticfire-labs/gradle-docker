@@ -25,7 +25,7 @@ To correctly run all integration tests:
 The `integrationTest` task runs integration tests from all subprojects:
 - `plugin-integration-test/docker/*`
    - mid-level aggregator for 'docker' type commands (build, tag, save, publish) for the `docker` task 
-- `plugin-integration-test/compose/*`
+- `plugin-integration-test/dockerOrch/*`
    - mid-level aggregator for 'docker compose' type commands for testing a Docker image using `composeUp`/`composeDown` 
      for the `dockerOrch` task
 
@@ -34,7 +34,7 @@ The `integrationTest` task runs integration tests from all subprojects:
 ```
 plugin-integration-test/    # all integration tests:  top-level aggregator
 ├── app/                    # Sample Java application (builds JAR for Docker images)
-├── compose/                # Docker Compose integration tests for `dockerOrch` task: mid-level aggregator
+├── dockerOrch/             # Docker Compose integration tests for `dockerOrch` task: mid-level aggregator
 │   └── scenario-1/         # individual integration test '1'
 │   └── scenario-n/         # individual integration test 'n'
 ├── docker/                 # Docker integration tests for `docker` task: mid-level aggregator
@@ -97,6 +97,11 @@ plugin-integration-test/    # all integration tests:  top-level aggregator
 cd docker && ./gradlew scenario-1:integrationTest
 cd docker/scenario-1 && ./gradlew integrationTest
 ```
+
+### Run Integration Tests That Publish to Public Image Repositories
+
+Integration tests that publish to public image repositories do not run with the group of basic integration tests and
+must be specifically selected.  These often require additional configuration, namely credentials.
 
 Run integration tests for publish to Docker Hub:
 ```bash
