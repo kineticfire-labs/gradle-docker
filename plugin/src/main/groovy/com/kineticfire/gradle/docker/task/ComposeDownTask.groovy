@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.model.ComposeConfig
+import com.kineticfire.gradle.docker.model.LogsConfig
 import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
@@ -58,19 +59,22 @@ abstract class ComposeDownTask extends DefaultTask {
     void composeDown() {
         def projectName = this.projectName.get()
         def stackName = this.stackName.get()
-        
+
         logger.lifecycle("Stopping Docker Compose stack: {} (project: {})", stackName, projectName)
-        
+
         try {
+            // Capture logs before tearing down
+            captureLogsIfConfigured(stackName, projectName)
+
             // Use compose files if provided, otherwise fall back to project name only
             if (composeFiles?.files?.size() > 0) {
                 // Convert FileCollection to List<Path>
                 def composeFilePaths = composeFiles.files.collect { it.toPath() }
                 def envFilePaths = envFiles?.files?.collect { it.toPath() } ?: []
-                
+
                 // Create compose configuration
                 def config = new ComposeConfig(composeFilePaths, envFilePaths, projectName, stackName, [:])
-                
+
                 // Stop the compose stack with specific files
                 def future = composeService.get().downStack(config)
                 future.get()
@@ -79,11 +83,55 @@ abstract class ComposeDownTask extends DefaultTask {
                 def future = composeService.get().downStack(projectName)
                 future.get()
             }
-            
+
             logger.lifecycle("Successfully stopped compose stack '{}'", stackName)
-            
+
         } catch (Exception e) {
             throw new RuntimeException("Failed to stop compose stack '${stackName}': ${e.message}", e)
+        }
+    }
+
+    /**
+     * Capture logs if configured
+     */
+    private void captureLogsIfConfigured(String stackName, String projectName) {
+        def dockerOrchExt = project.extensions.findByName('dockerOrch')
+        if (!dockerOrchExt) {
+            return
+        }
+
+        def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
+        if (!stackSpec || !stackSpec.logs.present) {
+            return
+        }
+
+        def logsSpec = stackSpec.logs.get()
+
+        logger.lifecycle("Capturing logs for stack '{}'", stackName)
+
+        def logsConfig = new LogsConfig(
+            logsSpec.services.present ? logsSpec.services.get() : [],
+            logsSpec.tailLines.getOrElse(100),
+            logsSpec.follow.getOrElse(false),
+            null  // outputFile not used here - we handle file writing ourselves
+        )
+
+        try {
+            def logsFuture = composeService.get().captureLogs(projectName, logsConfig)
+            def logs = logsFuture.get()
+
+            // Write logs to configured location
+            if (logsSpec.writeTo.present) {
+                def logFile = logsSpec.writeTo.get().asFile
+                logFile.parentFile.mkdirs()
+                logFile.text = logs
+                logger.lifecycle("Logs written to: {}", logFile.absolutePath)
+            } else {
+                logger.info("Logs:\n{}", logs)
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to capture logs for stack '{}': {}", stackName, e.message)
+            // Don't fail the task if log capture fails - just warn
         }
     }
 }

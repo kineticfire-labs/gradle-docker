@@ -16,21 +16,20 @@
 
 package com.kineticfire.gradle.docker.junit;
 
-import com.kineticfire.gradle.docker.junit.service.DefaultFileService;
-import com.kineticfire.gradle.docker.junit.service.DefaultProcessExecutor;
-import com.kineticfire.gradle.docker.junit.service.DefaultSystemPropertyService;
-import com.kineticfire.gradle.docker.junit.service.DefaultTimeService;
-import com.kineticfire.gradle.docker.junit.service.FileService;
-import com.kineticfire.gradle.docker.junit.service.ProcessExecutor;
-import com.kineticfire.gradle.docker.junit.service.SystemPropertyService;
-import com.kineticfire.gradle.docker.junit.service.TimeService;
+import com.kineticfire.gradle.docker.junit.service.*;
+import com.kineticfire.gradle.docker.model.*;
+import com.kineticfire.gradle.docker.service.ComposeService;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -57,8 +56,11 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
 
     // Store the unique project name per test thread to ensure cleanup uses the same name
     private final ThreadLocal<String> uniqueProjectName = new ThreadLocal<>();
+    // Store the ComposeState from upStack for state file generation
+    private final ThreadLocal<ComposeState> composeState = new ThreadLocal<>();
 
     // Service dependencies
+    private final ComposeService composeService;
     private final ProcessExecutor processExecutor;
     private final FileService fileService;
     private final SystemPropertyService systemPropertyService;
@@ -71,7 +73,7 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
      * starting fresh containers before each test method and stopping them after each method completes.
      */
     public DockerComposeMethodExtension() {
-        this(new DefaultProcessExecutor(), new DefaultFileService(),
+        this(new JUnitComposeService(), new DefaultProcessExecutor(), new DefaultFileService(),
              new DefaultSystemPropertyService(), new DefaultTimeService());
     }
 
@@ -80,13 +82,16 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
      *
      * This constructor allows dependency injection for testing purposes.
      *
+     * @param composeService the compose service for Docker Compose operations
      * @param processExecutor the process executor for running external commands
      * @param fileService the file service for file operations
      * @param systemPropertyService the system property service for property access
      * @param timeService the time service for time operations
      */
-    public DockerComposeMethodExtension(ProcessExecutor processExecutor, FileService fileService,
-                                       SystemPropertyService systemPropertyService, TimeService timeService) {
+    public DockerComposeMethodExtension(ComposeService composeService, ProcessExecutor processExecutor,
+                                       FileService fileService, SystemPropertyService systemPropertyService,
+                                       TimeService timeService) {
+        this.composeService = composeService;
         this.processExecutor = processExecutor;
         this.fileService = fileService;
         this.systemPropertyService = systemPropertyService;
@@ -175,9 +180,10 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         if (lastException != null) {
             System.err.println("Warning: Some cleanup operations failed but test execution will continue");
         }
-        
-        // Clear the ThreadLocal to prevent memory leaks
+
+        // Clear the ThreadLocals to prevent memory leaks
         uniqueProjectName.remove();
+        composeState.remove();
     }
     
     private String getStackName(ExtensionContext context) {
@@ -217,16 +223,16 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private String sanitizeProjectName(String projectName) {
         // Convert to lowercase and replace invalid characters with hyphens
         String sanitized = projectName.toLowerCase()
-            .replaceAll("[^a-z0-9\\-_]", "-")  // Replace invalid chars with hyphens
-            .replaceAll("-+", "-")             // Replace multiple hyphens with single
-            .replaceAll("^-", "")              // Remove leading hyphens
-            .replaceAll("-$", "");             // Remove trailing hyphens
-            
+            .replaceAll(/[^a-z0-9\-_]/, "-")  // Replace invalid chars with hyphens
+            .replaceAll(/-+/, "-")             // Replace multiple hyphens with single
+            .replaceAll(/^-/, "")              // Remove leading hyphens
+            .replaceAll(/-$/, "");             // Remove trailing hyphens
+
         // Ensure it starts with alphanumeric character
         if (sanitized.length() > 0 && !Character.isLetterOrDigit(sanitized.charAt(0))) {
             sanitized = "test-" + sanitized;
         }
-        
+
         return sanitized.isEmpty() ? "test-project" : sanitized;
     }
     
@@ -253,7 +259,7 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         }
 
         // Clean up containers using integration test ports (8081, 8082, 8083, 8084, 8085)
-        String[] ports = {"8081", "8082", "8083", "8084", "8085"};
+        String[] ports = ["8081", "8082", "8083", "8084", "8085"];
         for (String port : ports) {
             try {
                 ProcessExecutor.ProcessResult result = processExecutor.executeWithTimeout(10, TimeUnit.SECONDS,
@@ -266,92 +272,68 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         }
     }
     
-    private void startComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
-        // Use docker compose directly instead of Gradle to avoid configuration cache issues
-        // Read compose file from the integration test resources
+    private void startComposeStack(String stackName, String uniqueProjectName) throws Exception {
+        // Use ComposeService to start the stack
         Path composeFile = fileService.resolve("src/integrationTest/resources/compose/integration-method.yml");
         if (!fileService.exists(composeFile)) {
             throw new IllegalStateException("Compose file not found: " + composeFile);
         }
 
-        ProcessExecutor.ProcessResult result = processExecutor.executeInDirectory(
-            fileService.toFile(fileService.resolve(".")),
-            "docker", "compose",
-            "-f", composeFile.toString(),
-            "-p", uniqueProjectName,
-            "up", "-d", "--remove-orphans"
+        // Create ComposeConfig
+        ComposeConfig config = new ComposeConfig(
+            Collections.singletonList(composeFile),  // composeFiles
+            uniqueProjectName,                       // projectName
+            stackName                                // stackName
         );
 
-        if (result.getExitCode() != 0) {
-            System.err.println("DEBUG: Docker compose command failed with exit code: " + result.getExitCode());
-            System.err.println("DEBUG: Command was: docker compose -f " + composeFile + " -p " + uniqueProjectName + " up -d --remove-orphans");
-            System.err.println("DEBUG: Working directory was: " + fileService.resolve(".").toAbsolutePath());
-            System.err.println("DEBUG: Process output: " + result.getOutput());
-            throw new RuntimeException("Failed to start compose stack '" + stackName +
-                                     "' with project '" + uniqueProjectName + "': " + result.getOutput());
-        }
+        // Start the stack and store the state
+        ComposeState state = composeService.upStack(config).get();
+        composeState.set(state);
+
+        System.out.println("Successfully started compose stack '" + stackName +
+                          "' with project '" + uniqueProjectName + "'");
     }
     
-    private void stopComposeStack(String stackName, String uniqueProjectName) throws IOException, InterruptedException {
-        // Use docker compose directly to stop and remove containers
-        Path composeFile = fileService.resolve("src/integrationTest/resources/compose/integration-method.yml");
-
-        ProcessExecutor.ProcessResult result = processExecutor.executeInDirectory(
-            fileService.toFile(fileService.resolve(".")),
-            "docker", "compose",
-            "-f", composeFile.toString(),
-            "-p", uniqueProjectName,
-            "down", "--remove-orphans", "--volumes"
-        );
-
-        if (result.getExitCode() != 0) {
+    private void stopComposeStack(String stackName, String uniqueProjectName) throws Exception {
+        // Use ComposeService to stop the stack
+        try {
+            composeService.downStack(uniqueProjectName).get();
+            System.out.println("Successfully stopped compose stack '" + stackName +
+                              "' with project '" + uniqueProjectName + "'");
+        } catch (Exception e) {
             // For cleanup, log the error but don't throw exception
             System.err.println("Warning: Failed to cleanly stop compose stack '" + stackName +
-                             "' with project '" + uniqueProjectName + "': " + result.getOutput());
+                             "' with project '" + uniqueProjectName + "': " + e.getMessage());
         }
     }
     
-    private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws InterruptedException {
-        // Give containers a moment to start and become healthy
-        // Method lifecycle needs longer wait for fresh containers
+    private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws Exception {
+        // Use ComposeService to wait for services
         System.out.println("Waiting for containers to become healthy...");
-        timeService.sleep(5000);
 
-        // Wait for health check to pass
-        int attempts = 0;
-        int maxAttempts = 30;
-        while (attempts < maxAttempts) {
-            try {
-                ProcessExecutor.ProcessResult result = processExecutor.execute(
-                    "docker", "compose",
-                    "-p", uniqueProjectName,
-                    "ps", "--format", "json"
-                );
+        // For integration tests, wait for the time-server service to be healthy
+        List<String> services = Collections.singletonList("time-server");
+        WaitConfig waitConfig = new WaitConfig(
+            uniqueProjectName,
+            services,
+            Duration.ofSeconds(60),
+            Duration.ofSeconds(2),
+            ServiceStatus.HEALTHY
+        );
 
-                if (result.getExitCode() == 0) {
-                    String output = result.getOutput();
-                    if (output.contains("\"Health\":\"healthy\"") || output.contains("\"State\":\"running\"")) {
-                        System.out.println("Container is healthy after " + (attempts + 1) + " attempts");
-                        return;
-                    }
-                }
-
-                timeService.sleep(1000);
-                attempts++;
-            } catch (Exception e) {
-                System.err.println("Health check attempt " + (attempts + 1) + " failed: " + e.getMessage());
-                attempts++;
-                timeService.sleep(1000);
-            }
+        try {
+            composeService.waitForServices(waitConfig).get();
+            System.out.println("All services are healthy for stack '" + stackName + "'");
+        } catch (Exception e) {
+            System.err.println("Warning: Service health check did not pass within timeout: " + e.getMessage());
+            // Don't throw - let tests proceed even if health check times out
         }
-
-        System.err.println("Warning: Container health check did not pass within timeout");
     }
     
     
-    private void generateStateFile(String stackName, String uniqueProjectName, ExtensionContext context) throws IOException {
-        // Generate a JSON state file for this method's containers
-        // In production, this would query Docker daemon for actual container info
+    private void generateStateFile(String stackName, String uniqueProjectName,
+                                   ExtensionContext context) throws IOException {
+        // Generate a JSON state file using the ComposeState from upStack
         Path buildDir = fileService.resolve("build");
         Path stateDir = buildDir.resolve("compose-state");
         fileService.createDirectories(stateDir);
@@ -360,26 +342,45 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         String methodName = context.getTestMethod().map(m -> m.getName()).orElse("unknown");
         Path stateFile = stateDir.resolve(stackName + "-" + className + "-" + methodName + "-state.json");
 
-        String stateJson = "{\n" +
-                          "  \"stackName\": \"" + stackName + "\",\n" +
-                          "  \"projectName\": \"" + uniqueProjectName + "\",\n" +
-                          "  \"lifecycle\": \"method\",\n" +
-                          "  \"testClass\": \"" + className + "\",\n" +
-                          "  \"testMethod\": \"" + methodName + "\",\n" +
-                          "  \"timestamp\": \"" + timeService.now() + "\",\n" +
-                          "  \"services\": {\n" +
-                          "    \"time-server\": {\n" +
-                          "      \"containerId\": \"method-" + uniqueProjectName + "\",\n" +
-                          "      \"containerName\": \"time-server-" + uniqueProjectName + "-1\",\n" +
-                          "      \"state\": \"healthy\",\n" +
-                          "      \"publishedPorts\": [\n" +
-                          "        {\"container\": 8080, \"host\": 8083, \"protocol\": \"tcp\"}\n" +
-                          "      ]\n" +
-                          "    }\n" +
-                          "  }\n" +
-                          "}";
+        // Get the stored state from upStack
+        ComposeState state = composeState.get();
+        if (state == null) {
+            System.err.println("Warning: No ComposeState available for state file generation");
+            return;
+        }
 
-        fileService.writeString(stateFile, stateJson);
+        // Build JSON manually (could use Jackson or Gson in production)
+        StringBuilder json = new StringBuilder();
+        json.append("{\n");
+        json.append("  \"stackName\": \"").append(stackName).append("\",\n");
+        json.append("  \"projectName\": \"").append(uniqueProjectName).append("\",\n");
+        json.append("  \"lifecycle\": \"method\",\n");
+        json.append("  \"testClass\": \"").append(className).append("\",\n");
+        json.append("  \"testMethod\": \"").append(methodName).append("\",\n");
+        json.append("  \"timestamp\": \"").append(timeService.now()).append("\",\n");
+        json.append("  \"services\": {\n");
+
+        List<String> serviceEntries = new ArrayList<>();
+        for (java.util.Map.Entry<String, ServiceInfo> entry : state.getServices().entrySet()) {
+            String serviceName = entry.getKey();
+            ServiceInfo serviceInfo = entry.getValue();
+
+            StringBuilder serviceJson = new StringBuilder();
+            serviceJson.append("    \"").append(serviceName).append("\": {\n");
+            serviceJson.append("      \"containerId\": \"").append(serviceInfo.getContainerId()).append("\",\n");
+            serviceJson.append("      \"containerName\": \"").append(serviceInfo.getContainerName()).append("\",\n");
+            serviceJson.append("      \"state\": \"").append(serviceInfo.getState()).append("\",\n");
+            serviceJson.append("      \"publishedPorts\": []\n");
+            serviceJson.append("    }");
+            serviceEntries.add(serviceJson.toString());
+        }
+
+        json.append(String.join(",\n", serviceEntries));
+        json.append("\n");
+        json.append("  }\n");
+        json.append("}");
+
+        fileService.writeString(stateFile, json.toString());
 
         // Set system property so tests can find the state file
         systemPropertyService.setProperty(COMPOSE_STATE_FILE_PROPERTY, stateFile.toString());

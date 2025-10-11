@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.Project
 import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 
 import javax.inject.Inject
@@ -26,17 +27,20 @@ import javax.inject.Inject
  * Specification for Docker Compose logs configuration
  */
 abstract class LogsSpec {
-    
+
     private final Project project
-    
+
     @Inject
     LogsSpec(Project project) {
         this.project = project
-        
+
         // Set defaults
         tailLines.convention(100)
+        follow.convention(false)
     }
-    
+
     abstract RegularFileProperty getWriteTo()
     abstract Property<Integer> getTailLines()
+    abstract Property<Boolean> getFollow()
+    abstract ListProperty<String> getServices()
 }

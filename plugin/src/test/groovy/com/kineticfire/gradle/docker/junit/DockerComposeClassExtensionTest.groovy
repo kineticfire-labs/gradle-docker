@@ -20,15 +20,20 @@ import com.kineticfire.gradle.docker.junit.service.FileService
 import com.kineticfire.gradle.docker.junit.service.ProcessExecutor
 import com.kineticfire.gradle.docker.junit.service.SystemPropertyService
 import com.kineticfire.gradle.docker.junit.service.TimeService
+import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.model.ComposeState
+import com.kineticfire.gradle.docker.model.ServiceStatus
 import org.junit.jupiter.api.extension.ExtensionContext
 import spock.lang.Specification
 import spock.lang.Subject
 
 import java.lang.reflect.InvocationTargetException
 import java.lang.reflect.Method
+import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
 import java.time.LocalDateTime
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import java.util.stream.Stream
 
@@ -37,6 +42,7 @@ import java.util.stream.Stream
  */
 class DockerComposeClassExtensionTest extends Specification {
 
+    ComposeService composeService = Mock()
     ProcessExecutor processExecutor = Mock()
     FileService fileService = Mock()
     SystemPropertyService systemPropertyService = Mock()
@@ -46,8 +52,28 @@ class DockerComposeClassExtensionTest extends Specification {
     @Subject
     DockerComposeClassExtension extension
 
+    // Temporary compose file for tests
+    static Path tempComposeFile
+
+    def setupSpec() {
+        // Create temporary compose file that ComposeConfig can validate
+        tempComposeFile = Files.createTempFile("integration-class", ".yml")
+        Files.write(tempComposeFile, """
+services:
+  web:
+    image: nginx:latest
+""".bytes)
+    }
+
+    def cleanupSpec() {
+        // Clean up temporary compose file
+        if (tempComposeFile != null && Files.exists(tempComposeFile)) {
+            Files.delete(tempComposeFile)
+        }
+    }
+
     def setup() {
-        extension = new DockerComposeClassExtension(processExecutor, fileService, systemPropertyService, timeService)
+        extension = new DockerComposeClassExtension(composeService, processExecutor, fileService, systemPropertyService, timeService)
     }
 
     def "constructor with default services creates successfully"() {
@@ -160,19 +186,20 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
 
+        // Mock ComposeService methods
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+
         processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
 
         when:
         extension.beforeAll(context)
@@ -189,19 +216,21 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
 
+        // Mock ComposeService methods
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        composeService.downStack(_) >> CompletableFuture.completedFuture(null)
+
         processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
         processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
 
         extension.beforeAll(context)  // Initialize state
@@ -408,9 +437,8 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.toFile(_) >> new File(".")
 
         // First cleanup succeeds, compose start fails, second cleanup fails
@@ -556,21 +584,25 @@ class DockerComposeClassExtensionTest extends Specification {
 
     def "startComposeStack handles non-zero exit code"() {
         given:
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
 
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(1, "Docker compose failed")
+        // Mock ComposeService to throw exception
+        composeService.upStack(_) >> {
+            CompletableFuture.failedFuture(new RuntimeException("Failed to start compose stack 'test-stack': Docker compose failed"))
+        }
 
         when:
         invokeStartComposeStack("test-stack", "test-project")
 
         then:
-        RuntimeException ex = thrown()
-        ex.message.contains("Failed to start compose stack")
-        ex.message.contains("Docker compose failed")
+        // CompletableFuture.get() wraps the exception in ExecutionException
+        java.util.concurrent.ExecutionException ex = thrown()
+        ex.cause instanceof RuntimeException
+        ex.cause.message.contains("Failed to start compose stack")
+        ex.cause.message.contains("Docker compose failed")
     }
 
     def "stopComposeStack handles non-zero exit code gracefully"() {
@@ -618,29 +650,26 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
 
+        // Mock ComposeService methods for beforeAll
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+
+        // Make downStack fail
+        composeService.downStack(_) >> CompletableFuture.failedFuture(new Exception("Container cleanup failed"))
+
         processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
         processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
 
         extension.beforeAll(context)  // Initialize state
-
-        // Make cleanup operations fail
-        processExecutor.executeInDirectory(_, _) >>> [
-            new ProcessExecutor.ProcessResult(0, "Success"),  // For beforeAll
-            { throw new Exception("Container cleanup failed") },  // stopComposeStack fails
-            new ProcessExecutor.ProcessResult(0, "Force cleanup success")  // forceRemoveContainersByName succeeds
-        ]
 
         when:
         extension.afterAll(context)
@@ -656,28 +685,29 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
 
-        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
-        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
+        // Mock ComposeService methods for beforeAll and afterAll
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        composeService.downStack(_) >> CompletableFuture.completedFuture(null)
 
-        extension.beforeAll(context)  // Initialize state
+        processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
 
         // Make force cleanup fail
         processExecutor.execute("docker", "ps", "-aq", "--filter", _) >>> [
             new ProcessExecutor.ProcessResult(0, ""),  // For beforeAll
             { throw new Exception("Force cleanup failed") }  // forceRemoveContainersByName fails
         ]
+
+        extension.beforeAll(context)  // Initialize state
 
         when:
         extension.afterAll(context)
@@ -693,19 +723,21 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.of(Paths.get("state-file"))
 
+        // Mock ComposeService methods
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        composeService.downStack(_) >> CompletableFuture.completedFuture(null)
+
         processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
         processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
 
         extension.beforeAll(context)  // Initialize state
@@ -727,32 +759,31 @@ class DockerComposeClassExtensionTest extends Specification {
         context.getTestClass() >> Optional.of(String.class)
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
 
-        Path composeFile = Paths.get("src/integrationTest/resources/compose/integration-class.yml")
-        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> composeFile
-        fileService.exists(composeFile) >> true
+        fileService.resolve("src/integrationTest/resources/compose/integration-class.yml") >> tempComposeFile
+        fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
         fileService.toFile(_) >> new File(".")
         fileService.resolve("build") >> Paths.get("build")
         fileService.exists(Paths.get("build/compose-state")) >> true
         fileService.list(Paths.get("build/compose-state")) >> Stream.empty()
 
+        // Mock ComposeService methods for beforeAll
+        def composeState = new ComposeState("test-stack", "test-project-string-123045")
+        composeService.upStack(_) >> CompletableFuture.completedFuture(composeState)
+        composeService.waitForServices(_) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+
+        // Make downStack fail
+        composeService.downStack(_) >> CompletableFuture.failedFuture(new Exception("Container cleanup failed"))
+
         processExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Success")
-        processExecutor.execute("docker", "compose", "-p", _, "ps", "--format", "json") >>
-            new ProcessExecutor.ProcessResult(0, '{"Health":"healthy"}')
-        processExecutor.execute("docker", "ps", "-aq", "--filter", _) >> new ProcessExecutor.ProcessResult(0, "")
 
-        extension.beforeAll(context)  // Initialize state
-
-        // Make both cleanup operations fail
-        processExecutor.executeInDirectory(_, _) >>> [
-            new ProcessExecutor.ProcessResult(0, "Success"),  // For beforeAll
-            { throw new Exception("Container cleanup failed") }  // stopComposeStack fails
-        ]
+        // Make force cleanup fail too
         processExecutor.execute("docker", "ps", "-aq", "--filter", _) >>> [
             new ProcessExecutor.ProcessResult(0, ""),  // For beforeAll
             { throw new Exception("Force cleanup failed") }  // forceRemoveContainersByName fails
         ]
+
+        extension.beforeAll(context)  // Initialize state
 
         when:
         extension.afterAll(context)
