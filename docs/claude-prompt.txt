@@ -93,8 +93,14 @@ example for what these integration tests SHOULD be and how this task should work
 lines 184 to 219 which show the lifecycle tests (integrationSuite, integrationClass, integrationMethod).
 
 I want you to evaluate the current state of the code supporting image testing using `dockerOrch` task and report your findings.
-Does the implementation support the stated project goals and approach?  What is the state of the implementation (done or more work to do)?
-Is there sufficient unit test coverage?  Are there are gaps?  recommendations?  Analyze and report only, do NOT edit files.
+- Is the approach sound?
+- Does the implementation support the stated project goals and approach?
+- What is the state of the implementation (done or more work to do)?
+- Is there sufficient unit test coverage?
+- Recommendations?
+- What is needed to have this implementation done and production ready, to support writing final integration tests?
+
+Analyze and report only, do NOT edit files.
 
 
 
