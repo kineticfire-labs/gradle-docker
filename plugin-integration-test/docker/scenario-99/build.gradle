@@ -1,0 +1,355 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Publish Features
+ *       - publish to public registry: Docker Hub
+ *       - Authentication with environment variables (DOCKERHUB_USERNAME, DOCKERHUB_TOKEN)
+ *       - Timestamp-based tags for test rerunnability
+ *
+ * ⚠️  MANUAL PREREQUISITES:
+ *   1. Create private repository 'kineticfire/gradle-docker-test' on Docker Hub
+ *   2. Set environment variables:
+ *      - DOCKERHUB_USERNAME (your Docker Hub username)
+ *      - DOCKERHUB_TOKEN (your Personal Access Token)
+ *
+ * 🚀 RUN COMMAND:
+ *   cd plugin-integration-test
+ *   ./gradlew -Pplugin_version=1.0.0 docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true
+ *
+ * ⚠️  NOTE: This test does NOT run as part of regular integration tests
+ *   - Requires manual credentials setup
+ *   - Publishes to Docker Hub (external service)
+ *   - Uses timestamp-based tags to allow reruns
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('dockerHubIntegrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'dockerHub'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-99 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew -Pplugin_version=1.0.0 docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Placeholder for regular integrationTest
+    tasks.register('integrationTest') {
+        description = 'Placeholder - Docker Hub tests must be run explicitly'
+        group = 'verification'
+        doFirst {
+            println """
+╔════════════════════════════════════════════════════════════════╗
+║  ℹ️  Docker Hub Integration Test (Scenario 99)                 ║
+╠════════════════════════════════════════════════════════════════╣
+║  This test requires manual execution with credentials.          ║
+║                                                                  ║
+║  Run with:                                                       ║
+║    ./gradlew -Pplugin_version=1.0.0 \\                           ║
+║      docker:scenario-99:dockerHubIntegrationTest \\              ║
+║      -PenableDockerHubTests=true                                 ║
+╚════════════════════════════════════════════════════════════════╝
+"""
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+import java.time.*
+import java.time.format.*
+import org.gradle.api.provider.ValueSource
+import org.gradle.api.provider.ValueSourceParameters
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+// ValueSource for timestamp generation (config cache compatible)
+abstract class TimestampValueSource implements ValueSource<String, ValueSourceParameters.None> {
+    @Override
+    String obtain() {
+        // Format: 2025-10-10T14-30-45Z (safe for Docker tags, no colons)
+        Instant.now().atZone(ZoneOffset.UTC)
+            .format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss'Z'"))
+    }
+}
+
+// Generate unique timestamp tag
+def timestamp = providers.of(TimestampValueSource) {}
+def timestampTag = timestamp.map { t -> "test-${t}" }
+
+docker {
+    images {
+        timeServer {
+            contextTask = tasks.register('prepareScenario99TimeServerContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for Docker Hub test'
+                into layout.buildDirectory.dir('docker-context/timeServer')
+                from('src/main/docker')
+
+                // Only copy app JAR when running from parent project (where :app project exists)
+                if (rootProject.name == 'plugin-integration-test') {
+                    // Capture version as string during configuration to avoid closure access at execution
+                    def versionString = project.version.toString()
+                    from(file('../../app/build/libs')) {
+                        include 'app-*.jar'
+                        rename { String fileName -> "app-${versionString}.jar" }
+                    }
+                    dependsOn ':app:jar'
+                }
+            }
+
+            // Build args for the Dockerfile
+            buildArgs.put("JAR_FILE", "app-${project.version}.jar")
+            buildArgs.put("BUILD_VERSION", project.version.toString())
+
+            // Labels to identify this test image
+            labels.put("org.opencontainers.image.version", project.version.toString())
+            labels.put("maintainer", "team@kineticfire.com")
+            labels.put("test.scenario", "99")
+            labels.put("test.registry", "dockerhub")
+            labels.put("test.purpose", "integration-test")
+
+            // Build locally with timestamp tag
+            imageName.set('scenario99-time-server')
+            tags.set(timestampTag.map { [it] })  // Single timestamp-based tag
+
+            // Publish to Docker Hub
+            publish {
+                to('dockerhub') {
+                    registry.set('docker.io')
+                    repository.set('kineticfire/gradle-docker-test')
+                    publishTags.set(timestampTag.map { [it] })
+
+                    // Credentials from environment variables
+                    auth {
+                        username.set(providers.environmentVariable('DOCKERHUB_USERNAME'))
+                        password.set(providers.environmentVariable('DOCKERHUB_TOKEN'))
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Verify local build (dynamic tag based on timestamp)
+tasks.register('verifyLocalBuild') {
+    description = 'Verify Docker image was built locally'
+    group = 'verification'
+
+    doLast {
+        def tag = timestampTag.get()
+        def imageName = "scenario99-time-server:${tag}"
+
+        println "Verifying local image: ${imageName}"
+
+        def process = new ProcessBuilder('docker', 'images', '-q', imageName)
+            .redirectErrorStream(true)
+            .start()
+        def output = process.inputStream.text.trim()
+        process.waitFor()
+
+        if (process.exitValue() != 0 || output.isEmpty()) {
+            throw new GradleException("❌ Local image '${imageName}' not found!")
+        }
+
+        println "✅ Local image verified: ${imageName}"
+    }
+}
+
+// Verify Docker Hub publish (requires pulling image back)
+tasks.register('verifyDockerHubPublish') {
+    description = 'Verify image was published to Docker Hub'
+    group = 'verification'
+
+    doLast {
+        def tag = timestampTag.get()
+        def fullRef = "docker.io/kineticfire/gradle-docker-test:${tag}"
+
+        println "\nVerifying Docker Hub image: ${fullRef}"
+
+        // First, remove local copy to ensure we pull from Docker Hub
+        println "Removing local copy to ensure fresh pull..."
+        def removeProcess = new ProcessBuilder('docker', 'rmi', '-f', fullRef)
+            .redirectErrorStream(true)
+            .start()
+        removeProcess.waitFor()
+
+        // Try to pull from Docker Hub (this verifies it exists)
+        def username = System.getenv('DOCKERHUB_USERNAME')
+        def token = System.getenv('DOCKERHUB_TOKEN')
+
+        // Login first
+        println "Logging in to Docker Hub..."
+        def loginProcess = new ProcessBuilder('docker', 'login', 'docker.io', '-u', username, '--password-stdin')
+            .redirectErrorStream(true)
+            .start()
+        loginProcess.outputStream.write((token + '\n').bytes)
+        loginProcess.outputStream.flush()
+        loginProcess.outputStream.close()
+        def loginOutput = loginProcess.inputStream.text
+        loginProcess.waitFor()
+
+        if (loginProcess.exitValue() != 0) {
+            throw new GradleException("❌ Docker Hub login failed:\n${loginOutput}")
+        }
+
+        println "Login successful. Pulling image from Docker Hub..."
+
+        // Pull the image
+        def pullProcess = new ProcessBuilder('docker', 'pull', fullRef)
+            .redirectErrorStream(true)
+            .start()
+        def pullOutput = pullProcess.inputStream.text
+        pullProcess.waitFor()
+
+        if (pullProcess.exitValue() != 0) {
+            throw new GradleException("❌ Failed to pull image from Docker Hub:\n${pullOutput}")
+        }
+
+        println "✅ Docker Hub image verified: ${fullRef}"
+        println "\n⚠️  MANUAL CLEANUP REQUIRED:"
+        println "   Visit https://hub.docker.com/r/kineticfire/gradle-docker-test/tags"
+        println "   Delete tag: ${tag}"
+    }
+}
+
+// Clean local images after test
+tasks.register('cleanDockerHubTestImages') {
+    description = 'Clean up local test images'
+    group = 'verification'
+
+    doLast {
+        def tag = timestampTag.get()
+
+        println "\nCleaning up local test images..."
+
+        // Clean local build
+        def process1 = new ProcessBuilder('docker', 'rmi', '-f', "scenario99-time-server:${tag}")
+            .redirectErrorStream(true)
+            .start()
+        process1.waitFor()
+
+        // Clean pulled copy
+        def process2 = new ProcessBuilder('docker', 'rmi', '-f', "docker.io/kineticfire/gradle-docker-test:${tag}")
+            .redirectErrorStream(true)
+            .start()
+        process2.waitFor()
+
+        println "✅ Local test images cleaned"
+    }
+}
+
+// Main Docker Hub integration test task
+tasks.register('dockerHubIntegrationTest') {
+    description = 'Run Docker Hub integration test: build → publish → verify'
+    group = 'dockerHub'
+
+    enabled = project.hasProperty('enableDockerHubTests')
+
+    doFirst {
+        // Validate credentials
+        def username = System.getenv('DOCKERHUB_USERNAME')
+        def token = System.getenv('DOCKERHUB_TOKEN')
+
+        if (!username || !token) {
+            throw new GradleException("""
+❌ Docker Hub credentials not found!
+
+Required environment variables:
+  - DOCKERHUB_USERNAME
+  - DOCKERHUB_TOKEN
+
+Get your token from: https://hub.docker.com/settings/security
+
+Set credentials:
+  export DOCKERHUB_USERNAME='your-username'
+  export DOCKERHUB_TOKEN='your-access-token'
+
+Then run:
+  cd plugin-integration-test
+  ./gradlew -Pplugin_version=1.0.0 docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true
+""")
+        }
+
+        println """
+╔════════════════════════════════════════════════════════════════╗
+║        Docker Hub Integration Test - Scenario 99                ║
+╠════════════════════════════════════════════════════════════════╣
+║ Username: ${username}
+║ Repository: kineticfire/gradle-docker-test
+║ Tag: ${timestampTag.get()}
+║ Registry: docker.io
+╚════════════════════════════════════════════════════════════════╝
+"""
+    }
+
+    dependsOn 'dockerBuild'
+    dependsOn 'dockerPublish'
+    dependsOn 'verifyLocalBuild'
+    dependsOn 'verifyDockerHubPublish'
+    finalizedBy 'cleanDockerHubTestImages'
+}
+
+// Configure task ordering
+tasks.named('dockerPublish') { mustRunAfter 'dockerBuild' }
+tasks.named('verifyLocalBuild') { mustRunAfter 'dockerBuild' }
+tasks.named('verifyDockerHubPublish') { mustRunAfter 'dockerPublish' }
+tasks.named('cleanDockerHubTestImages') { mustRunAfter 'verifyDockerHubPublish' }
+
+// Regular integrationTest does NOT run Docker Hub tests
+tasks.register('integrationTest') {
+    description = 'Placeholder - Docker Hub tests must be run explicitly'
+    group = 'verification'
+
+    doFirst {
+        println """
+╔════════════════════════════════════════════════════════════════╗
+║  ℹ️  Docker Hub Integration Test (Scenario 99)                 ║
+╠════════════════════════════════════════════════════════════════╣
+║  This test requires manual execution with credentials.          ║
+║                                                                  ║
+║  Run with:                                                       ║
+║    cd plugin-integration-test                                    ║
+║    ./gradlew -Pplugin_version=1.0.0 \\                           ║
+║      docker:scenario-99:dockerHubIntegrationTest \\              ║
+║      -PenableDockerHubTests=true                                 ║
+╚════════════════════════════════════════════════════════════════╝
+"""
+    }
+}

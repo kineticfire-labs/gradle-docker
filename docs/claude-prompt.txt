@@ -3,20 +3,10 @@ Compose.  You are on a team building a custom Gradle plugin to build, tag, save,
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 
 
-You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
-  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
-  the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 
-  You will write a specific, new integration test to test and prove and demonstrate aspects of the plugin.  Your integration test must be compatible with Gradle and 10, especially
-  the build cache configuration, per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
-  Your integration test will cover aspects related to 'docker' DSL task so functionality like: build, tag, save, and publish.  Analyze the existing integration tests for the
-  'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
-  test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
 
-  Your task is to write a new integration test, called 'scenario-6' at @plugin-integration-test/docker/scenario-6/ , that must provide an integration test using a build.gradle file
-  for these aspects:
-
+## Integration Tests
 
   You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
     Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
@@ -29,25 +19,66 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
     'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
     test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
 
-    Your task is to write a new integration test, called 'scenario-13' at @plugin-integration-test/docker/scenario-13/ , that must provide an integration test using a build.gradle
+    Your task is to write a new integration test, called 'scenario-99' at @plugin-integration-test/docker/scenario-99/ , that must provide an integration test using a build.gradle
   file
     for these aspects:
-  - We are going to test the "Source Ref Mode" to define an image.  You can see an examples:
-       - using "Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag" at @plugin-integration-test/docker/scenario-5/ .
-       - using the full image reference 'sourceRef' at @plugin-integration-test/docker/scenario-9/ .
-  - Define the image using the "Repository Mode: sourceRefRepository, sourceRefTag"
-      - since we are not defining the registry, then the image must exist local.  so there should be a check that the image is local else pull it.  There are integration test helpers
-        in build source (buildSrc) that can probably help with this.
-      - pick a tag like "latest", because picking a specific version like "1.27" could be aged off and no longer available
-  - Omit 'pullingIfMissing' which will default to 'false'.  If the image isn't local, then it can't be pulled since there is no registry.
-  - Do not create additional tags for the image
-  - Do not save the image
-  - Do not publish the image
-  - I should be able to run the integration test from the @plugin-integration-test/ directory using:
-     - ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
-     - ./gradlew -Pplugin_version=1.0.0 docker:scenario-13:clean docker:scenario-13:integrationTest
+  - The goal of the integration is to test publish an image to Docker Hub, so the integration test will have a 'publish' task
+  - We will use environment variable 'DOCKERHUB_USERNAME' for the username and environment variable 'DOCKERHUB_TOKEN' for the token, so that we don't commit these credentials to the
+  git repository
+  - The image we will publish will be our TimeServer app and name the image 'time-server'
+  - We need to think about these aspects:
+     - If we hardcode the image tag as 'latest' or '1.0.0', then we can't re-run the integration test because that image will already exist.  Perhaps we could set the tag as a
+     datetimestamp based on zulu time?
+     - I assume we can create a private repository in Docker Hub, so that these test images won't be public?
+     - The repository name should be: kineticfire/gradle-docker/test/ ?
+     - We don't want this integration test to run with the other integration tests because:
+        - This test requires special authentication information in the form of env vars
+        - We don't want to fill up the repository with a bunch of test images.  Run only when needed.
 
   Acceptance criteria is that the integration test passes.
 
-  Create a plan, but do NOT update any files.
+  Can you consider these aspects and suggest how to create this integration test for Docker Hub?  We will likely repeat
+  this approach with other public repositories, so it needs to be a solid and repeatable approach.  Plan only,
+  do NOT update any files.
+
+
+
+To signal to run the Docker Hub tests:
+   - let's do your recommend "./gradlew docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true"
+   - and NOT do option B with the env var
+
+# Scenario 99: Docker Hub Publishing Integration Test
+
+  Tests publishing Docker images to Docker Hub public registry with authentication.
+
+  ## ⚠️ PREREQUISITES
+
+  ### 1. Create Private Repository
+  - Go to https://hub.docker.com
+  - Create repository: `kineticfire/gradle-docker-test`
+  - Make it **PRIVATE** (avoid polluting public namespace)
+
+  ### 2. Get Personal Access Token
+  - Visit https://hub.docker.com/settings/security
+  - Create new token with Read & Write permissions
+  - Copy the token (you won't see it again!)
+
+  ### 3. Set Environment Variables
+  ```bash
+  export DOCKERHUB_USERNAME='your-username'
+  export DOCKERHUB_TOKEN='your-personal-access-token'
+
+  🚀 RUNNING THE TEST
+
+  # From plugin-integration-test directory
+  ./gradlew docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true
+
+Docker Hub images must be deleted manually:
+
+  1. Visit https://hub.docker.com/r/kineticfire/gradle-docker-test/tags
+  2. Find tags starting with test-
+  3. Delete old test tags periodically
+
+  Recommendation: Delete tags weekly to avoid clutter.
+
 

@@ -98,6 +98,16 @@ cd docker && ./gradlew scenario-1:integrationTest
 cd docker/scenario-1 && ./gradlew integrationTest
 ```
 
+Run integration tests for publish to Docker Hub:
+```bash
+# Set your credentials
+export DOCKERHUB_USERNAME='your-username'
+export DOCKERHUB_TOKEN='your-pat-token'
+
+# Run the integration test (replace 1.0.0 with your plugin version)
+./gradlew -Pplugin_version=1.0.0 docker:scenario-99:dockerHubIntegrationTest -PenableDockerHubTests=true
+```
+
 ## Requirements
 
 - **Docker**: Must be installed and daemon running
