@@ -30,16 +30,19 @@ import java.util.concurrent.CompletableFuture
  * Real implementation of Docker Compose service using process execution
  */
 abstract class ExecLibraryComposeService implements BuildService<BuildServiceParameters.None>, ComposeService {
-    
-    private final ProcessExecutor processExecutor
-    private final CommandValidator commandValidator
-    private final ServiceLogger serviceLogger
+
+    protected ProcessExecutor processExecutor
+    protected CommandValidator commandValidator
+    protected ServiceLogger serviceLogger
     
     @Inject
     ExecLibraryComposeService() {
-        this(new DefaultProcessExecutor(), 
-             new DefaultCommandValidator(new DefaultProcessExecutor()), 
-             new DefaultServiceLogger(ExecLibraryComposeService.class))
+        this.processExecutor = new DefaultProcessExecutor()
+        this.commandValidator = new DefaultCommandValidator(new DefaultProcessExecutor())
+        this.serviceLogger = new DefaultServiceLogger(ExecLibraryComposeService.class)
+
+        commandValidator.validateDockerCompose()
+        serviceLogger.info("ComposeService initialized with docker-compose CLI")
     }
     
     @VisibleForTesting
@@ -144,15 +147,15 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                             def json = new groovy.json.JsonSlurper().parseText(line)
                             def serviceName = json.Service ?: json.Name?.split('_')?.getAt(1) // fallback parsing
                             def status = json.State ?: json.Status
-                            def ports = json.Ports ? [json.Ports] : []
-                            
+                            def portMappings = parsePortMappings(json.Ports)
+
                             if (serviceName) {
                                 def serviceState = parseServiceState(status)
                                 services[serviceName] = new ServiceInfo(
                                     json.ID ?: 'unknown',
                                     serviceName,
                                     serviceState.toString(),
-                                    ports
+                                    portMappings
                                 )
                             }
                         } catch (Exception e) {
@@ -172,7 +175,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     
     protected ServiceStatus parseServiceState(String status) {
         if (!status) return ServiceStatus.UNKNOWN
-        
+
         def lowerStatus = status.toLowerCase()
         if (lowerStatus.contains('running') || lowerStatus.contains('up')) {
             if (lowerStatus.contains('healthy')) {
@@ -186,6 +189,31 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         } else {
             return ServiceStatus.UNKNOWN
         }
+    }
+
+    protected List<PortMapping> parsePortMappings(String portsString) {
+        if (!portsString) return []
+
+        def portMappings = []
+        // Docker Compose ps --format json returns ports like "0.0.0.0:9091->8080/tcp, :::9091->8080/tcp"
+        portsString.split(',').each { portEntry ->
+            def trimmed = portEntry.trim()
+            if (trimmed) {
+                try {
+                    // Parse format: "0.0.0.0:9091->8080/tcp" or "9091->8080/tcp"
+                    def matcher = trimmed =~ /(?:[\d\.]+:)?(\d+)->(\d+)(?:\/(\w+))?/
+                    if (matcher.find()) {
+                        def hostPort = matcher.group(1) as Integer
+                        def containerPort = matcher.group(2) as Integer
+                        def protocol = matcher.group(3) ?: 'tcp'
+                        portMappings << new PortMapping(containerPort, hostPort, protocol)
+                    }
+                } catch (Exception e) {
+                    serviceLogger.debug("Failed to parse port mapping: ${trimmed} - ${e.message}")
+                }
+            }
+        }
+        return portMappings
     }
 
     @Override

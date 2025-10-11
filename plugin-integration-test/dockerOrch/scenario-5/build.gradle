@@ -1,0 +1,9 @@
+plugins {
+    id 'base'
+}
+
+tasks.register('integrationTest') {
+    doFirst {
+        throw new GradleException("Scenario $i not yet implemented")
+    }
+}

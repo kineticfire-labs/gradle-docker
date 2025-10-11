@@ -45,6 +45,8 @@ class ComposeUpTaskTest extends Specification {
         project = ProjectBuilder.builder().build()
         task = project.tasks.register('testComposeUp', ComposeUpTask).get()
         task.composeService.set(mockComposeService)
+        // Configure outputDirectory for Gradle 10 compatibility
+        task.outputDirectory.set(project.layout.buildDirectory.dir('compose-state'))
     }
 
     // ===== BASIC TASK TESTS =====
@@ -525,7 +527,7 @@ class ComposeUpTaskTest extends Specification {
         stackSpec.projectName = 'test-project'
 
         stackSpec.waitForHealthy {
-            services.set(['web', 'api'])
+            waitForServices.set(['web', 'api'])
             timeoutSeconds.set(45)
             pollSeconds.set(3)
         }
@@ -533,6 +535,10 @@ class ComposeUpTaskTest extends Specification {
         task.composeFiles.from(composeFile)
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+        // Manually configure wait properties for this test
+        task.waitForHealthyServices.set(['web', 'api'])
+        task.waitForHealthyTimeoutSeconds.set(45)
+        task.waitForHealthyPollSeconds.set(3)
 
         def mockComposeState = new ComposeState([
             'web': new ServiceInfo('web-id', 'web', 'healthy', []),
@@ -567,13 +573,16 @@ class ComposeUpTaskTest extends Specification {
         stackSpec.projectName = 'test-project'
 
         stackSpec.waitForRunning {
-            services.set(['redis', 'postgres'])
+            waitForServices.set(['redis', 'postgres'])
             timeoutSeconds.set(30)
         }
 
         task.composeFiles.from(composeFile)
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+        // Manually configure wait properties for this test
+        task.waitForRunningServices.set(['redis', 'postgres'])
+        task.waitForRunningTimeoutSeconds.set(30)
 
         def mockComposeState = new ComposeState([
             'redis': new ServiceInfo('redis-id', 'redis', 'running', []),
@@ -608,18 +617,23 @@ class ComposeUpTaskTest extends Specification {
         stackSpec.projectName = 'test-project'
 
         stackSpec.waitForHealthy {
-            services.set(['web'])
+            waitForServices.set(['web'])
             timeoutSeconds.set(60)
         }
 
         stackSpec.waitForRunning {
-            services.set(['cache', 'queue'])
+            waitForServices.set(['cache', 'queue'])
             timeoutSeconds.set(20)
         }
 
         task.composeFiles.from(composeFile)
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+        // Manually configure wait properties for both healthy and running
+        task.waitForHealthyServices.set(['web'])
+        task.waitForHealthyTimeoutSeconds.set(60)
+        task.waitForRunningServices.set(['cache', 'queue'])
+        task.waitForRunningTimeoutSeconds.set(20)
 
         def mockComposeState = new ComposeState([
             'web': new ServiceInfo('web-id', 'web', 'healthy', []),
@@ -661,13 +675,16 @@ class ComposeUpTaskTest extends Specification {
         stackSpec.projectName = 'test-project'
 
         stackSpec.waitForHealthy {
-            services.set(['web'])
+            waitForServices.set(['web'])
             timeoutSeconds.set(10)
         }
 
         task.composeFiles.from(composeFile)
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+        // Manually configure wait properties for this test
+        task.waitForHealthyServices.set(['web'])
+        task.waitForHealthyTimeoutSeconds.set(10)
 
         def mockComposeState = new ComposeState([
             'web': new ServiceInfo('web-id', 'web', 'starting', [])

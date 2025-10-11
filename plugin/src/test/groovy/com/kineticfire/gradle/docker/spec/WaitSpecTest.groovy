@@ -45,11 +45,11 @@ class WaitSpecTest extends Specification {
 
     def "services property works correctly"() {
         when:
-        waitSpec.services.set(['web', 'database', 'redis'])
+        waitSpec.waitForServices.set(['web', 'database', 'redis'])
 
         then:
-        waitSpec.services.present
-        waitSpec.services.get() == ['web', 'database', 'redis']
+        waitSpec.waitForServices.present
+        waitSpec.waitForServices.get() == ['web', 'database', 'redis']
     }
 
     def "timeoutSeconds property works correctly"() {
@@ -86,24 +86,24 @@ class WaitSpecTest extends Specification {
 
     def "complete configuration with all properties"() {
         when:
-        waitSpec.services.set(['app', 'db', 'cache'])
+        waitSpec.waitForServices.set(['app', 'db', 'cache'])
         waitSpec.timeoutSeconds.set(180)
         waitSpec.pollSeconds.set(10)
 
         then:
-        waitSpec.services.get() == ['app', 'db', 'cache']
+        waitSpec.waitForServices.get() == ['app', 'db', 'cache']
         waitSpec.timeoutSeconds.get() == 180
         waitSpec.pollSeconds.get() == 10
     }
 
     def "configuration with single service"() {
         when:
-        waitSpec.services.set(['web'])
+        waitSpec.waitForServices.set(['web'])
         waitSpec.timeoutSeconds.set(30)
         waitSpec.pollSeconds.set(1)
 
         then:
-        waitSpec.services.get() == ['web']
+        waitSpec.waitForServices.get() == ['web']
         waitSpec.timeoutSeconds.get() == 30
         waitSpec.pollSeconds.get() == 1
     }
@@ -112,22 +112,22 @@ class WaitSpecTest extends Specification {
 
     def "properties can be updated after initial configuration"() {
         when:
-        waitSpec.services.set(['initial'])
+        waitSpec.waitForServices.set(['initial'])
         waitSpec.timeoutSeconds.set(60)
         waitSpec.pollSeconds.set(2)
 
         then:
-        waitSpec.services.get() == ['initial']
+        waitSpec.waitForServices.get() == ['initial']
         waitSpec.timeoutSeconds.get() == 60
         waitSpec.pollSeconds.get() == 2
 
         when:
-        waitSpec.services.set(['updated', 'service2'])
+        waitSpec.waitForServices.set(['updated', 'service2'])
         waitSpec.timeoutSeconds.set(300)
         waitSpec.pollSeconds.set(15)
 
         then:
-        waitSpec.services.get() == ['updated', 'service2']
+        waitSpec.waitForServices.get() == ['updated', 'service2']
         waitSpec.timeoutSeconds.get() == 300
         waitSpec.pollSeconds.get() == 15
     }
@@ -163,16 +163,16 @@ class WaitSpecTest extends Specification {
     def "services is initially empty when not configured"() {
         expect:
         // ListProperty is typically present but empty by default
-        waitSpec.services.get().isEmpty()
+        waitSpec.waitForServices.get().isEmpty()
     }
 
     def "empty services list is supported"() {
         when:
-        waitSpec.services.set([])
+        waitSpec.waitForServices.set([])
 
         then:
-        waitSpec.services.present
-        waitSpec.services.get().isEmpty()
+        waitSpec.waitForServices.present
+        waitSpec.waitForServices.get().isEmpty()
     }
 
     def "various timeout values can be set"() {
@@ -196,11 +196,11 @@ class WaitSpecTest extends Specification {
         def servicesList = ['web', 'api', 'database', 'redis', 'elasticsearch', 'rabbitmq']
 
         when:
-        waitSpec.services.set(servicesList)
+        waitSpec.waitForServices.set(servicesList)
 
         then:
-        waitSpec.services.get() == servicesList
-        waitSpec.services.get().size() == 6
+        waitSpec.waitForServices.get() == servicesList
+        waitSpec.waitForServices.get().size() == 6
     }
 
     def "realistic waiting configurations"() {

@@ -16,13 +16,13 @@
 
 /**
  * Plugin Integration Tests Root Project
- * 
+ *
  * This project orchestrates all integration tests that demonstrate real usage patterns
  * of the gradle-docker plugin including:
  * - Docker operations (build, tag, save, publish) in docker/ subproject
- * - Docker Compose orchestration in compose/ subproject (future)
+ * - Docker Compose orchestration in dockerOrch/ subproject
  * - Application JAR building in app/ subproject (shared dependency)
- * 
+ *
  * Each major subproject represents a category of integration tests.
  */
 
@@ -34,26 +34,40 @@ version = '1.0.0'
 // Aggregate task to run all integration tests
 //   - Probably want to run 'cleanAll' before invoking this task
 tasks.register('integrationTest') {
-    description = 'Run all integration tests (Docker and Compose)'
+    description = 'Run all integration tests (Docker and DockerOrch)'
     group = 'verification'
-    
+
     // Ensure app is built first, then run all integration test categories
     dependsOn ':app:build'
     dependsOn ':docker:integrationTest'
-    
-    // Future compose integration tests:
-    // dependsOn ':compose:integrationTest'
+    dependsOn ':dockerOrch:integrationTest'
 }
 
-// Aggregate cleanup task  
+// Task to run only docker integration tests
+tasks.register('dockerIntegrationTest') {
+    description = 'Run docker integration tests only'
+    group = 'verification'
+
+    dependsOn ':app:build'
+    dependsOn ':docker:integrationTest'
+}
+
+// Task to run only dockerOrch integration tests
+tasks.register('dockerOrchIntegrationTest') {
+    description = 'Run dockerOrch integration tests only'
+    group = 'verification'
+
+    dependsOn ':app:build'
+    dependsOn ':dockerOrch:integrationTest'
+}
+
+// Aggregate cleanup task
 tasks.register('cleanAll') {
     description = 'Clean all integration test projects'
     group = 'build'
-    
+
     dependsOn ':app:clean'
     dependsOn ':docker:cleanAll'
-    
-    // Future compose integration tests:
-    // dependsOn ':compose:cleanAll'
+    dependsOn ':dockerOrch:clean'
 }
 

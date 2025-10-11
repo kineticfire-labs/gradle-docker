@@ -51,5 +51,14 @@ include 'docker:scenario-12'
 include 'docker:scenario-13'
 include 'docker:scenario-99'
 
-// Future: Include Compose integration tests
-// include 'compose'
+// Include DockerOrch integration tests
+include 'dockerOrch'
+include 'dockerOrch:scenario-1'
+include 'dockerOrch:scenario-1:app'
+include 'dockerOrch:scenario-1:app-image'
+include 'dockerOrch:scenario-2'
+include 'dockerOrch:scenario-3'
+include 'dockerOrch:scenario-4'
+include 'dockerOrch:scenario-5'
+include 'dockerOrch:scenario-6'
+include 'dockerOrch:scenario-7'

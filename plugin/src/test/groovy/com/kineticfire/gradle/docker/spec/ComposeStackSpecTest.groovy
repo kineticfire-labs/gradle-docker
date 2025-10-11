@@ -148,14 +148,14 @@ class ComposeStackSpecTest extends Specification {
     def "waitForRunning(Closure) configures wait spec"() {
         when:
         composeStack.waitForRunning {
-            services = ['web', 'db']
+            waitForServices = ['web', 'db']
             timeoutSeconds = 120
             pollSeconds = 5
         }
 
         then:
         composeStack.waitForRunning.present
-        composeStack.waitForRunning.get().services.get() == ['web', 'db']
+        composeStack.waitForRunning.get().waitForServices.get() == ['web', 'db']
         composeStack.waitForRunning.get().timeoutSeconds.get() == 120
         composeStack.waitForRunning.get().pollSeconds.get() == 5
     }
@@ -165,14 +165,14 @@ class ComposeStackSpecTest extends Specification {
         composeStack.waitForRunning(new Action<WaitSpec>() {
             @Override
             void execute(WaitSpec waitSpec) {
-                waitSpec.services.set(['api', 'worker'])
+                waitSpec.waitForServices.set(['api', 'worker'])
                 waitSpec.timeoutSeconds.set(180)
             }
         })
 
         then:
         composeStack.waitForRunning.present
-        composeStack.waitForRunning.get().services.get() == ['api', 'worker']
+        composeStack.waitForRunning.get().waitForServices.get() == ['api', 'worker']
         composeStack.waitForRunning.get().timeoutSeconds.get() == 180
         composeStack.waitForRunning.get().pollSeconds.get() == 2 // default
     }
@@ -182,14 +182,14 @@ class ComposeStackSpecTest extends Specification {
     def "waitForHealthy(Closure) configures wait spec"() {
         when:
         composeStack.waitForHealthy {
-            services = ['web']
+            waitForServices = ['web']
             timeoutSeconds = 300
             pollSeconds = 10
         }
 
         then:
         composeStack.waitForHealthy.present
-        composeStack.waitForHealthy.get().services.get() == ['web']
+        composeStack.waitForHealthy.get().waitForServices.get() == ['web']
         composeStack.waitForHealthy.get().timeoutSeconds.get() == 300
         composeStack.waitForHealthy.get().pollSeconds.get() == 10
     }
@@ -199,7 +199,7 @@ class ComposeStackSpecTest extends Specification {
         composeStack.waitForHealthy(new Action<WaitSpec>() {
             @Override
             void execute(WaitSpec waitSpec) {
-                waitSpec.services.set(['database'])
+                waitSpec.waitForServices.set(['database'])
                 waitSpec.timeoutSeconds.set(240)
                 waitSpec.pollSeconds.set(15)
             }
@@ -207,7 +207,7 @@ class ComposeStackSpecTest extends Specification {
 
         then:
         composeStack.waitForHealthy.present
-        composeStack.waitForHealthy.get().services.get() == ['database']
+        composeStack.waitForHealthy.get().waitForServices.get() == ['database']
         composeStack.waitForHealthy.get().timeoutSeconds.get() == 240
         composeStack.waitForHealthy.get().pollSeconds.get() == 15
     }
@@ -265,11 +265,11 @@ class ComposeStackSpecTest extends Specification {
         composeStack.environment.set(['STAGE': 'production', 'LOG_LEVEL': 'info'])
         composeStack.projectName.set('myproject-prod')
         composeStack.waitForRunning {
-            services = ['web', 'api']
+            waitForServices = ['web', 'api']
             timeoutSeconds = 120
         }
         composeStack.waitForHealthy {
-            services = ['db']
+            waitForServices = ['db']
             timeoutSeconds = 180
         }
         composeStack.logs {

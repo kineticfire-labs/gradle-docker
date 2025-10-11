@@ -14,31 +14,16 @@
  * limitations under the License.
  */
 
-package com.kineticfire.gradle.docker.spec
+package com.kineticfire.test;
 
-import org.gradle.api.Project
-import org.gradle.api.provider.ListProperty
-import org.gradle.api.provider.Property
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
 
-import javax.inject.Inject
+@SpringBootTest
+class ApplicationTest {
 
-/**
- * Specification for waiting on Docker services
- */
-abstract class WaitSpec {
-    
-    private final Project project
-    
-    @Inject
-    WaitSpec(Project project) {
-        this.project = project
-        
-        // Set defaults
-        timeoutSeconds.convention(60)
-        pollSeconds.convention(2)
+    @Test
+    void contextLoads() {
+        // Verify Spring context loads
     }
-    
-    abstract ListProperty<String> getWaitForServices()
-    abstract Property<Integer> getTimeoutSeconds()
-    abstract Property<Integer> getPollSeconds()
 }

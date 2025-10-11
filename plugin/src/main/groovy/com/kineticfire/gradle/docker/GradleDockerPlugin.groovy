@@ -588,18 +588,18 @@ class GradleDockerPlugin implements Plugin<Project> {
     private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {
         task.group = 'docker compose'
         task.description = "Start Docker Compose stack: ${stackSpec.name}"
-        
+
         // Configure service dependency
         task.composeService.set(composeService)
-        
+
         // Configure compose files with multi-file support and backward compatibility
         // Use provider transformation to avoid configuration cache violations
         task.composeFiles.setFrom(createComposeFilesProvider(stackSpec, task.project))
-        
+
         if (stackSpec.envFiles && !stackSpec.envFiles.empty) {
             task.envFiles.setFrom(stackSpec.envFiles)
         }
-        
+
         // Configure project and stack names with property override support
         // Capture project name property during configuration to avoid project access during execution
         def projectNameProperty = task.project.findProperty("compose.project.name")
@@ -607,6 +607,29 @@ class GradleDockerPlugin implements Plugin<Project> {
             projectNameProperty ?: stackSpec.projectName.getOrElse(stackSpec.name)
         })
         task.stackName.set(stackSpec.name)
+
+        // Configure output directory for state files (Gradle 10 compatibility)
+        task.outputDirectory.set(task.project.layout.buildDirectory.dir('compose-state'))
+
+        // Configure wait-for-healthy settings (Gradle 10 compatibility)
+        if (stackSpec.waitForHealthy.present) {
+            def waitSpec = stackSpec.waitForHealthy.get()
+            if (waitSpec.waitForServices.present) {
+                task.waitForHealthyServices.set(waitSpec.waitForServices)
+            }
+            task.waitForHealthyTimeoutSeconds.set(waitSpec.timeoutSeconds.getOrElse(60))
+            task.waitForHealthyPollSeconds.set(waitSpec.pollSeconds.getOrElse(2))
+        }
+
+        // Configure wait-for-running settings (Gradle 10 compatibility)
+        if (stackSpec.waitForRunning.present) {
+            def waitSpec = stackSpec.waitForRunning.get()
+            if (waitSpec.waitForServices.present) {
+                task.waitForRunningServices.set(waitSpec.waitForServices)
+            }
+            task.waitForRunningTimeoutSeconds.set(waitSpec.timeoutSeconds.getOrElse(60))
+            task.waitForRunningPollSeconds.set(waitSpec.pollSeconds.getOrElse(2))
+        }
     }
     
     private void configureComposeDownTask(task, stackSpec, composeService) {

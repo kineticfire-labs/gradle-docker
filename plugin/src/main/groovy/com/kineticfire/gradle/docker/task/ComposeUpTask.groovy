@@ -24,12 +24,15 @@ import com.kineticfire.gradle.docker.service.ComposeService
 import groovy.json.JsonBuilder
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 
 import java.time.Duration
@@ -60,7 +63,34 @@ abstract class ComposeUpTask extends DefaultTask {
     
     @Input
     abstract Property<String> getStackName()
-    
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @Input
+    @Optional
+    abstract ListProperty<String> getWaitForHealthyServices()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForHealthyTimeoutSeconds()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForHealthyPollSeconds()
+
+    @Input
+    @Optional
+    abstract ListProperty<String> getWaitForRunningServices()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForRunningTimeoutSeconds()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForRunningPollSeconds()
+
     @TaskAction
     void composeUp() {
         def projectName = this.projectName.get()
@@ -85,7 +115,7 @@ abstract class ComposeUpTask extends DefaultTask {
 
             composeState.services.each { serviceName, serviceInfo ->
                 logger.info("  Service '{}': {} ({})", serviceName,
-                    serviceInfo.state, serviceInfo.ports.collect { "${it.hostPort}:${it.containerPort}" }.join(', '))
+                    serviceInfo.state, serviceInfo.publishedPorts.collect { "${it.hostPort}:${it.containerPort}" }.join(', '))
             }
 
             // Wait for services to be ready
@@ -103,56 +133,48 @@ abstract class ComposeUpTask extends DefaultTask {
      * Wait for services to reach desired state if configured
      */
     private void performWaitIfConfigured(String stackName, String projectName) {
-        def dockerOrchExt = project.extensions.findByName('dockerOrch')
-        if (!dockerOrchExt) {
-            return
+        // Wait for healthy services (configured during configuration phase)
+        if (waitForHealthyServices.isPresent() && !waitForHealthyServices.get().isEmpty()) {
+            def services = waitForHealthyServices.get()
+            def timeoutSeconds = waitForHealthyTimeoutSeconds.getOrElse(60)
+            def pollSeconds = waitForHealthyPollSeconds.getOrElse(2)
+
+            logger.lifecycle("Waiting for services to be HEALTHY: {}", services)
+
+            def waitConfig = new WaitConfig(
+                projectName,
+                services,
+                Duration.ofSeconds(timeoutSeconds),
+                Duration.ofSeconds(pollSeconds),
+                ServiceStatus.HEALTHY
+            )
+
+            def waitFuture = composeService.get().waitForServices(waitConfig)
+            waitFuture.get()
+
+            logger.lifecycle("All services are HEALTHY")
         }
 
-        def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
-        if (!stackSpec) {
-            return
-        }
+        // Wait for running services (configured during configuration phase)
+        if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
+            def services = waitForRunningServices.get()
+            def timeoutSeconds = waitForRunningTimeoutSeconds.getOrElse(60)
+            def pollSeconds = waitForRunningPollSeconds.getOrElse(2)
 
-        // Wait for healthy services
-        if (stackSpec.waitForHealthy.present) {
-            def waitSpec = stackSpec.waitForHealthy.get()
-            if (waitSpec.services.present && !waitSpec.services.get().isEmpty()) {
-                logger.lifecycle("Waiting for services to be HEALTHY: {}", waitSpec.services.get())
+            logger.lifecycle("Waiting for services to be RUNNING: {}", services)
 
-                def waitConfig = new WaitConfig(
-                    projectName,
-                    waitSpec.services.get(),
-                    Duration.ofSeconds(waitSpec.timeoutSeconds.getOrElse(60)),
-                    Duration.ofSeconds(waitSpec.pollSeconds.getOrElse(2)),
-                    ServiceStatus.HEALTHY
-                )
+            def waitConfig = new WaitConfig(
+                projectName,
+                services,
+                Duration.ofSeconds(timeoutSeconds),
+                Duration.ofSeconds(pollSeconds),
+                ServiceStatus.RUNNING
+            )
 
-                def waitFuture = composeService.get().waitForServices(waitConfig)
-                waitFuture.get()
+            def waitFuture = composeService.get().waitForServices(waitConfig)
+            waitFuture.get()
 
-                logger.lifecycle("All services are HEALTHY")
-            }
-        }
-
-        // Wait for running services
-        if (stackSpec.waitForRunning.present) {
-            def waitSpec = stackSpec.waitForRunning.get()
-            if (waitSpec.services.present && !waitSpec.services.get().isEmpty()) {
-                logger.lifecycle("Waiting for services to be RUNNING: {}", waitSpec.services.get())
-
-                def waitConfig = new WaitConfig(
-                    projectName,
-                    waitSpec.services.get(),
-                    Duration.ofSeconds(waitSpec.timeoutSeconds.getOrElse(60)),
-                    Duration.ofSeconds(waitSpec.pollSeconds.getOrElse(2)),
-                    ServiceStatus.RUNNING
-                )
-
-                def waitFuture = composeService.get().waitForServices(waitConfig)
-                waitFuture.get()
-
-                logger.lifecycle("All services are RUNNING")
-            }
+            logger.lifecycle("All services are RUNNING")
         }
     }
 
@@ -160,8 +182,7 @@ abstract class ComposeUpTask extends DefaultTask {
      * Generate state file for test consumption
      */
     private void generateStateFile(String stackName, String projectName, ComposeState composeState) {
-        def buildDir = project.layout.buildDirectory.get().asFile
-        def stateDir = new File(buildDir, "compose-state")
+        def stateDir = outputDirectory.get().asFile
         stateDir.mkdirs()
 
         def stateFile = new File(stateDir, "${stackName}-state.json")
@@ -178,7 +199,7 @@ abstract class ComposeUpTask extends DefaultTask {
                         containerId: serviceInfo.containerId,
                         containerName: serviceInfo.containerName ?: "${serviceName}-${projectName}-1",
                         state: serviceInfo.state,
-                        publishedPorts: serviceInfo.ports.collect { port ->
+                        publishedPorts: serviceInfo.publishedPorts.collect { port ->
                             [
                                 container: port.containerPort,
                                 host: port.hostPort,
