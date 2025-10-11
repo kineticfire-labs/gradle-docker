@@ -29,25 +29,23 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
     'docker' DSL tasks in @plugin-integration-test/docker/ .  Understand usage for the 'docker' DSL task at @docs/usage/usage-docker.md .  Understand and use the common integration
     test capabilities in the buildSrc at @plugin-integration-test/buildSrc/ .
 
-    Your task is to write a new integration test, called 'scenario-12' at @plugin-integration-test/docker/scenario-12/ , that must provide an integration test using a build.gradle
+    Your task is to write a new integration test, called 'scenario-13' at @plugin-integration-test/docker/scenario-13/ , that must provide an integration test using a build.gradle
   file
     for these aspects:
   - We are going to test the "Source Ref Mode" to define an image.  You can see an examples:
        - using "Image Name Mode: sourceRefRegistry, sourceRefNamespace, sourceRefImageName, sourceRefTag" at @plugin-integration-test/docker/scenario-5/ .
        - using the full image reference 'sourceRef' at @plugin-integration-test/docker/scenario-9/ .
-  - Define the image using the "Image Name Mode: sourceRefNamespace, sourceRefImageName, sourceRefTag"
+  - Define the image using the "Repository Mode: sourceRefRepository, sourceRefTag"
       - since we are not defining the registry, then the image must exist local.  so there should be a check that the image is local else pull it.  There are integration test helpers
         in build source (buildSrc) that can probably help with this.
       - pick a tag like "latest", because picking a specific version like "1.27" could be aged off and no longer available
   - Omit 'pullingIfMissing' which will default to 'false'.  If the image isn't local, then it can't be pulled since there is no registry.
   - Do not create additional tags for the image
-  - Save the image to the filesystem using compression type of 'zip'
-  - Publish the image to a local, private registry that DOES require authentication
-      - Use "Repository Mode: repository, 1 tag" mode to define the image to publish
-      - Use port 5120 for the registry so as not conflict with other tests
+  - Do not save the image
+  - Do not publish the image
   - I should be able to run the integration test from the @plugin-integration-test/ directory using:
-     - ./gradlew -Pplugin_version=1.0.0  cleanAll integrationTest
-     - ./gradlew -Pplugin_version=1.0.0 docker:scenario-12:clean docker:scenario-12:integrationTest
+     - ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
+     - ./gradlew -Pplugin_version=1.0.0 docker:scenario-13:clean docker:scenario-13:integrationTest
 
   Acceptance criteria is that the integration test passes.
 

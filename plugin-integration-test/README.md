@@ -125,13 +125,14 @@ When using public images (e.g., those from Docker Hub), integration tests must u
   another test uses `haproxy:latest`.  Note that DockerHub images do not have an explicit registry. These must be 
   recorded in the table below to track.
 
-| Registry | Repository | Image Name | Image Tag | `docker` or `dockerOrch` | Integration Test |
-|----------|------------|------------|-----------|--------------------------|------------------|
-|          |            | httpd      | latest    | `docker`                 | scenario-5       |
-|          |            | nginx      | latest    | `docker`                 | scenario-9       |
-|          |            | alpine     | latest    | `docker`                 | scenario-10      |
-|          |            | php        | latest    | `docker`                 | scenario-11      |
-|          |            | haproxy    | latest    | `docker`                 | scenario-12      |
+| Registry | Repository | Image Name   | Image Tag | `docker` or `dockerOrch` | Integration Test |
+|----------|------------|--------------|-----------|--------------------------|------------------|
+|          |            | httpd        | latest    | `docker`                 | scenario-5       |
+|          |            | nginx        | latest    | `docker`                 | scenario-9       |
+|          |            | alpine       | latest    | `docker`                 | scenario-10      |
+|          |            | php          | latest    | `docker`                 | scenario-11      |
+|          |            | haproxy      | latest    | `docker`                 | scenario-12      |
+|          | apache     | kafka-native | latest    | `docker`                 | scenario-13      |
 
 
 

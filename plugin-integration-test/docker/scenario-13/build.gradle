@@ -1,0 +1,117 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - SourceRef Mode
+ *       - Repository Mode: sourceRefRepository, sourceRefTag
+ *   - Tag Features
+ *       - none
+ *   - Save Features
+ *       - none
+ *   - Publish Features
+ *       - none
+ *   - pullIfMissing
+ *       - not set (defaults to false) && image IS local
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+// Ensure integration tests are run from top-level only
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ Scenario-13 integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../../..').canonicalPath}
+   ./gradlew docker:scenario-13:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+
+    // Stop here - don't configure anything else
+    return
+}
+
+group = 'com.kineticfire.gradle.docker.integration'
+version = '1.0.0'
+
+docker {
+    images {
+        kafkaTest {
+            // SourceRef mode using Repository Mode components
+            // Tests Repository Mode: sourceRefRepository + sourceRefTag (without registry)
+            sourceRefRepository.set('apache/kafka-native')
+            sourceRefTag.set('latest')
+            // Effective sourceRef: apache/kafka-native:latest (local only, no registry)
+
+            // pullIfMissing defaults to false - image must exist locally
+            // (ensured by ensureSourceImage task below)
+
+            // No tags block - no additional tagging
+            // No save block - no save operation
+            // No publish block - no publish operation
+        }
+    }
+}
+
+// ============================================================================
+// INTEGRATION TEST VERIFICATION TASKS
+// ============================================================================
+
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Ensure the source image exists locally for sourceRef testing with pullIfMissing=false (default)
+// This task will pull apache/kafka-native:latest if it doesn't exist, ensuring the test can run
+tasks.register('ensureSourceImage', EnsureDockerImageTask) {
+    imageRef.set('apache/kafka-native:latest')
+    reason.set('Required for sourceRef Repository Mode testing')
+    description = 'Ensure apache/kafka-native:latest exists locally for sourceRef test'
+    group = 'docker'
+}
+
+// No build workflow tasks since this uses existing image (sourceRef mode)
+
+// Note: We skip build args verification for this test because:
+// 1. This test focuses on Repository Mode sourceRef functionality, not build args
+// 2. The apache/kafka-native image is a third-party image with build args that may change over time
+// 3. Build args verification is more relevant for images we build ourselves (Build Mode tests)
+
+// Note: apache/kafka-native may or may not have labels depending on the image version
+// Skip label verification for this test as we're only testing the Repository Mode sourceRef
+
+// Task that runs integration test workflow (sourceRef mode)
+tasks.register('integrationTest') {
+    description = 'Run sourceRef Repository Mode test: ensure local → verify (no operations)'
+    group = 'verification'
+
+    // Dependencies for sourceRef mode (no build needed)
+    dependsOn 'ensureSourceImage'      // Ensure source image exists locally
+    dependsOn 'dockerImages'           // This will complete without operations (no build/tag/save/publish)
+}
+
+// Configure task ordering without direct task references
+tasks.named('dockerImages') { mustRunAfter 'ensureSourceImage' }
