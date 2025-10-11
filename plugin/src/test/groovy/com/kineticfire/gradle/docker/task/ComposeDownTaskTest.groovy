@@ -20,6 +20,7 @@ import com.kineticfire.gradle.docker.GradleDockerPlugin
 import com.kineticfire.gradle.docker.model.ComposeConfig
 import com.kineticfire.gradle.docker.model.LogsConfig
 import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.spec.LogsSpec
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -733,5 +734,43 @@ class ComposeDownTaskTest extends Specification {
         then:
         noExceptionThrown()
         logFile.exists()
+    }
+
+    def "composeDown captures logs when services property not set at all"() {
+        given:
+        project.pluginManager.apply(GradleDockerPlugin)
+
+        def logFile = project.file('build/logs/no-services.log')
+        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        stackSpec.files.from(project.file('docker-compose.yml'))
+        stackSpec.projectName = 'test-project'
+
+        // Create logs spec using Action API and explicitly do NOT set services property
+        stackSpec.logs {
+            writeTo.set(logFile)
+            tailLines.set(75)
+            // Intentionally NOT setting services - services.present should be false
+        }
+
+        task.projectName.set('test-project')
+        task.stackName.set('testStack')
+
+        def mockLogs = "Logs without services filter"
+
+        and:
+        1 * mockComposeService.downStack('test-project') >> CompletableFuture.completedFuture(null)
+        1 * mockComposeService.captureLogs('test-project', _ as LogsConfig) >> { String projectName, LogsConfig config ->
+            assert config.tailLines == 75
+            assert config.services.isEmpty() // Should use empty list when services.present is false
+            return CompletableFuture.completedFuture(mockLogs)
+        }
+
+        when:
+        task.composeDown()
+
+        then:
+        noExceptionThrown()
+        logFile.exists()
+        logFile.text == mockLogs
     }
 }

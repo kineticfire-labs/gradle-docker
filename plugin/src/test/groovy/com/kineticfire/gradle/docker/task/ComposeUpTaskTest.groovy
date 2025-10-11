@@ -24,6 +24,7 @@ import com.kineticfire.gradle.docker.model.ServiceState
 import com.kineticfire.gradle.docker.model.ServiceStatus
 import com.kineticfire.gradle.docker.model.WaitConfig
 import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.spec.WaitSpec
 import groovy.json.JsonSlurper
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
@@ -509,6 +510,183 @@ class ComposeUpTaskTest extends Specification {
         then:
         1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
         0 * mockComposeService.waitForServices(_ as WaitConfig)
+    }
+
+    def "composeUp waits for healthy services with non-empty service list"() {
+        given:
+        project.pluginManager.apply(GradleDockerPlugin)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        // Configure dockerOrch extension with services explicitly set
+        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        stackSpec.files.from(composeFile)
+        stackSpec.projectName = 'test-project'
+
+        stackSpec.waitForHealthy {
+            services.set(['web', 'api'])
+            timeoutSeconds.set(45)
+            pollSeconds.set(3)
+        }
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('test-project')
+        task.stackName.set('testStack')
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'healthy', []),
+            'api': new ServiceInfo('api-id', 'api', 'healthy', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
+            assert config.projectName == 'test-project'
+            assert config.services == ['web', 'api']
+            assert config.timeout.seconds == 45
+            assert config.pollInterval.seconds == 3
+            assert config.targetState == ServiceStatus.HEALTHY
+            return CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        }
+    }
+
+    def "composeUp waits for running services with non-empty service list"() {
+        given:
+        project.pluginManager.apply(GradleDockerPlugin)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        // Configure dockerOrch extension with services explicitly set
+        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        stackSpec.files.from(composeFile)
+        stackSpec.projectName = 'test-project'
+
+        stackSpec.waitForRunning {
+            services.set(['redis', 'postgres'])
+            timeoutSeconds.set(30)
+        }
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('test-project')
+        task.stackName.set('testStack')
+
+        def mockComposeState = new ComposeState([
+            'redis': new ServiceInfo('redis-id', 'redis', 'running', []),
+            'postgres': new ServiceInfo('postgres-id', 'postgres', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
+            assert config.projectName == 'test-project'
+            assert config.services == ['redis', 'postgres']
+            assert config.timeout.seconds == 30
+            assert config.pollInterval.seconds == 2  // default
+            assert config.targetState == ServiceStatus.RUNNING
+            return CompletableFuture.completedFuture(ServiceStatus.RUNNING)
+        }
+    }
+
+    def "composeUp waits for both healthy and running services when both configured with non-empty lists"() {
+        given:
+        project.pluginManager.apply(GradleDockerPlugin)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        // Configure dockerOrch extension with both wait specs having services
+        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        stackSpec.files.from(composeFile)
+        stackSpec.projectName = 'test-project'
+
+        stackSpec.waitForHealthy {
+            services.set(['web'])
+            timeoutSeconds.set(60)
+        }
+
+        stackSpec.waitForRunning {
+            services.set(['cache', 'queue'])
+            timeoutSeconds.set(20)
+        }
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('test-project')
+        task.stackName.set('testStack')
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'healthy', []),
+            'cache': new ServiceInfo('cache-id', 'cache', 'running', []),
+            'queue': new ServiceInfo('queue-id', 'queue', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+
+        and: "wait for healthy services is called"
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
+            assert config.targetState == ServiceStatus.HEALTHY
+            assert config.services == ['web']
+            return CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        }
+
+        and: "wait for running services is called"
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
+            assert config.targetState == ServiceStatus.RUNNING
+            assert config.services == ['cache', 'queue']
+            return CompletableFuture.completedFuture(ServiceStatus.RUNNING)
+        }
+    }
+
+    def "composeUp handles wait failure gracefully and propagates exception"() {
+        given:
+        project.pluginManager.apply(GradleDockerPlugin)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        // Configure wait with services
+        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        stackSpec.files.from(composeFile)
+        stackSpec.projectName = 'test-project'
+
+        stackSpec.waitForHealthy {
+            services.set(['web'])
+            timeoutSeconds.set(10)
+        }
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('test-project')
+        task.stackName.set('testStack')
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'starting', [])
+        ])
+
+        and:
+        def waitException = new RuntimeException("Timeout waiting for services")
+        def failedWaitFuture = CompletableFuture.failedFuture(waitException)
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> failedWaitFuture
+
+        and:
+        def thrown = thrown(RuntimeException)
+        thrown.message.contains("Failed to start compose stack")
     }
 
     // ===== STATE FILE GENERATION TESTS =====
