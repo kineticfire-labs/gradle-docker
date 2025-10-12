@@ -16,9 +16,10 @@ To correctly run all integration tests:
 ```
 
 **Why both commands?**
-- `cleanAll` ensures Docker images are removed and all projects are cleaned
-- `integrationTest` runs the actual tests  
-- Running `cleanAll` first prevents Gradle from marking tasks as up-to-date when they should re-run
+- `cleanAll` ensures Docker images are removed and all projects are cleaned, prevents Gradle from marking tasks as 
+  up-to-date when they should re-run
+- `integrationTest` runs the actual tests   
+
 
 ## What Gets Tested
 
@@ -28,6 +29,10 @@ The `integrationTest` task runs integration tests from all subprojects:
 - `plugin-integration-test/dockerOrch/*`
    - mid-level aggregator for 'docker compose' type commands for testing a Docker image using `composeUp`/`composeDown` 
      for the `dockerOrch` task
+
+Note that `integrationTest` does NOT run integration tests for publishing to public image repositories, like Docker Hub,
+for the `docker` task.  See 
+[Run Integration Tests That Publish to Public Image Repositories](#run-integration-tests-that-publish-to-public-image-repositories).
 
 ## Integration Test Structure
 
@@ -52,46 +57,30 @@ plugin-integration-test/    # all integration tests:  top-level aggregator
 
 ## dockerOrch Test Organization
 
-The `dockerOrch/` tests are organized into two distinct categories:
+The `dockerOrch/` tests are organized into two categories:
 
 ### Verification Tests (`dockerOrch/verification/`)
 
-**Purpose**: Validate plugin mechanics (for plugin developers)
+Tests that validate plugin mechanics using internal validators from `buildSrc/`. These tests verify that the plugin
+infrastructure works correctly (container states, state files, cleanup, etc.).
 
-These tests use internal validators from `buildSrc/` to verify the plugin infrastructure works correctly. They test
-features that users typically wouldn't test directly.
-
-**⚠️ Important**: Do NOT copy these tests for your own projects. See `dockerOrch/examples/` for user-facing
+**⚠️ Important**: Do NOT copy these tests for your projects. See `dockerOrch/examples/` for user-facing
 demonstrations.
-
-| Scenario | Location | Status | Lifecycle | Plugin Features Tested |
-|----------|----------|--------|-----------|------------------------|
-| Basic | `verification/basic/` | ✅ Complete | SUITE | composeUp, composeDown, state files, port mapping, cleanup |
-| Wait Healthy | `verification/wait-healthy/` | ⏳ Planned | SUITE | waitForHealthy, health check timing, timeout handling |
-| Wait Running | `verification/wait-running/` | ⏳ Planned | SUITE | waitForRunning, running state detection |
-| Mixed Wait | `verification/mixed-wait/` | ⏳ Planned | SUITE | Both wait types together (app + database) |
-| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned | SUITE | Class-level lifecycle (suite), setupSpec/cleanupSpec |
-| Lifecycle Test | `verification/lifecycle-test/` | ⏳ Planned | TEST | Method-level lifecycle (test), setup/cleanup |
-| Logs Capture | `verification/logs-capture/` | ⏳ Planned | SUITE | Log capture configuration, file generation |
-| Multi Service | `verification/multi-service/` | ⏳ Planned | SUITE | Complex orchestration (3+ services) |
-| Existing Images | `verification/existing-images/` | ⏳ Planned | SUITE | Public images (nginx, redis), sourceRef pattern |
 
 ### Example Tests (`dockerOrch/examples/`)
 
-**Purpose**: Demonstrate real-world usage (for plugin users)
-
-These tests show how real users would test their applications using standard testing libraries. Each example serves as
-living documentation and a copy-paste template.
+Real-world usage demonstrations showing how to test applications using standard testing libraries (RestAssured, JDBC,
+Kafka client). These are designed to be copied and adapted for your projects.
 
 **✅ Recommended**: Copy and adapt these for your own projects!
 
-| Example | Location | Status | Lifecycle | Use Case | Testing Libraries |
-|---------|----------|--------|-----------|----------|-------------------|
-| Web App | `examples/web-app/` | ✅ Complete | SUITE | REST API testing | RestAssured, HTTP client |
-| Database App | `examples/database-app/` | ⏳ Planned | SUITE | Database integration | JDBC, JPA, Spring Data |
-| Microservices | `examples/microservices/` | ⏳ Planned | SUITE | Service orchestration | RestAssured, service discovery |
-| Kafka App | `examples/kafka-app/` | ⏳ Planned | SUITE | Event-driven architecture | Kafka client, TestProducer/Consumer |
-| Batch Job | `examples/batch-job/` | ⏳ Planned | SUITE | Scheduled processing | Spring Batch, JDBC |
+**For detailed scenario tracking and documentation**, see [`dockerOrch/README.md`](dockerOrch/README.md).
+
+## docker Test Organization
+
+All `docker` related tests (build, tag, save, and publish) are at `docker/`.
+
+**For detailed scenario tracking and documentation**, see [`docker/README.md`](docker/README.md).
 
 ## Task Organization
 
@@ -119,11 +108,20 @@ living documentation and a copy-paste template.
 **All commands must be run from `/plugin-integration-test/` directory:**
 
 ```bash
-# Run all integration tests
+# Run ALL integration tests (docker + dockerOrch)
 ./gradlew -Pplugin_version=<version> cleanAll integrationTest
 
-# Run all Docker integration tests
+# Run all Docker integration tests (build, tag, save, publish)
 ./gradlew -Pplugin_version=<version> docker:integrationTest
+
+# Run all dockerOrch integration tests (compose up/down)
+./gradlew -Pplugin_version=<version> dockerOrch:integrationTest
+
+# Run all dockerOrch verification tests (plugin mechanics validation)
+./gradlew -Pplugin_version=<version> dockerOrch:verification:integrationTest
+
+# Run all dockerOrch example tests (user-facing demonstrations)
+./gradlew -Pplugin_version=<version> dockerOrch:examples:integrationTest
 
 # Run specific Docker scenario
 ./gradlew -Pplugin_version=<version> docker:scenario-1:integrationTest
@@ -134,8 +132,16 @@ living documentation and a copy-paste template.
 ./gradlew -Pplugin_version=<version> docker:scenario-6:integrationTest
 ./gradlew -Pplugin_version=<version> docker:scenario-7:integrationTest
 
+# Run specific dockerOrch verification test
+./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:integrationTest
+
+# Run specific dockerOrch example test
+./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:integrationTest
+
 # Run with clean for specific scenario
 ./gradlew -Pplugin_version=<version> docker:scenario-1:clean docker:scenario-1:integrationTest
+./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:clean dockerOrch:verification:basic:integrationTest
+./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:clean dockerOrch:examples:web-app:integrationTest
 
 # Run all Docker tests with clean
 ./gradlew -Pplugin_version=<version> docker:cleanAll docker:integrationTest

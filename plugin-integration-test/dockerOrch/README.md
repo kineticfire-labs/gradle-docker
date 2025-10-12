@@ -1,44 +1,152 @@
-# Integration Test Coverage - 'dockerOrch' Task
+# dockerOrch Integration Tests
 
-This document tracks integration test scenarios for the `dockerOrch` task.
+Integration tests for the `dockerOrch` task (Docker Compose orchestration).
 
-## Test Philosophy
+## Purpose
 
-These integration tests:
-1. **Mirror real-world usage**: Build app → Build image → Orchestrate → Test → Teardown
-2. **Double as examples**: Users can copy scenarios as starting points
-3. **Use real Docker**: No mocks, actual containers
-4. **Validate Phase 1 work**: End-to-end testing of wait, logs, state files
-5. **Are Gradle 9/10 compatible**: Build cache, configuration cache, version catalogs
+These integration tests validate the `dockerOrch` plugin functionality by:
+1. **Running real Docker Compose stacks** - No mocks, actual containers
+2. **Testing real-world scenarios** - Build → Compose Up → Test → Compose Down
+3. **Demonstrating plugin usage** - Users can copy scenarios as examples
+4. **Validating wait mechanisms** - `waitForHealthy` and `waitForRunning` functionality
+5. **Ensuring Gradle 9/10 compatibility** - Build cache, configuration cache, Provider API
 
-## Scenario Coverage Matrix
+## Test Organization
 
-| Scenario | User Story | Image Source | Wait Config | Test Lang | Lifecycle | Logs | Status |
-|----------|-----------|--------------|-------------|-----------|-----------|------|--------|
-| 1 | Web app build + test | Built (docker DSL) | HEALTHY | Groovy | Suite | ❌ | TODO |
-| 2 | App + database | Built + postgres | RUNNING + HEALTHY | Java | Suite | ❌ | TODO |
-| 3 | Microservices | Multiple built | Mixed | Groovy | Suite | ❌ | TODO |
-| 4 | Existing images | sourceRef only | RUNNING | Groovy | Suite | ❌ | TODO |
-| 5 | Class lifecycle | Built | HEALTHY | Java | Class | ❌ | TODO |
-| 6 | Method lifecycle | Built | HEALTHY | Java | Method | ❌ | TODO |
-| 7 | Logs capture | Built | HEALTHY | Groovy | Suite | ✅ | TODO |
+The `dockerOrch/` tests are organized into two distinct categories:
 
-## Plugin Feature Coverage
+### Verification Tests (`verification/`)
 
-| Feature | Tested By Scenarios | Notes |
-|---------|---------------------|-------|
-| `composeUp` task | All | Start containers |
-| `composeDown` task | All | Stop and remove containers |
-| `waitForHealthy` | 1, 2, 3, 5, 6, 7 | Wait for HEALTHY status |
-| `waitForRunning` | 2, 4 | Wait for RUNNING status (no health check) |
-| Mixed wait states | 2, 3 | Some HEALTHY, some RUNNING |
-| `logs` capture | 7 | Automatic log capture on teardown |
-| State file generation | All | JSON state in build/compose-state/ |
-| State file consumption | All | Tests read state file for ports/IDs |
-| JUnit class extension | 5 | `@ExtendWith(DockerComposeClassExtension)` |
-| JUnit method extension | 6 | `@ExtendWith(DockerComposeMethodExtension)` |
-| Integration with `docker` DSL | 1, 2, 3, 5, 6, 7 | Build image then orchestrate |
-| Using existing images | 2 (postgres), 4 (all) | Reference public images |
+**Purpose**: Validate plugin mechanics (for plugin developers)
+
+These tests use internal validators from `buildSrc/` to verify the plugin infrastructure works correctly. They test
+features that users typically wouldn't test directly.
+
+**⚠️ Important**: Do NOT copy these tests for your own projects. See `examples/` for user-facing demonstrations.
+
+| Scenario        | Location                        | Status     | Lifecycle | Plugin Features Tested                                     |
+|-----------------|---------------------------------|------------|-----------|------------------------------------------------------------|
+| Basic           | `verification/basic/`           | ✅ Complete | SUITE     | composeUp, composeDown, state files, port mapping, cleanup |
+| Wait Healthy    | `verification/wait-healthy/`    | ⏳ Planned  | SUITE     | waitForHealthy, health check timing, timeout handling      |
+| Wait Running    | `verification/wait-running/`    | ⏳ Planned  | SUITE     | waitForRunning, running state detection                    |
+| Mixed Wait      | `verification/mixed-wait/`      | ⏳ Planned  | SUITE     | Both wait types together (app + database)                  |
+| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned  | SUITE     | Class-level lifecycle (suite), setupSpec/cleanupSpec       |
+| Lifecycle Test  | `verification/lifecycle-test/`  | ⏳ Planned  | TEST      | Method-level lifecycle (test), setup/cleanup               |
+| Logs Capture    | `verification/logs-capture/`    | ⏳ Planned  | SUITE     | Log capture configuration, file generation                 |
+| Multi Service   | `verification/multi-service/`   | ⏳ Planned  | SUITE     | Complex orchestration (3+ services)                        |
+| Existing Images | `verification/existing-images/` | ⏳ Planned  | SUITE     | Public images (nginx, redis), sourceRef pattern            |
+
+**Lifecycle Types:**
+- **SUITE** - Containers start once (setupSpec), all tests run, containers stop once (cleanupSpec)
+- **TEST** - Containers start/stop for each test method (setup/cleanup)
+
+### Example Tests (`examples/`)
+
+**Purpose**: Demonstrate real-world usage (for plugin users)
+
+These tests show how real users would test their applications using standard testing libraries. Each example serves as
+living documentation and a copy-paste template.
+
+**✅ Recommended**: Copy and adapt these for your own projects!
+
+| Example       | Location                  | Status     | Lifecycle | Use Case                  | Testing Libraries                   |
+|---------------|---------------------------|------------|-----------|---------------------------|-------------------------------------|
+| Web App       | `examples/web-app/`       | ✅ Complete | SUITE     | REST API testing          | RestAssured, HTTP client            |
+| Database App  | `examples/database-app/`  | ⏳ Planned  | SUITE     | Database integration      | JDBC, JPA, Spring Data              |
+| Microservices | `examples/microservices/` | ⏳ Planned  | SUITE     | Service orchestration     | RestAssured, service discovery      |
+| Kafka App     | `examples/kafka-app/`     | ⏳ Planned  | SUITE     | Event-driven architecture | Kafka client, TestProducer/Consumer |
+| Batch Job     | `examples/batch-job/`     | ⏳ Planned  | SUITE     | Scheduled processing      | Spring Batch, JDBC                  |
+
+## Task Organization
+
+**Task Names:**
+- Integration tests are identified by task name `integrationTest` (not by group)
+- Each subproject has its own `integrationTest` task
+- The root `integrationTest` depends on all subproject integration tests
+
+**Task Groups:**
+- `verification` group contains Docker verification tasks (`cleanDockerImages`, `verifyDockerImages`)
+- `build` group contains cleanup tasks (`cleanAll`)
+
+**Generated Tasks:**
+- `composeUp<StackName>` - Start Docker Compose stack
+- `composeDown<StackName>` - Stop and remove Docker Compose stack
+- Each stack defined in `dockerOrch { composeStacks { ... } }` generates these tasks
+
+## Running dockerOrch Tests
+
+**⚠️ All commands must be run from `/plugin-integration-test/` directory.**
+
+```bash
+# Run all dockerOrch integration tests (verification + examples)
+./gradlew -Pplugin_version=<version> dockerOrch:integrationTest
+
+# Run all verification tests (plugin mechanics validation)
+./gradlew -Pplugin_version=<version> dockerOrch:verification:integrationTest
+
+# Run all example tests (user-facing demonstrations)
+./gradlew -Pplugin_version=<version> dockerOrch:examples:integrationTest
+
+# Run specific verification test
+./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:integrationTest
+./gradlew -Pplugin_version=<version> dockerOrch:verification:wait-healthy:integrationTest
+
+# Run specific example test
+./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:integrationTest
+./gradlew -Pplugin_version=<version> dockerOrch:examples:database-app:integrationTest
+
+# Run with clean for specific test
+./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:clean dockerOrch:verification:basic:integrationTest
+./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:clean dockerOrch:examples:web-app:integrationTest
+
+# Verify no containers remain after tests
+docker ps -a | grep verification
+docker ps -a | grep example
+```
+
+## Validation Infrastructure
+
+Common validators in `buildSrc/`:
+- `DockerComposeValidator`: Container state validation (running, healthy)
+- `StateFileValidator`: Parse and validate state JSON files
+- `HttpValidator`: HTTP endpoint testing
+- `CleanupValidator`: Verify no resource leaks after tests
+
+**Note**: Validators are used primarily by verification tests. Example tests use standard testing libraries
+(RestAssured, JDBC, etc.).
+
+For detailed validator documentation, see verification test README files.
+
+## Success Criteria
+
+For each dockerOrch test:
+- [ ] All files created as specified
+- [ ] Build completes successfully with Gradle 9/10
+- [ ] All integration tests pass
+- [ ] Containers cleaned up automatically via `composeDown`
+- [ ] `docker ps -a` shows no containers after completion
+- [ ] Can run test multiple times successfully
+- [ ] Build cache works correctly
+- [ ] Configuration cache works correctly
+
+## De-conflict Integration Tests
+
+Integration tests run in parallel. Shared resources must be manually de-conflicted:
+
+**Docker Compose Project Names:**
+- Use unique project names per test (e.g., `verification-basic-web-app-test`, `example-web-app-test`)
+- Configured via `dockerOrch { composeStacks { stackName { projectName = "unique-name" } } }`
+
+**Ports:**
+- Use random port assignment in Docker Compose files: `"8080"` (not `"9091:8080"`)
+- Plugin assigns random host ports to avoid conflicts
+- Tests read actual ports from state file
+
+**Image Names:**
+- Verification tests: `verification-<scenario>-<image-name>` (e.g., `verification-basic-web-app`)
+- Example tests: `example-<scenario>-<image-name>` (e.g., `example-web-app`)
+
+For complete de-conflict rules, see [`../README.md`](../README.md#de-conflict-integration-tests).
 
 ## Gradle 9/10 Compatibility
 
@@ -49,48 +157,3 @@ All scenarios demonstrate proper Gradle 9/10 usage:
 - ✅ Provider API usage (lazy configuration)
 - ✅ Task configuration avoidance
 - ✅ No deprecated APIs
-
-## Running Scenarios
-
-From top-level plugin-integration-test directory:
-
-```bash
-# Run all dockerOrch scenarios
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT dockerOrchIntegrationTest
-
-# Run single scenario
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT dockerOrch:scenario-1:integrationTest
-
-# Clean and run single scenario
-./gradlew dockerOrch:scenario-1:clean dockerOrch:scenario-1:integrationTest
-
-# Verify no leaks
-docker ps -a | grep scenario
-```
-
-## Validation Infrastructure
-
-Common validators in `buildSrc/`:
-- `DockerComposeValidator`: Container state validation
-- `StateFileValidator`: Parse and validate state JSON
-- `HttpValidator`: HTTP endpoint testing
-- `CleanupValidator`: Verify no resource leaks
-
-## Success Criteria
-
-For each scenario:
-- [ ] All files created as specified
-- [ ] Build completes successfully with Gradle 9/10
-- [ ] All integration tests pass
-- [ ] Containers cleaned up automatically
-- [ ] `docker ps -a` shows no containers after completion
-- [ ] Can run scenario multiple times successfully
-- [ ] Build cache works correctly
-- [ ] Configuration cache works correctly
-
-## De-conflict Integration Tests
-
-Integration tests run in parallel, including those from `docker/`. Shared resources must be manually de-conflicted:
-- Docker images must have unique names per integration test
-- Ports must be unique for exposed services and compose stacks
-- Compose project names must be unique (use `scenario-<number>-<stack-name>` pattern)
