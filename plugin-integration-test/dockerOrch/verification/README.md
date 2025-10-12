@@ -39,17 +39,21 @@ For user-facing examples of how to test your applications, see `../examples/`
 
 ## Verification Scenarios
 
-| Scenario | Description | Features Tested |
-|----------|-------------|-----------------|
-| `basic/` | Basic compose up/down with health checks | composeUp, composeDown, state files, port mapping, cleanup |
-| `wait-healthy/` | Wait for healthy functionality | waitForHealthy, health check timing, timeout handling |
-| `wait-running/` | Wait for running functionality | waitForRunning, running state detection |
-| `mixed-wait/` | Both wait types together | Sequential wait processing, multiple services |
-| `lifecycle-suite/` | Class-level lifecycle | Lifecycle.SUITE, setupSpec/cleanupSpec timing |
-| `lifecycle-test/` | Method-level lifecycle | Lifecycle.TEST, setup/cleanup timing |
-| `logs-capture/` | Log capture functionality | Logs configuration, file generation |
-| `multi-service/` | Complex orchestration | Multiple services, dependencies, scaling |
-| `existing-images/` | Public images without building | sourceRef pattern, Docker Hub images |
+| Scenario | Description | Lifecycle | Features Tested |
+|----------|-------------|-----------|-----------------|
+| `basic/` | Basic compose up/down with health checks | SUITE | composeUp, composeDown, state files, port mapping, cleanup |
+| `wait-healthy/` | Wait for healthy functionality | SUITE | waitForHealthy, health check timing, timeout handling |
+| `wait-running/` | Wait for running functionality | SUITE | waitForRunning, running state detection |
+| `mixed-wait/` | Both wait types together | SUITE | Sequential wait processing, multiple services |
+| `lifecycle-suite/` | Class-level lifecycle | SUITE | Lifecycle.SUITE, setupSpec/cleanupSpec timing |
+| `lifecycle-test/` | Method-level lifecycle | TEST | Lifecycle.TEST, setup/cleanup timing |
+| `logs-capture/` | Log capture functionality | SUITE | Logs configuration, file generation |
+| `multi-service/` | Complex orchestration | SUITE | Multiple services, dependencies, scaling |
+| `existing-images/` | Public images without building | SUITE | sourceRef pattern, Docker Hub images |
+
+**Lifecycle Types:**
+- **SUITE** - Containers start once (setupSpec), all tests run, containers stop once (cleanupSpec)
+- **TEST** - Containers start/stop for each test method (setup/cleanup)
 
 ## Running Verification Tests
 

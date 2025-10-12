@@ -64,17 +64,17 @@ features that users typically wouldn't test directly.
 **⚠️ Important**: Do NOT copy these tests for your own projects. See `dockerOrch/examples/` for user-facing
 demonstrations.
 
-| Scenario | Location | Status | Plugin Features Tested |
-|----------|----------|--------|------------------------|
-| Basic | `verification/basic/` | ✅ Complete | composeUp, composeDown, state files, port mapping, cleanup |
-| Wait Healthy | `verification/wait-healthy/` | ⏳ Planned | waitForHealthy, health check timing, timeout handling |
-| Wait Running | `verification/wait-running/` | ⏳ Planned | waitForRunning, running state detection |
-| Mixed Wait | `verification/mixed-wait/` | ⏳ Planned | Both wait types together (app + database) |
-| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned | Class-level lifecycle (suite), setupSpec/cleanupSpec |
-| Lifecycle Test | `verification/lifecycle-test/` | ⏳ Planned | Method-level lifecycle (test), setup/cleanup |
-| Logs Capture | `verification/logs-capture/` | ⏳ Planned | Log capture configuration, file generation |
-| Multi Service | `verification/multi-service/` | ⏳ Planned | Complex orchestration (3+ services) |
-| Existing Images | `verification/existing-images/` | ⏳ Planned | Public images (nginx, redis), sourceRef pattern |
+| Scenario | Location | Status | Lifecycle | Plugin Features Tested |
+|----------|----------|--------|-----------|------------------------|
+| Basic | `verification/basic/` | ✅ Complete | SUITE | composeUp, composeDown, state files, port mapping, cleanup |
+| Wait Healthy | `verification/wait-healthy/` | ⏳ Planned | SUITE | waitForHealthy, health check timing, timeout handling |
+| Wait Running | `verification/wait-running/` | ⏳ Planned | SUITE | waitForRunning, running state detection |
+| Mixed Wait | `verification/mixed-wait/` | ⏳ Planned | SUITE | Both wait types together (app + database) |
+| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned | SUITE | Class-level lifecycle (suite), setupSpec/cleanupSpec |
+| Lifecycle Test | `verification/lifecycle-test/` | ⏳ Planned | TEST | Method-level lifecycle (test), setup/cleanup |
+| Logs Capture | `verification/logs-capture/` | ⏳ Planned | SUITE | Log capture configuration, file generation |
+| Multi Service | `verification/multi-service/` | ⏳ Planned | SUITE | Complex orchestration (3+ services) |
+| Existing Images | `verification/existing-images/` | ⏳ Planned | SUITE | Public images (nginx, redis), sourceRef pattern |
 
 ### Example Tests (`dockerOrch/examples/`)
 
@@ -85,13 +85,13 @@ living documentation and a copy-paste template.
 
 **✅ Recommended**: Copy and adapt these for your own projects!
 
-| Example | Location | Status | Use Case | Testing Libraries |
-|---------|----------|--------|----------|-------------------|
-| Web App | `examples/web-app/` | ✅ Complete | REST API testing | RestAssured, HTTP client |
-| Database App | `examples/database-app/` | ⏳ Planned | Database integration | JDBC, JPA, Spring Data |
-| Microservices | `examples/microservices/` | ⏳ Planned | Service orchestration | RestAssured, service discovery |
-| Kafka App | `examples/kafka-app/` | ⏳ Planned | Event-driven architecture | Kafka client, TestProducer/Consumer |
-| Batch Job | `examples/batch-job/` | ⏳ Planned | Scheduled processing | Spring Batch, JDBC |
+| Example | Location | Status | Lifecycle | Use Case | Testing Libraries |
+|---------|----------|--------|-----------|----------|-------------------|
+| Web App | `examples/web-app/` | ✅ Complete | SUITE | REST API testing | RestAssured, HTTP client |
+| Database App | `examples/database-app/` | ⏳ Planned | SUITE | Database integration | JDBC, JPA, Spring Data |
+| Microservices | `examples/microservices/` | ⏳ Planned | SUITE | Service orchestration | RestAssured, service discovery |
+| Kafka App | `examples/kafka-app/` | ⏳ Planned | SUITE | Event-driven architecture | Kafka client, TestProducer/Consumer |
+| Batch Job | `examples/batch-job/` | ⏳ Planned | SUITE | Scheduled processing | Spring Batch, JDBC |
 
 ## Task Organization
 

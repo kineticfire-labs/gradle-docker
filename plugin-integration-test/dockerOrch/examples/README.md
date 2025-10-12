@@ -36,9 +36,17 @@ These are the same tools you would use in your own projects.
 
 ## Example Scenarios
 
+All examples use **SUITE lifecycle** (setupSpec/cleanupSpec):
+- Containers start once before all tests
+- All tests run against the same container environment
+- Containers stop once after all tests
+- Most efficient for integration testing
+
 ### Web App (`web-app/`)
 
 **Use Case**: Testing REST API endpoints
+
+**Lifecycle**: SUITE
 
 **Stack**: Spring Boot + REST endpoints
 
@@ -71,6 +79,8 @@ dockerOrch {
 ### Database App (`database-app/`)
 
 **Use Case**: Testing application with database persistence
+
+**Lifecycle**: SUITE
 
 **Stack**: Spring Boot + PostgreSQL
 
@@ -107,6 +117,8 @@ dockerOrch {
 
 **Use Case**: Testing multiple interacting services
 
+**Lifecycle**: SUITE
+
 **Stack**: Frontend (React) + Backend (Spring Boot) + Auth Service (Spring Boot)
 
 **Tests**:
@@ -138,6 +150,8 @@ dockerOrch {
 ### Kafka App (`kafka-app/`)
 
 **Use Case**: Testing event-driven applications
+
+**Lifecycle**: SUITE
 
 **Stack**: Spring Boot + Kafka + Zookeeper
 
@@ -173,6 +187,8 @@ dockerOrch {
 ### Batch Job (`batch-job/`)
 
 **Use Case**: Testing scheduled/batch processing
+
+**Lifecycle**: SUITE
 
 **Stack**: Spring Boot + Spring Batch + PostgreSQL
 
