@@ -1,7 +1,7 @@
 # Verification Test: Basic Docker Compose Up/Down
 
 **Type**: Plugin Mechanics Validation
-**Lifecycle**: SUITE (setupSpec/cleanupSpec)
+**Lifecycle**: CLASS (setupSpec/cleanupSpec)
 **Purpose**: Validates basic dockerOrch plugin functionality
 
 ## What This Test Validates
@@ -16,11 +16,11 @@ This verification test ensures the dockerOrch plugin correctly:
 
 ## Test Lifecycle
 
-**Lifecycle Type**: `SUITE`
+**Lifecycle Type**: `CLASS`
 
 The test uses Spock's `setupSpec()` and `cleanupSpec()` methods:
-- `setupSpec()` - Runs once before all tests (reads state file)
-- `cleanupSpec()` - Runs once after all tests (verifies cleanup)
+- `setupSpec()` - Runs once before all tests in the class (reads state file)
+- `cleanupSpec()` - Runs once after all tests in the class (verifies cleanup)
 - Tests run with the same Docker Compose stack (started by `composeUpWebAppTest` task)
 
 This mirrors how real users would test: start containers once, run multiple tests, tear down once.

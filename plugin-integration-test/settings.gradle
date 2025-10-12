@@ -59,7 +59,23 @@ include 'dockerOrch:verification:basic'
 include 'dockerOrch:verification:basic:app'
 include 'dockerOrch:verification:basic:app-image'
 
+include 'dockerOrch:verification:lifecycle-class'
+include 'dockerOrch:verification:lifecycle-class:app'
+include 'dockerOrch:verification:lifecycle-class:app-image'
+
+include 'dockerOrch:verification:lifecycle-method'
+include 'dockerOrch:verification:lifecycle-method:app'
+include 'dockerOrch:verification:lifecycle-method:app-image'
+
 // Example tests (user-facing demonstrations)
 include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'
 include 'dockerOrch:examples:web-app:app-image'
+
+include 'dockerOrch:examples:stateful-web-app'
+include 'dockerOrch:examples:stateful-web-app:app'
+include 'dockerOrch:examples:stateful-web-app:app-image'
+
+include 'dockerOrch:examples:isolated-tests'
+include 'dockerOrch:examples:isolated-tests:app'
+include 'dockerOrch:examples:isolated-tests:app-image'

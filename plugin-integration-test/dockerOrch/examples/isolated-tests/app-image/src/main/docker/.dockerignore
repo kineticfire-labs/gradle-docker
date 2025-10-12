@@ -1,0 +1,5 @@
+# Ignore everything except what we explicitly copy
+*
+!Dockerfile
+!*.jar
+!entrypoint.sh

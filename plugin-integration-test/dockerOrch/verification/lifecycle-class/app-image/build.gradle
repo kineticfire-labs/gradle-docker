@@ -1,0 +1,142 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from app subproject
+def jarFileProvider = project(':dockerOrch:verification:lifecycle-class:app').tasks.named('bootJar').flatMap { it.archiveFile }
+
+// Configure docker DSL
+docker {
+    images {
+        stateApp {
+            imageName = 'verification-lifecycle-class-state-app'
+            tags = ['latest', '1.0.0']
+
+            contextTask = tasks.register('prepareStateAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for state app image'
+                into layout.buildDirectory.dir('docker-context/stateApp')
+                from('src/main/docker')
+
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':dockerOrch:verification:lifecycle-class:app').tasks.named('bootJar')
+            }
+        }
+    }
+}
+
+// Configure dockerOrch DSL
+dockerOrch {
+    composeStacks {
+        lifecycleClassTest {
+            files.from('src/integrationTest/resources/compose/lifecycle-class.yml')
+            projectName = "verification-lifecycle-class-test"
+
+            waitForHealthy {
+                waitForServices.set(['state-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// Integration test source set
+sourceSets {
+    integrationTest {
+        groovy {
+            srcDir 'src/integrationTest/groovy'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+// Add buildSrc validators
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
+    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+tasks.named('processIntegrationTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Integration test task
+tasks.register('integrationTest', Test) {
+    description = 'Runs CLASS lifecycle verification tests'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+
+    useJUnitPlatform()
+
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/lifecycleClassTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "verification-lifecycle-class-test"
+
+    outputs.cacheIf { false }
+}
+
+// Wire dependencies
+afterEvaluate {
+    tasks.named('composeUpLifecycleClassTest') {
+        dependsOn tasks.named('dockerBuildStateApp')
+    }
+}
+
+// Full workflow
+tasks.register('runIntegrationTest') {
+    description = 'Full integration test: build -> up -> test -> down'
+    group = 'verification'
+
+    dependsOn tasks.named('dockerBuildStateApp')
+    dependsOn tasks.named('composeUpLifecycleClassTest')
+    dependsOn tasks.named('integrationTest')
+    finalizedBy tasks.named('composeDownLifecycleClassTest')
+
+    doLast {
+        logger.lifecycle("Lifecycle CLASS verification test complete")
+    }
+}

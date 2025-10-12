@@ -24,21 +24,23 @@ features that users typically wouldn't test directly.
 
 **⚠️ Important**: Do NOT copy these tests for your own projects. See `examples/` for user-facing demonstrations.
 
-| Scenario        | Location                        | Status     | Lifecycle | Plugin Features Tested                                     |
-|-----------------|---------------------------------|------------|-----------|------------------------------------------------------------|
-| Basic           | `verification/basic/`           | ✅ Complete | SUITE     | composeUp, composeDown, state files, port mapping, cleanup |
-| Wait Healthy    | `verification/wait-healthy/`    | ⏳ Planned  | SUITE     | waitForHealthy, health check timing, timeout handling      |
-| Wait Running    | `verification/wait-running/`    | ⏳ Planned  | SUITE     | waitForRunning, running state detection                    |
-| Mixed Wait      | `verification/mixed-wait/`      | ⏳ Planned  | SUITE     | Both wait types together (app + database)                  |
-| Lifecycle Suite | `verification/lifecycle-suite/` | ⏳ Planned  | SUITE     | Class-level lifecycle (suite), setupSpec/cleanupSpec       |
-| Lifecycle Test  | `verification/lifecycle-test/`  | ⏳ Planned  | TEST      | Method-level lifecycle (test), setup/cleanup               |
-| Logs Capture    | `verification/logs-capture/`    | ⏳ Planned  | SUITE     | Log capture configuration, file generation                 |
-| Multi Service   | `verification/multi-service/`   | ⏳ Planned  | SUITE     | Complex orchestration (3+ services)                        |
-| Existing Images | `verification/existing-images/` | ⏳ Planned  | SUITE     | Public images (nginx, redis), sourceRef pattern            |
+| Scenario         | Location                         | Status     | Lifecycle | Plugin Features Tested                                        |
+|------------------|----------------------------------|------------|-----------|---------------------------------------------------------------|
+| Basic            | `verification/basic/`            | ✅ Complete | CLASS     | composeUp, composeDown, state files, port mapping, cleanup    |
+| Wait Healthy     | `verification/wait-healthy/`     | ⏳ Planned  | CLASS     | waitForHealthy, health check timing, timeout handling         |
+| Wait Running     | `verification/wait-running/`     | ⏳ Planned  | CLASS     | waitForRunning, running state detection                       |
+| Mixed Wait       | `verification/mixed-wait/`       | ⏳ Planned  | CLASS     | Both wait types together (app + database)                     |
+| Lifecycle Class  | `verification/lifecycle-class/`  | ✅ Complete | CLASS     | Class-level lifecycle, setupSpec/cleanupSpec, state persistence |
+| Lifecycle Method | `verification/lifecycle-method/` | ✅ Complete | METHOD    | Method-level lifecycle, setup/cleanup, state isolation        |
+| Logs Capture     | `verification/logs-capture/`     | ⏳ Planned  | CLASS     | Log capture configuration, file generation                    |
+| Multi Service    | `verification/multi-service/`    | ⏳ Planned  | CLASS     | Complex orchestration (3+ services)                           |
+| Existing Images  | `verification/existing-images/`  | ⏳ Planned  | CLASS     | Public images (nginx, redis), sourceRef pattern               |
 
 **Lifecycle Types:**
-- **SUITE** - Containers start once (setupSpec), all tests run, containers stop once (cleanupSpec)
-- **TEST** - Containers start/stop for each test method (setup/cleanup)
+- **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
+  containers, containers stop in cleanupSpec/@AfterAll. Most efficient for integration testing.
+- **METHOD** - Containers start in setup/@BeforeEach, one test method runs, containers stop in cleanup/@AfterEach.
+  Use when tests require isolated, clean state.
 
 ### Example Tests (`examples/`)
 
@@ -49,13 +51,15 @@ living documentation and a copy-paste template.
 
 **✅ Recommended**: Copy and adapt these for your own projects!
 
-| Example       | Location                  | Status     | Lifecycle | Use Case                  | Testing Libraries                   |
-|---------------|---------------------------|------------|-----------|---------------------------|-------------------------------------|
-| Web App       | `examples/web-app/`       | ✅ Complete | SUITE     | REST API testing          | RestAssured, HTTP client            |
-| Database App  | `examples/database-app/`  | ⏳ Planned  | SUITE     | Database integration      | JDBC, JPA, Spring Data              |
-| Microservices | `examples/microservices/` | ⏳ Planned  | SUITE     | Service orchestration     | RestAssured, service discovery      |
-| Kafka App     | `examples/kafka-app/`     | ⏳ Planned  | SUITE     | Event-driven architecture | Kafka client, TestProducer/Consumer |
-| Batch Job     | `examples/batch-job/`     | ⏳ Planned  | SUITE     | Scheduled processing      | Spring Batch, JDBC                  |
+| Example          | Location                       | Status     | Lifecycle | Use Case                           | Testing Libraries                   |
+|------------------|--------------------------------|------------|-----------|------------------------------------|-------------------------------------|
+| Web App          | `examples/web-app/`            | ✅ Complete | CLASS     | REST API testing                   | RestAssured, HTTP client            |
+| Stateful Web App | `examples/stateful-web-app/`   | ✅ Complete | CLASS     | Session management, workflow tests | RestAssured, HTTP client            |
+| Isolated Tests   | `examples/isolated-tests/`     | ✅ Complete | METHOD    | Database isolation, independent tests | RestAssured, JPA, H2             |
+| Database App     | `examples/database-app/`       | ⏳ Planned  | CLASS     | Database integration               | JDBC, JPA, Spring Data              |
+| Microservices    | `examples/microservices/`      | ⏳ Planned  | CLASS     | Service orchestration              | RestAssured, service discovery      |
+| Kafka App        | `examples/kafka-app/`          | ⏳ Planned  | CLASS     | Event-driven architecture          | Kafka client, TestProducer/Consumer |
+| Batch Job        | `examples/batch-job/`          | ⏳ Planned  | CLASS     | Scheduled processing               | Spring Batch, JDBC                  |
 
 ## Task Organization
 

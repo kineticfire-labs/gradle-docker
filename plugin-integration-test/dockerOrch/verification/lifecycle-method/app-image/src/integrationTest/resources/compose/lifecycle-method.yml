@@ -1,0 +1,11 @@
+services:
+  state-app:
+    image: verification-lifecycle-method-state-app:latest
+    ports:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s

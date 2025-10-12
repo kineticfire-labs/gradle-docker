@@ -1,0 +1,860 @@
+# Enhance dockerOrch Integration Tests - Phase 3: Lifecycle Terminology and Tests
+
+**Date**: 2025-10-11
+**Status**: Planned
+**Priority**: High
+**Estimated Effort**: 7.5 hours
+
+## Overview
+
+This document outlines the plan to:
+1. Fix lifecycle terminology throughout all dockerOrch integration tests and documentation (SUITE → CLASS, TEST → METHOD)
+2. Add comprehensive lifecycle verification tests (class-level and method-level)
+3. Add lifecycle example tests demonstrating when to use each lifecycle type
+
+## Background
+
+### Current State
+
+The dockerOrch integration tests currently use inconsistent and confusing lifecycle terminology:
+- "SUITE" is used to mean "once per test class" (setupSpec/cleanupSpec or @BeforeAll/@AfterAll)
+- "TEST" is used to mean "once per test method" (setup/cleanup or @BeforeEach/@AfterEach)
+
+This terminology is confusing because:
+- It doesn't align with standard Spock/JUnit terminology
+- "Suite" implies multiple test classes, but each test class is independent
+- "Test" is ambiguous (could mean test class or test method)
+
+### Problems Identified
+
+1. **Terminology mismatch**: Documentation uses "SUITE" but standard testing frameworks use "class-level lifecycle"
+2. **Missing verification tests**: No tests proving method-level lifecycle works correctly
+3. **Missing examples**: No examples showing users when to use class vs method lifecycle
+4. **Inconsistent documentation**: "suite" appears in multiple files with different meanings
+
+## Goals
+
+1. ✅ **Standardize terminology**: Use CLASS and METHOD to align with Spock/JUnit terminology
+2. ✅ **Complete verification coverage**: Add tests proving both class and method lifecycles work
+3. ✅ **Provide user guidance**: Add examples showing when to use each lifecycle type
+4. ✅ **Update all documentation**: Remove all references to "SUITE" and "TEST" lifecycle terminology
+
+## Implementation Plan
+
+### Phase 1: Fix Lifecycle Terminology (1 hour)
+
+**Objective**: Replace all "SUITE" → "CLASS" and "TEST" → "METHOD" in all dockerOrch files.
+
+#### 1.1 Update dockerOrch README (`plugin-integration-test/dockerOrch/README.md`)
+
+**Files to Update**: 1 file
+
+**Changes**:
+- Line 27-37: Verification tests table - Change all "SUITE" → "CLASS", "TEST" → "METHOD"
+- Line 32: Change "Lifecycle Suite" → "Lifecycle Class"
+- Line 34: Change "Lifecycle Test" → "Lifecycle Method"
+- Line 39-41: Update lifecycle definitions:
+
+```markdown
+**Lifecycle Types:**
+- **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
+  containers, containers stop in cleanupSpec/@AfterAll. Most efficient for integration testing.
+- **METHOD** - Containers start in setup/@BeforeEach, one test method runs, containers stop in cleanup/@AfterEach.
+  Use when tests require isolated, clean state.
+```
+
+- Line 52-58: Example tests table - Change all "SUITE" → "CLASS"
+
+**Estimated Time**: 15 minutes
+
+---
+
+#### 1.2 Update Verification README (`plugin-integration-test/dockerOrch/verification/README.md`)
+
+**Files to Update**: 1 file
+
+**Changes**:
+- Line 16: Change "Lifecycle timing is correct (suite vs test level)" → "Lifecycle timing is correct (class vs method level)"
+- Line 48: Change "| `lifecycle-suite/`" → "| `lifecycle-class/`"
+- Line 48: Change "Class-level lifecycle | SUITE" → "Class-level lifecycle | CLASS"
+- Line 49: Change "| `lifecycle-test/`" → "| `lifecycle-method/`"
+- Line 49: Change "Method-level lifecycle | TEST" → "Method-level lifecycle | METHOD"
+- Line 54-57: Update lifecycle definitions:
+
+```markdown
+**Lifecycle Types:**
+- **CLASS** - Containers start once per test class (setupSpec/cleanupSpec or @BeforeAll/@AfterAll), all tests run,
+  containers stop once
+- **METHOD** - Containers start/stop for each test method (setup/cleanup or @BeforeEach/@AfterEach)
+```
+
+**Estimated Time**: 10 minutes
+
+---
+
+#### 1.3 Update Examples README (`plugin-integration-test/dockerOrch/examples/README.md`)
+
+**Files to Update**: 1 file
+
+**Changes**:
+- Line 39: Change "All examples use **SUITE lifecycle**" → "All examples use **CLASS lifecycle**"
+- Line 49: Change "**Lifecycle**: SUITE" → "**Lifecycle**: CLASS"
+- Line 83: Change "**Lifecycle**: SUITE" → "**Lifecycle**: CLASS"
+- Line 117: Change "**Lifecycle**: SUITE" → "**Lifecycle**: CLASS"
+- Line 151: Change "**Lifecycle**: SUITE" → "**Lifecycle**: CLASS"
+- Line 187: Change "**Lifecycle**: SUITE" → "**Lifecycle**: CLASS"
+
+**Estimated Time**: 10 minutes
+
+---
+
+#### 1.4 Update Basic Verification README (`plugin-integration-test/dockerOrch/verification/basic/README.md`)
+
+**Files to Update**: 1 file
+
+**Changes**:
+- Line 3: Change "**Lifecycle**: SUITE (setupSpec/cleanupSpec)" → "**Lifecycle**: CLASS (setupSpec/cleanupSpec)"
+- Line 20: Change "**Lifecycle Type**: `SUITE`" → "**Lifecycle Type**: `CLASS`"
+- Line 22-26: Update lifecycle description:
+
+```markdown
+The test uses Spock's `setupSpec()` method:
+- `setupSpec()` - Runs once before all tests in the class
+  - Reads state file generated by `composeUp`
+  - Extracts published port for web-app service
+- Tests run with the same Docker Compose stack
+- `cleanupSpec()` - Runs once after all tests (validates cleanup)
+
+**Why CLASS lifecycle?**
+- Containers start once, tests run multiple times (efficient)
+- Mirrors real-world usage: start environment, run test suite, tear down
+- Reduces test execution time (no container restarts between tests)
+```
+
+**Estimated Time**: 10 minutes
+
+---
+
+#### 1.5 Update Web App Example README (`plugin-integration-test/dockerOrch/examples/web-app/README.md`)
+
+**Files to Update**: 1 file
+
+**Changes**:
+- Line 4: Change "**Lifecycle**: SUITE (setupSpec/cleanupSpec)" → "**Lifecycle**: CLASS (setupSpec/cleanupSpec)"
+- Line 21: Change "**Lifecycle Type**: `SUITE`" → "**Lifecycle Type**: `CLASS`"
+- Line 23-31: Update lifecycle description:
+
+```markdown
+The test uses Spock's `setupSpec()` method:
+- `setupSpec()` - Runs once before all tests in the class
+  - Reads state file generated by `composeUp`
+  - Extracts published port for web-app service
+  - Configures RestAssured base URL
+- Tests run with the same Docker Compose stack
+- No `cleanupSpec()` needed (composeDown handles cleanup)
+
+**Why CLASS lifecycle?**
+- Containers start once, tests run multiple times (efficient)
+- Mirrors real-world usage: start environment, run test suite, tear down
+- Reduces test execution time (no container restarts between tests)
+```
+
+**Estimated Time**: 10 minutes
+
+---
+
+#### 1.6 Search and Update Any Remaining References
+
+**Search Pattern**: `grep -r -i "suite" --include="*.md" --include="*.groovy" --include="*.gradle" dockerOrch/`
+
+**Files to Check**:
+- All Groovy test files in `verification/` and `examples/`
+- All build.gradle files
+- Any design docs or TODO files
+
+**Estimated Time**: 5 minutes
+
+---
+
+### Phase 2: Add Verification Tests (3 hours)
+
+**Objective**: Implement comprehensive lifecycle verification tests proving both CLASS and METHOD lifecycles work.
+
+#### 2.1 Rename Lifecycle Suite → Lifecycle Class (1 hour)
+
+**Directory**: `plugin-integration-test/dockerOrch/verification/lifecycle-class/`
+
+**Structure**:
+```
+verification/lifecycle-class/
+├── app/                           # Spring Boot app with stateful endpoint
+│   ├── src/main/java/
+│   │   └── com/kineticfire/test/
+│   │       ├── Application.java
+│   │       └── StateController.java   # Endpoint that tracks state
+│   └── build.gradle
+├── app-image/
+│   ├── src/
+│   │   ├── main/docker/
+│   │   │   ├── Dockerfile
+│   │   │   └── entrypoint.sh
+│   │   └── integrationTest/
+│   │       ├── groovy/com/kineticfire/test/
+│   │       │   └── LifecycleClassIT.groovy
+│   │       └── resources/compose/
+│   │           └── lifecycle-class.yml
+│   └── build.gradle
+├── build.gradle
+├── gradle -> ../../../gradle
+├── gradlew -> ../../../gradlew
+└── README.md
+```
+
+**Purpose**: Verify CLASS lifecycle works correctly
+
+**Tests** (`LifecycleClassIT.groovy`):
+```groovy
+class LifecycleClassIT extends Specification {
+
+    static String projectName
+    static Map stateData
+    static int setupSpecCallCount = 0
+    static int cleanupSpecCallCount = 0
+
+    def setupSpec() {
+        setupSpecCallCount++
+        projectName = System.getProperty('COMPOSE_PROJECT_NAME')
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        stateData = StateFileValidator.parseStateFile(stateFile)
+    }
+
+    def cleanupSpec() {
+        cleanupSpecCallCount++
+        CleanupValidator.verifyCleanup(projectName)
+    }
+
+    def "setupSpec should be called exactly once"() {
+        expect: "setupSpec called once for entire test class"
+        setupSpecCallCount == 1
+    }
+
+    def "containers should remain running between tests"() {
+        expect: "same containers from setupSpec still running"
+        DockerComposeValidator.isContainerRunning(projectName, 'state-app')
+        DockerComposeValidator.isContainerHealthy(projectName, 'state-app')
+    }
+
+    def "state should persist across test methods - write"() {
+        given: "we have the base URL from state file"
+        def port = stateData.services['state-app'].publishedPorts[0].host
+        def baseUrl = "http://localhost:${port}"
+
+        when: "we write state to the application"
+        def response = RestAssured.given()
+            .contentType("application/json")
+            .body('{"key":"test","value":"class-lifecycle"}')
+            .post("${baseUrl}/state")
+
+        then: "state is written successfully"
+        response.statusCode() == 200
+    }
+
+    def "state should persist across test methods - read"() {
+        given: "we have the base URL from state file"
+        def port = stateData.services['state-app'].publishedPorts[0].host
+        def baseUrl = "http://localhost:${port}"
+
+        when: "we read state written in previous test"
+        def response = RestAssured.get("${baseUrl}/state/test")
+
+        then: "state from previous test still exists"
+        response.statusCode() == 200
+        response.jsonPath().getString("value") == "class-lifecycle"
+    }
+
+    def "containers should still be running after all tests"() {
+        expect: "containers not torn down between tests"
+        DockerComposeValidator.isContainerRunning(projectName, 'state-app')
+    }
+}
+```
+
+**Validation Points**:
+- setupSpec called exactly once
+- Containers remain running between test methods
+- State persists across test methods (write in test N, read in test N+1)
+- cleanupSpec called exactly once at the end
+- Cleanup removes all resources
+
+**Estimated Time**: 1 hour
+
+---
+
+#### 2.2 Implement Lifecycle Method Test (2 hours)
+
+**Directory**: `plugin-integration-test/dockerOrch/verification/lifecycle-method/`
+
+**Structure**: Same as lifecycle-class
+
+**Purpose**: Verify METHOD lifecycle works correctly
+
+**Tests** (`LifecycleMethodIT.groovy`):
+```groovy
+class LifecycleMethodIT extends Specification {
+
+    String projectName
+    Map stateData
+    String baseUrl
+
+    static int setupCallCount = 0
+    static int cleanupCallCount = 0
+
+    def setup() {
+        setupCallCount++
+        projectName = System.getProperty('COMPOSE_PROJECT_NAME')
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        stateData = StateFileValidator.parseStateFile(stateFile)
+
+        def port = stateData.services['state-app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${port}"
+    }
+
+    def cleanup() {
+        cleanupCallCount++
+        CleanupValidator.verifyCleanup(projectName)
+    }
+
+    def "setup should be called before each test"() {
+        expect: "setup called at least once"
+        setupCallCount >= 1
+    }
+
+    def "containers should be fresh for each test - test 1"() {
+        when: "we write state to the application"
+        def response = RestAssured.given()
+            .contentType("application/json")
+            .body('{"key":"test1","value":"method-1"}')
+            .post("${baseUrl}/state")
+
+        then: "state is written successfully"
+        response.statusCode() == 200
+    }
+
+    def "containers should be fresh for each test - test 2"() {
+        when: "we try to read state from previous test"
+        def response = RestAssured.get("${baseUrl}/state/test1")
+
+        then: "state from previous test does NOT exist (fresh container)"
+        response.statusCode() == 404
+    }
+
+    def "cleanup should be called after each test"() {
+        expect: "cleanup called at least as many times as setup"
+        cleanupCallCount >= setupCallCount - 1  // May be called after this test
+    }
+
+    def "state should not persist between test methods - verify isolation"() {
+        when: "we check for any previously written state"
+        def response1 = RestAssured.get("${baseUrl}/state/test1")
+        def response2 = RestAssured.get("${baseUrl}/state/test")
+
+        then: "no state from any previous test exists"
+        response1.statusCode() == 404
+        response2.statusCode() == 404
+    }
+}
+```
+
+**Validation Points**:
+- setup() called before each test method
+- Containers are fresh for each test (no state from previous tests)
+- cleanup() called after each test method
+- State isolation between test methods
+- Cleanup happens multiple times (once per test)
+
+**Estimated Time**: 2 hours
+
+---
+
+### Phase 3: Add Example Tests (3.5 hours)
+
+**Objective**: Provide user-facing examples showing when to use CLASS vs METHOD lifecycle.
+
+#### 3.1 Add Stateful Web App Example (1.75 hours)
+
+**Directory**: `plugin-integration-test/dockerOrch/examples/stateful-web-app/`
+
+**Structure**: Same as other examples
+
+**Purpose**: Demonstrate CLASS lifecycle for stateful testing (session management)
+
+**Use Case**: Testing a stateful web application where tests build on each other
+
+**Application** (`SessionController.java`):
+```java
+@RestController
+public class SessionController {
+
+    private Map<String, Session> sessions = new ConcurrentHashMap<>();
+
+    @PostMapping("/register")
+    public ResponseEntity<Map<String, String>> register(@RequestBody User user) {
+        // Create session for user
+        String sessionId = UUID.randomUUID().toString();
+        sessions.put(sessionId, new Session(user));
+        return ResponseEntity.ok(Map.of("sessionId", sessionId));
+    }
+
+    @PostMapping("/login")
+    public ResponseEntity<Map<String, String>> login(
+        @RequestHeader("Session-Id") String sessionId,
+        @RequestBody Credentials creds) {
+        // Validate session exists and credentials match
+        Session session = sessions.get(sessionId);
+        // ... validation logic
+        return ResponseEntity.ok(Map.of("status", "logged-in"));
+    }
+
+    @PutMapping("/profile")
+    public ResponseEntity<Void> updateProfile(
+        @RequestHeader("Session-Id") String sessionId,
+        @RequestBody Profile profile) {
+        // Update profile in existing session
+        Session session = sessions.get(sessionId);
+        session.setProfile(profile);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/logout")
+    public ResponseEntity<Void> logout(@RequestHeader("Session-Id") String sessionId) {
+        sessions.remove(sessionId);
+        return ResponseEntity.ok().build();
+    }
+}
+```
+
+**Tests** (`StatefulWebAppIT.groovy`):
+```groovy
+class StatefulWebAppIT extends Specification {
+
+    static String baseUrl
+    static String sessionId
+
+    def setupSpec() {
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        def stateData = new JsonSlurper().parse(stateFile)
+        def port = stateData.services['stateful-app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${port}"
+        RestAssured.baseURI = baseUrl
+    }
+
+    def "test 1: user should register and receive session"() {
+        when: "user registers"
+        def response = given()
+            .contentType("application/json")
+            .body('{"username":"alice","password":"secret123"}')
+            .post("/register")
+
+        then: "registration succeeds with session ID"
+        response.statusCode() == 200
+        sessionId = response.jsonPath().getString("sessionId")
+        sessionId != null
+    }
+
+    def "test 2: user should login with existing session"() {
+        when: "user logs in with session from test 1"
+        def response = given()
+            .header("Session-Id", sessionId)
+            .contentType("application/json")
+            .body('{"username":"alice","password":"secret123"}')
+            .post("/login")
+
+        then: "login succeeds"
+        response.statusCode() == 200
+        response.jsonPath().getString("status") == "logged-in"
+    }
+
+    def "test 3: user should update profile in existing session"() {
+        when: "user updates profile"
+        def response = given()
+            .header("Session-Id", sessionId)
+            .contentType("application/json")
+            .body('{"displayName":"Alice Anderson","email":"alice@example.com"}')
+            .put("/profile")
+
+        then: "profile update succeeds"
+        response.statusCode() == 200
+    }
+
+    def "test 4: user should logout and clear session"() {
+        when: "user logs out"
+        def response = given()
+            .header("Session-Id", sessionId)
+            .delete("/logout")
+
+        then: "logout succeeds"
+        response.statusCode() == 200
+
+        and: "session is no longer valid"
+        def checkResponse = given()
+            .header("Session-Id", sessionId)
+            .get("/profile")
+        checkResponse.statusCode() == 401
+    }
+}
+```
+
+**Why CLASS Lifecycle**:
+- Tests build on each other (register → login → update → logout)
+- Session state must persist across test methods
+- Models real user workflow through the application
+- Efficient (containers start once)
+
+**README.md**: Full documentation explaining when to use CLASS lifecycle for stateful testing
+
+**Estimated Time**: 1.75 hours
+
+---
+
+#### 3.2 Add Isolated Database Tests Example (1.75 hours)
+
+**Directory**: `plugin-integration-test/dockerOrch/examples/isolated-tests/`
+
+**Structure**: Same as other examples
+
+**Purpose**: Demonstrate METHOD lifecycle for tests requiring clean state
+
+**Use Case**: Database operations where each test needs isolated, clean state
+
+**Application** (`UserRepository.java`):
+```java
+@Repository
+public class UserRepository {
+
+    @Autowired
+    private JdbcTemplate jdbcTemplate;
+
+    public void createUser(String username, String email) {
+        jdbcTemplate.update(
+            "INSERT INTO users (username, email) VALUES (?, ?)",
+            username, email
+        );
+    }
+
+    public User findByUsername(String username) {
+        // ... query logic
+    }
+
+    public void deleteUser(String username) {
+        jdbcTemplate.update("DELETE FROM users WHERE username = ?", username);
+    }
+
+    public void updateEmail(String username, String newEmail) {
+        jdbcTemplate.update(
+            "UPDATE users SET email = ? WHERE username = ?",
+            newEmail, username
+        );
+    }
+}
+```
+
+**Tests** (`IsolatedDatabaseTestsIT.groovy`):
+```groovy
+class IsolatedDatabaseTestsIT extends Specification {
+
+    String baseUrl
+
+    def setup() {
+        // Runs before EACH test - fresh database for each test
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        def stateData = new JsonSlurper().parse(stateFile)
+        def port = stateData.services['db-app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${port}"
+        RestAssured.baseURI = baseUrl
+    }
+
+    def "test 1: should create user in fresh database"() {
+        when: "we create a new user"
+        def response = given()
+            .contentType("application/json")
+            .body('{"username":"alice","email":"alice@example.com"}')
+            .post("/users")
+
+        then: "user is created successfully"
+        response.statusCode() == 201
+
+        and: "user exists in database"
+        def getResponse = get("/users/alice")
+        getResponse.statusCode() == 200
+        getResponse.jsonPath().getString("email") == "alice@example.com"
+    }
+
+    def "test 2: should create duplicate user in fresh database (no data from test 1)"() {
+        when: "we create a user with same name as test 1"
+        def response = given()
+            .contentType("application/json")
+            .body('{"username":"alice","email":"different@example.com"}')
+            .post("/users")
+
+        then: "user is created successfully (database was reset)"
+        response.statusCode() == 201
+
+        and: "this is a fresh database - no constraint violation"
+        def getResponse = get("/users/alice")
+        getResponse.statusCode() == 200
+        getResponse.jsonPath().getString("email") == "different@example.com"  // NOT alice@example.com
+    }
+
+    def "test 3: should delete user from fresh database"() {
+        given: "we create a user in this test's fresh database"
+        given()
+            .contentType("application/json")
+            .body('{"username":"bob","email":"bob@example.com"}')
+            .post("/users")
+
+        when: "we delete the user"
+        def response = delete("/users/bob")
+
+        then: "delete succeeds"
+        response.statusCode() == 204
+
+        and: "user no longer exists"
+        def getResponse = get("/users/bob")
+        getResponse.statusCode() == 404
+    }
+
+    def "test 4: should update user in fresh database"() {
+        given: "we create a user in this test's fresh database"
+        given()
+            .contentType("application/json")
+            .body('{"username":"charlie","email":"charlie@example.com"}')
+            .post("/users")
+
+        when: "we update the user's email"
+        def response = given()
+            .contentType("application/json")
+            .body('{"email":"new.charlie@example.com"}')
+            .put("/users/charlie")
+
+        then: "update succeeds"
+        response.statusCode() == 200
+
+        and: "email is updated"
+        def getResponse = get("/users/charlie")
+        getResponse.statusCode() == 200
+        getResponse.jsonPath().getString("email") == "new.charlie@example.com"
+    }
+
+    def "test 5: verify no data from previous tests exists"() {
+        when: "we check for users from previous tests"
+        def aliceResponse = get("/users/alice")
+        def bobResponse = get("/users/bob")
+        def charlieResponse = get("/users/charlie")
+
+        then: "no users from previous tests exist (fresh database)"
+        aliceResponse.statusCode() == 404
+        bobResponse.statusCode() == 404
+        charlieResponse.statusCode() == 404
+    }
+}
+```
+
+**Why METHOD Lifecycle**:
+- Each test needs clean database state
+- Tests verify specific operations in isolation
+- No dependencies between tests
+- Prevents test order dependencies
+- True idempotency (can run tests in any order)
+
+**Docker Compose** (`isolated-tests.yml`):
+```yaml
+services:
+  db-app:
+    image: example-isolated-tests-app:latest
+    ports:
+      - "8080"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/testdb
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_DB=testdb
+      - POSTGRES_USER=test
+      - POSTGRES_PASSWORD=test
+    tmpfs:
+      - /var/lib/postgresql/data  # In-memory database for speed
+```
+
+**README.md**: Full documentation explaining when to use METHOD lifecycle for isolated testing
+
+**Estimated Time**: 1.75 hours
+
+---
+
+### Phase 4: Update Scenario Tracking Tables (30 minutes)
+
+**Objective**: Update all scenario tracking tables with new lifecycle tests.
+
+#### 4.1 Update dockerOrch README Verification Table
+
+**File**: `plugin-integration-test/dockerOrch/README.md`
+
+**Changes**: Add two new scenarios to verification table:
+
+```markdown
+| Scenario | Location | Status | Lifecycle | Plugin Features Tested |
+|----------|----------|--------|-----------|------------------------|
+| Basic | `verification/basic/` | ✅ Complete | CLASS | composeUp, composeDown, state files, port mapping, cleanup |
+| Wait Healthy | `verification/wait-healthy/` | ⏳ Planned | CLASS | waitForHealthy, health check timing, timeout handling |
+| Wait Running | `verification/wait-running/` | ⏳ Planned | CLASS | waitForRunning, running state detection |
+| Mixed Wait | `verification/mixed-wait/` | ⏳ Planned | CLASS | Both wait types together (app + database) |
+| Lifecycle Class | `verification/lifecycle-class/` | ⏳ Planned | CLASS | Class-level lifecycle, setupSpec/cleanupSpec, state persistence |
+| Lifecycle Method | `verification/lifecycle-method/` | ⏳ Planned | METHOD | Method-level lifecycle, setup/cleanup, state isolation |
+| Logs Capture | `verification/logs-capture/` | ⏳ Planned | CLASS | Log capture configuration, file generation |
+| Multi Service | `verification/multi-service/` | ⏳ Planned | CLASS | Complex orchestration (3+ services) |
+| Existing Images | `verification/existing-images/` | ⏳ Planned | CLASS | Public images (nginx, redis), sourceRef pattern |
+```
+
+#### 4.2 Update dockerOrch README Example Table
+
+**File**: `plugin-integration-test/dockerOrch/README.md`
+
+**Changes**: Add two new examples to example table:
+
+```markdown
+| Example | Location | Status | Lifecycle | Use Case | Testing Libraries |
+|---------|----------|--------|-----------|----------|-------------------|
+| Web App | `examples/web-app/` | ✅ Complete | CLASS | REST API testing | RestAssured, HTTP client |
+| Database App | `examples/database-app/` | ⏳ Planned | CLASS | Database integration | JDBC, JPA, Spring Data |
+| Microservices | `examples/microservices/` | ⏳ Planned | CLASS | Service orchestration | RestAssured, service discovery |
+| Kafka App | `examples/kafka-app/` | ⏳ Planned | CLASS | Event-driven architecture | Kafka client, TestProducer/Consumer |
+| Batch Job | `examples/batch-job/` | ⏳ Planned | CLASS | Scheduled processing | Spring Batch, JDBC |
+| Stateful Web App | `examples/stateful-web-app/` | ⏳ Planned | CLASS | Session management, stateful testing | RestAssured, session cookies |
+| Isolated Tests | `examples/isolated-tests/` | ⏳ Planned | METHOD | Clean state per test, idempotency | JDBC, Spring Data, PostgreSQL |
+```
+
+#### 4.3 Update Verification README Table
+
+**File**: `plugin-integration-test/dockerOrch/verification/README.md`
+
+**Changes**: Update scenario table with new names and lifecycle terminology:
+
+```markdown
+| Scenario | Description | Lifecycle | Features Tested |
+|----------|-------------|-----------|-----------------|
+| `basic/` | Basic compose up/down with health checks | CLASS | composeUp, composeDown, state files, port mapping, cleanup |
+| `wait-healthy/` | Wait for healthy functionality | CLASS | waitForHealthy, health check timing, timeout handling |
+| `wait-running/` | Wait for running functionality | CLASS | waitForRunning, running state detection |
+| `mixed-wait/` | Both wait types together | CLASS | Sequential wait processing, multiple services |
+| `lifecycle-class/` | Class-level lifecycle | CLASS | setupSpec/cleanupSpec timing, state persistence across methods |
+| `lifecycle-method/` | Method-level lifecycle | METHOD | setup/cleanup timing, state isolation between methods |
+| `logs-capture/` | Log capture functionality | CLASS | Logs configuration, file generation |
+| `multi-service/` | Complex orchestration | CLASS | Multiple services, dependencies, scaling |
+| `existing-images/` | Public images without building | CLASS | sourceRef pattern, Docker Hub images |
+```
+
+#### 4.4 Update Examples README
+
+**File**: `plugin-integration-test/dockerOrch/examples/README.md`
+
+**Changes**: Add new examples to the list and update lifecycle references.
+
+**Estimated Time**: 30 minutes
+
+---
+
+## Summary of Changes
+
+### Files to Update
+
+#### Documentation Files (6 files):
+1. `plugin-integration-test/dockerOrch/README.md` - Update tables, lifecycle definitions
+2. `plugin-integration-test/dockerOrch/verification/README.md` - Update table, lifecycle definitions
+3. `plugin-integration-test/dockerOrch/examples/README.md` - Update lifecycle references
+4. `plugin-integration-test/dockerOrch/verification/basic/README.md` - Update lifecycle terminology
+5. `plugin-integration-test/dockerOrch/examples/web-app/README.md` - Update lifecycle terminology
+6. Any additional files found by grep search
+
+#### New Directories to Create (2 verification + 2 examples):
+1. `plugin-integration-test/dockerOrch/verification/lifecycle-class/` - CLASS lifecycle verification
+2. `plugin-integration-test/dockerOrch/verification/lifecycle-method/` - METHOD lifecycle verification
+3. `plugin-integration-test/dockerOrch/examples/stateful-web-app/` - CLASS lifecycle example
+4. `plugin-integration-test/dockerOrch/examples/isolated-tests/` - METHOD lifecycle example
+
+### Terminology Changes
+
+**Before**:
+- SUITE = once per test class
+- TEST = once per test method
+
+**After**:
+- CLASS = once per test class (setupSpec/cleanupSpec or @BeforeAll/@AfterAll)
+- METHOD = once per test method (setup/cleanup or @BeforeEach/@AfterEach)
+
+### Test Coverage After Implementation
+
+**Verification Tests**: 9 scenarios
+- 8 using CLASS lifecycle (most common)
+- 1 using METHOD lifecycle (special case validation)
+
+**Example Tests**: 7 scenarios
+- 6 using CLASS lifecycle (recommended for most cases)
+- 1 using METHOD lifecycle (when clean state required)
+
+## Effort Breakdown
+
+| Phase | Task | Time |
+|-------|------|------|
+| **Phase 1** | Fix Lifecycle Terminology | **1.0 hours** |
+| 1.1 | Update dockerOrch README | 0.15 hours |
+| 1.2 | Update Verification README | 0.15 hours |
+| 1.3 | Update Examples README | 0.15 hours |
+| 1.4 | Update Basic Verification README | 0.15 hours |
+| 1.5 | Update Web App Example README | 0.15 hours |
+| 1.6 | Search and update remaining references | 0.25 hours |
+| **Phase 2** | Add Verification Tests | **3.0 hours** |
+| 2.1 | Rename Lifecycle Suite → Class | 1.0 hours |
+| 2.2 | Implement Lifecycle Method | 2.0 hours |
+| **Phase 3** | Add Example Tests | **3.5 hours** |
+| 3.1 | Stateful Web App Example | 1.75 hours |
+| 3.2 | Isolated Database Tests Example | 1.75 hours |
+| **Phase 4** | Update Scenario Tracking Tables | **0.5 hours** |
+| 4.1 | Update dockerOrch README verification table | 0.1 hours |
+| 4.2 | Update dockerOrch README example table | 0.1 hours |
+| 4.3 | Update Verification README table | 0.15 hours |
+| 4.4 | Update Examples README | 0.15 hours |
+| **TOTAL** | | **8.0 hours** |
+
+## Success Criteria
+
+- [ ] All references to "SUITE" lifecycle replaced with "CLASS"
+- [ ] All references to "TEST" lifecycle replaced with "METHOD"
+- [ ] Lifecycle Class verification test implemented and passing
+- [ ] Lifecycle Method verification test implemented and passing
+- [ ] Stateful Web App example implemented and passing
+- [ ] Isolated Tests example implemented and passing
+- [ ] All scenario tracking tables updated
+- [ ] All README files updated with correct terminology
+- [ ] Documentation clearly explains when to use CLASS vs METHOD lifecycle
+- [ ] No containers remain after running any lifecycle test
+
+## Next Steps
+
+After completing this plan:
+1. Implement remaining verification scenarios (wait-healthy, wait-running, etc.)
+2. Implement remaining example scenarios (database-app, microservices, etc.)
+3. Update design doc with implementation status
+4. Consider adding lifecycle documentation to main plugin docs

@@ -1,7 +1,7 @@
 # Example: Testing a Web Application with Docker Compose
 
 **Type**: User-Facing Example
-**Lifecycle**: SUITE (setupSpec/cleanupSpec)
+**Lifecycle**: CLASS (setupSpec/cleanupSpec)
 **Use Case**: REST API testing with dockerOrch plugin
 
 ## Purpose
@@ -18,7 +18,7 @@ This example demonstrates how to test a Spring Boot REST API using the dockerOrc
 
 ## Test Lifecycle
 
-**Lifecycle Type**: `SUITE`
+**Lifecycle Type**: `CLASS`
 
 The test uses Spock's `setupSpec()` method:
 - `setupSpec()` - Runs once before all tests
@@ -28,7 +28,7 @@ The test uses Spock's `setupSpec()` method:
 - Tests run with the same Docker Compose stack
 - No `cleanupSpec()` needed (composeDown handles cleanup)
 
-**Why SUITE lifecycle?**
+**Why CLASS lifecycle?**
 - Containers start once, tests run multiple times (efficient)
 - Mirrors real-world usage: start environment, run test suite, tear down
 - Reduces test execution time (no container restarts between tests)

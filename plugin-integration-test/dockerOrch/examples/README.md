@@ -36,7 +36,7 @@ These are the same tools you would use in your own projects.
 
 ## Example Scenarios
 
-All examples use **SUITE lifecycle** (setupSpec/cleanupSpec):
+All examples use **CLASS lifecycle** (setupSpec/cleanupSpec):
 - Containers start once before all tests
 - All tests run against the same container environment
 - Containers stop once after all tests
@@ -46,7 +46,7 @@ All examples use **SUITE lifecycle** (setupSpec/cleanupSpec):
 
 **Use Case**: Testing REST API endpoints
 
-**Lifecycle**: SUITE
+**Lifecycle**: CLASS
 
 **Stack**: Spring Boot + REST endpoints
 
@@ -76,11 +76,88 @@ dockerOrch {
 
 ---
 
+### Stateful Web App (`stateful-web-app/`)
+
+**Use Case**: Testing stateful workflows with CLASS lifecycle
+
+**Lifecycle**: CLASS
+
+**Stack**: Spring Boot + Session management API
+
+**Tests**:
+- Register user account
+- Login and receive sessionId
+- Update profile using sessionId
+- Get profile data
+- Logout and invalidate session
+- Verify session invalidation
+
+**Libraries**: RestAssured, HTTP client
+
+**Key Feature**: Demonstrates **why CLASS lifecycle** is appropriate - tests build on each other, carrying state (sessionId) from one test to the next.
+
+**Configuration**:
+```groovy
+dockerOrch {
+    composeStacks {
+        statefulWebAppTest {
+            files.from('compose.yml')
+            projectName = "example-stateful-web-app"
+            waitForHealthy {
+                waitForServices.set(['stateful-web-app'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+```
+
+---
+
+### Isolated Tests (`isolated-tests/`)
+
+**Use Case**: Testing with METHOD lifecycle for complete isolation
+
+**Lifecycle**: METHOD
+
+**Stack**: Spring Boot + H2 in-memory database + JPA
+
+**Tests**:
+- Create user "alice" in test 1
+- Verify "alice" does NOT exist in test 2 (fresh database!)
+- Create user "alice" again in test 3 (succeeds because database is fresh)
+- Create user "bob" in test 4
+- Verify "bob" does NOT exist in test 5 (isolation!)
+
+**Libraries**: RestAssured, Spring Data JPA, H2 database
+
+**Key Feature**: Demonstrates **why METHOD lifecycle** is needed - containers restart for EACH test, ensuring complete database isolation. Tests can run in any order.
+
+**Configuration**:
+```groovy
+dockerOrch {
+    composeStacks {
+        isolatedTestsTest {
+            files.from('compose.yml')
+            projectName = "example-isolated-tests"
+            waitForHealthy {
+                waitForServices.set(['isolated-tests'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+```
+
+**Test Structure**: Uses `setup()` and `cleanup()` (NOT `setupSpec()`/`cleanupSpec()`), instance variables (NOT static), ensuring fresh containers for each test.
+
+---
+
 ### Database App (`database-app/`)
 
 **Use Case**: Testing application with database persistence
 
-**Lifecycle**: SUITE
+**Lifecycle**: CLASS
 
 **Stack**: Spring Boot + PostgreSQL
 
@@ -117,7 +194,7 @@ dockerOrch {
 
 **Use Case**: Testing multiple interacting services
 
-**Lifecycle**: SUITE
+**Lifecycle**: CLASS
 
 **Stack**: Frontend (React) + Backend (Spring Boot) + Auth Service (Spring Boot)
 
@@ -151,7 +228,7 @@ dockerOrch {
 
 **Use Case**: Testing event-driven applications
 
-**Lifecycle**: SUITE
+**Lifecycle**: CLASS
 
 **Stack**: Spring Boot + Kafka + Zookeeper
 
@@ -188,7 +265,7 @@ dockerOrch {
 
 **Use Case**: Testing scheduled/batch processing
 
-**Lifecycle**: SUITE
+**Lifecycle**: CLASS
 
 **Stack**: Spring Boot + Spring Batch + PostgreSQL
 
@@ -229,6 +306,8 @@ From `plugin-integration-test/` directory:
 
 # Run specific example
 ./gradlew dockerOrch:examples:web-app:integrationTest
+./gradlew dockerOrch:examples:stateful-web-app:integrationTest
+./gradlew dockerOrch:examples:isolated-tests:integrationTest
 ./gradlew dockerOrch:examples:database-app:integrationTest
 ```
 

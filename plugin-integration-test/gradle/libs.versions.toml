@@ -18,6 +18,7 @@ spring-boot = "3.3.4"
 spring-dependency-management = "1.1.6"
 junit-platform = "1.10.1"
 postgres = "42.7.1"
+h2 = "2.2.224"
 
 [libraries]
 groovy = { module = "org.apache.groovy:groovy", version.ref = "groovy" }
@@ -42,6 +43,7 @@ spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-start
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres" }
+h2-database = { module = "com.h2database:h2", version.ref = "h2" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

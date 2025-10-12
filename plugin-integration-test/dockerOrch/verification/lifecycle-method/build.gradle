@@ -1,0 +1,6 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ */
+
+// Empty build file for lifecycle-method aggregator project
+// Subprojects handle actual build logic

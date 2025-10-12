@@ -12,7 +12,7 @@ Verification tests prove the plugin infrastructure works correctly by validating
 - ✅ Port mapping works correctly (container → host)
 - ✅ Wait mechanisms block properly until conditions are met
 - ✅ Cleanup removes all containers, networks, and volumes
-- ✅ Lifecycle timing is correct (suite vs test level)
+- ✅ Lifecycle timing is correct (class vs method level)
 - ✅ Log capture generates files with expected content
 - ✅ Multi-service orchestration coordinates correctly
 
@@ -41,19 +41,20 @@ For user-facing examples of how to test your applications, see `../examples/`
 
 | Scenario | Description | Lifecycle | Features Tested |
 |----------|-------------|-----------|-----------------|
-| `basic/` | Basic compose up/down with health checks | SUITE | composeUp, composeDown, state files, port mapping, cleanup |
-| `wait-healthy/` | Wait for healthy functionality | SUITE | waitForHealthy, health check timing, timeout handling |
-| `wait-running/` | Wait for running functionality | SUITE | waitForRunning, running state detection |
-| `mixed-wait/` | Both wait types together | SUITE | Sequential wait processing, multiple services |
-| `lifecycle-suite/` | Class-level lifecycle | SUITE | Lifecycle.SUITE, setupSpec/cleanupSpec timing |
-| `lifecycle-test/` | Method-level lifecycle | TEST | Lifecycle.TEST, setup/cleanup timing |
-| `logs-capture/` | Log capture functionality | SUITE | Logs configuration, file generation |
-| `multi-service/` | Complex orchestration | SUITE | Multiple services, dependencies, scaling |
-| `existing-images/` | Public images without building | SUITE | sourceRef pattern, Docker Hub images |
+| `basic/` | Basic compose up/down with health checks | CLASS | composeUp, composeDown, state files, port mapping, cleanup |
+| `wait-healthy/` | Wait for healthy functionality | CLASS | waitForHealthy, health check timing, timeout handling |
+| `wait-running/` | Wait for running functionality | CLASS | waitForRunning, running state detection |
+| `mixed-wait/` | Both wait types together | CLASS | Sequential wait processing, multiple services |
+| `lifecycle-class/` | Class-level lifecycle | CLASS | ✅ COMPLETE - setupSpec/cleanupSpec timing, state persistence across methods |
+| `lifecycle-method/` | Method-level lifecycle | METHOD | ✅ COMPLETE - setup/cleanup timing, state isolation between methods |
+| `logs-capture/` | Log capture functionality | CLASS | Logs configuration, file generation |
+| `multi-service/` | Complex orchestration | CLASS | Multiple services, dependencies, scaling |
+| `existing-images/` | Public images without building | CLASS | sourceRef pattern, Docker Hub images |
 
 **Lifecycle Types:**
-- **SUITE** - Containers start once (setupSpec), all tests run, containers stop once (cleanupSpec)
-- **TEST** - Containers start/stop for each test method (setup/cleanup)
+- **CLASS** - Containers start once per test class (setupSpec/cleanupSpec or @BeforeAll/@AfterAll), all tests run,
+  containers stop once
+- **METHOD** - Containers start/stop for each test method (setup/cleanup or @BeforeEach/@AfterEach)
 
 ## Running Verification Tests
 
