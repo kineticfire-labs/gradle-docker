@@ -105,16 +105,16 @@ class StatefulWebAppExampleIT extends Specification {
             .body("""{"username":"${username}","password":"${password}"}""")
             .post("/login")
 
+        // Extract sessionId for subsequent tests
+        sessionId = response.jsonPath().getString("sessionId")
+
         then: "login succeeds"
         response.statusCode() == 200
 
         and: "we receive a session ID"
         response.jsonPath().getString("status") == "logged_in"
-        response.jsonPath().getString("sessionId") != null
+        sessionId != null
         response.jsonPath().getString("username") == username
-
-        and: "we save the sessionId for subsequent tests"
-        sessionId = response.jsonPath().getString("sessionId")
 
         println "✓ User '${username}' logged in, sessionId: ${sessionId}"
     }

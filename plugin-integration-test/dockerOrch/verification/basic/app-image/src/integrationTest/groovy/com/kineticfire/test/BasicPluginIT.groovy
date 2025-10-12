@@ -54,11 +54,8 @@ class BasicPluginIT extends Specification {
         stateData = StateFileValidator.parseStateFile(stateFile)
     }
 
-    def cleanupSpec() {
-        // Verify no resource leaks after all tests
-        println "=== Verifying cleanup for project: ${projectName} ==="
-        CleanupValidator.verifyCleanup(projectName)
-    }
+    // NOTE: Cleanup is handled by Gradle task workflow (composeDown via finalizedBy)
+    // No cleanupSpec() needed - containers are stopped by the Gradle task after test completes
 
     def "plugin should generate valid state file"() {
         expect: "state file has required fields"

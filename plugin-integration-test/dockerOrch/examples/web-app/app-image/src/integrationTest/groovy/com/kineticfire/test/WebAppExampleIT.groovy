@@ -93,15 +93,18 @@ class WebAppExampleIT extends Specification {
     def "should handle multiple concurrent requests successfully"() {
         given: "we want to test concurrent load"
         def concurrentRequests = 50
+        def results = Collections.synchronizedList([])
 
         when: "we make many concurrent requests"
-        def results = (1..concurrentRequests).collect {
+        def threads = (1..concurrentRequests).collect {
             Thread.start {
-                given()
+                def statusCode = given()
                     .get("/health")
                     .statusCode()
+                results.add(statusCode)
             }
-        }*.join()
+        }
+        threads*.join()
 
         then: "all requests should succeed"
         results.size() == concurrentRequests

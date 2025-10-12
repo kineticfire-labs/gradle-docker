@@ -72,6 +72,10 @@ include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'
 include 'dockerOrch:examples:web-app:app-image'
 
+include 'dockerOrch:examples:web-app-junit'
+include 'dockerOrch:examples:web-app-junit:app'
+include 'dockerOrch:examples:web-app-junit:app-image'
+
 include 'dockerOrch:examples:stateful-web-app'
 include 'dockerOrch:examples:stateful-web-app:app'
 include 'dockerOrch:examples:stateful-web-app:app-image'
@@ -79,3 +83,7 @@ include 'dockerOrch:examples:stateful-web-app:app-image'
 include 'dockerOrch:examples:isolated-tests'
 include 'dockerOrch:examples:isolated-tests:app'
 include 'dockerOrch:examples:isolated-tests:app-image'
+
+include 'dockerOrch:examples:isolated-tests-junit'
+include 'dockerOrch:examples:isolated-tests-junit:app'
+include 'dockerOrch:examples:isolated-tests-junit:app-image'

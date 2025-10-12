@@ -1,13 +1,32 @@
 package com.kineticfire.test
 
+import com.kineticfire.gradle.docker.spock.ComposeUp
+import com.kineticfire.gradle.docker.spock.LifecycleMode
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
 import spock.lang.Specification
 
 import static io.restassured.RestAssured.given
 
+/**
+ * Verification test for CLASS lifecycle using @ComposeUp extension.
+ *
+ * This test verifies that the Spock extension correctly implements CLASS lifecycle:
+ * - Containers start ONCE before all tests (setupSpec)
+ * - State PERSISTS between test methods
+ * - Containers stop ONCE after all tests (cleanupSpec)
+ */
+@ComposeUp(
+    stackName = "lifecycleClassTest",
+    composeFile = "src/integrationTest/resources/compose/lifecycle-class.yml",
+    lifecycle = LifecycleMode.CLASS,
+    waitForHealthy = ["state-app"],
+    timeoutSeconds = 60,
+    pollSeconds = 2
+)
 class LifecycleClassIT extends Specification {
 
+    // Static variables (shared across all tests in class)
     static String projectName
     static Map stateData
     static String baseUrl
@@ -17,20 +36,22 @@ class LifecycleClassIT extends Specification {
     def setupSpec() {
         setupSpecCallCount++
 
+        // Extension provides COMPOSE_STATE_FILE and COMPOSE_PROJECT_NAME system properties
         projectName = System.getProperty('COMPOSE_PROJECT_NAME')
         def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
         def stateFile = new File(stateFilePath)
-        stateData = StateFileValidator.parseStateFile(stateFile)
+        stateData = new JsonSlurper().parse(stateFile)
 
         def port = stateData.services['state-app'].publishedPorts[0].host
         baseUrl = "http://localhost:${port}"
         RestAssured.baseURI = baseUrl
+
+        println "=== SetupSpec complete with shared containers at ${baseUrl} ==="
     }
 
     def cleanupSpec() {
         cleanupSpecCallCount++
-        // Note: Don't check for cleanup here - composeDown runs AFTER cleanupSpec via finalizedBy
-        // Containers are still running at this point, which is correct for CLASS lifecycle
+        println "=== CleanupSpec complete, containers stopping ==="
     }
 
     def "setupSpec should be called exactly once"() {
@@ -38,9 +59,13 @@ class LifecycleClassIT extends Specification {
         setupSpecCallCount == 1
     }
 
-    def "plugin should generate valid state file"() {
-        expect: "state file has required fields"
-        StateFileValidator.assertValidStructure(stateData, 'lifecycleClassTest', projectName)
+    def "extension should generate valid state file"() {
+        expect: "state file has required fields with CLASS lifecycle"
+        stateData.stackName == 'lifecycleClassTest'
+        stateData.lifecycle == 'class'
+        stateData.testClass != null
+        stateData.testMethod == null  // No testMethod in CLASS lifecycle
+        stateData.services['state-app'] != null
     }
 
     def "containers should remain running between tests"() {

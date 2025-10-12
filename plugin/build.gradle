@@ -78,7 +78,11 @@ dependencies {
     
     // JUnit 5 for lifecycle extensions (provided as implementation for downstream consumers)
     implementation libs.junit.jupiter.api
-    
+
+    // Spock for Spock extension support (provided as implementation for downstream consumers)
+    implementation platform(libs.spock.bom)
+    implementation libs.spock.core
+
     // Gradle API
     compileOnly gradleApi()
     compileOnly localGroovy()

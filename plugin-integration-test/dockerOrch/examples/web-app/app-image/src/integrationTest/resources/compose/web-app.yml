@@ -17,9 +17,9 @@
 
 services:
   web-app:
-    image: scenario-1-web-app:latest
+    image: example-web-app:latest
     ports:
-      - "9091:8080"
+      - "8080"
     environment:
       - SPRING_PROFILES_ACTIVE=test
     healthcheck:

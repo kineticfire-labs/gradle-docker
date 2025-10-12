@@ -40,11 +40,11 @@ if (rootProject.name != 'plugin-integration-test') {
         group = 'verification'
         doFirst {
             throw new GradleException("""
-❌ DockerOrch scenario-1 integration test must be run from the top-level directory.
+❌ DockerOrch basic verification test must be run from the top-level directory.
 
 ✅ SOLUTION:
    cd ${file('../..').canonicalPath}
-   ./gradlew dockerOrch:scenario-1:integrationTest
+   ./gradlew dockerOrch:verification:basic:integrationTest
 
 ℹ️  This ensures access to the shared buildSrc functionality.
 """)
@@ -55,26 +55,26 @@ if (rootProject.name != 'plugin-integration-test') {
 
 // ========================================
 // Task: integrationTest
-// Run this scenario's integration test
+// Run this verification test
 // ========================================
 tasks.register('integrationTest') {
     group = 'verification'
-    description = 'Run scenario-1 integration test'
+    description = 'Run basic verification test'
 
     // Depends on the full workflow in app-image
-    dependsOn ':dockerOrch:scenario-1:app-image:runIntegrationTest'
+    dependsOn ':dockerOrch:verification:basic:app-image:integrationTest'
 
     doLast {
-        logger.lifecycle("✅ Scenario 1 integration test complete")
+        logger.lifecycle("✅ Basic verification test complete")
     }
 }
 
 // ========================================
 // Task: clean
-// Clean this scenario
+// Clean this verification test
 // (Note: 'clean' task provided by 'base' plugin)
 // ========================================
 tasks.named('clean') {
-    dependsOn ':dockerOrch:scenario-1:app:clean'
-    dependsOn ':dockerOrch:scenario-1:app-image:clean'
+    dependsOn ':dockerOrch:verification:basic:app:clean'
+    dependsOn ':dockerOrch:verification:basic:app-image:clean'
 }

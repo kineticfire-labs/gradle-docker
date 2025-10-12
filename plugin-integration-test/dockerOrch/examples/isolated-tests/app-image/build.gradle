@@ -64,22 +64,9 @@ docker {
     }
 }
 
-// Configure dockerOrch DSL
-dockerOrch {
-    composeStacks {
-        isolatedTestsTest {
-            files.from('src/integrationTest/resources/compose/isolated-tests.yml')
-            projectName = "example-isolated-tests-test"
-
-            // Wait for app to be healthy
-            waitForHealthy {
-                waitForServices.set(['isolated-tests'])
-                timeoutSeconds.set(60)
-                pollSeconds.set(2)
-            }
-        }
-    }
-}
+// NOTE: dockerOrch DSL is NOT needed for this example.
+// The @ComposeUp annotation on the test class handles all Docker Compose orchestration.
+// This demonstrates how to use the Spock extension for METHOD lifecycle management.
 
 // Create integration test source set
 sourceSets {
@@ -95,13 +82,11 @@ sourceSets {
     }
 }
 
-// NOTE: User-facing examples do NOT use buildSrc validators
-// Examples show how real users would test their applications
-
-// Add REST testing dependencies for examples
+// Add plugin classes and REST testing dependencies
 dependencies {
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.5.0'
+    integrationTestImplementation 'io.rest-assured:json-path:5.5.0'
 }
 
 configurations {
@@ -114,9 +99,9 @@ tasks.named('processIntegrationTestResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
-// Register integration test task (Gradle 9/10 style)
+// Register integration test task
 tasks.register('integrationTest', Test) {
-    description = 'Runs integration tests against Docker Compose stack'
+    description = 'Runs METHOD lifecycle integration tests using @ComposeUp extension'
     group = 'verification'
 
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
@@ -124,65 +109,17 @@ tasks.register('integrationTest', Test) {
 
     useJUnitPlatform()
 
-    // Pass state file location to tests (lazy)
-    systemProperty 'COMPOSE_STATE_FILE',
-        layout.buildDirectory.file('compose-state/isolatedTestsTest-state.json').get().asFile.absolutePath
-
-    // Pass project name (examples don't typically need validators, but included for completeness)
-    systemProperty 'COMPOSE_PROJECT_NAME', "example-isolated-tests-test"
+    // NOTE: No systemProperty settings needed - @ComposeUp extension handles everything
+    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
 
     // Not cacheable - interacts with Docker
     outputs.cacheIf { false }
 }
 
-// Ensure compose up waits for image build
+// Ensure Docker image is built before running integration tests
 afterEvaluate {
-    tasks.named('composeUpIsolatedTestsTest') {
+    tasks.named('integrationTest') {
         dependsOn tasks.named('dockerBuildIsolatedTests')
     }
 }
 
-// Full integration test workflow
-tasks.register('runIntegrationTest') {
-        description = 'Full integration test: build image -> up -> test -> down'
-        group = 'verification'
-
-        // Build image first (lazy)
-        dependsOn tasks.named('dockerBuildIsolatedTests')
-
-        // Then compose up
-        dependsOn tasks.named('composeUpIsolatedTestsTest')
-
-        // Then run tests
-        dependsOn tasks.named('integrationTest')
-
-        // Always tear down
-        finalizedBy tasks.named('composeDownIsolatedTestsTest')
-
-        doLast {
-            logger.lifecycle("Integration test complete for example:isolated-tests")
-    }
-}
-
-// Cleanup task
-tasks.register('cleanupContainers') {
-    description = 'Force cleanup of any lingering containers'
-    group = 'verification'
-
-    doLast {
-        def projectName = "example-isolated-tests-test"
-        def result = exec {
-            commandLine 'docker', 'ps', '-a', '-q', '--filter', "name=${projectName}"
-            standardOutput = new ByteArrayOutputStream()
-            ignoreExitValue = true
-        }
-
-        def containerIds = result.standardOutput.toString().trim()
-        if (containerIds) {
-            exec {
-                commandLine 'docker', 'rm', '-f'
-                args containerIds.split('\n')
-            }
-        }
-    }
-}

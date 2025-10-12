@@ -1,0 +1,143 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'java'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+repositories {
+    mavenLocal()  // Plugin must be in Maven local
+    mavenCentral()
+}
+
+// Get JAR file from app subproject using Provider API (Gradle 9/10)
+def jarFileProvider = project(':dockerOrch:examples:isolated-tests-junit:app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Configure docker DSL
+docker {
+    images {
+        isolatedTests {
+            imageName = 'example-isolated-tests-junit'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareIsolatedTestsContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for isolated tests image'
+                into layout.buildDirectory.dir('docker-context/isolatedTests')
+                from('src/main/docker')
+
+                // Copy JAR from app project
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':dockerOrch:examples:isolated-tests-junit:app').tasks.named('bootJar')
+            }
+
+            // Pass JAR file name as build arg (lazy)
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+    }
+}
+
+// Configure dockerOrch DSL
+dockerOrch {
+    composeStacks {
+        isolatedTestsTest {
+            files.from('src/integrationTest/resources/compose/isolated-tests.yml')
+            projectName = "example-isolated-tests-junit-test"
+
+            waitForHealthy {
+                waitForServices.set(['isolated-tests'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// Create integration test source set
+sourceSets {
+    integrationTest {
+        java {
+            srcDir 'src/integrationTest/java'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+// Add JUnit 5, REST testing dependencies and plugin classes
+dependencies {
+    // JUnit 5 for integration tests (includes API, engine, and params)
+    integrationTestImplementation libs.junit.jupiter
+    integrationTestRuntimeOnly libs.junit.platform.launcher
+
+    // REST testing
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
+    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+
+    // Add plugin classes for @ExtendWith annotation access
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Configure resource processing
+tasks.named('processIntegrationTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Register integration test task
+tasks.register('integrationTest', Test) {
+    description = 'Runs METHOD lifecycle integration tests using JUnit 5 extension'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+
+    useJUnitPlatform()
+
+    // Configure system properties for JUnit extension
+    systemProperty 'docker.compose.stack', 'isolatedTestsTest'
+    systemProperty 'docker.compose.project', 'example-isolated-tests-junit-test'
+    systemProperty 'docker.compose.file', file('src/integrationTest/resources/compose/isolated-tests.yml').absolutePath
+    systemProperty 'docker.compose.waitServices', 'isolated-tests'
+
+    // NOTE: No systemProperty for COMPOSE_STATE_FILE needed - extension generates it
+    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
+
+    // Not cacheable - interacts with Docker
+    outputs.cacheIf { false }
+}
+
+// Ensure Docker image is built before running integration tests
+afterEvaluate {
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('dockerBuildIsolatedTests')
+    }
+}

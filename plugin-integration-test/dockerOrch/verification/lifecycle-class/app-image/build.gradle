@@ -56,21 +56,9 @@ docker {
     }
 }
 
-// Configure dockerOrch DSL
-dockerOrch {
-    composeStacks {
-        lifecycleClassTest {
-            files.from('src/integrationTest/resources/compose/lifecycle-class.yml')
-            projectName = "verification-lifecycle-class-test"
-
-            waitForHealthy {
-                waitForServices.set(['state-app'])
-                timeoutSeconds.set(60)
-                pollSeconds.set(2)
-            }
-        }
-    }
-}
+// NOTE: dockerOrch DSL is NOT needed for this test.
+// The @ComposeUp annotation on the test class handles all Docker Compose orchestration.
+// This demonstrates how to use the Spock extension for CLASS lifecycle management.
 
 // Integration test source set
 sourceSets {
@@ -86,11 +74,14 @@ sourceSets {
     }
 }
 
-// Add buildSrc validators
+// Add buildSrc validators and plugin dependencies
 dependencies {
     integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
     integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
     integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+
+    // Add plugin classes for @ComposeUp annotation access
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
 }
 
 configurations {
@@ -104,7 +95,7 @@ tasks.named('processIntegrationTestResources') {
 
 // Integration test task
 tasks.register('integrationTest', Test) {
-    description = 'Runs CLASS lifecycle verification tests'
+    description = 'Runs CLASS lifecycle verification tests using @ComposeUp extension'
     group = 'verification'
 
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
@@ -112,31 +103,15 @@ tasks.register('integrationTest', Test) {
 
     useJUnitPlatform()
 
-    systemProperty 'COMPOSE_STATE_FILE',
-        layout.buildDirectory.file('compose-state/lifecycleClassTest-state.json').get().asFile.absolutePath
-    systemProperty 'COMPOSE_PROJECT_NAME', "verification-lifecycle-class-test"
+    // NOTE: No systemProperty settings needed - @ComposeUp extension handles everything
+    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
 
     outputs.cacheIf { false }
 }
 
-// Wire dependencies
+// Ensure Docker image is built before running integration tests
 afterEvaluate {
-    tasks.named('composeUpLifecycleClassTest') {
+    tasks.named('integrationTest') {
         dependsOn tasks.named('dockerBuildStateApp')
-    }
-}
-
-// Full workflow
-tasks.register('runIntegrationTest') {
-    description = 'Full integration test: build -> up -> test -> down'
-    group = 'verification'
-
-    dependsOn tasks.named('dockerBuildStateApp')
-    dependsOn tasks.named('composeUpLifecycleClassTest')
-    dependsOn tasks.named('integrationTest')
-    finalizedBy tasks.named('composeDownLifecycleClassTest')
-
-    doLast {
-        logger.lifecycle("Lifecycle CLASS verification test complete")
     }
 }

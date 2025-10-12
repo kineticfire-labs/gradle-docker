@@ -40,11 +40,11 @@ if (rootProject.name != 'plugin-integration-test') {
         group = 'verification'
         doFirst {
             throw new GradleException("""
-❌ DockerOrch scenario-1 integration test must be run from the top-level directory.
+❌ DockerOrch isolated-tests integration test must be run from the top-level directory.
 
 ✅ SOLUTION:
    cd ${file('../..').canonicalPath}
-   ./gradlew dockerOrch:scenario-1:integrationTest
+   ./gradlew dockerOrch:examples:isolated-tests:integrationTest
 
 ℹ️  This ensures access to the shared buildSrc functionality.
 """)
@@ -55,26 +55,26 @@ if (rootProject.name != 'plugin-integration-test') {
 
 // ========================================
 // Task: integrationTest
-// Run this scenario's integration test
+// Run this example's integration test
 // ========================================
 tasks.register('integrationTest') {
     group = 'verification'
-    description = 'Run scenario-1 integration test'
+    description = 'Run isolated-tests integration test'
 
     // Depends on the full workflow in app-image
-    dependsOn ':dockerOrch:scenario-1:app-image:runIntegrationTest'
+    dependsOn ':dockerOrch:examples:isolated-tests:app-image:integrationTest'
 
     doLast {
-        logger.lifecycle("✅ Scenario 1 integration test complete")
+        logger.lifecycle("✅ Isolated-tests integration test complete")
     }
 }
 
 // ========================================
 // Task: clean
-// Clean this scenario
+// Clean this example
 // (Note: 'clean' task provided by 'base' plugin)
 // ========================================
 tasks.named('clean') {
-    dependsOn ':dockerOrch:scenario-1:app:clean'
-    dependsOn ':dockerOrch:scenario-1:app-image:clean'
+    dependsOn ':dockerOrch:examples:isolated-tests:app:clean'
+    dependsOn ':dockerOrch:examples:isolated-tests:app-image:clean'
 }

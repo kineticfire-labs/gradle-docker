@@ -136,6 +136,12 @@ afterEvaluate {
     tasks.named('composeUpWebAppTest') {
         dependsOn tasks.named('dockerBuildWebApp')
     }
+
+    // Ensure integrationTest has full workflow
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpWebAppTest')
+        finalizedBy tasks.named('composeDownWebAppTest')
+    }
 }
 
 // Full integration test workflow

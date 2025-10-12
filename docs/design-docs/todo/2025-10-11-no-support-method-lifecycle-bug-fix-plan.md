@@ -1,10 +1,46 @@
 # Implementation Plan: Add Spock Extension for METHOD Lifecycle Support
 
-**Date**: 2025-10-11  
-**Status**: Ready to Implement  
-**Priority**: High  
-**Related**: `2025-10-11-no-support-method-lifecycle-bug.md`  
+**Date Created**: 2025-10-11
+**Last Updated**: 2025-10-12
+**Status**: In Progress - Phases 1 & 2 Complete
+**Priority**: High
+**Related**: `2025-10-11-no-support-method-lifecycle-bug.md`
 **Estimated Total Effort**: 14-18 hours
+**Actual Effort So Far**: ~6 hours
+
+## Progress Update (2025-10-12)
+
+### ✅ Completed
+
+**Phase 1: Spock Extension Infrastructure (4-5 hours)** - COMPLETE
+- ✅ 1.1: Created `ComposeUp` annotation and `LifecycleMode` enum
+- ✅ 1.2: Implemented `DockerComposeSpockExtension`, `ComposeClassInterceptor`, `ComposeMethodInterceptor`
+- ⏳ 1.3: Unit tests deferred until integration tests validate functionality
+
+**Phase 2: Refactor Integration Tests (3-4 hours)** - COMPLETE
+- ✅ Updated `lifecycle-class` test to use `@ComposeUp` annotation with CLASS lifecycle
+- ✅ Updated `lifecycle-method` test to use `@ComposeUp` annotation with METHOD lifecycle
+- ✅ Both tests passing: lifecycle-class (7/7), lifecycle-method (all pass)
+- ✅ No containers remain after test execution
+
+**Additional Fixes**:
+- ✅ Added Spock as `implementation` dependency in `plugin/build.gradle`
+- ✅ Fixed compose file path resolution with `.toAbsolutePath()`
+- ✅ Fixed `JUnitComposeService.getStackServices()` to properly parse docker compose ps JSON output
+- ✅ Added plugin dependency for integration test source sets
+- ✅ Fixed task dependencies with `afterEvaluate` blocks
+
+### 🚧 In Progress
+
+**Next**: Phase 3 - Add JUnit 5 Examples (2-3 hours)
+
+### ⏰ Remaining
+
+- Phase 3: Add JUnit 5 Examples
+- Phase 4: Update Documentation
+- Phase 5: Verification and Testing
+
+---
 
 ## Executive Summary
 

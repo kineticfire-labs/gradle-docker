@@ -32,31 +32,38 @@ tasks.register('integrationTest') {
     group = 'verification'
     description = 'Run all dockerOrch integration tests'
 
-    // Depend on each scenario's integrationTest task
-    dependsOn ':dockerOrch:scenario-1:integrationTest'
-    dependsOn ':dockerOrch:scenario-2:integrationTest'
-    dependsOn ':dockerOrch:scenario-3:integrationTest'
-    dependsOn ':dockerOrch:scenario-4:integrationTest'
-    dependsOn ':dockerOrch:scenario-5:integrationTest'
-    dependsOn ':dockerOrch:scenario-6:integrationTest'
-    dependsOn ':dockerOrch:scenario-7:integrationTest'
+    // Verification tests
+    dependsOn ':dockerOrch:verification:basic:app-image:integrationTest'
+    dependsOn ':dockerOrch:verification:lifecycle-class:app-image:integrationTest'
+    dependsOn ':dockerOrch:verification:lifecycle-method:app-image:integrationTest'
+
+    // Example tests
+    dependsOn ':dockerOrch:examples:web-app:app-image:integrationTest'
+    dependsOn ':dockerOrch:examples:web-app-junit:app-image:integrationTest'
+    dependsOn ':dockerOrch:examples:stateful-web-app:app-image:integrationTest'
+    dependsOn ':dockerOrch:examples:isolated-tests:app-image:integrationTest'
+    dependsOn ':dockerOrch:examples:isolated-tests-junit:app-image:integrationTest'
 
     doLast {
-        logger.lifecycle("✅ All dockerOrch scenarios complete")
+        logger.lifecycle("✅ All dockerOrch tests complete")
     }
 }
 
 // ========================================
 // Task: clean
-// Clean all dockerOrch scenarios
+// Clean all dockerOrch tests
 // (Note: 'clean' task provided by 'base' plugin)
 // ========================================
 tasks.named('clean') {
-    dependsOn ':dockerOrch:scenario-1:clean'
-    dependsOn ':dockerOrch:scenario-2:clean'
-    dependsOn ':dockerOrch:scenario-3:clean'
-    dependsOn ':dockerOrch:scenario-4:clean'
-    dependsOn ':dockerOrch:scenario-5:clean'
-    dependsOn ':dockerOrch:scenario-6:clean'
-    dependsOn ':dockerOrch:scenario-7:clean'
+    // Verification tests - clean at app-image level
+    dependsOn ':dockerOrch:verification:basic:app-image:clean'
+    dependsOn ':dockerOrch:verification:lifecycle-class:app-image:clean'
+    dependsOn ':dockerOrch:verification:lifecycle-method:app-image:clean'
+
+    // Examples - clean at app-image level
+    dependsOn ':dockerOrch:examples:web-app:app-image:clean'
+    dependsOn ':dockerOrch:examples:web-app-junit:app-image:clean'
+    dependsOn ':dockerOrch:examples:stateful-web-app:app-image:clean'
+    dependsOn ':dockerOrch:examples:isolated-tests:app-image:clean'
+    dependsOn ':dockerOrch:examples:isolated-tests-junit:app-image:clean'
 }

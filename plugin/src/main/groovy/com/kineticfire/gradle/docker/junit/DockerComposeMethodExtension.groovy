@@ -28,6 +28,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -52,6 +53,8 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
 
     private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
+    private static final String COMPOSE_FILE_PROPERTY = "docker.compose.file";
+    private static final String COMPOSE_WAIT_SERVICES_PROPERTY = "docker.compose.waitServices";
     private static final String COMPOSE_STATE_FILE_PROPERTY = "COMPOSE_STATE_FILE";
 
     // Store the unique project name per test thread to ensure cleanup uses the same name
@@ -274,7 +277,13 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     
     private void startComposeStack(String stackName, String uniqueProjectName) throws Exception {
         // Use ComposeService to start the stack
-        Path composeFile = fileService.resolve("src/integrationTest/resources/compose/integration-method.yml");
+        // Read compose file path from system property, fall back to default for plugin integration tests
+        String composeFilePath = systemPropertyService.getProperty(COMPOSE_FILE_PROPERTY);
+        if (composeFilePath == null || composeFilePath.isEmpty()) {
+            composeFilePath = "src/integrationTest/resources/compose/integration-method.yml";
+        }
+
+        Path composeFile = fileService.resolve(composeFilePath);
         if (!fileService.exists(composeFile)) {
             throw new IllegalStateException("Compose file not found: " + composeFile);
         }
@@ -311,8 +320,16 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         // Use ComposeService to wait for services
         System.out.println("Waiting for containers to become healthy...");
 
-        // For integration tests, wait for the time-server service to be healthy
-        List<String> services = Collections.singletonList("time-server");
+        // Read wait services from system property, fall back to default for plugin integration tests
+        String waitServicesProperty = systemPropertyService.getProperty(COMPOSE_WAIT_SERVICES_PROPERTY);
+        List<String> services;
+        if (waitServicesProperty != null && !waitServicesProperty.isEmpty()) {
+            services = Arrays.asList(waitServicesProperty.split(","));
+        } else {
+            // Default for plugin integration tests
+            services = Collections.singletonList("time-server");
+        }
+
         WaitConfig waitConfig = new WaitConfig(
             uniqueProjectName,
             services,
@@ -370,7 +387,22 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
             serviceJson.append("      \"containerId\": \"").append(serviceInfo.getContainerId()).append("\",\n");
             serviceJson.append("      \"containerName\": \"").append(serviceInfo.getContainerName()).append("\",\n");
             serviceJson.append("      \"state\": \"").append(serviceInfo.getState()).append("\",\n");
-            serviceJson.append("      \"publishedPorts\": []\n");
+            serviceJson.append("      \"publishedPorts\": [");
+
+            // Add port mappings
+            List<String> portEntries = new ArrayList<>();
+            for (PortMapping port : serviceInfo.getPublishedPorts()) {
+                StringBuilder portJson = new StringBuilder();
+                portJson.append("{");
+                portJson.append("\"container\": ").append(port.getContainerPort()).append(", ");
+                portJson.append("\"host\": ").append(port.getHostPort()).append(", ");
+                portJson.append("\"protocol\": \"").append(port.getProtocol()).append("\"");
+                portJson.append("}");
+                portEntries.add(portJson.toString());
+            }
+
+            serviceJson.append(String.join(", ", portEntries));
+            serviceJson.append("]\n");
             serviceJson.append("    }");
             serviceEntries.add(serviceJson.toString());
         }

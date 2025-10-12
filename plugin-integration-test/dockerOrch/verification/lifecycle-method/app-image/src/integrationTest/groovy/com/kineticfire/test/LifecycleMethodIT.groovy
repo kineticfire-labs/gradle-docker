@@ -1,16 +1,32 @@
 package com.kineticfire.test
 
+import com.kineticfire.gradle.docker.spock.ComposeUp
+import com.kineticfire.gradle.docker.spock.LifecycleMode
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
 import spock.lang.Specification
 
 import static io.restassured.RestAssured.given
 
+/**
+ * Verification test for METHOD lifecycle using @ComposeUp extension.
+ *
+ * This test verifies that the Spock extension correctly implements METHOD lifecycle:
+ * - Containers start fresh before EACH test method
+ * - State does NOT persist between test methods
+ * - Containers stop after EACH test method
+ */
+@ComposeUp(
+    stackName = "lifecycleMethodTest",
+    composeFile = "src/integrationTest/resources/compose/lifecycle-method.yml",
+    lifecycle = LifecycleMode.METHOD,
+    waitForHealthy = ["state-app"],
+    timeoutSeconds = 60,
+    pollSeconds = 2
+)
 class LifecycleMethodIT extends Specification {
 
     // Instance variables (not static!) - fresh for each test
-    String projectName
-    Map stateData
     String baseUrl
 
     // Static counters to track lifecycle calls
@@ -20,20 +36,21 @@ class LifecycleMethodIT extends Specification {
     def setup() {
         setupCallCount++
 
-        projectName = System.getProperty('COMPOSE_PROJECT_NAME')
+        // Extension provides COMPOSE_STATE_FILE system property
         def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
         def stateFile = new File(stateFilePath)
-        stateData = StateFileValidator.parseStateFile(stateFile)
+        def stateData = new JsonSlurper().parse(stateFile)
 
         def port = stateData.services['state-app'].publishedPorts[0].host
         baseUrl = "http://localhost:${port}"
         RestAssured.baseURI = baseUrl
+
+        println "=== Test ${setupCallCount}: Setup complete with fresh containers at ${baseUrl} ==="
     }
 
     def cleanup() {
         cleanupCallCount++
-        // Note: composeDown runs via finalizedBy at the very end, not after each test method
-        // So we don't verify cleanup here
+        println "=== Test ${cleanupCallCount}: Cleanup complete, containers stopping ==="
     }
 
     def "setup should be called before each test"() {
@@ -41,9 +58,18 @@ class LifecycleMethodIT extends Specification {
         setupCallCount >= 1
     }
 
-    def "plugin should generate valid state file"() {
-        expect: "state file has required fields"
-        StateFileValidator.assertValidStructure(stateData, 'lifecycleMethodTest', projectName)
+    def "extension should generate valid state file"() {
+        given: "we read the state file"
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        def stateData = new JsonSlurper().parse(stateFile)
+
+        expect: "state file has required fields with METHOD lifecycle"
+        stateData.stackName == 'lifecycleMethodTest'
+        stateData.lifecycle == 'method'
+        stateData.testClass != null
+        stateData.testMethod != null
+        stateData.services['state-app'] != null
     }
 
     def "containers should be fresh for each test - write test 1"() {

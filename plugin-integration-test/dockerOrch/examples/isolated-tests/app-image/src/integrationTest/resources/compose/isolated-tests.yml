@@ -17,9 +17,9 @@
 
 services:
   isolated-tests:
-    image: scenario-1-isolated-tests:latest
+    image: example-isolated-tests:latest
     ports:
-      - "9091:8080"
+      - "8080"
     environment:
       - SPRING_PROFILES_ACTIVE=test
     healthcheck:

@@ -260,20 +260,31 @@ class JUnitComposeService implements ComposeService {
                 return Collections.emptyMap()
             }
 
-            // Simple parsing - in production would use proper JSON library
             def services = [:]
             if (result.output != null && !result.output.trim().isEmpty()) {
                 // Docker compose ps outputs one JSON object per line
                 String[] lines = result.output.split("\n")
                 for (String line : lines) {
                     if (line.trim().isEmpty()) continue
-                    // Simple extraction - would use JSON parser in production
-                    services.put("time-server", new ServiceInfo(
-                        "container-id",
-                        "time-server",
-                        "running",
-                        []
-                    ))
+
+                    try {
+                        def json = new groovy.json.JsonSlurper().parseText(line)
+                        def serviceName = json.Service ?: json.Name?.split('_')?.getAt(1)
+                        def status = json.State ?: json.Status
+                        def portMappings = parsePortMappings(json.Ports)
+
+                        if (serviceName) {
+                            def serviceState = parseServiceState(status)
+                            services[serviceName] = new ServiceInfo(
+                                json.ID ?: 'unknown',
+                                serviceName,
+                                serviceState.toString(),
+                                portMappings
+                            )
+                        }
+                    } catch (Exception e) {
+                        System.err.println("Failed to parse service info line: ${line} - ${e.message}")
+                    }
                 }
             }
 
@@ -283,6 +294,49 @@ class JUnitComposeService implements ComposeService {
             System.err.println("Error getting stack services: ${e.message}")
             return Collections.emptyMap()
         }
+    }
+
+    private ServiceStatus parseServiceState(String status) {
+        if (!status) return ServiceStatus.UNKNOWN
+
+        def lowerStatus = status.toLowerCase()
+        if (lowerStatus.contains('running') || lowerStatus.contains('up')) {
+            if (lowerStatus.contains('healthy')) {
+                return ServiceStatus.HEALTHY
+            }
+            return ServiceStatus.RUNNING
+        } else if (lowerStatus.contains('exit') || lowerStatus.contains('stop')) {
+            return ServiceStatus.STOPPED
+        } else if (lowerStatus.contains('restart') || lowerStatus.contains('restarting')) {
+            return ServiceStatus.RESTARTING
+        } else {
+            return ServiceStatus.UNKNOWN
+        }
+    }
+
+    private List<PortMapping> parsePortMappings(String portsString) {
+        if (!portsString) return []
+
+        def portMappings = []
+        // Docker Compose ps --format json returns ports like "0.0.0.0:9091->8080/tcp, :::9091->8080/tcp"
+        portsString.split(',').each { portEntry ->
+            def trimmed = portEntry.trim()
+            if (trimmed) {
+                try {
+                    // Parse format: "0.0.0.0:9091->8080/tcp" or "9091->8080/tcp"
+                    def matcher = trimmed =~ /(?:[\d\.]+:)?(\d+)->(\d+)(?:\/(\w+))?/
+                    if (matcher.find()) {
+                        def hostPort = matcher.group(1) as Integer
+                        def containerPort = matcher.group(2) as Integer
+                        def protocol = matcher.group(3) ?: 'tcp'
+                        portMappings << new PortMapping(containerPort, hostPort, protocol)
+                    }
+                } catch (Exception e) {
+                    System.err.println("Failed to parse port mapping: ${trimmed} - ${e.message}")
+                }
+            }
+        }
+        return portMappings
     }
 
     private boolean checkServiceReady(String projectName, String serviceName, ServiceStatus targetState) {
