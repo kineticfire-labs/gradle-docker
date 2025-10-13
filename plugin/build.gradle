@@ -90,6 +90,7 @@ dependencies {
     // Testing
     testImplementation platform(libs.spock.bom)
     testImplementation libs.spock.core
+    testImplementation 'net.bytebuddy:byte-buddy:1.14.11'  // Required for Spock to mock classes
     testImplementation libs.spock.junit4
     testRuntimeOnly libs.junit.platform.launcher
     testRuntimeOnly libs.junit.platform.engine
