@@ -333,4 +333,168 @@ class DockerTagTaskTest extends Specification {
         }
         1 * mockDockerService.tagImage('private.registry.com/myapp:1.0.0', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
     }
+
+    // ===== MISSING ISSOURCEREFMODE TESTS =====
+
+    def "isInSourceRefMode returns true with sourceRefRepository only"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRefRepository.set('myrepo/myimage')
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        method.accessible = true
+        def result = method.invoke(task, imageSpec)
+
+        then:
+        result == true
+    }
+
+    def "isInSourceRefMode returns true with sourceRefImageName only"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRefImageName.set('myimage')
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        method.accessible = true
+        def result = method.invoke(task, imageSpec)
+
+        then:
+        result == true
+    }
+
+    def "isInSourceRefMode returns true with both sourceRefRepository and sourceRefImageName"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRefRepository.set('myrepo/myimage')
+        imageSpec.sourceRefImageName.set('myimage')
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        method.accessible = true
+        def result = method.invoke(task, imageSpec)
+
+        then:
+        result == true
+    }
+
+    def "isInSourceRefMode returns false with empty sourceRef and no components"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('')
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        method.accessible = true
+        def result = method.invoke(task, imageSpec)
+
+        then:
+        result == false
+    }
+
+    def "isInSourceRefMode returns true with direct sourceRef taking precedence"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.sourceRefRepository.set('myrepo/myimage')
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        method.accessible = true
+        def result = method.invoke(task, imageSpec)
+
+        then:
+        result == true
+    }
+
+    // ===== MISSING TAGIMAGE EDGE CASES =====
+
+    def "tagImage logs info when sourceRef mode has empty tags"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.tags.set([])
+        task.imageSpec.set(imageSpec)
+
+        when:
+        task.tagImage()
+
+        then:
+        noExceptionThrown()
+        0 * mockDockerService.tagImage(_, _)
+    }
+
+    def "tagImage returns early when build mode has single tag"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.imageName.set('myapp')
+        imageSpec.tags.set(['latest'])  // Single tag
+        task.imageSpec.set(imageSpec)
+
+        when:
+        task.tagImage()
+
+        then:
+        noExceptionThrown()
+        0 * mockDockerService.tagImage(_, _)  // No-op because only one tag
+    }
+
+    // ===== MISSING PULLSOURCEREFIFNEEDED TESTS =====
+
+    def "pullSourceRefIfNeeded does nothing when imageSpec is null"() {
+        given:
+        task.imageSpec.set(null)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        noExceptionThrown()
+        0 * mockDockerService.imageExists(_)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    def "pullSourceRefIfNeeded does nothing when pullIfMissing is false"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.pullIfMissing.set(false)
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        noExceptionThrown()
+        0 * mockDockerService.imageExists(_)
+        0 * mockDockerService.pullImage(_, _)
+    }
+
+    def "pullSourceRefIfNeeded does nothing when sourceRef is empty"() {
+        given:
+        def imageSpec = createImageSpec()
+        imageSpec.sourceRef.set('')
+        imageSpec.pullIfMissing.set(false)  // When sourceRef is empty, pullIfMissing must be false
+        task.imageSpec.set(imageSpec)
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')
+        method.accessible = true
+        method.invoke(task)
+
+        then:
+        noExceptionThrown()
+        0 * mockDockerService.imageExists(_)
+        0 * mockDockerService.pullImage(_, _)
+    }
 }

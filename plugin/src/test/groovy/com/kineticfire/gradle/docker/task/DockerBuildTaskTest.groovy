@@ -352,4 +352,94 @@ class DockerBuildTaskTest extends Specification {
         then:
         result
     }
+
+    // ===== MISSING NULL CHECKS FOR DEFENSIVE CODE =====
+
+    def "buildImage fails when contextPath.asFile is null via groovy safe navigation"() {
+        given:
+        def dockerfileFile = project.file('Dockerfile')
+        dockerfileFile.createNewFile()
+        task.dockerfile.set(dockerfileFile)
+        // Mock contextPath to return non-null DirectoryProperty but with null asFile
+        def mockContextPath = Mock(org.gradle.api.file.DirectoryProperty)
+        mockContextPath.get() >> Mock(org.gradle.api.file.Directory) {
+            getAsFile() >> null
+        }
+        task.contextPath.set(mockContextPath.get())
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when dockerfile.asFile is null via groovy safe navigation"() {
+        given:
+        task.contextPath.set(project.file('.'))
+        // Mock dockerfile to return non-null RegularFileProperty but with null asFile
+        def mockDockerfile = Mock(org.gradle.api.file.RegularFileProperty)
+        mockDockerfile.isPresent() >> true
+        mockDockerfile.get() >> Mock(org.gradle.api.file.RegularFile) {
+            getAsFile() >> null
+        }
+        task.dockerfile.set(mockDockerfile.get())
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when both contextFile and dockerfileFile are null"() {
+        given:
+        // Mock both to return null asFile
+        def mockContextPath = Mock(org.gradle.api.file.DirectoryProperty)
+        mockContextPath.get() >> Mock(org.gradle.api.file.Directory) {
+            getAsFile() >> null
+        }
+        def mockDockerfile = Mock(org.gradle.api.file.RegularFileProperty)
+        mockDockerfile.isPresent() >> true
+        mockDockerfile.get() >> Mock(org.gradle.api.file.RegularFile) {
+            getAsFile() >> null
+        }
+        task.contextPath.set(mockContextPath.get())
+        task.dockerfile.set(mockDockerfile.get())
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    def "buildImage fails when imageId.get() returns null RegularFile"() {
+        given:
+        project.file('Dockerfile').createNewFile()
+        task.dockerfile.set(project.file('Dockerfile'))
+        task.contextPath.set(project.file('.'))
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        // Mock imageId to return null
+        def mockImageId = Mock(org.gradle.api.file.RegularFileProperty)
+        mockImageId.get() >> null
+        task.imageId.set(mockImageId.get())
+        mockDockerService.buildImage(_) >> CompletableFuture.completedFuture('sha256:abc123')
+
+        when:
+        task.buildImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
 }

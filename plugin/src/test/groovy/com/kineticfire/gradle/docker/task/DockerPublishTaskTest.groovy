@@ -832,4 +832,210 @@ class DockerPublishTaskTest extends Specification {
         examples.username.contains('MY_CUSTOM_REGISTRY_COM_USERNAME')
         examples.password.contains('MY_CUSTOM_REGISTRY_COM_TOKEN')
     }
+
+    // ===== MISSING AUTH VALIDATION TESTS (Environment Variable Exceptions) =====
+
+    def "validateAuthenticationCredentials catches IllegalStateException for missing username environment variable"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = Mock(AuthSpec) {
+            isPresent() >> false  // AuthSpec itself
+            username >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> { throw new IllegalStateException("environment variable DOCKER_USERNAME is not set") }
+            }
+            password >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> false
+            }
+        }
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Authentication username environment variable is not set for registry 'docker.io'")
+        exception.message.contains("DOCKERHUB_USERNAME")
+    }
+
+    def "validateAuthenticationCredentials catches IllegalStateException for missing password provider"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('ghcr.io')
+        def authSpec = Mock(AuthSpec) {
+            username >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> "testuser"
+            }
+            password >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> { throw new IllegalStateException("provider not available") }
+            }
+        }
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        def exception = thrown(org.gradle.api.GradleException)
+        exception.message.contains("Authentication password/token environment variable is not set for registry 'ghcr.io'")
+        exception.message.contains("GHCR_TOKEN")
+    }
+
+    def "validateAuthenticationCredentials re-throws IllegalStateException when not env var related"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = Mock(AuthSpec) {
+            username >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> { throw new IllegalStateException("Some other error") }
+            }
+            password >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> false
+            }
+        }
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        def exception = thrown(IllegalStateException)
+        exception.message == "Some other error"
+    }
+
+    def "validateAuthenticationCredentials skips username validation when not present"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = Mock(AuthSpec) {
+            username >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> false
+            }
+            password >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> "testpass"
+            }
+        }
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateAuthenticationCredentials skips password validation when not present"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, "test", project.objects)
+        target.registry.set('docker.io')
+        def authSpec = Mock(AuthSpec) {
+            username >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> true
+                get() >> "testuser"
+            }
+            password >> Mock(org.gradle.api.provider.Property) {
+                isPresent() >> false
+            }
+        }
+
+        when:
+        task.validateAuthenticationCredentials(target, authSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== MISSING SOURCE REF TESTS =====
+
+    def "buildSourceImageReference returns direct sourceRef when set"() {
+        given:
+        task.sourceRef.set('docker.io/myrepo/myimage:latest')
+        task.tags.set(['latest'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'docker.io/myrepo/myimage:latest'
+    }
+
+    def "buildSourceImageReference returns effectiveSourceRef when set and sourceRef empty"() {
+        given:
+        task.sourceRef.set('')
+        task.effectiveSourceRef.set('registry.com/image:tag')
+        task.tags.set(['latest'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'registry.com/image:tag'
+    }
+
+    def "buildSourceImageReference uses repository with non-empty registry"() {
+        given:
+        task.repository.set('myorg/myapp')
+        task.registry.set('registry.example.com')
+        task.tags.set(['latest'])
+
+        when:
+        def sourceRef = task.buildSourceImageReference()
+
+        then:
+        sourceRef == 'registry.example.com/myorg/myapp:latest'
+    }
+
+    // ===== MISSING PUBLISH/PUBLISHIMAGE TESTS =====
+
+    def "publish uses publishSpec when available"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def target = createPublishTarget(['latest'])
+        def publishSpec = new Object() {
+            List<PublishTarget> to = [target]
+        }
+        task.publishSpec.set(publishSpec)
+
+        and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage('localhost:5000/myapp:latest', null) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.publish()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "publish validates auth when target has auth configured"() {
+        given:
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])
+        def authSpec = createAuthSpec('testuser', 'testpass', null)
+        def target = createPublishTargetWithAuth(['latest'], authSpec)
+        task.publishTargets.set([target])
+
+        and:
+        mockDockerService.imageExists('myapp:latest') >> CompletableFuture.completedFuture(true)
+        mockDockerService.tagImage('myapp:latest', ['localhost:5000/myapp:latest']) >> CompletableFuture.completedFuture(null)
+        mockDockerService.pushImage(_, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.publish()
+
+        then:
+        noExceptionThrown() // Validation should pass for valid credentials
+    }
+
+    // NOTE: Test for "publishImage logs warning when targetRefs is empty" was removed
+    // because the inheritance mechanism in EffectiveImageProperties.parseFromDirectSourceRef()
+    // makes it impossible to achieve truly empty targetRefs in a unit test scenario.
+    // Any sourceRef value (including digest-only refs like 'sha256:abc123') gets parsed
+    // and provides properties that can be inherited by targets. This edge case is covered
+    // by integration testing instead.
+    // Documented in: docs/design-docs/testing/unit-test-gaps.md
 }

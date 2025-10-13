@@ -696,4 +696,49 @@ class DockerSaveTaskTest extends Specification {
         1 * mockDockerService.saveImage('alpine:3.16', _, SaveCompression.NONE) >> CompletableFuture.completedFuture(null)
     }
 
+    // ===== MISSING NULL FUTURE TEST =====
+
+    def "saveImage fails when saveImage future is null"() {
+        given:
+        task.sourceRef.set('alpine:latest')
+        task.tags.set(['latest'])
+        task.outputFile.set(project.file('output.tar'))
+        mockDockerService.saveImage(_, _, _) >> null
+
+        when:
+        task.saveImage()
+
+        then:
+        thrown(IllegalStateException)
+    }
+
+    // ===== MISSING SOURCEREF COMPONENT EDGE CASES =====
+
+    def "buildPrimaryImageReference with sourceRefRepository and empty registry"() {
+        given:
+        task.sourceRefRegistry.set('')
+        task.sourceRefRepository.set('myorg/myapp')
+        task.sourceRefTag.set('v1.0')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myorg/myapp:v1.0'
+    }
+
+    def "buildPrimaryImageReference with sourceRefImageName and empty registry and namespace"() {
+        given:
+        task.sourceRefRegistry.set('')
+        task.sourceRefNamespace.set('')
+        task.sourceRefImageName.set('myapp')
+        task.sourceRefTag.set('dev')
+
+        when:
+        def result = task.buildPrimaryImageReference()
+
+        then:
+        result == 'myapp:dev'
+    }
+
 }

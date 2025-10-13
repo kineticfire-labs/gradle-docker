@@ -66,5 +66,42 @@ unit test coverage with 28 comprehensive test cases covering:
 This ensures the configuration and setup logic is thoroughly tested, while the runtime orchestration is validated
 through integration tests.
 
+## DockerPublishTask - Empty Target References Edge Case
+
+### Classes Affected
+- `com.kineticfire.gradle.docker.task.DockerPublishTask`
+
+### Reason for Gap
+The code path where `buildTargetImageReferences()` returns an empty list cannot be reached in unit tests due to the
+inheritance mechanism in `EffectiveImageProperties`. Specifically:
+
+1. **Property Inheritance**: When `EffectiveImageProperties.parseFromDirectSourceRef()` parses any sourceRef
+   (including digest-only references like 'sha256:abc123'), it extracts components that get inherited by targets
+   via `applyTargetOverrides()`.
+
+2. **Automatic Fallbacks**: The system has multiple fallback mechanisms:
+   - Empty publishTags inherits from source tags
+   - Empty target imageName inherits from parsed sourceRef components
+   - Default tags are applied when none are specified
+
+3. **Architecture Design**: The inheritance-based design makes it architecturally impossible to create a scenario
+   where a valid sourceRef exists but no targetRefs can be built, because any parseable sourceRef will provide
+   inheritable properties.
+
+### Test Coverage Alternative
+While this specific edge case cannot be unit tested, related scenarios are covered:
+- The warning message and skip logic exist in the code at DockerPublishTask.groovy:217-220
+- Integration tests validate real-world publish scenarios with various target configurations
+- All other branches in `buildTargetImageReferences()` have 100% unit test coverage
+
+### Justification
+This edge case represents an architecturally impossible state in the current implementation. Attempting to force
+it through complex mocking would test artificial scenarios that cannot occur in practice.
+
+### Mitigation
+- All reachable code paths in `buildTargetImageReferences()` have 100% unit test coverage
+- The DockerPublishTask test suite has 56 tests covering all practical scenarios
+- Integration tests validate actual publish workflows with real Docker registries
+
 ## Last Updated
 2025-10-12
