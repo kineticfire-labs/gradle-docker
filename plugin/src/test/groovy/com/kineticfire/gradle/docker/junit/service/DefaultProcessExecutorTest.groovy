@@ -231,4 +231,29 @@ class DefaultProcessExecutorTest extends Specification {
         1       | TimeUnit.MINUTES
     }
 
+    def "execute handles command with special characters"() {
+        given:
+        String[] command = ["echo", "special_chars"]
+
+        when:
+        ProcessExecutor.ProcessResult result = executor.execute(command)
+
+        then:
+        result != null
+        result.exitCode == 0
+        result.output.contains("special_chars")
+    }
+
+    def "executeInDirectory with non-existent directory throws IOException"() {
+        given:
+        File nonExistentDir = new File("/non/existent/directory/that/does/not/exist")
+        String[] command = ["echo", "test"]
+
+        when:
+        executor.executeInDirectory(nonExistentDir, command)
+
+        then:
+        thrown(IOException)
+    }
+
 }

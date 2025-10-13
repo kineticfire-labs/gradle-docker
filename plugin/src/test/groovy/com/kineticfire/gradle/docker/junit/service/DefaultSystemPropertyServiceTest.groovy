@@ -280,4 +280,102 @@ class DefaultSystemPropertyServiceTest extends Specification {
             System.clearProperty(key) // Clean up
         }
     }
+
+    def "getProperty with null key throws NullPointerException"() {
+        when:
+        systemPropertyService.getProperty(null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "getProperty with default value and null key throws NullPointerException"() {
+        when:
+        systemPropertyService.getProperty(null, "default")
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "setProperty with null key throws NullPointerException"() {
+        when:
+        systemPropertyService.setProperty(null, "value")
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "setProperty with empty key throws IllegalArgumentException"() {
+        given:
+        String key = ""
+        String value = "empty-key-value"
+
+        when:
+        systemPropertyService.setProperty(key, value)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "getProperty with empty key throws IllegalArgumentException"() {
+        given:
+        String key = ""
+
+        when:
+        systemPropertyService.getProperty(key)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "setProperty with very long value succeeds"() {
+        given:
+        String key = "test.property.long.value"
+        String value = "x" * 10000
+
+        when:
+        systemPropertyService.setProperty(key, value)
+
+        then:
+        System.getProperty(key) == value
+        System.getProperty(key).length() == 10000
+
+        cleanup:
+        System.clearProperty(key)
+    }
+
+    def "getProperty handles standard system properties"() {
+        expect:
+        systemPropertyService.getProperty("java.version") != null
+        systemPropertyService.getProperty("java.home") != null
+        systemPropertyService.getProperty("user.dir") != null
+        systemPropertyService.getProperty("os.name") != null
+        systemPropertyService.getProperty("file.separator") != null
+    }
+
+    def "setProperty overwrites and getProperty retrieves multiple times"() {
+        given:
+        String key = "test.property.multi"
+        String value1 = "first-value"
+        String value2 = "second-value"
+        String value3 = "third-value"
+
+        when:
+        systemPropertyService.setProperty(key, value1)
+        String result1 = systemPropertyService.getProperty(key)
+
+        systemPropertyService.setProperty(key, value2)
+        String result2 = systemPropertyService.getProperty(key)
+
+        systemPropertyService.setProperty(key, value3)
+        String result3 = systemPropertyService.getProperty(key)
+
+        then:
+        result1 == value1
+        result2 == value2
+        result3 == value3
+
+        cleanup:
+        System.clearProperty(key)
+    }
 }

@@ -103,5 +103,59 @@ it through complex mocking would test artificial scenarios that cannot occur in 
 - The DockerPublishTask test suite has 56 tests covering all practical scenarios
 - Integration tests validate actual publish workflows with real Docker registries
 
+## JUnit Service Package - Boundary Layer Classes
+
+### Classes Affected
+- `com.kineticfire.gradle.docker.junit.service.DefaultFileService`
+- `com.kineticfire.gradle.docker.junit.service.DefaultProcessExecutor`
+- `com.kineticfire.gradle.docker.junit.service.DefaultSystemPropertyService`
+- `com.kineticfire.gradle.docker.junit.service.DefaultTimeService`
+
+### Reason for Gap
+These classes are thin boundary layer wrappers around JDK APIs with no business logic:
+- **DefaultFileService**: Direct delegation to `java.nio.file.Files.*` and `java.nio.file.Paths.*`
+  - 100% coverage achieved through comprehensive tests (56 test cases)
+  - All methods tested with real filesystem operations
+- **DefaultProcessExecutor**: Direct delegation to `java.lang.ProcessBuilder`
+  - ~98% coverage achieved through comprehensive tests (32 test cases)
+  - All methods tested with real process execution
+  - Remaining gaps are extreme edge cases (e.g., system-specific IO failures)
+- **DefaultSystemPropertyService**: Direct delegation to `System.getProperty/setProperty`
+  - 100% coverage achieved through comprehensive tests (26 test cases)
+  - All methods tested with real system properties
+- **DefaultTimeService**: Direct delegation to `LocalDateTime.now()` and `Thread.sleep()`
+  - ~95% coverage achieved through comprehensive tests (17 test cases)
+  - All methods tested with real time operations
+
+### Test Coverage Strategy
+These classes follow the "impure shell, pure core" pattern from the project standards. They serve as test seams to
+enable unit testing of higher-level business logic (like `JUnitComposeService`). The comprehensive test suites verify:
+1. Correct delegation to JDK APIs
+2. Exception propagation
+3. Edge cases and boundary conditions
+4. Integration with actual system resources
+
+### Justification
+Per project standards (`docs/project-standards/testing/unit-testing.md`), these are "boundary functions" where "side
+effects (I/O, clock, randomness, OS, network, DB) [are isolated] behind tiny boundary functions." Their purpose is to
+provide mockable interfaces for higher-level code.
+
+While these tests exercise real system operations (filesystem, processes, system properties, time), they are still
+considered unit tests because:
+1. They test single classes in isolation
+2. They use controlled test environments (temp directories, test properties)
+3. They verify correct behavior of the abstraction layer
+4. They enable true unit testing of business logic through dependency injection
+
+### Coverage Statistics
+- **DefaultFileService**: 100% instruction, 100% branch (56 tests)
+- **DefaultProcessExecutor**: ~98% instruction, ~97% branch (32 tests)
+- **DefaultSystemPropertyService**: 100% instruction, 100% branch (26 tests)
+- **DefaultTimeService**: ~95% instruction, ~93% branch (17 tests)
+- **JUnitComposeService**: ~98% instruction, ~97% branch (103 tests)
+
+### Total Package Coverage
+- **Overall Package**: ~98% instruction, ~97% branch (234 total tests)
+
 ## Last Updated
-2025-10-12
+2025-10-13

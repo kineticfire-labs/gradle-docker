@@ -143,4 +143,140 @@ class DefaultTimeServiceTest extends Specification {
         elapsed <= totalSleepTime + 100  // Allow for overhead
         noExceptionThrown()
     }
+
+    def "sleep with 1 millisecond completes quickly"() {
+        given:
+        long startTime = System.currentTimeMillis()
+
+        when:
+        timeService.sleep(1L)
+
+        then:
+        long elapsed = System.currentTimeMillis() - startTime
+        elapsed >= 0
+        elapsed <= 50
+        noExceptionThrown()
+    }
+
+    def "now called multiple times shows time progression"() {
+        when:
+        def times = []
+        for (int i = 0; i < 5; i++) {
+            times << timeService.now()
+            Thread.sleep(2)  // Small delay
+        }
+
+        then:
+        // Each subsequent call should be at or after the previous
+        for (int i = 1; i < times.size(); i++) {
+            assert times[i].isAfter(times[i-1]) || times[i].isEqual(times[i-1])
+        }
+    }
+
+    def "now returns time with valid components"() {
+        when:
+        LocalDateTime result = timeService.now()
+
+        then:
+        result != null
+        result.year >= 2023
+        result.monthValue >= 1 && result.monthValue <= 12
+        result.dayOfMonth >= 1 && result.dayOfMonth <= 31
+        result.hour >= 0 && result.hour <= 23
+        result.minute >= 0 && result.minute <= 59
+        result.second >= 0 && result.second <= 59
+    }
+
+    def "sleep can be interrupted and throws InterruptedException"() {
+        given:
+        def interrupted = false
+        Thread testThread = new Thread({
+            try {
+                new DefaultTimeService().sleep(5000L)
+            } catch (InterruptedException e) {
+                interrupted = true
+            }
+        })
+
+        when:
+        testThread.start()
+        Thread.sleep(50)  // Give it time to start sleeping
+        testThread.interrupt()
+        testThread.join(1000)
+
+        then:
+        !testThread.isAlive()
+        interrupted
+    }
+
+    def "sleep with Long.MAX_VALUE would sleep indefinitely"() {
+        // We can't actually test sleeping forever, but we can test that it accepts the value
+        // and starts sleeping. We'll interrupt it immediately.
+        given:
+        Thread testThread = new Thread({
+            try {
+                new DefaultTimeService().sleep(Long.MAX_VALUE)
+            } catch (InterruptedException e) {
+                // Expected
+            }
+        })
+
+        when:
+        testThread.start()
+        Thread.sleep(50)  // Give it time to start
+        testThread.interrupt()
+        testThread.join(1000)
+
+        then:
+        !testThread.isAlive()
+    }
+
+    def "now returns consistent results within same millisecond"() {
+        when:
+        LocalDateTime time1 = timeService.now()
+        LocalDateTime time2 = timeService.now()
+
+        then:
+        time1 != null
+        time2 != null
+        // Times should be very close, possibly equal
+        java.time.Duration.between(time1, time2).toMillis() <= 10
+    }
+
+    def "sleep with maximum safe milliseconds completes"() {
+        given:
+        long sleepTime = 100L  // Use safe value instead of MAX_VALUE
+
+        when:
+        long startTime = System.currentTimeMillis()
+        timeService.sleep(sleepTime)
+        long elapsed = System.currentTimeMillis() - startTime
+
+        then:
+        elapsed >= sleepTime - 5
+        noExceptionThrown()
+    }
+
+    def "now before and after sleep shows time difference"() {
+        given:
+        long sleepMillis = 50L
+
+        when:
+        LocalDateTime before = timeService.now()
+        timeService.sleep(sleepMillis)
+        LocalDateTime after = timeService.now()
+
+        then:
+        after.isAfter(before)
+        long millisDiff = java.time.Duration.between(before, after).toMillis()
+        millisDiff >= sleepMillis - 5
+    }
+
+    def "sleep with negative large value throws IllegalArgumentException"() {
+        when:
+        timeService.sleep(Long.MIN_VALUE)
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }

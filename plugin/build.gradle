@@ -292,13 +292,26 @@ tasks.register('coverageSummary', CoverageSummaryTask) {
     description = 'Displays test coverage summary and HTML report link'
     group = 'reporting'
     dependsOn jacocoTestReport
-    
+
     reportFile = layout.buildDirectory.file("reports/jacoco/test/jacocoTestReport.xml")
     htmlReportFile = layout.buildDirectory.file("reports/jacoco/test/html/index.html")
 }
 
 // Configure test task to run coverage summary after tests complete
 tasks.test {
+    // ProjectBuilder tests are heavyweight - fork periodically to prevent resource exhaustion
+    // 31 test files use ProjectBuilder.builder().build() which creates full Gradle projects
+    maxParallelForks = 4  // Run 4 test processes in parallel
+    forkEvery = 10  // Fork a new JVM after every 10 test classes
+    maxHeapSize = '1536m'  // More memory per fork
+
+    // Improve test output
+    testLogging {
+        events "failed", "skipped"
+        exceptionFormat "short"
+        showStandardStreams = false
+    }
+
     finalizedBy(tasks.jacocoTestReport, tasks.coverageSummary) // Report and summary are always generated after tests run
 }
 

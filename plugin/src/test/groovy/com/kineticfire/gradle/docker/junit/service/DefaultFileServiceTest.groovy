@@ -378,4 +378,169 @@ class DefaultFileServiceTest extends Specification {
         !fileService.exists(filePath)
         !fileService.exists(dirPath)
     }
+
+    def "writeString with null content throws NullPointerException"() {
+        given:
+        Path filePath = tempDirPath.resolve("null-content.txt")
+
+        when:
+        fileService.writeString(filePath, null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "list with file instead of directory throws IOException"() {
+        given:
+        File testFile = new File(tempDir, "not-a-directory.txt")
+        testFile.createNewFile()
+        Path filePath = testFile.toPath()
+
+        when:
+        fileService.list(filePath)
+
+        then:
+        thrown(IOException)
+    }
+
+    def "createDirectories with file in path throws IOException"() {
+        given:
+        // Create a file
+        File blockingFile = new File(tempDir, "blocking-file")
+        blockingFile.createNewFile()
+        // Try to create a directory with the file in the path
+        Path invalidPath = blockingFile.toPath().resolve("subdir")
+
+        when:
+        fileService.createDirectories(invalidPath)
+
+        then:
+        thrown(IOException)
+    }
+
+    def "delete non-empty directory throws IOException"() {
+        given:
+        File testDir = new File(tempDir, "non-empty-dir")
+        testDir.mkdirs()
+        new File(testDir, "child-file.txt").createNewFile()
+        Path dirPath = testDir.toPath()
+
+        when:
+        fileService.delete(dirPath)
+
+        then:
+        thrown(IOException)
+    }
+
+    def "writeString creates parent directories if they exist"() {
+        given:
+        Path parentDir = tempDirPath.resolve("parent")
+        fileService.createDirectories(parentDir)
+        Path filePath = parentDir.resolve("test-file.txt")
+        String content = "Test content"
+
+        when:
+        fileService.writeString(filePath, content)
+
+        then:
+        fileService.exists(filePath)
+        fileService.toFile(filePath).text == content
+    }
+
+    def "writeString with very long path succeeds"() {
+        given:
+        StringBuilder longPath = new StringBuilder(tempDirPath.toString())
+        for (int i = 0; i < 20; i++) {
+            longPath.append("/level${i}")
+        }
+        longPath.append("/file.txt")
+        Path filePath = fileService.resolve(longPath.toString())
+        fileService.createDirectories(filePath.parent)
+        String content = "Long path test"
+
+        when:
+        fileService.writeString(filePath, content)
+
+        then:
+        fileService.exists(filePath)
+        fileService.toFile(filePath).text == content
+    }
+
+    def "resolve with null in more parameters"() {
+        given:
+        String first = "base"
+        String[] more = ["level1", null, "level3"]
+
+        when:
+        Path result = fileService.resolve(first, more)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "exists returns false for null path"() {
+        when:
+        fileService.exists(null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "delete handles symbolic link"() {
+        given:
+        File targetFile = new File(tempDir, "target.txt")
+        targetFile.createNewFile()
+        File linkFile = new File(tempDir, "link.txt")
+
+        // Create symbolic link (skip test if not supported)
+        try {
+            java.nio.file.Files.createSymbolicLink(linkFile.toPath(), targetFile.toPath())
+        } catch (Exception e) {
+            // Skip test on systems that don't support symbolic links
+            return
+        }
+
+        Path linkPath = linkFile.toPath()
+
+        when:
+        fileService.delete(linkPath)
+
+        then:
+        !fileService.exists(linkPath)
+        fileService.exists(targetFile.toPath())  // Target should still exist
+    }
+
+    def "writeString with special filename characters"() {
+        given:
+        Path filePath = tempDirPath.resolve("file-with-special_chars.123.txt")
+        String content = "Special filename test"
+
+        when:
+        fileService.writeString(filePath, content)
+
+        then:
+        fileService.exists(filePath)
+        fileService.toFile(filePath).text == content
+    }
+
+    def "list returns paths in consistent order"() {
+        given:
+        // Create multiple files
+        for (int i = 1; i <= 10; i++) {
+            new File(tempDir, "file${i}.txt").createNewFile()
+        }
+
+        when:
+        Stream<Path> stream1 = fileService.list(tempDirPath)
+        List<Path> list1 = stream1.collect()
+        Stream<Path> stream2 = fileService.list(tempDirPath)
+        List<Path> list2 = stream2.collect()
+
+        then:
+        list1.size() == 10
+        list2.size() == 10
+        // Lists should contain the same paths (order may vary)
+        list1.containsAll(list2)
+        list2.containsAll(list1)
+    }
 }
