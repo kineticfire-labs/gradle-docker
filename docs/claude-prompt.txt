@@ -3,6 +3,9 @@ Compose.  You are on a team building a custom Gradle plugin to build, tag, save,
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 
 
+com.kineticfire.gradle.docker.model
+
+
 
 ## Exploring dockerOrch
 

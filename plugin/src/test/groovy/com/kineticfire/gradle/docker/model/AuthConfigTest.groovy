@@ -227,4 +227,217 @@ class AuthConfigTest extends Specification {
         auth.isUsernamePassword()
         auth.isTokenBased()
     }
+
+    // ===== EQUALS METHOD TESTS =====
+
+    def "equals returns true for same object"() {
+        given:
+        def auth = new AuthConfig("user", "pass", "token")
+
+        expect:
+        auth.equals(auth)
+    }
+
+    def "equals returns true for equal objects"() {
+        given:
+        def auth1 = new AuthConfig("user", "pass", "token")
+        def auth2 = new AuthConfig("user", "pass", "token")
+
+        expect:
+        auth1.equals(auth2)
+    }
+
+    def "equals returns true for equal empty objects"() {
+        given:
+        def auth1 = new AuthConfig()
+        def auth2 = new AuthConfig()
+
+        expect:
+        auth1.equals(auth2)
+    }
+
+    def "equals returns false for different username"() {
+        given:
+        def auth1 = new AuthConfig("user1", "pass", null)
+        def auth2 = new AuthConfig("user2", "pass", null)
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    def "equals returns false for different password"() {
+        given:
+        def auth1 = new AuthConfig("user", "pass1", null)
+        def auth2 = new AuthConfig("user", "pass2", null)
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    def "equals returns false for different token"() {
+        given:
+        def auth1 = new AuthConfig(null, null, "token1")
+        def auth2 = new AuthConfig(null, null, "token2")
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    def "equals returns false for null object"() {
+        given:
+        def auth = new AuthConfig("user", "pass")
+
+        expect:
+        !auth.equals(null)
+    }
+
+    def "equals returns false for different class"() {
+        given:
+        def auth = new AuthConfig("user", "pass")
+
+        expect:
+        !auth.equals("not an AuthConfig")
+        !auth.equals(123)
+        !auth.equals([username: "user", password: "pass"])
+    }
+
+    def "equals handles null vs empty string username"() {
+        given:
+        def auth1 = new AuthConfig(null, "pass", null)
+        def auth2 = new AuthConfig("", "pass", null)
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    def "equals handles null vs empty string password"() {
+        given:
+        def auth1 = new AuthConfig("user", null, null)
+        def auth2 = new AuthConfig("user", "", null)
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    def "equals handles null vs empty string token"() {
+        given:
+        def auth1 = new AuthConfig(null, null, null)
+        def auth2 = new AuthConfig(null, null, "")
+
+        expect:
+        !auth1.equals(auth2)
+    }
+
+    // ===== HASHCODE METHOD TESTS =====
+
+    def "hashCode returns same value for equal objects"() {
+        given:
+        def auth1 = new AuthConfig("user", "pass", "token")
+        def auth2 = new AuthConfig("user", "pass", "token")
+
+        expect:
+        auth1.hashCode() == auth2.hashCode()
+    }
+
+    def "hashCode returns same value for equal empty objects"() {
+        given:
+        def auth1 = new AuthConfig()
+        def auth2 = new AuthConfig()
+
+        expect:
+        auth1.hashCode() == auth2.hashCode()
+    }
+
+    def "hashCode returns different values for different username"() {
+        given:
+        def auth1 = new AuthConfig("user1", "pass", null)
+        def auth2 = new AuthConfig("user2", "pass", null)
+
+        expect:
+        auth1.hashCode() != auth2.hashCode()
+    }
+
+    def "hashCode returns different values for different password"() {
+        given:
+        def auth1 = new AuthConfig("user", "pass1", null)
+        def auth2 = new AuthConfig("user", "pass2", null)
+
+        expect:
+        auth1.hashCode() != auth2.hashCode()
+    }
+
+    def "hashCode returns different values for different token"() {
+        given:
+        def auth1 = new AuthConfig(null, null, "token1")
+        def auth2 = new AuthConfig(null, null, "token2")
+
+        expect:
+        auth1.hashCode() != auth2.hashCode()
+    }
+
+    def "hashCode is consistent across multiple calls"() {
+        given:
+        def auth = new AuthConfig("user", "pass", "token")
+        def hash1 = auth.hashCode()
+        def hash2 = auth.hashCode()
+        def hash3 = auth.hashCode()
+
+        expect:
+        hash1 == hash2
+        hash2 == hash3
+    }
+
+    def "hashCode uses all significant fields"() {
+        given:
+        def configs = [
+            new AuthConfig("user", "pass", null),
+            new AuthConfig("user", "pass", "token"),
+            new AuthConfig("different", "pass", null),
+            new AuthConfig("user", "different", null),
+            new AuthConfig(null, null, "token")
+        ]
+
+        when:
+        def hashCodes = configs.collect { it.hashCode() }
+
+        then:
+        // All hash codes should be different (though collisions are theoretically possible)
+        hashCodes.toSet().size() == 5
+    }
+
+    def "equals and hashCode contract is maintained"() {
+        given:
+        def auth1 = new AuthConfig("user", "pass", "token")
+        def auth2 = new AuthConfig("user", "pass", "token")
+        def auth3 = new AuthConfig("different", "pass", "token")
+
+        expect:
+        // If objects are equal, hashCodes must be equal
+        auth1.equals(auth2) implies auth1.hashCode() == auth2.hashCode()
+
+        // If objects are not equal, hashCodes should be different (though not required)
+        !auth1.equals(auth3)
+    }
+
+    // ===== ANONYMOUS AUTH EDGE CASE =====
+
+    def "hasCredentials returns true for anonymous auth (empty username and password)"() {
+        given:
+        def auth = new AuthConfig("", "", null)
+
+        expect:
+        auth.hasCredentials()
+        auth.isUsernamePassword()
+        !auth.isTokenBased()
+    }
+
+    def "equals works correctly for anonymous auth"() {
+        given:
+        def auth1 = new AuthConfig("", "", null)
+        def auth2 = new AuthConfig("", "", null)
+
+        expect:
+        auth1.equals(auth2)
+        auth1.hashCode() == auth2.hashCode()
+    }
 }

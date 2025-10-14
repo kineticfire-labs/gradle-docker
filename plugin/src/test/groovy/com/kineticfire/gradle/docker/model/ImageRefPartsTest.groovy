@@ -260,4 +260,194 @@ class ImageRefPartsTest extends Specification {
         !parts.equals("nginx:latest")
         !parts.equals(null)
     }
+
+    // ===== HASHCODE METHOD TESTS =====
+
+    def "hashCode returns same value for equal objects"() {
+        when:
+        def parts1 = ImageRefParts.parse('docker.io/library/nginx:1.21')
+        def parts2 = ImageRefParts.parse('docker.io/library/nginx:1.21')
+
+        then:
+        parts1.hashCode() == parts2.hashCode()
+    }
+
+    def "hashCode returns different values for different tags"() {
+        when:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = ImageRefParts.parse('nginx:1.21')
+
+        then:
+        parts1.hashCode() != parts2.hashCode()
+    }
+
+    def "hashCode returns different values for different repositories"() {
+        when:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = ImageRefParts.parse('httpd:latest')
+
+        then:
+        parts1.hashCode() != parts2.hashCode()
+    }
+
+    def "hashCode returns different values for different namespaces"() {
+        when:
+        def parts1 = ImageRefParts.parse('org1/app:latest')
+        def parts2 = ImageRefParts.parse('org2/app:latest')
+
+        then:
+        parts1.hashCode() != parts2.hashCode()
+    }
+
+    def "hashCode returns different values for different registries"() {
+        when:
+        def parts1 = ImageRefParts.parse('docker.io/library/nginx:latest')
+        def parts2 = ImageRefParts.parse('ghcr.io/library/nginx:latest')
+
+        then:
+        parts1.hashCode() != parts2.hashCode()
+    }
+
+    def "hashCode is consistent across multiple calls"() {
+        given:
+        def parts = ImageRefParts.parse('nginx:latest')
+        def hash1 = parts.hashCode()
+        def hash2 = parts.hashCode()
+        def hash3 = parts.hashCode()
+
+        expect:
+        hash1 == hash2
+        hash2 == hash3
+    }
+
+    def "hashCode uses all significant fields"() {
+        given:
+        def refs = [
+            ImageRefParts.parse('nginx:latest'),
+            ImageRefParts.parse('nginx:1.21'),
+            ImageRefParts.parse('httpd:latest'),
+            ImageRefParts.parse('myorg/nginx:latest'),
+            ImageRefParts.parse('docker.io/library/nginx:latest')
+        ]
+
+        when:
+        def hashCodes = refs.collect { it.hashCode() }
+
+        then:
+        // All hash codes should be different (though collisions are theoretically possible)
+        hashCodes.toSet().size() == 5
+    }
+
+    def "equals and hashCode contract is maintained"() {
+        given:
+        def parts1 = ImageRefParts.parse('nginx:latest')
+        def parts2 = ImageRefParts.parse('nginx:latest')
+        def parts3 = ImageRefParts.parse('nginx:1.21')
+
+        expect:
+        // If objects are equal, hashCodes must be equal
+        parts1.equals(parts2) implies parts1.hashCode() == parts2.hashCode()
+
+        // If objects are not equal, hashCodes should be different (though not required)
+        !parts1.equals(parts3)
+    }
+
+    // ===== EDGE CASE TESTS =====
+
+    def "handles just colon input"() {
+        when:
+        def parts = ImageRefParts.parse(':')
+
+        then:
+        parts != null
+        parts.registry == ""
+        parts.namespace == ""
+        parts.repository == 'unknown'
+        parts.tag == 'latest'
+    }
+
+    def "handles colon with tag only"() {
+        when:
+        def parts = ImageRefParts.parse(':tag')
+
+        then:
+        // When colon is at position 0, the tag extraction logic is skipped
+        // and ":tag" is treated as the repository name
+        parts != null
+        parts.registry == ""
+        parts.namespace == ""
+        parts.repository == ':tag'
+        parts.tag == 'latest'
+    }
+
+    def "getFullRepository with empty namespace"() {
+        when:
+        def parts = ImageRefParts.parse('nginx:latest')
+
+        then:
+        parts.namespace == ""
+        parts.repository == 'nginx'
+        parts.fullRepository == 'nginx'
+    }
+
+    def "getFullRepository with namespace"() {
+        when:
+        def parts = ImageRefParts.parse('library/nginx:latest')
+
+        then:
+        parts.namespace == 'library'
+        parts.repository == 'nginx'
+        parts.fullRepository == 'library/nginx'
+    }
+
+    def "getFullRepository with multi-level namespace"() {
+        when:
+        def parts = ImageRefParts.parse('company/team/app:latest')
+
+        then:
+        parts.namespace == 'company/team'
+        parts.repository == 'app'
+        parts.fullRepository == 'company/team/app'
+    }
+
+    def "toString provides useful information"() {
+        when:
+        def parts = ImageRefParts.parse('docker.io/library/nginx:1.21')
+        def string = parts.toString()
+
+        then:
+        string.contains('ImageRefParts')
+        string.contains('docker.io')
+        string.contains('library')
+        string.contains('nginx')
+        string.contains('1.21')
+    }
+
+    def "handles namespace with numbers and dashes"() {
+        when:
+        def parts = ImageRefParts.parse('company-123/my-app:v1.0')
+
+        then:
+        parts.namespace == 'company-123'
+        parts.repository == 'my-app'
+        parts.tag == 'v1.0'
+    }
+
+    def "handles repository with underscores"() {
+        when:
+        def parts = ImageRefParts.parse('my_app_name:latest')
+
+        then:
+        parts.repository == 'my_app_name'
+        parts.tag == 'latest'
+    }
+
+    def "handles tags with special characters"() {
+        when:
+        def parts = ImageRefParts.parse('nginx:1.21.3-alpine')
+
+        then:
+        parts.repository == 'nginx'
+        parts.tag == '1.21.3-alpine'
+    }
 }
