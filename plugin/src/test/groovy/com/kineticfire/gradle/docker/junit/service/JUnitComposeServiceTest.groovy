@@ -16,8 +16,14 @@
 
 package com.kineticfire.gradle.docker.junit.service
 
+import com.kineticfire.gradle.docker.model.*
 import spock.lang.Specification
 import spock.lang.Subject
+
+import java.lang.reflect.Method
+import java.nio.file.Files
+import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 
 /**
  * Unit tests for JUnitComposeService.
@@ -29,7 +35,7 @@ import spock.lang.Subject
  * Coverage Impact:
  * - JUnitComposeService: ~664 instructions (includes generated closures)
  * - Package junit.service total: 2,181 instructions
- * - Unit test coverage: 222/2,181 (10.2%) - but 100% of unit-testable code is covered
+ * - Unit test coverage improved with null checks and private method tests
  *
  * Alternative Coverage:
  * - Integration tests fully exercise this class's functionality
@@ -42,15 +48,21 @@ import spock.lang.Subject
  * 4. Refactoring to make it unit-testable would require significant architectural changes
  *    that compromise its purpose as a convenience wrapper for async Docker Compose operations
  *
- * All other classes in this package have 100% unit test coverage.
+ * This test file covers:
+ * - Constructor tests
+ * - Null parameter validation (synchronous checks before async execution)
+ * - Private helper method tests via reflection
  */
 class JUnitComposeServiceTest extends Specification {
 
     @Subject
     JUnitComposeService service
 
+    ProcessExecutor mockExecutor
+
     def setup() {
-        service = new JUnitComposeService()
+        mockExecutor = Mock(ProcessExecutor)
+        service = new JUnitComposeService(mockExecutor)
     }
 
     def "constructor creates instance"() {
@@ -63,12 +75,205 @@ class JUnitComposeServiceTest extends Specification {
 
     def "constructor with executor creates instance"() {
         given:
-        ProcessExecutor executor = new DefaultProcessExecutor()
+        ProcessExecutor executor = Mock(ProcessExecutor)
 
         when:
         JUnitComposeService customService = new JUnitComposeService(executor)
 
         then:
         customService != null
+    }
+
+    def "upStack throws NullPointerException for null config"() {
+        when:
+        service.upStack(null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "downStack with String throws NullPointerException for null project name"() {
+        when:
+        service.downStack((String) null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "downStack with ComposeConfig throws NullPointerException for null config"() {
+        when:
+        service.downStack((ComposeConfig) null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "waitForServices throws NullPointerException for null config"() {
+        when:
+        service.waitForServices(null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "captureLogs throws NullPointerException for null project name"() {
+        when:
+        service.captureLogs((String) null, new LogsConfig(Collections.emptyList(), 0, false))
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    def "captureLogs throws NullPointerException for null logs config"() {
+        when:
+        service.captureLogs("test-project", (LogsConfig) null)
+
+        then:
+        thrown(NullPointerException)
+    }
+
+    // Tests for private helper methods via reflection
+
+    def "parseServiceState returns HEALTHY for status containing 'healthy' with 'running' or 'up'"() {
+        expect:
+        invokeParseServiceState(status) == ServiceStatus.HEALTHY
+
+        where:
+        status << ["running (healthy)", "Up (healthy)", "running healthy"]
+    }
+
+    def "parseServiceState returns RUNNING for status containing 'running' without 'healthy'"() {
+        expect:
+        invokeParseServiceState(status) == ServiceStatus.RUNNING
+
+        where:
+        status << ["running", "up", "Up", "Running"]
+    }
+
+    def "parseServiceState returns STOPPED for status containing 'exit' or 'stop'"() {
+        expect:
+        invokeParseServiceState(status) == ServiceStatus.STOPPED
+
+        where:
+        status << ["exit", "exited", "stopped", "Exited (0)"]
+    }
+
+    def "parseServiceState returns RESTARTING for status containing 'restart'"() {
+        expect:
+        invokeParseServiceState(status) == ServiceStatus.RESTARTING
+
+        where:
+        status << ["restarting", "Restarting"]
+    }
+
+    def "parseServiceState returns UNKNOWN for unrecognized status"() {
+        expect:
+        invokeParseServiceState(status) == ServiceStatus.UNKNOWN
+
+        where:
+        status << ["created", "paused", "dead", "removing", "healthy", ""]
+    }
+
+    def "parseServiceState handles null status"() {
+        expect:
+        invokeParseServiceState(null) == ServiceStatus.UNKNOWN
+    }
+
+    def "parseServiceState handles empty status"() {
+        expect:
+        invokeParseServiceState("") == ServiceStatus.UNKNOWN
+    }
+
+    def "parsePortMappings parses valid port string"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("0.0.0.0:8080->80/tcp")
+
+        then:
+        result.size() == 1
+        result[0].hostPort == 8080
+        result[0].containerPort == 80
+        result[0].protocol == "tcp"
+    }
+
+    def "parsePortMappings parses multiple ports"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("0.0.0.0:8080->80/tcp, :::8080->80/tcp, 0.0.0.0:9090->90/udp")
+
+        then:
+        result.size() == 3
+        result[0].hostPort == 8080
+        result[0].containerPort == 80
+        result[0].protocol == "tcp"
+        result[1].hostPort == 8080
+        result[1].containerPort == 80
+        result[1].protocol == "tcp"
+        result[2].hostPort == 9090
+        result[2].containerPort == 90
+        result[2].protocol == "udp"
+    }
+
+    def "parsePortMappings handles port string without IP"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("9091->8080/tcp")
+
+        then:
+        result.size() == 1
+        result[0].hostPort == 9091
+        result[0].containerPort == 8080
+        result[0].protocol == "tcp"
+    }
+
+    def "parsePortMappings handles port string without protocol"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("0.0.0.0:8080->80")
+
+        then:
+        result.size() == 1
+        result[0].hostPort == 8080
+        result[0].containerPort == 80
+        result[0].protocol == "tcp"  // Defaults to tcp
+    }
+
+    def "parsePortMappings returns empty list for null input"() {
+        expect:
+        invokeParsePortMappings(null).isEmpty()
+    }
+
+    def "parsePortMappings returns empty list for empty string"() {
+        expect:
+        invokeParsePortMappings("").isEmpty()
+    }
+
+    def "parsePortMappings handles invalid port format gracefully"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("invalid-port-format, 0.0.0.0:8080->80/tcp")
+
+        then:
+        result.size() == 1  // Only the valid one is parsed
+        result[0].hostPort == 8080
+    }
+
+    def "parsePortMappings handles exception in parsing"() {
+        when:
+        List<PortMapping> result = invokeParsePortMappings("not-a-valid-port-at-all")
+
+        then:
+        result.isEmpty()  // Should handle exception gracefully
+    }
+
+    // Helper methods to invoke private methods via reflection
+
+    private ServiceStatus invokeParseServiceState(String status) {
+        Method method = JUnitComposeService.getDeclaredMethod("parseServiceState", String.class)
+        method.setAccessible(true)
+        // Use Object array to properly pass null parameter in Groovy
+        return (ServiceStatus) method.invoke(service, [status] as Object[])
+    }
+
+    private List<PortMapping> invokeParsePortMappings(String portsString) {
+        Method method = JUnitComposeService.getDeclaredMethod("parsePortMappings", String.class)
+        method.setAccessible(true)
+        // Use Object array to properly pass null parameter in Groovy
+        return (List<PortMapping>) method.invoke(service, [portsString] as Object[])
     }
 }

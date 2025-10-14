@@ -308,7 +308,7 @@ tasks.test {
     // Improve test output
     testLogging {
         events "failed", "skipped"
-        exceptionFormat "short"
+        exceptionFormat = "short"
         showStandardStreams = false
     }
 
