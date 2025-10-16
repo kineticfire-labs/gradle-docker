@@ -190,16 +190,34 @@ Future approaches to resolve this gap:
 
 ## Coverage Statistics
 
+### Overall Project Coverage (as of 2025-10-16)
+
+**Current Coverage**: 81.1% instruction, 80.3% branch
+**Target**: 100% instruction, 100% branch
+**Gap**: 18.9% instruction, 19.7% branch
+
+### Package-Level Coverage:
+- ✅ com.kineticfire.gradle.docker.exception: 100% instruction, 100% branch
+- ✅ com.kineticfire.gradle.docker.spec: 98.9% instruction, 96.1% branch
+- ✅ com.kineticfire.gradle.docker.model: 95.9% instruction, 93.1% branch
+- ✅ com.kineticfire.gradle.docker.task: 93.8% instruction, 88.2% branch
+- ✅ com.kineticfire.gradle.docker.extension: 91.0% instruction, 85.0% branch
+- ⚠️ com.kineticfire.gradle.docker.spock: 90.1% instruction, 73.5% branch
+- ⚠️ com.kineticfire.gradle.docker: 81.1% instruction, 51.3% branch (base package)
+- ⚠️ com.kineticfire.gradle.docker.junit: 73.0% instruction, 61.8% branch
+- ❌ com.kineticfire.gradle.docker.service: 54.1% instruction, 67.0% branch
+- ❌ com.kineticfire.gradle.docker.junit.service: 40.9% instruction, 67.7% branch
+
 ### Service Package Coverage (com.kineticfire.gradle.docker.service)
 
-**Current Coverage**: 54.0% instruction, 66.5% branch
+**Current Coverage**: 54.1% instruction, 67.0% branch
 
 **Breakdown by Class**:
 - ✅ ExecLibraryComposeService: 89% instruction, 93% branch (67 unit tests, all passing)
 - ✅ JsonServiceImpl: 99% instruction, 100% branch
 - ✅ DefaultServiceLogger: 100% instruction
 - ✅ ProcessResult: 100% instruction, 100% branch
-- ⚠️ DefaultCommandValidator: 95% instruction, 90% branch (minor gaps)
+- ✅ DefaultCommandValidator: 98% instruction, 95% branch (improved with caching tests)
 - ⚠️ DefaultProcessExecutor: 77% instruction, 66% branch (minor gaps)
 - ❌ DockerServiceImpl: 30% instruction, 0% branch (documented gap - tests exist but disabled)
 - ❌ DockerServiceImpl closures: 0% coverage (dependent on main class tests)
@@ -221,6 +239,10 @@ This document should be reviewed:
 
 ## Document History
 
+- **2025-10-16**: Updated coverage statistics to reflect current state (81.1% instruction, 80.3% branch). Added
+  improvements to DefaultCommandValidator with three additional tests for command caching behavior, improving coverage
+  from 95% to 98% instruction and 90% to 95% branch. Added package-level coverage breakdown showing that most packages
+  exceed 90% coverage, with the main gaps in service and junit.service packages due to the documented limitations.
 - **2025-10-13**: Added JUnitComposeService gap documentation. Significantly improved unit test coverage by adding null
   parameter validation tests and reflection-based tests for private helper methods (parseServiceState, parsePortMappings).
   Async closures within CompletableFuture remain untestable without real execution. All other classes in

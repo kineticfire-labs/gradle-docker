@@ -146,4 +146,57 @@ class CommandValidatorTest extends Specification {
         ex.errorType == ComposeServiceException.ErrorType.COMPOSE_UNAVAILABLE
         ex.cause instanceof RuntimeException
     }
+
+    def "detectComposeCommand caches result and only calls process executor once"() {
+        when:
+        def firstCall = validator.detectComposeCommand()
+        def secondCall = validator.detectComposeCommand()
+        def thirdCall = validator.detectComposeCommand()
+
+        then:
+        // All calls should return the same command
+        firstCall == ['docker', 'compose']
+        secondCall == ['docker', 'compose']
+        thirdCall == ['docker', 'compose']
+
+        // Process executor should only be called once (caching works)
+        1 * mockProcessExecutor.execute(['docker', 'compose', 'version'], null, _) >>
+            new ProcessResult(0, "docker compose version", "")
+    }
+
+    def "detectComposeCommand caches docker-compose result"() {
+        when:
+        def firstCall = validator.detectComposeCommand()
+        def secondCall = validator.detectComposeCommand()
+
+        then:
+        // Both calls should return docker-compose
+        firstCall == ['docker-compose']
+        secondCall == ['docker-compose']
+
+        // Process executor should be called once for each command (on first call only)
+        1 * mockProcessExecutor.execute(['docker', 'compose', 'version'], null, _) >>
+            new ProcessResult(1, "", "command not found")
+        1 * mockProcessExecutor.execute(['docker-compose', '--version'], null, _) >>
+            new ProcessResult(0, "docker-compose version", "")
+    }
+
+    def "detectComposeCommand cache is instance-specific"() {
+        given:
+        def validator1 = new DefaultCommandValidator(mockProcessExecutor)
+        def validator2 = new DefaultCommandValidator(mockProcessExecutor)
+
+        when:
+        def command1 = validator1.detectComposeCommand()
+        def command2 = validator2.detectComposeCommand()
+
+        then:
+        // Both validators should detect the command
+        command1 == ['docker', 'compose']
+        command2 == ['docker', 'compose']
+
+        // Process executor should be called twice (once per validator instance)
+        2 * mockProcessExecutor.execute(['docker', 'compose', 'version'], null, _) >>
+            new ProcessResult(0, "docker compose version", "")
+    }
 }

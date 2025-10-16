@@ -3,9 +3,29 @@ Compose.  You are on a team building a custom Gradle plugin to build, tag, save,
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 
 
-com.kineticfire.gradle.docker.junit 73.0%        61.8%
-com.kineticfire.gradle.docker.service 15.1%        21.3%
-com.kineticfire.gradle.docker.model
+com.kineticfire.gradle.docker                             81.1%        51.3%
+
+
+## Unit Tests
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.  You must add unit tests for the "com.kineticfire.gradle.docker" package because
+the project goal is 100% instruction and branch unit test coverage but this package falls short.  Analyze the source implementation, then inspect the unit tests, then:
+- identify functions that are not unit tested that can be without complex mocks
+- identify functions that are not fully tested that can be without complex mocks
+- identify functions whose inputs are not fully tested, such as edge cases (null, 0, exceptions, etc)
+- generally identify functions where additional unit tests can be added without complex mocks
+
+Note that the unit tests require about 8 to 12 minutes to run, so set your timeouts accordingly.  Consider running targeted unit tests first against only the
+code you changed then run the full test suite at the end.
+
+Analyze, develop a plan, then implement.  Acceptance criteria is all tests pass and the plugin builds.  Go!
+
+### Unit Test Challenge Package
+This package may be challenging to unit test since it makes external calls to 'docker' and 'docker compose'.  Test the code that does not require mocks or the code
+that does not require complex mocks.  Consider how code could be refactored to push external calls to the smallest functions (by code and branch size) possible
+to increase unit test coverage without mocks or complex mocks.
 
 
 
