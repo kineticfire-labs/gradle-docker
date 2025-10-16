@@ -120,4 +120,180 @@ class TestIntegrationExtensionTest extends Specification {
         then:
         path1 == path2
     }
+
+    // ===== USES COMPOSE TESTS =====
+
+    def "usesCompose configures suite lifecycle correctly"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Create compose stack
+        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerOrchExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        // Evaluate project to create compose tasks
+        project.evaluate()
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', 'suite')
+
+        then:
+        noExceptionThrown()
+        // Task should have dependencies configured
+        testTask.dependsOn.find { it.toString().contains('composeUpTestStack') }
+        testTask.finalizedBy.getDependencies(testTask).find { it.name.contains('composeDownTestStack') }
+    }
+
+    def "usesCompose configures class lifecycle correctly"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Create compose stack
+        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerOrchExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', 'class')
+
+        then:
+        noExceptionThrown()
+        // Should configure system properties for JUnit extension
+        testTask.systemProperties['docker.compose.stack'] == 'testStack'
+        testTask.systemProperties['docker.compose.lifecycle'] == 'class'
+        testTask.systemProperties['docker.compose.project'] == project.name
+    }
+
+    def "usesCompose configures method lifecycle correctly"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Create compose stack
+        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerOrchExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', 'method')
+
+        then:
+        noExceptionThrown()
+        // Should configure system properties for JUnit extension
+        testTask.systemProperties['docker.compose.stack'] == 'testStack'
+        testTask.systemProperties['docker.compose.lifecycle'] == 'method'
+        testTask.systemProperties['docker.compose.project'] == project.name
+    }
+
+    def "usesCompose fails when dockerOrch extension not found"() {
+        given:
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', 'suite')
+
+        then:
+        def ex = thrown(IllegalStateException)
+        ex.message.contains("dockerOrch extension not found")
+    }
+
+    def "usesCompose fails when compose stack not found"() {
+        given:
+        // Apply plugin to get dockerOrch extension
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'nonExistentStack', 'suite')
+
+        then:
+        def ex = thrown(IllegalArgumentException)
+        ex.message.contains("Compose stack 'nonExistentStack' not found")
+    }
+
+    def "usesCompose fails with invalid lifecycle"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Create compose stack
+        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerOrchExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', 'invalid')
+
+        then:
+        def ex = thrown(IllegalArgumentException)
+        ex.message.contains("Invalid lifecycle")
+        ex.message.contains("Must be 'suite', 'class', or 'method'")
+    }
+
+    @Unroll
+    def "usesCompose handles different lifecycle values case-insensitively: #lifecycle"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Create compose stack
+        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerOrchExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        extension.usesCompose(testTask, 'testStack', lifecycle)
+
+        then:
+        noExceptionThrown()
+
+        where:
+        lifecycle << ['SUITE', 'Suite', 'CLASS', 'Class', 'METHOD', 'Method']
+    }
 }

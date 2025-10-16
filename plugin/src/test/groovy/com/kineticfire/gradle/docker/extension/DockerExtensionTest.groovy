@@ -918,4 +918,266 @@ class DockerExtensionTest extends Specification {
         ex.message.contains("Invalid tag format")
         ex.message.contains('.invalid')
     }
+
+    // ===== ADDITIONAL EDGE CASE TESTS FOR COVERAGE =====
+
+    def "validateNomenclature fails when no naming approach specified"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        // Don't set any naming properties
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify some form of image naming")
+    }
+
+    def "validateNomenclature accepts sourceRefImageName without sourceRefRepository"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.sourceRefImageName.set('alpine')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature accepts sourceRefRepository without other properties"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.sourceRefRepository.set('library/alpine')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature accepts sourceRefNamespace"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.sourceRefNamespace.set('library')
+        imageSpec.sourceRefImageName.set('alpine')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles tag with maximum length"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['a' * 128])  // Exactly 128 characters
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature fails with tag exceeding maximum length"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['a' * 129])  // 129 characters - too long
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+    }
+
+    def "validateSaveConfiguration accepts valid compression parameter"() {
+        given:
+        def saveSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.SaveSpec,
+            project.objects,
+            project.layout
+        )
+        saveSpec.compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        saveSpec.outputFile.set(project.layout.buildDirectory.file('custom/image.tar.gz'))
+
+        when:
+        extension.validateSaveConfiguration(saveSpec, 'testImage')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSaveConfiguration fails when outputFile uses default convention path"() {
+        given:
+        def saveSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.SaveSpec,
+            project.objects,
+            project.layout
+        )
+        saveSpec.compression.set(com.kineticfire.gradle.docker.model.SaveCompression.NONE)
+        // Simulate default convention path
+        saveSpec.outputFile.set(project.layout.buildDirectory.file('docker-images/image.tar'))
+
+        when:
+        extension.validateSaveConfiguration(saveSpec, 'testImage')
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("outputFile parameter is required")
+    }
+
+    def "isValidImageReference handles registry with port and multiple colons"() {
+        expect:
+        extension.isValidImageReference('localhost:5000/app:latest') == true
+        extension.isValidImageReference('registry.io:8080/namespace/app:v1') == true
+    }
+
+    def "isValidImageReference fails with empty image part"() {
+        expect:
+        extension.isValidImageReference(':tag') == false
+    }
+
+    def "isValidImageReference fails with empty tag part"() {
+        expect:
+        extension.isValidImageReference('image:') == false
+    }
+
+    def "isValidImageReference handles maximum length reference"() {
+        given:
+        def validRef = 'registry.io/' + ('a' * 200) + ':tag'  // Valid if under 255 total
+
+        expect:
+        extension.isValidImageReference(validRef) == (validRef.length() <= 255)
+    }
+
+    def "isValidRepositoryFormat requires slash"() {
+        expect:
+        extension.isValidRepositoryFormat('justname') == false
+        extension.isValidRepositoryFormat('name/space') == true
+    }
+
+    def "isValidRepositoryFormat handles long repository names"() {
+        expect:
+        extension.isValidRepositoryFormat('a' * 255 + '/name') == false  // Over 255
+        extension.isValidRepositoryFormat('a' * 127 + '/name') == true   // Under 255
+    }
+
+    def "isValidRegistryFormat handles edge cases"() {
+        expect:
+        extension.isValidRegistryFormat('localhost') == true
+        extension.isValidRegistryFormat('192.168.1.1') == true
+        extension.isValidRegistryFormat('192.168.1.1:5000') == true
+        extension.isValidRegistryFormat('registry.io:8080') == true
+        extension.isValidRegistryFormat('invalid:port:extra') == false
+        extension.isValidRegistryFormat(':5000') == false
+    }
+
+    def "isValidNamespaceFormat handles edge cases"() {
+        expect:
+        extension.isValidNamespaceFormat('simple') == true
+        extension.isValidNamespaceFormat('with-dash') == true
+        extension.isValidNamespaceFormat('with_underscore') == true
+        extension.isValidNamespaceFormat('with.dot') == true
+        extension.isValidNamespaceFormat('with/slash') == true
+        extension.isValidNamespaceFormat('a' * 255) == true
+        extension.isValidNamespaceFormat('a' * 256) == false
+        extension.isValidNamespaceFormat('WithUppercase') == false
+    }
+
+    def "isValidImageNameFormat handles edge cases"() {
+        expect:
+        extension.isValidImageNameFormat('simple') == true
+        extension.isValidImageNameFormat('with-dash') == true
+        extension.isValidImageNameFormat('with_underscore') == true
+        extension.isValidImageNameFormat('with.dot') == true
+        extension.isValidImageNameFormat('a' * 128) == true
+        extension.isValidImageNameFormat('a' * 129) == false
+        extension.isValidImageNameFormat('with/slash') == false
+        extension.isValidImageNameFormat('WithUppercase') == false
+    }
+
+    def "isValidRepositoryName handles edge cases"() {
+        expect:
+        extension.isValidRepositoryName('simple') == true
+        extension.isValidRepositoryName('registry.io:5000/namespace/name') == true
+        extension.isValidRepositoryName('-starts-with-dash') == false
+        extension.isValidRepositoryName('ends-with-dash-') == false
+        extension.isValidRepositoryName('contains spaces') == false
+        extension.isValidRepositoryName('a' * 256) == false
+        extension.isValidRepositoryName('') == false
+        extension.isValidRepositoryName(null) == false
+    }
+
+    def "validatePublishConfiguration with ImageSpec handles empty targets list"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def publishSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishSpec,
+            project.objects
+        )
+        // Empty targets list
+
+        when:
+        extension.validatePublishConfiguration(publishSpec, imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one target")
+    }
+
+    def "getSourceTags handles sourceRefTag with default convention"() {
+        given:
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        imageSpec.sourceRefImageName.set('alpine')
+        // sourceRefTag not explicitly set, should use convention
+
+        when:
+        def tags = extension.getSourceTags(imageSpec)
+
+        then:
+        tags != null
+    }
+
+    def "isValidTagFormat validates all allowed characters"() {
+        expect:
+        extension.isValidTagFormat('v1.0.0') == true
+        extension.isValidTagFormat('tag_with_underscore') == true
+        extension.isValidTagFormat('tag-with-dash') == true
+        extension.isValidTagFormat('tag.with.dots') == true
+        extension.isValidTagFormat('TAG123') == true
+        extension.isValidTagFormat('123tag') == true
+    }
+
+    def "isValidTagFormat rejects invalid starting characters"() {
+        expect:
+        extension.isValidTagFormat('.starts-with-dot') == false
+        extension.isValidTagFormat('-starts-with-dash') == false
+    }
+
+    def "isValidImageReference validates complete reference format"() {
+        expect:
+        extension.isValidImageReference('registry.io:5000/namespace/name:tag') == true
+        extension.isValidImageReference('localhost:5000/name:tag') == true
+        extension.isValidImageReference('name:tag') == true
+    }
+
+    def "extractImageName handles various image reference formats"() {
+        expect:
+        extension.extractImageName('simple:tag') == 'simple'
+        extension.extractImageName('namespace/name:tag') == 'namespace/name'
+        extension.extractImageName('registry.io/namespace/name:tag') == 'registry.io/namespace/name'
+        extension.extractImageName('registry.io:5000/namespace/name:tag') == 'registry.io:5000/namespace/name'
+    }
 }
