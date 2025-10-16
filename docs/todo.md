@@ -1,13 +1,8 @@
 # todo
 
-I can see the problem! The plugin is always creating a dockerBuild${capitalizedName} task on line 189, even when sourceRef is set. For sourceRef mode,
-there should be no build task since we're just referencing an existing image. This is causing the functional test to fail because it's trying to run
-a build task that shouldn't exist for sourceRef images.
-
 
 ## Clean-up
 1. remove temp/debug/backup files/dirs
-2. Look for deprecated methods
 3. Function tests
    1. Try to re-enable functional tests?
    2. Need to add any, even if disabled? 
@@ -105,6 +100,9 @@ Publish Tags vs Build Tags
 - run integration tests... lifecycle tests
 - when i build plugin, where does it go (like a jar would go to build/libs/)?  do i need to publishToMavenLocal?
 - for running the integration tests, must the plugin have been published to maven local?
+- takes about 8 to 12 minutes to run unit tests.  limit tests to what you changed, then run tests for all.
+- takes about 28 minutes to run integration tests (not including tests with public registries).  limit tests to what you changed, then run tests for all.
+   -  tests to public registries must be run separate
 
 ### Other
 

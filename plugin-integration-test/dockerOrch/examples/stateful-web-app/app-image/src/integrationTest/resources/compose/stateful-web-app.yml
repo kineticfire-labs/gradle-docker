@@ -13,7 +13,6 @@
 # limitations under the License.
 
 # Docker Compose file for integration testing
-# NOTE: No 'version' field - deprecated in Docker Compose
 
 services:
   stateful-web-app:
