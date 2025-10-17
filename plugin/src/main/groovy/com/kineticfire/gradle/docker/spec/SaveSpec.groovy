@@ -49,8 +49,9 @@ abstract class SaveSpec {
     
     @Input
     abstract Property<SaveCompression> getCompression()
-    
-    @OutputFile
+
+    // Note: @OutputFile removed - SaveSpec is a configuration object, not a task
+    // The task (DockerSaveTask) has its own @OutputFile annotation
     abstract RegularFileProperty getOutputFile()
     
 
