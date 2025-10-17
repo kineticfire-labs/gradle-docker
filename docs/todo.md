@@ -1,48 +1,6 @@
 # todo
 
-
-Perfect! I found the root cause. In ComposeDownTask.groovy line 98 (shown in the reminder as line 8), the task accesses project.extensions at execution time within the captureLogsIfConfigured
-method. This is called from the @TaskAction method which runs at execution time, causing the Gradle 10 incompatibility warning.
-
-The issue is that we need to capture the logs configuration at CONFIGURATION time, not at execution time. Let me inform the user of the findings:
-
-I successfully identified and partially fixed the Gradle 10 incompatibility issue. Here's what I found:
-
-Summary of Changes Made
-
-✅ Completed: Plugin Configuration Layer (GradleDockerPlugin.groovy)
-
-- Updated configureComposeUpTask method to accept project parameter
-- Updated configureComposeDownTask method to accept project parameter
-- Replaced all task.project references with injected project parameter at configuration time
-- Modified method call sites to pass project instead of accessing task.project
-
-❌ Remaining Issue: Task Execution Layer (ComposeDownTask.groovy)
-
-The deprecation warning persists because ComposeDownTask.groovy:98 accesses project.extensions at execution time:
-
-private void captureLogsIfConfigured(String stackName, String projectName) {
-def dockerOrchExt = project.extensions.findByName('dockerOrch')  // ← Execution-time project access
-...
-}
-
-Test Results
-
-- ✅ All integration tests PASSED (251 tasks: 202 executed, 11 from cache, 38 up-to-date)
-- ❌ Deprecation warning still appears during composeDownStatefulStatefulWebAppTest task execution
-
-Next Steps Required
-
-To completely fix this issue, we need to:
-1. Add an @Internal property to ComposeDownTask for logs configuration
-2. Configure this property at configuration time in GradleDockerPlugin
-3. Use the configured property at execution time instead of accessing project.extensions
-
-The same pattern should be checked in ComposeUpTask if it has similar code.
-
-Would you like me to implement the complete fix for the task execution layer?
-
-
+failure in dockerOrch:examples:stateful-web-app:app-image:integrationTest (specifically the StatefulWebAppExampleIT test)
 
 ## Clean-up
 1. remove temp/debug/backup files/dirs

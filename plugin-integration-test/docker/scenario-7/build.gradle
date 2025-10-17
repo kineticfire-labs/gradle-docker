@@ -210,44 +210,7 @@ tasks.named('verifyDockerBuildArgs') {
 }
 tasks.named('stopTestRegistries') { mustRunAfter 'verifyRegistryDockerImages' }
 
-// Configure task ordering and force rebuild after clean
-tasks.named('dockerImages') {
-    // Force task to always run when cleanDockerImages has run
-    outputs.upToDateWhen {
-        // Check if any of our target images exist
-        def imageNames = ['scenario-7-time-server:latest']
-        return imageNames.every { imageName ->
-            try {
-                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
-                        .redirectErrorStream(true)
-                        .start()
-                def output = process.inputStream.text.trim()
-                process.waitFor()
-                return process.exitValue() == 0 && !output.isEmpty()
-            } catch (Exception e) {
-                return false
-            }
-        }
-    }
-}
-
-// Apply the same logic to tasks that start with "dockerBuild"
+// Configure task ordering
 tasks.matching { it.name.startsWith('dockerBuild') }.configureEach {
     mustRunAfter 'cleanDockerImages'
-    outputs.upToDateWhen {
-        // Check if any of our target images exist
-        def imageNames = ['scenario-7-time-server:latest']
-        return imageNames.every { imageName ->
-            try {
-                def process = new ProcessBuilder('docker', 'images', '-q', imageName)
-                        .redirectErrorStream(true)
-                        .start()
-                def output = process.inputStream.text.trim()
-                process.waitFor()
-                return process.exitValue() == 0 && !output.isEmpty()
-            } catch (Exception e) {
-                return false
-            }
-        }
-    }
 }
