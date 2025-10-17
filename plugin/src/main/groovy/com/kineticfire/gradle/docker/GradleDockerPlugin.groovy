@@ -241,12 +241,12 @@ class GradleDockerPlugin implements Plugin<Project> {
             
             // Up task
             project.tasks.register("composeUp${capitalizedName}", ComposeUpTask) { task ->
-                configureComposeUpTask(task, stackSpec, composeService, jsonService)
+                configureComposeUpTask(task, stackSpec, composeService, jsonService, project)
             }
-            
-            // Down task  
+
+            // Down task
             project.tasks.register("composeDown${capitalizedName}", ComposeDownTask) { task ->
-                configureComposeDownTask(task, stackSpec, composeService)
+                configureComposeDownTask(task, stackSpec, composeService, project)
             }
         }
     }
@@ -585,7 +585,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void configureComposeUpTask(task, stackSpec, composeService, jsonService) {
+    private void configureComposeUpTask(task, stackSpec, composeService, jsonService, project) {
         task.group = 'docker compose'
         task.description = "Start Docker Compose stack: ${stackSpec.name}"
 
@@ -593,8 +593,8 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.composeService.set(composeService)
 
         // Configure compose files with multi-file support and backward compatibility
-        // Use provider transformation to avoid configuration cache violations
-        task.composeFiles.setFrom(createComposeFilesProvider(stackSpec, task.project))
+        // Resolve files at configuration time to avoid project access at execution time (Gradle 10 compatibility)
+        task.composeFiles.setFrom(createComposeFilesList(stackSpec, project))
 
         if (stackSpec.envFiles && !stackSpec.envFiles.empty) {
             task.envFiles.setFrom(stackSpec.envFiles)
@@ -602,14 +602,14 @@ class GradleDockerPlugin implements Plugin<Project> {
 
         // Configure project and stack names with property override support
         // Capture project name property during configuration to avoid project access during execution
-        def projectNameProperty = task.project.findProperty("compose.project.name")
-        task.projectName.set(task.project.provider {
+        def projectNameProperty = project.findProperty("compose.project.name")
+        task.projectName.set(project.provider {
             projectNameProperty ?: stackSpec.projectName.getOrElse(stackSpec.name)
         })
         task.stackName.set(stackSpec.name)
 
         // Configure output directory for state files (Gradle 10 compatibility)
-        task.outputDirectory.set(task.project.layout.buildDirectory.dir('compose-state'))
+        task.outputDirectory.set(project.layout.buildDirectory.dir('compose-state'))
 
         // Configure wait-for-healthy settings (Gradle 10 compatibility)
         if (stackSpec.waitForHealthy.present) {
@@ -632,7 +632,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void configureComposeDownTask(task, stackSpec, composeService) {
+    private void configureComposeDownTask(task, stackSpec, composeService, project) {
         task.group = 'docker compose'
         task.description = "Stop Docker Compose stack: ${stackSpec.name}"
         
@@ -640,8 +640,8 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.composeService.set(composeService)
         
         // Configure compose files - automatically use same files as ComposeUp for proper teardown
-        // Use provider transformation to avoid configuration cache violations
-        task.composeFiles.setFrom(createComposeFilesProvider(stackSpec, task.project))
+        // Resolve files at configuration time to avoid project access at execution time (Gradle 10 compatibility)
+        task.composeFiles.setFrom(createComposeFilesList(stackSpec, project))
         
         if (stackSpec.envFiles && !stackSpec.envFiles.empty) {
             task.envFiles.setFrom(stackSpec.envFiles)
@@ -649,62 +649,76 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure project and stack names with property override support
         // Capture project name property during configuration to avoid project access during execution
-        def projectNameProperty = task.project.findProperty("compose.project.name")
-        task.projectName.set(task.project.provider {
+        def projectNameProperty = project.findProperty("compose.project.name")
+        task.projectName.set(project.provider {
             projectNameProperty ?: stackSpec.projectName.getOrElse(stackSpec.name)
         })
         task.stackName.set(stackSpec.name)
+
+        // Configure logs capture properties at configuration time (Gradle 10 compatibility)
+        if (stackSpec.logs.present) {
+            def logsSpec = stackSpec.logs.get()
+            task.logsEnabled.set(true)
+            if (logsSpec.services.present) {
+                task.logsServices.set(logsSpec.services)
+            }
+            task.logsTailLines.set(logsSpec.tailLines)
+            task.logsFollow.set(logsSpec.follow)
+            if (logsSpec.writeTo.present) {
+                task.logsWriteTo.set(logsSpec.writeTo)
+            }
+        } else {
+            task.logsEnabled.set(false)
+        }
     }
     
     /**
-     * Create a provider for compose files with multi-file support and backward compatibility.
-     * Uses provider transformations to maintain configuration cache compatibility.
+     * Create a list of compose files with multi-file support and backward compatibility.
+     * Resolves files at configuration time to avoid project access at execution time (Gradle 10 compatibility).
      */
-    private Provider<List<File>> createComposeFilesProvider(stackSpec, project) {
-        // Create provider that combines all possible compose file sources
-        return project.provider {
-            def files = []
-            
-            // Priority 1: Use new multi-file configuration
-            if (stackSpec.composeFiles.present && !stackSpec.composeFiles.getOrElse([]).empty) {
-                // Add files from composeFiles property (List<String>)
-                stackSpec.composeFiles.getOrElse([]).each { path ->
-                    files.add(project.file(path))
-                }
+    private List<File> createComposeFilesList(stackSpec, project) {
+        def files = []
+
+        // Priority 1: Use new multi-file configuration
+        if (stackSpec.composeFiles.present && !stackSpec.composeFiles.getOrElse([]).empty) {
+            // Add files from composeFiles property (List<String>)
+            // Resolve at configuration time to avoid project.file() at execution time
+            stackSpec.composeFiles.getOrElse([]).each { path ->
+                files.add(project.file(path))
             }
-            
-            if (!stackSpec.composeFileCollection.empty) {
-                // Add files from composeFileCollection (ConfigurableFileCollection)
-                files.addAll(stackSpec.composeFileCollection.files)
-            }
-            
-            // Priority 2: Use legacy single-file configuration (backward compatibility)
-            if (files.empty && stackSpec.composeFile.present) {
-                files.add(stackSpec.composeFile.get().asFile)
-            }
-            
-            // Priority 3: Use original files property (existing behavior)
-            if (files.empty && !stackSpec.files.empty) {
-                files.addAll(stackSpec.files.files)
-            }
-            
-            // Validation: ensure at least one compose file is specified
-            if (files.empty) {
-                throw new GradleException("No compose files specified for stack '${stackSpec.name}'. " +
-                    "Use 'composeFile', 'composeFiles', 'composeFileCollection', or 'files' to specify compose files.\\n" +
-                    "Suggestion: Add at least one compose file to the stack configuration")
-            }
-            
-            // Validate that specified files exist
-            files.each { file ->
-                if (!file.exists()) {
-                    throw new GradleException("Compose file does not exist: ${file.absolutePath} for stack '${stackSpec.name}'\\n" +
-                        "Suggestion: Create the compose file or update the path")
-                }
-            }
-            
-            return files
         }
+
+        if (!stackSpec.composeFileCollection.empty) {
+            // Add files from composeFileCollection (ConfigurableFileCollection)
+            files.addAll(stackSpec.composeFileCollection.files)
+        }
+
+        // Priority 2: Use legacy single-file configuration (backward compatibility)
+        if (files.empty && stackSpec.composeFile.present) {
+            files.add(stackSpec.composeFile.get().asFile)
+        }
+
+        // Priority 3: Use original files property (existing behavior)
+        if (files.empty && !stackSpec.files.empty) {
+            files.addAll(stackSpec.files.files)
+        }
+
+        // Validation: ensure at least one compose file is specified
+        if (files.empty) {
+            throw new GradleException("No compose files specified for stack '${stackSpec.name}'. " +
+                "Use 'composeFile', 'composeFiles', 'composeFileCollection', or 'files' to specify compose files.\\n" +
+                "Suggestion: Add at least one compose file to the stack configuration")
+        }
+
+        // Validate that specified files exist
+        files.each { file ->
+            if (!file.exists()) {
+                throw new GradleException("Compose file does not exist: ${file.absolutePath} for stack '${stackSpec.name}'\\n" +
+                    "Suggestion: Create the compose file or update the path")
+            }
+        }
+
+        return files
     }
     
     private void setupTestIntegration(Project project) {

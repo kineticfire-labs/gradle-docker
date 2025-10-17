@@ -21,11 +21,14 @@ import com.kineticfire.gradle.docker.model.LogsConfig
 import com.kineticfire.gradle.docker.service.ComposeService
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
 /**
@@ -54,7 +57,27 @@ abstract class ComposeDownTask extends DefaultTask {
     
     @Input
     abstract Property<String> getStackName()
-    
+
+    // Logs capture configuration (configured at configuration time to avoid project access at execution time)
+    @Internal
+    abstract Property<Boolean> getLogsEnabled()
+
+    @Input
+    @Optional
+    abstract ListProperty<String> getLogsServices()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getLogsTailLines()
+
+    @Input
+    @Optional
+    abstract Property<Boolean> getLogsFollow()
+
+    @OutputFile
+    @Optional
+    abstract RegularFileProperty getLogsWriteTo()
+
     @TaskAction
     void composeDown() {
         def projectName = this.projectName.get()
@@ -92,27 +115,20 @@ abstract class ComposeDownTask extends DefaultTask {
     }
 
     /**
-     * Capture logs if configured
+     * Capture logs if configured (uses properties configured at configuration time)
      */
     private void captureLogsIfConfigured(String stackName, String projectName) {
-        def dockerOrchExt = project.extensions.findByName('dockerOrch')
-        if (!dockerOrchExt) {
+        // Check if logs are enabled (configured at configuration time)
+        if (!logsEnabled.getOrElse(false)) {
             return
         }
-
-        def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
-        if (!stackSpec || !stackSpec.logs.present) {
-            return
-        }
-
-        def logsSpec = stackSpec.logs.get()
 
         logger.lifecycle("Capturing logs for stack '{}'", stackName)
 
         def logsConfig = new LogsConfig(
-            logsSpec.services.present ? logsSpec.services.get() : [],
-            logsSpec.tailLines.getOrElse(100),
-            logsSpec.follow.getOrElse(false),
+            logsServices.getOrElse([]),
+            logsTailLines.getOrElse(100),
+            logsFollow.getOrElse(false),
             null  // outputFile not used here - we handle file writing ourselves
         )
 
@@ -121,8 +137,8 @@ abstract class ComposeDownTask extends DefaultTask {
             def logs = logsFuture.get()
 
             // Write logs to configured location
-            if (logsSpec.writeTo.present) {
-                def logFile = logsSpec.writeTo.get().asFile
+            if (logsWriteTo.present) {
+                def logFile = logsWriteTo.get().asFile
                 logFile.parentFile.mkdirs()
                 logFile.text = logs
                 logger.lifecycle("Logs written to: {}", logFile.absolutePath)

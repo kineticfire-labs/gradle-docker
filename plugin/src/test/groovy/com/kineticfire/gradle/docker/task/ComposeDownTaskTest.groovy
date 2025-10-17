@@ -435,6 +435,12 @@ class ComposeDownTaskTest extends Specification {
         task.projectName.set('test-project')
         task.stackName.set('testStack')
 
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(50)
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
+
         def mockLogs = "Service web logs\nService db logs"
 
         and:
@@ -476,6 +482,12 @@ class ComposeDownTaskTest extends Specification {
         task.projectName.set('test-project')
         task.stackName.set('testStack')
 
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(200)
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
+
         def mockLogs = "Service logs"
 
         and:
@@ -514,6 +526,12 @@ class ComposeDownTaskTest extends Specification {
         task.projectName.set('test-project')
         task.stackName.set('testStack')
 
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(100)
+        task.logsFollow.set(true)
+        task.logsWriteTo.set(logFile)
+
         def mockLogs = "Following logs..."
 
         and:
@@ -549,6 +567,11 @@ class ComposeDownTaskTest extends Specification {
         task.projectName.set('test-project')
         task.stackName.set('testStack')
 
+        // Configure logs properties to match what plugin would do (no writeTo)
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(150)
+        task.logsFollow.set(false)
+
         def mockLogs = "Console logs"
 
         and:
@@ -582,6 +605,12 @@ class ComposeDownTaskTest extends Specification {
 
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(100)  // Default value
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
 
         and:
         1 * mockComposeService.downStack('test-project') >> CompletableFuture.completedFuture(null)
@@ -684,6 +713,12 @@ class ComposeDownTaskTest extends Specification {
         task.projectName.set('test-project')
         task.stackName.set('testStack')
 
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(100)  // Default value
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
+
         def mockLogs = "Nested logs"
 
         and:
@@ -718,6 +753,12 @@ class ComposeDownTaskTest extends Specification {
 
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+
+        // Configure logs properties to match what plugin would do (using default)
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(100)  // Default value from LogsSpec
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
 
         def mockLogs = "Default tail logs"
 
@@ -754,6 +795,12 @@ class ComposeDownTaskTest extends Specification {
 
         task.projectName.set('test-project')
         task.stackName.set('testStack')
+
+        // Configure logs properties to match what plugin would do
+        task.logsEnabled.set(true)
+        task.logsTailLines.set(75)
+        task.logsFollow.set(false)
+        task.logsWriteTo.set(logFile)
 
         def mockLogs = "Logs without services filter"
 
