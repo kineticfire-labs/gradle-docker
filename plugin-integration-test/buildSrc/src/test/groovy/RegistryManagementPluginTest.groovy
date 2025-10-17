@@ -15,6 +15,7 @@
  */
 
 import org.gradle.api.Project
+import org.gradle.api.tasks.testing.Test
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -96,10 +97,10 @@ class RegistryManagementPluginTest extends Specification {
         plugin.apply(project)
         
         then:
-        project.ext.hasProperty('createRegistryConfig')
-        project.ext.hasProperty('addRegistryConfig')
-        project.ext.hasProperty('withTestRegistry')
-        project.ext.hasProperty('withAuthenticatedRegistry')
+        project.ext.has('createRegistryConfig')
+        project.ext.has('addRegistryConfig')
+        project.ext.has('withTestRegistry')
+        project.ext.has('withAuthenticatedRegistry')
     }
 
     def "createRegistryConfig convenience method works"() {
@@ -181,55 +182,60 @@ class RegistryManagementPluginTest extends Specification {
         config.extraLabels == ['custom': 'value']
     }
 
-    def "plugin configures task dependencies after evaluation"() {
+    def "plugin configures task dependencies with lazy wiring"() {
         given:
         plugin.apply(project)
         
-        // Create a test task to verify dependency setup
-        def testTask = project.tasks.register('integrationTest') {
+        // Create a Test task to verify dependency setup
+        def testTask = project.tasks.register('integrationTest', Test) {
             it.group = 'verification'
         }
         
         when:
-        project.evaluate()
+        // Force task realization to trigger configureEach
+        project.tasks.getByName('integrationTest')
         
         then:
         def stopTask = project.tasks.getByName('stopTestRegistries')
-        def cleanupTask = project.tasks.getByName('cleanupTestRegistries')
         
-        // Verify stop task is finalized by cleanup
-        stopTask.finalizedBy.getDependencies(stopTask).contains(cleanupTask)
+        // Verify stop task runs after the test task using lazy wiring
+        stopTask.mustRunAfter.getDependencies(stopTask).contains(testTask.get())
     }
 
     def "plugin handles projects without test tasks"() {
         when:
         plugin.apply(project)
-        project.evaluate()
+        // No need to call project.evaluate() anymore - lazy wiring happens automatically
         
         then:
         noExceptionThrown()
     }
 
-    def "plugin configures dependencies for test tasks"() {
+    def "plugin configures dependencies for test tasks with lazy wiring"() {
         given:
         plugin.apply(project)
         
-        // Create test tasks that should trigger dependency setup
-        project.tasks.register('myTest') { it.group = 'verification' }
-        project.tasks.register('someOtherTest') { it.group = 'verification' }
+        // Create Test tasks with names that match the plugin's filter
+        def testTask = project.tasks.register('test', Test) { it.group = 'verification' }
+        def integrationTestTask = project.tasks.register('integrationTest', Test) { it.group = 'verification' }
+        // Create a task that should NOT be wired (wrong name)
+        def customTestTask = project.tasks.register('customTest', Test) { it.group = 'verification' }
         
         when:
-        project.evaluate()
+        // Force task realization to trigger configureEach
+        project.tasks.getByName('test')
+        project.tasks.getByName('integrationTest')
+        project.tasks.getByName('customTest')
         
         then:
         def stopTask = project.tasks.getByName('stopTestRegistries')
         
-        // Verify stop task runs after test tasks
-        def testTask1 = project.tasks.getByName('myTest')
-        def testTask2 = project.tasks.getByName('someOtherTest')
+        // Verify stop task runs after standard test tasks
+        stopTask.mustRunAfter.getDependencies(stopTask).contains(testTask.get())
+        stopTask.mustRunAfter.getDependencies(stopTask).contains(integrationTestTask.get())
         
-        stopTask.mustRunAfter.getDependencies(stopTask).contains(testTask1)
-        stopTask.mustRunAfter.getDependencies(stopTask).contains(testTask2)
+        // Verify custom test task is NOT wired (name doesn't match filter)
+        !stopTask.mustRunAfter.getDependencies(stopTask).contains(customTestTask.get())
     }
 
     def "plugin can be applied multiple times safely"() {

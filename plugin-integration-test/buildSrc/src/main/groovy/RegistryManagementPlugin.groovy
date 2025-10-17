@@ -16,6 +16,7 @@
 
 import org.gradle.api.Plugin
 import org.gradle.api.Project
+import org.gradle.api.tasks.testing.Test
 
 /**
  * Plugin that provides Docker registry container management for integration testing.
@@ -30,6 +31,12 @@ class RegistryManagementPlugin implements Plugin<Project> {
 
     @Override
     void apply(Project project) {
+        // Make plugin idempotent - check if already applied
+        if (project.extensions.findByName('registryManagement') != null) {
+            // Plugin already applied, skip initialization
+            return
+        }
+        
         // Create the shared registry fixture
         def registryFixture = new RegistryTestFixture()
         
@@ -58,25 +65,15 @@ class RegistryManagementPlugin implements Plugin<Project> {
             it.description = 'Emergency cleanup of orphaned Docker registries'
         }
         
-        // Configure task dependencies
-        project.afterEvaluate {
-            // Ensure stop task runs after Gradle's built-in test tasks only
-            project.tasks.matching {
-                it.name == 'test' || it.name == 'functionalTest' || it.name == 'integrationTest'
-            }.all { testTask ->
-                // Only add mustRunAfter if the test task doesn't depend on stop task
-                if (!testTask.taskDependencies.getDependencies().any { it.name == 'stopTestRegistries' }) {
-                    stopTask.configure {
-                        it.mustRunAfter(testTask)
-                    }
-                }
+        // Configure task dependencies using lazy wiring (Gradle 9/10 best practice)
+        // Wire stopTestRegistries to run after test tasks without using afterEvaluate
+        project.tasks.withType(Test).configureEach { testTask ->
+            // Only add mustRunAfter for standard test task names to avoid over-constraining the build
+            if (testTask.name in ['test', 'functionalTest', 'integrationTest']) {
+                // Get the realized task and add ordering constraint
+                // stopTask should run AFTER testTask
+                stopTask.get().mustRunAfter(testTask)
             }
-            
-            // Ensure cleanup runs if stop fails
-            // Note: Commented out to avoid circular dependency
-            // stopTask.configure {
-            //     it.finalizedBy(cleanupTask)
-            // }
         }
         
         // Add convenience methods to project
