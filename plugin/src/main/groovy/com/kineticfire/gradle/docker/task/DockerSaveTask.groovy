@@ -65,10 +65,6 @@ abstract class DockerSaveTask extends DefaultTask {
     @Optional
     abstract Property<String> getContextTaskPath()
 
-    // Compatibility property for tests (not serialized due to @Internal)
-    @Internal
-    abstract Property<ImageSpec> getImageSpec()
-
     // PullIfMissing properties (configuration cache safe alternative to ImageSpec)
     @Input
     @Optional

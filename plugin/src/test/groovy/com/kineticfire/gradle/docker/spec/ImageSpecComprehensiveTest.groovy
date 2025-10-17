@@ -32,7 +32,7 @@ class ImageSpecComprehensiveTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
     }
 
     // ===== PROVIDER API TESTS =====
@@ -303,7 +303,7 @@ class ImageSpecComprehensiveTest extends Specification {
     def "version convention uses project version"() {
         given:
         project.version = "3.0.0-SNAPSHOT"
-        def newImageSpec = project.objects.newInstance(ImageSpec, 'versionTest', project)
+        def newImageSpec = project.objects.newInstance(ImageSpec, 'versionTest', project.objects, project.providers, project.layout)
 
         expect:
         newImageSpec.version.get() == "3.0.0-SNAPSHOT"

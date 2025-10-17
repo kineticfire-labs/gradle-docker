@@ -31,7 +31,7 @@ class ImageSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -44,8 +44,8 @@ class ImageSpecTest extends Specification {
 
     def "constructor with different names"() {
         given:
-        def image1 = project.objects.newInstance(ImageSpec, 'webapp', project)
-        def image2 = project.objects.newInstance(ImageSpec, 'api', project)
+        def image1 = project.objects.newInstance(ImageSpec, 'webapp', project.objects, project.providers, project.layout)
+        def image2 = project.objects.newInstance(ImageSpec, 'api', project.objects, project.providers, project.layout)
 
         expect:
         image1.name == 'webapp'
@@ -469,8 +469,8 @@ class ImageSpecTest extends Specification {
 
     def "multiple context configurations create separate tasks"() {
         given:
-        def image1 = project.objects.newInstance(ImageSpec, 'webapp', project)
-        def image2 = project.objects.newInstance(ImageSpec, 'api', project)
+        def image1 = project.objects.newInstance(ImageSpec, 'webapp', project.objects, project.providers, project.layout)
+        def image2 = project.objects.newInstance(ImageSpec, 'api', project.objects, project.providers, project.layout)
         def srcDir = project.file('src')
 
         when:

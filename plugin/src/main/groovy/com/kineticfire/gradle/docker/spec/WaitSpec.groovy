@@ -27,12 +27,8 @@ import javax.inject.Inject
  */
 abstract class WaitSpec {
     
-    private final Project project
-    
     @Inject
-    WaitSpec(Project project) {
-        this.project = project
-        
+    WaitSpec() {
         // Set defaults
         timeoutSeconds.convention(60)
         pollSeconds.convention(2)

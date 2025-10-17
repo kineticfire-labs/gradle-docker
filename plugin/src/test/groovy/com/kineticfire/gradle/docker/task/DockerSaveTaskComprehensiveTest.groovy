@@ -42,7 +42,7 @@ class DockerSaveTaskComprehensiveTest extends Specification {
         task.dockerService.set(mockDockerService)
         
         // Create real ImageSpec instance instead of mock
-        testImageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        testImageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         testImageSpec.pullIfMissing.set(false) // Default to false for most tests
         task.imageSpec.set(testImageSpec)
     }

@@ -34,15 +34,13 @@ abstract class ImageSpec {
     private final ObjectFactory objectFactory
     private final ProviderFactory providers
     private final ProjectLayout layout
-    private final Project project
     
     @Inject
-    ImageSpec(String name, Project project) {
+    ImageSpec(String name, ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout) {
         this.name = name
-        this.objectFactory = project.objects
-        this.providers = project.providers
-        this.layout = project.layout
-        this.project = project
+        this.objectFactory = objectFactory
+        this.providers = providers
+        this.layout = layout
         
         // Set conventions for new nomenclature properties
         registry.convention("")
@@ -248,38 +246,32 @@ abstract class ImageSpec {
     
     /**
      * Configure inline context using Copy task DSL
-     * Creates an anonymous Copy task to prepare build context
+     * NOTE: This method is deprecated and should not be used with configuration cache.
+     * Instead, create tasks explicitly in your build script and use contextTask to reference them.
+     * 
+     * @deprecated Create tasks in build.gradle instead: 
+     *   tasks.register('prepareContext', Copy) { ... }
+     *   docker.images.myImage.contextTask = tasks.named('prepareContext')
      */
+    @Deprecated
     void context(@DelegatesTo(Copy) Closure closure) {
-        // For testing purposes, create a basic copy task-like configuration
-        // In real plugin usage, this would be handled during plugin configuration
-        def copyTask = project.tasks.register("prepare${name.capitalize()}Context", Copy) { task ->
-            task.group = 'docker'
-            task.description = "Prepare build context for Docker image"
-            closure.delegate = task
-            closure.call()
-        }
-        this.contextTask = copyTask
-        // Set configuration cache safe properties
-        this.contextTaskName.set("prepare${name.capitalize()}Context")
-        this.contextTaskPath.set(":prepare${name.capitalize()}Context")
+        throw new UnsupportedOperationException(
+            "Inline context() DSL is not supported with Gradle configuration cache. " +
+            "Create tasks explicitly in your build script instead: " +
+            "tasks.register('prepareContext', Copy) { ... } and then set contextTask property."
+        )
     }
     
     /**
      * Configure inline context using Copy task Action
+     * @deprecated See context(Closure) for alternative approach
      */
+    @Deprecated
     void context(Action<Copy> action) {
-        // For testing purposes, create a basic copy task-like configuration  
-        // In real plugin usage, this would be handled during plugin configuration
-        def copyTask = project.tasks.register("prepare${name.capitalize()}Context", Copy) { task ->
-            task.group = 'docker'
-            task.description = "Prepare build context for Docker image"
-            action.execute(task)
-        }
-        this.contextTask = copyTask
-        // Set configuration cache safe properties
-        this.contextTaskName.set("prepare${name.capitalize()}Context")
-        this.contextTaskPath.set(":prepare${name.capitalize()}Context")
+        throw new UnsupportedOperationException(
+            "Inline context() DSL is not supported with Gradle configuration cache. " +
+            "Create tasks explicitly in your build script instead."
+        )
     }
     
     // DSL methods for pullAuth configuration

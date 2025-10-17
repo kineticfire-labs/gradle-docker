@@ -32,7 +32,7 @@ class DockerExtensionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        extension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout, project)
+        extension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout)
     }
 
     def "extension can be created"() {
@@ -760,7 +760,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns tags from sourceRef property"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set('alpine:3.16')
 
         when:
@@ -772,7 +772,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns latest when sourceRef has no tag"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set('alpine')
 
         when:
@@ -784,7 +784,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns tag from sourceRef components"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefRepository.set('myregistry.com/namespace/app')
         imageSpec.sourceRefTag.set('v1.0.0')
 
@@ -797,7 +797,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns latest when sourceRef components have empty tag convention"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefImageName.set('myapp')
         imageSpec.sourceRefTag.set('')  // Empty string convention
 
@@ -812,7 +812,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns build mode tags when no sourceRef"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.tags.set(['v1.0.0', 'latest', 'stable'])
 
         when:
@@ -824,7 +824,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags returns empty list when no tags configured"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
 
         when:
         def tags = extension.getSourceTags(imageSpec)
@@ -837,7 +837,7 @@ class DockerExtensionTest extends Specification {
 
     def "validatePublishTarget with ImageSpec allows tag inheritance from source image"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.tags.set(['v1.0.0', 'latest'])
 
         def publishTarget = project.objects.newInstance(
@@ -856,7 +856,7 @@ class DockerExtensionTest extends Specification {
 
     def "validatePublishTarget with ImageSpec fails when no tags to inherit"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         // No tags set on imageSpec
 
         def publishTarget = project.objects.newInstance(

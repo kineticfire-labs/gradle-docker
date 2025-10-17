@@ -80,7 +80,7 @@ class DockerTestDataFactory {
     }
     
     static ImageSpec createImageSpec(Project project, String name = "test") {
-        def spec = project.objects.newInstance(ImageSpec, name, project)
+        def spec = project.objects.newInstance(ImageSpec, name, project.objects, project.providers, project.layout)
         spec.registry.set("docker.io")
         spec.namespace.set("mycompany")
         spec.imageName.set("myapp")
@@ -92,7 +92,7 @@ class DockerTestDataFactory {
     }
     
     static ImageSpec createSourceRefImageSpec(Project project, String name = "sourceRef") {
-        def spec = project.objects.newInstance(ImageSpec, name, project)
+        def spec = project.objects.newInstance(ImageSpec, name, project.objects, project.providers, project.layout)
         spec.sourceRef.set("existing:image")
         spec.tags.set(["local:latest"])
         return spec

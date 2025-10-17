@@ -35,14 +35,16 @@ abstract class DockerExtension {
     
     private final NamedDomainObjectContainer<ImageSpec> images
     private final ObjectFactory objectFactory
-    private final Project project
+    private final ProviderFactory providers
+    private final ProjectLayout layout
     
     @Inject
-    DockerExtension(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout, Project project) {
+    DockerExtension(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout) {
         this.objectFactory = objectFactory
-        this.project = project
+        this.providers = providers
+        this.layout = layout
         this.images = objectFactory.domainObjectContainer(ImageSpec) { name ->
-            def imageSpec = objectFactory.newInstance(ImageSpec, name, project)
+            def imageSpec = objectFactory.newInstance(ImageSpec, name, objectFactory, providers, layout)
             return imageSpec
         }
     }

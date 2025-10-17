@@ -28,12 +28,8 @@ import javax.inject.Inject
  */
 abstract class LogsSpec {
 
-    private final Project project
-
     @Inject
-    LogsSpec(Project project) {
-        this.project = project
-
+    LogsSpec() {
         // Set defaults
         tailLines.convention(100)
         follow.convention(false)

@@ -31,7 +31,7 @@ class ImageSpecAdditionalTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project)
+        imageSpec = project.objects.newInstance(ImageSpec, 'testImage', project.objects, project.providers, project.layout)
     }
 
     // ===== PULLAUTH MULTIPLE CONFIGURATION TESTS =====

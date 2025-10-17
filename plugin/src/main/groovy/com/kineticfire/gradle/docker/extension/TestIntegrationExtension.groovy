@@ -17,18 +17,40 @@
 package com.kineticfire.gradle.docker.extension
 
 import org.gradle.api.Project
+import org.gradle.api.file.ProjectLayout
+import org.gradle.api.logging.Logger
+import org.gradle.api.logging.Logging
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Provider
+import org.gradle.api.provider.ProviderFactory
 import org.gradle.api.tasks.testing.Test
+
+import javax.inject.Inject
 
 /**
  * Extension methods for Test task integration with Docker Compose
  */
-class TestIntegrationExtension {
+abstract class TestIntegrationExtension {
     
-    private final Project project
+    private final ProjectLayout layout
+    private final Provider<String> projectNameProvider
+    private final Logger logger
+    // Store reference to DockerOrchExtension for configuration-time access
+    private DockerOrchExtension dockerOrchExtension
     
-    TestIntegrationExtension(Project project) {
-        this.project = project
+    @Inject
+    TestIntegrationExtension(ProjectLayout layout, ProviderFactory providers) {
+        this.layout = layout
+        this.projectNameProvider = providers.gradleProperty("project.name")
+            .orElse(providers.provider { "unknown-project" })
+        this.logger = Logging.getLogger(TestIntegrationExtension)
+    }
+    
+    /**
+     * Set the DockerOrchExtension reference (called by plugin during configuration)
+     */
+    void setDockerOrchExtension(DockerOrchExtension extension) {
+        this.dockerOrchExtension = extension
     }
     
     /**
@@ -38,14 +60,14 @@ class TestIntegrationExtension {
      * @param lifecycle When to start/stop the stack: "suite", "class", or "method"
      */
     void usesCompose(Test test, String stackName, String lifecycle) {
-        project.logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'", 
+        logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'", 
             test.name, stackName, lifecycle)
             
         // Find the compose stack configuration
-        def dockerOrchExt = project.extensions.findByName('dockerOrch')
-        if (!dockerOrchExt) {
+        if (!dockerOrchExtension) {
             throw new IllegalStateException("dockerOrch extension not found. Apply gradle-docker plugin first.")
         }
+        def dockerOrchExt = dockerOrchExtension
         
         def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
         if (!stackSpec) {
@@ -74,7 +96,7 @@ class TestIntegrationExtension {
      * @return Provider of path to the state file that will contain runtime information
      */
     Provider<String> composeStateFileFor(String stackName) {
-        def buildDirProvider = project.layout.buildDirectory
+        def buildDirProvider = layout.buildDirectory
         def stateDirProvider = buildDirProvider.dir("compose-state")
         return stateDirProvider.map { dir ->
             dir.asFile.toPath().resolve("${stackName}-state.json").toString()
@@ -101,10 +123,10 @@ class TestIntegrationExtension {
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "class")
-        test.systemProperty("docker.compose.project", project.name)
+        test.systemProperty("docker.compose.project", projectNameProvider.get())
         
-        project.logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
-        project.logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
+        logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
+        logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
     }
     
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
@@ -114,9 +136,9 @@ class TestIntegrationExtension {
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "method")
-        test.systemProperty("docker.compose.project", project.name)
+        test.systemProperty("docker.compose.project", projectNameProvider.get())
         
-        project.logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
-        project.logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
+        logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
+        logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
     }
 }

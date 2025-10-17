@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.Action
-import org.gradle.api.Project
+import org.gradle.api.model.ObjectFactory
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.ListProperty
@@ -34,12 +34,12 @@ import javax.inject.Inject
 abstract class ComposeStackSpec {
     
     private final String name
-    private final Project project
+    private final ObjectFactory objectFactory
     
     @Inject
-    ComposeStackSpec(String name, Project project) {
+    ComposeStackSpec(String name, ObjectFactory objectFactory) {
         this.name = name
-        this.project = project
+        this.objectFactory = objectFactory
     }
     
     String getName() { 
@@ -64,40 +64,40 @@ abstract class ComposeStackSpec {
     abstract Property<LogsSpec> getLogs()
     
     void waitForRunning(@DelegatesTo(WaitSpec) Closure closure) {
-        def waitSpec = project.objects.newInstance(WaitSpec, project)
+        def waitSpec = objectFactory.newInstance(WaitSpec)
         closure.delegate = waitSpec
         closure.call()
         waitForRunning.set(waitSpec)
     }
     
     void waitForRunning(Action<WaitSpec> action) {
-        def waitSpec = project.objects.newInstance(WaitSpec, project)
+        def waitSpec = objectFactory.newInstance(WaitSpec)
         action.execute(waitSpec)
         waitForRunning.set(waitSpec)
     }
     
     void waitForHealthy(@DelegatesTo(WaitSpec) Closure closure) {
-        def waitSpec = project.objects.newInstance(WaitSpec, project)
+        def waitSpec = objectFactory.newInstance(WaitSpec)
         closure.delegate = waitSpec
         closure.call()
         waitForHealthy.set(waitSpec)
     }
     
     void waitForHealthy(Action<WaitSpec> action) {
-        def waitSpec = project.objects.newInstance(WaitSpec, project)
+        def waitSpec = objectFactory.newInstance(WaitSpec)
         action.execute(waitSpec)
         waitForHealthy.set(waitSpec)
     }
     
     void logs(@DelegatesTo(LogsSpec) Closure closure) {
-        def logsSpec = project.objects.newInstance(LogsSpec, project)
+        def logsSpec = objectFactory.newInstance(LogsSpec)
         closure.delegate = logsSpec
         closure.call()
         logs.set(logsSpec)
     }
     
     void logs(Action<LogsSpec> action) {
-        def logsSpec = project.objects.newInstance(LogsSpec, project)
+        def logsSpec = objectFactory.newInstance(LogsSpec)
         action.execute(logsSpec)
         logs.set(logsSpec)
     }

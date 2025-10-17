@@ -44,14 +44,14 @@ class DockerExtensionComprehensiveTest extends Specification {
         project = ProjectBuilder.builder()
             .withProjectDir(tempDir.toFile())
             .build()
-        extension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout, project)
+        extension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout)
     }
 
     // ===== NOMENCLATURE VALIDATION TESTS =====
 
     def "validateNomenclature enforces mutual exclusivity between repository and namespace+imageName"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.repository.set("repo/name")
         imageSpec.namespace.set("namespace")
         imageSpec.imageName.set("name")
@@ -67,7 +67,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateNomenclature allows repository without namespace+imageName"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.repository.set("valid/repo")
         imageSpec.tags.set(["tag"])
 
@@ -80,7 +80,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateNomenclature allows namespace+imageName without repository"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.namespace.set("namespace")
         imageSpec.imageName.set("name")
         imageSpec.tags.set(["tag"])
@@ -94,7 +94,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateNomenclature allows only imageName"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.imageName.set("name")
         imageSpec.tags.set(["tag"])
 
@@ -107,7 +107,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateNomenclature accepts valid tag formats"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.imageName.set("name")
         imageSpec.tags.set([validTag])
 
@@ -131,7 +131,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateNomenclature rejects invalid tag formats"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.imageName.set("name")
         imageSpec.tags.set([invalidTag])
 
@@ -156,7 +156,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec requires context, contextTask, or sourceRef"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.imageName.set("name")
         imageSpec.tags.set(["tag"])
         // No context, contextTask, or sourceRef
@@ -171,7 +171,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec allows sourceRef without context"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.tags.set(["tag"])
 
@@ -187,7 +187,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def contextDir = tempDir.resolve("docker-context").toFile()
         contextDir.mkdirs()
         
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.context.set(contextDir)
         imageSpec.imageName.set("name")
         imageSpec.tags.set(["tag"])
@@ -201,7 +201,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec allows contextTask"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.contextTask = project.tasks.register("prepareContext") {
             it.group = "docker"
         }
@@ -220,7 +220,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def contextDir = tempDir.resolve("custom-context").toFile()
         contextDir.mkdirs()
         
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.context.set(contextDir)
         imageSpec.contextTask = project.tasks.register("prepareContext") {
             it.group = "docker"
@@ -243,7 +243,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def dockerfileFile = new File(contextDir, "Dockerfile")
         dockerfileFile.text = "FROM alpine"
         
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.context.set(contextDir)
         imageSpec.dockerfile.set(dockerfileFile)
         imageSpec.dockerfileName.set("Dockerfile.custom")
@@ -262,7 +262,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         given:
         def nonExistentDir = tempDir.resolve("nonexistent").toFile()
         
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.context.set(nonExistentDir)
         imageSpec.imageName.set("name")
         imageSpec.tags.set(["tag"])
@@ -281,7 +281,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec skips validation for sourceRef images"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.tags.set(["tag"])
         // No need for nomenclature or context validation
@@ -506,7 +506,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         contextDir.mkdirs()
         new File(contextDir, "Dockerfile").text = "FROM alpine"
         
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.context.set(contextDir)
         imageSpec.namespace.set("company")
         imageSpec.imageName.set("app")
@@ -534,7 +534,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validate processes sourceRef image configuration"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "existing", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "existing", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.tags.set(["local:latest"])
         
@@ -549,7 +549,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validate catches multiple validation errors"() {
         given:
-        def imageSpec = project.objects.newInstance(ImageSpec, "invalid", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "invalid", project.objects, project.providers, project.layout)
         imageSpec.repository.set("repo/name")
         imageSpec.namespace.set("namespace")  // Conflicts with repository
         imageSpec.imageName.set("name")       // Conflicts with repository
@@ -686,7 +686,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec rejects sourceRef with buildArgs"() {
         given: "ImageSpec with sourceRef and buildArgs (conflicting configuration)"
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.buildArgs.put("VERSION", "1.0")
 
@@ -703,7 +703,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def contextDir = tempDir.resolve("custom-context").toFile()
         contextDir.mkdirs()
 
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.context.set(project.layout.projectDirectory.dir(contextDir.name))
 
@@ -717,7 +717,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec rejects sourceRef with contextTask"() {
         given: "ImageSpec with sourceRef and contextTask"
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.contextTask = project.tasks.register("prepareContext") {
             // Mock context task
@@ -733,7 +733,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec rejects sourceRef with labels"() {
         given: "ImageSpec with sourceRef and labels"
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.labels.put("build.version", "1.0.0")
 
@@ -750,7 +750,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def dockerfileFile = tempDir.resolve("custom.dockerfile").toFile()
         dockerfileFile.createNewFile()
 
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.dockerfile.set(project.layout.projectDirectory.file(dockerfileFile.name))
 
@@ -764,7 +764,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec rejects sourceRef with dockerfileName"() {
         given: "ImageSpec with sourceRef and custom dockerfileName"
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.dockerfileName.set("Custom.dockerfile")
 
@@ -781,7 +781,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         def contextDir = tempDir.resolve("multi-context").toFile()
         contextDir.mkdirs()
 
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.context.set(project.layout.projectDirectory.dir(contextDir.name))
         imageSpec.buildArgs.put("VERSION", "1.0")
@@ -798,7 +798,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validateImageSpec allows sourceRef without build properties"() {
         given: "ImageSpec with only sourceRef (valid SourceRef Mode)"
-        def imageSpec = project.objects.newInstance(ImageSpec, "test", project)
+        def imageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("existing:image")
         imageSpec.tags.set(["local:latest"])  // Tags are allowed with sourceRef
 

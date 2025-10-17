@@ -37,7 +37,7 @@ class TestIntegrationExtensionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        extension = new TestIntegrationExtension(project)
+        extension = project.objects.newInstance(TestIntegrationExtension, project.layout, project.providers)
     }
 
     def "constructor initializes with project"() {

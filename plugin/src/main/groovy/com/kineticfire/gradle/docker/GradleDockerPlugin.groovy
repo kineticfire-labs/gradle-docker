@@ -49,8 +49,8 @@ class GradleDockerPlugin implements Plugin<Project> {
         def jsonService = registerJsonService(project)
 
         // Create extensions
-        def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project)
-        def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects, project)
+        def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project.providers, project.layout)
+        def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects)
 
         // Register task creation rules
         registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
@@ -722,7 +722,11 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void setupTestIntegration(Project project) {
-        def testIntegration = new TestIntegrationExtension(project)
+        def testIntegration = project.objects.newInstance(TestIntegrationExtension, project.layout, project.providers)
+        
+        // Wire the dockerOrchExtension reference
+        def dockerOrchExt = project.extensions.findByType(DockerOrchExtension)
+        testIntegration.setDockerOrchExtension(dockerOrchExt)
         
         // Add extension methods to all Test tasks
         project.tasks.withType(Test) { test ->

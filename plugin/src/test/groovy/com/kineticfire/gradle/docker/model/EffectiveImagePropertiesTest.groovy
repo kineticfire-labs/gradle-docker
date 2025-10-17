@@ -36,7 +36,7 @@ class EffectiveImagePropertiesTest extends Specification {
 
     def "fromImageSpec should parse direct sourceRef"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project)
+        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRef.set("docker.io/library/nginx:1.21")
 
         when:
@@ -52,7 +52,7 @@ class EffectiveImagePropertiesTest extends Specification {
 
     def "fromImageSpec should handle sourceRef components"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project)
+        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRefRegistry.set("ghcr.io")
         imageSpec.sourceRefNamespace.set("company")
         imageSpec.sourceRefImageName.set("myapp")
@@ -71,7 +71,7 @@ class EffectiveImagePropertiesTest extends Specification {
 
     def "fromImageSpec should handle sourceRef repository components"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project)
+        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.sourceRefRegistry.set("localhost:5000")
         imageSpec.sourceRefRepository.set("project/service")
         imageSpec.sourceRefTag.set("latest")
@@ -89,7 +89,7 @@ class EffectiveImagePropertiesTest extends Specification {
 
     def "fromImageSpec should handle build mode properties"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project)
+        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.registry.set("docker.io")
         imageSpec.namespace.set("mycompany")
         imageSpec.imageName.set("webapp")
@@ -108,7 +108,7 @@ class EffectiveImagePropertiesTest extends Specification {
 
     def "fromImageSpec should handle build mode with repository"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project)
+        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
         imageSpec.registry.set("ghcr.io")
         imageSpec.repository.set("username/project")
         imageSpec.tags.set(["stable"])
