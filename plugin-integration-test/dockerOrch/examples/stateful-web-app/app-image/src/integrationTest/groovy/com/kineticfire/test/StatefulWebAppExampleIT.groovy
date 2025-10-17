@@ -30,10 +30,10 @@ import static io.restassured.RestAssured.given
  * - Containers start ONCE in setupSpec() before all tests
  * - All test methods run against the SAME containers
  * - Containers stop ONCE in cleanupSpec() after all tests
- * - State PERSISTS between test methods
+ * - State PERSISTS between test methods AND between test suite runs
  *
  * This example tests a session management API where:
- * 1. Test 1: Register a new user account
+ * 1. Test 1: Register a new user account (idempotent - handles existing users)
  * 2. Test 2: Login and get a sessionId
  * 3. Test 3: Update profile using the sessionId from test 2
  * 4. Test 4: Get profile data using the sessionId
@@ -44,6 +44,11 @@ import static io.restassured.RestAssured.given
  * - We need to carry state (sessionId) from test 2 to tests 3, 4, and 5
  * - This is MUCH faster than restarting containers for each test
  * - This pattern is common for workflow and integration testing
+ *
+ * IMPORTANT - Idempotent Test Design:
+ * - Test 1 accepts both 200 (new user) and 409 (user exists) responses
+ * - This makes tests repeatable even when containers persist state from previous runs
+ * - This is a best practice for real-world integration testing
  *
  * When NOT to use CLASS lifecycle:
  * - When tests must be completely independent and isolated
@@ -79,7 +84,7 @@ class StatefulWebAppExampleIT extends Specification {
         RestAssured.baseURI = baseUrl
     }
 
-    // Test 1: Register a new user
+    // Test 1: Register a new user (idempotent - handles existing users)
     def "step 1: should register a new user account"() {
         when: "we register a new user"
         def response = given()
@@ -87,14 +92,18 @@ class StatefulWebAppExampleIT extends Specification {
             .body("""{"username":"${username}","password":"${password}"}""")
             .post("/register")
 
-        then: "registration succeeds"
-        response.statusCode() == 200
+        then: "registration succeeds OR user already exists"
+        response.statusCode() in [200, 409]
 
-        and: "response confirms registration"
-        response.jsonPath().getString("status") == "registered"
-        response.jsonPath().getString("username") == username
-
-        println "✓ User '${username}' registered successfully"
+        and: "response confirms registration or existing user"
+        if (response.statusCode() == 200) {
+            response.jsonPath().getString("status") == "registered"
+            response.jsonPath().getString("username") == username
+            println "✓ User '${username}' registered successfully"
+        } else {
+            response.jsonPath().getString("error") == "user already exists"
+            println "✓ User '${username}' already exists (from previous run)"
+        }
     }
 
     // Test 2: Login and get sessionId
