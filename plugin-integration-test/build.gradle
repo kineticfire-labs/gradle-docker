@@ -74,27 +74,23 @@ tasks.register('cleanAll') {
 // Docker container verification task
 // Verifies that no test registry containers remain after integration tests
 // This is a critical requirement per CLAUDE.md acceptance criteria
-tasks.register('verifyNoContainers') {
-    description = 'Verify no Docker test containers remain'
-    group = 'verification'
+abstract class VerifyNoContainersTask extends DefaultTask {
+    @javax.inject.Inject
+    abstract ExecOperations getExecOps()
 
-    doLast {
+    @TaskAction
+    void verify() {
         def stdout = new ByteArrayOutputStream()
-        def stderr = new ByteArrayOutputStream()
 
-        def result = exec {
+        def result = execOps.exec {
             commandLine 'docker', 'ps', '-a', '--filter', 'name=test-registry-', '--format', '{{.Names}}'
             standardOutput = stdout
-            errorOutput = stderr
             ignoreExitValue = true
         }
 
         def containers = stdout.toString().trim()
 
-        if (result.exitValue != 0) {
-            logger.warn("Docker command failed (exit code ${result.exitValue}): ${stderr.toString()}")
-            logger.warn("Skipping container verification - Docker may not be available")
-        } else if (containers && !containers.isEmpty()) {
+        if (containers && !containers.isEmpty()) {
             def containerList = containers.split('\n')
             def message = """
                 |
@@ -117,22 +113,42 @@ tasks.register('verifyNoContainers') {
     }
 }
 
-// Make integrationTest verify container cleanup
-tasks.named('integrationTest').configure {
-    finalizedBy('verifyNoContainers')
+tasks.register('verifyNoContainers', VerifyNoContainersTask) {
+    description = 'Verify no Docker test containers remain'
+    group = 'verification'
 }
 
-// Global cleanup hook - force remove any lingering test containers
-// This runs after the build finishes, regardless of success or failure
-gradle.buildFinished {
-    logger.lifecycle("Performing final Docker container cleanup...")
+// Global cleanup task - force remove any lingering test containers
+// This task should be run after integration tests to ensure cleanup
+abstract class CleanupContainersTask extends DefaultTask {
+    @javax.inject.Inject
+    abstract ExecOperations getExecOps()
 
-    exec {
-        commandLine 'sh', '-c',
-            'docker ps -a --filter name=test-registry- -q | xargs -r docker rm -f || true'
-        ignoreExitValue = true
+    @TaskAction
+    void cleanup() {
+        logger.lifecycle("Performing Docker container cleanup...")
+
+        execOps.exec {
+            commandLine 'sh', '-c',
+                'docker ps -a --filter name=test-registry- -q | xargs -r docker rm -f || true'
+            ignoreExitValue = true
+        }
+
+        logger.lifecycle("✓ Cleanup complete")
     }
+}
 
-    logger.lifecycle("✓ Final cleanup complete")
+tasks.register('cleanupContainers', CleanupContainersTask) {
+    description = 'Force cleanup of all test registry containers'
+    group = 'build'
+}
+
+// Make integrationTest always clean up containers afterward, then verify
+tasks.named('integrationTest').configure {
+    finalizedBy('cleanupContainers')
+}
+
+tasks.named('cleanupContainers').configure {
+    finalizedBy('verifyNoContainers')
 }
 
