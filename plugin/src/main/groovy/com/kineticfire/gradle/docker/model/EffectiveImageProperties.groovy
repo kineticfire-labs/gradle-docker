@@ -67,58 +67,17 @@ class EffectiveImageProperties {
             return parseFromDirectSourceRef(sourceRefValue)
         }
 
-        // Handle direct sourceRef from ImageSpec (for test compatibility)
-        if (task.imageSpec.isPresent()) {
-            try {
-                def imageSpec = task.imageSpec.get()
-                def imageSpecSourceRef = imageSpec.sourceRef.getOrElse("")
-                if (!imageSpecSourceRef.isEmpty()) {
-                    return parseFromDirectSourceRef(imageSpecSourceRef)
-                }
-            } catch (Exception e) {
-                // Fall through if ImageSpec access fails
-            }
-        }
-
         // Handle sourceRef components
         if (hasSourceRefComponents(task)) {
             return buildFromSourceRefComponents(task)
         }
 
-        // Check if task has ImageSpec with sourceRef components
-        if (task.imageSpec.isPresent()) {
-            try {
-                def imageSpec = task.imageSpec.get()
-                if (hasSourceRefComponents(imageSpec)) {
-                    return buildFromSourceRefComponents(imageSpec)
-                }
-            } catch (Exception e) {
-                // Fall through to build mode if ImageSpec fails
-            }
-        }
-
-        // Use build mode properties, check ImageSpec if task properties are empty
+        // Use build mode properties from task
         def registryValue = task.registry.getOrElse("")
         def namespaceValue = task.namespace.getOrElse("")
         def imageNameValue = task.imageName.getOrElse("")
         def repositoryValue = task.repository.getOrElse("")
         def tagsValue = task.tags.getOrElse([])
-
-        // If task properties are empty and we have an ImageSpec, use ImageSpec properties
-        if (task.imageSpec.isPresent() &&
-            registryValue.isEmpty() && namespaceValue.isEmpty() &&
-            imageNameValue.isEmpty() && repositoryValue.isEmpty() && tagsValue.isEmpty()) {
-            try {
-                def imageSpec = task.imageSpec.get()
-                registryValue = imageSpec.registry.getOrElse("")
-                namespaceValue = imageSpec.namespace.getOrElse("")
-                imageNameValue = imageSpec.imageName.getOrElse("")
-                repositoryValue = imageSpec.repository.getOrElse("")
-                tagsValue = imageSpec.tags.getOrElse([])
-            } catch (Exception e) {
-                // Use task properties as fallback
-            }
-        }
 
         return new EffectiveImageProperties(
             registryValue,

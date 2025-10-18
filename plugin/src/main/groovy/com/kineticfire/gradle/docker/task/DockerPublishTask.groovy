@@ -87,9 +87,10 @@ abstract class DockerPublishTask extends DefaultTask {
     @Optional
     abstract Property<String> getEffectiveSourceRef()
 
-    // Compatibility property for tests (not serialized due to @Internal)
-    @Internal
-    abstract Property<ImageSpec> getImageSpec()
+    // PullIfMissing auth property
+    @Nested
+    @Optional
+    abstract Property<com.kineticfire.gradle.docker.spec.AuthSpec> getPullAuth()
     
     // Docker Image Nomenclature Properties
     @Input
@@ -284,19 +285,6 @@ abstract class DockerPublishTask extends DefaultTask {
         def effectiveSourceRefValue = effectiveSourceRef.getOrElse("")
         if (!effectiveSourceRefValue.isEmpty()) {
             return effectiveSourceRefValue
-        }
-
-        // Check for ImageSpec and use its getEffectiveSourceRef if available
-        if (imageSpec.isPresent()) {
-            try {
-                def imageSpecValue = imageSpec.get()
-                def effectiveRef = imageSpecValue.getEffectiveSourceRef()
-                if (effectiveRef && !effectiveRef.isEmpty()) {
-                    return effectiveRef
-                }
-            } catch (Exception e) {
-                // Fall through to build mode if ImageSpec.getEffectiveSourceRef() fails
-            }
         }
 
         // Build Mode (building new images) - use nomenclature properties
@@ -497,9 +485,8 @@ abstract class DockerPublishTask extends DefaultTask {
         if (pullIfMissing.getOrElse(false)) {
             def sourceRefValue = effectiveSourceRef.getOrElse("")
             if (sourceRefValue && !sourceRefValue.isEmpty()) {
-                // Note: Auth config handling temporarily simplified for configuration cache compatibility
-                // TODO: Add configuration cache safe auth config support
-                def authConfig = null
+                def authConfig = pullAuth.isPresent() ?
+                    pullAuth.get().toAuthConfig() : null
 
                 def service = dockerService.get()
                 if (!service.imageExists(sourceRefValue).get()) {

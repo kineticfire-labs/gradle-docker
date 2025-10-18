@@ -1254,10 +1254,19 @@ class GradleDockerPluginTest extends Specification {
         }
         project.evaluate()
 
-        then: "DockerTagTask has sourceRef property configured"
+        then: "DockerTagTask has flattened properties configured"
         def tagTask = project.tasks.getByName("dockerTagTestImage")
+        // Verify sourceRef is set
         tagTask.sourceRef.get() == "existing:image"
         tagTask.tags.get() == ["new:tag"]
+        // Verify other flattened properties have default values (use getOrElse for optional properties)
+        tagTask.registry.getOrElse("") == ""
+        tagTask.namespace.getOrElse("") == ""
+        tagTask.imageName.getOrElse("") == ""
+        tagTask.repository.getOrElse("") == ""
+        tagTask.version.getOrElse("") == ""
+        tagTask.pullIfMissing.get() == false
+        tagTask.effectiveSourceRef.get() == "existing:image"
     }
 
     def "plugin configures sourceRef property for DockerSaveTask"() {
@@ -1278,13 +1287,23 @@ class GradleDockerPluginTest extends Specification {
         }
         project.evaluate()
 
-        then: "DockerSaveTask has sourceRef property configured"
+        then: "DockerSaveTask has flattened properties configured"
         def saveTask = project.tasks.getByName("dockerSaveTestImage")
+        // Verify sourceRef and compression
         saveTask.sourceRef.get() == "existing:image"
         saveTask.compression.get() == SaveCompression.GZIP
+        // Verify other flattened properties have default values (use getOrElse for optional properties)
+        saveTask.registry.getOrElse("") == ""
+        saveTask.namespace.getOrElse("") == ""
+        saveTask.imageName.getOrElse("") == ""
+        saveTask.repository.getOrElse("") == ""
+        saveTask.version.getOrElse("") == ""
+        saveTask.tags.get() == ["local:tag"]
+        saveTask.pullIfMissing.get() == false
+        saveTask.effectiveSourceRef.get() == "existing:image"
     }
 
-    def "plugin configures imageSpec for DockerSaveTask"() {
+    def "plugin configures flattened properties for DockerSaveTask with pullIfMissing"() {
         given: "Plugin applied with image configuration"
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
@@ -1303,13 +1322,22 @@ class GradleDockerPluginTest extends Specification {
         }
         project.evaluate()
 
-        then: "DockerSaveTask has imageSpec configured"
+        then: "DockerSaveTask has flattened properties configured including pullIfMissing"
         def saveTask = project.tasks.getByName("dockerSaveTestImage")
-        saveTask.imageSpec.isPresent()
+        // Verify sourceRef and pull configuration
         saveTask.sourceRef.get() == "remote:image"
+        saveTask.pullIfMissing.get() == true
+        saveTask.effectiveSourceRef.get() == "remote:image"
+        // Verify other properties (use getOrElse for optional properties)
+        saveTask.compression.get() == SaveCompression.NONE
+        saveTask.tags.get() == ["local:tag"]
+        saveTask.registry.getOrElse("") == ""
+        saveTask.namespace.getOrElse("") == ""
+        saveTask.imageName.getOrElse("") == ""
+        saveTask.repository.getOrElse("") == ""
     }
 
-    def "plugin configures pullAuth at image level"() {
+    def "plugin configures pullAuth at image level for DockerTagTask"() {
         given: "Plugin applied with image configuration"
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
@@ -1333,9 +1361,17 @@ class GradleDockerPluginTest extends Specification {
         }
         project.evaluate()
 
-        then: "DockerSaveTask has imageSpec configured"
-        def saveTask = project.tasks.getByName("dockerSaveTestImage")
-        saveTask.imageSpec.isPresent()
+        then: "DockerTagTask has flattened properties configured including pullAuth"
+        def tagTask = project.tasks.getByName("dockerTagTestImage")
+        // Verify sourceRef and pull configuration
+        tagTask.sourceRef.get() == "private.registry.com/image:latest"
+        tagTask.pullIfMissing.get() == true
+        tagTask.effectiveSourceRef.get() == "private.registry.com/image:latest"
+        // Verify pullAuth is configured (DockerTagTask has pullAuth property)
+        tagTask.pullAuth.isPresent()
+        tagTask.pullAuth.get().username.get() == "testuser"
+        tagTask.pullAuth.get().password.get() == "testpass"
+        tagTask.pullAuth.get().registryToken.get() == "token123"
     }
 
     def "plugin preserves property values through configuration chain"() {

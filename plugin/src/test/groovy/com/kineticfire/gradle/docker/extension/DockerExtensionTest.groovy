@@ -228,11 +228,13 @@ class DockerExtensionTest extends Specification {
         given:
         project.file('test-context').mkdirs()
         project.file('test-context/Dockerfile').text = 'FROM alpine'
-        
+
         def imageSpec = project.objects.newInstance(
-            com.kineticfire.gradle.docker.spec.ImageSpec, 
-            'testImage', 
-            project
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
         )
         imageSpec.context.set(project.file('test-context'))
         imageSpec.dockerfile.set(project.file('test-context/Dockerfile'))
@@ -459,12 +461,12 @@ class DockerExtensionTest extends Specification {
         noExceptionThrown()
     }
 
-    def "validate passes for image with inline context block"() {
+    def "inline context block throws UnsupportedOperationException"() {
         given:
         def srcDir = project.file('src')
         srcDir.mkdirs()
         project.file('Dockerfile').text = 'FROM alpine'
-        
+
         when:
         extension.images {
             inlineContextImage {
@@ -476,10 +478,10 @@ class DockerExtensionTest extends Specification {
                 dockerfile.set(project.file('Dockerfile'))
             }
         }
-        extension.validate()
 
         then:
-        noExceptionThrown()
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported")
     }
 
     // ===== DOCKERFILE NAME VALIDATION TESTS =====
@@ -923,7 +925,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature fails when no naming approach specified"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         // Don't set any naming properties
         imageSpec.tags.set(['latest'])
 
@@ -937,7 +939,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature accepts sourceRefImageName without sourceRefRepository"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefImageName.set('alpine')
         imageSpec.tags.set(['latest'])
 
@@ -950,7 +952,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature accepts sourceRefRepository without other properties"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefRepository.set('library/alpine')
         imageSpec.tags.set(['latest'])
 
@@ -963,7 +965,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature accepts sourceRefNamespace"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefNamespace.set('library')
         imageSpec.sourceRefImageName.set('alpine')
         imageSpec.tags.set(['latest'])
@@ -977,7 +979,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature handles tag with maximum length"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.imageName.set('test')
         imageSpec.tags.set(['a' * 128])  // Exactly 128 characters
 
@@ -990,7 +992,7 @@ class DockerExtensionTest extends Specification {
 
     def "validateNomenclature fails with tag exceeding maximum length"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.imageName.set('test')
         imageSpec.tags.set(['a' * 129])  // 129 characters - too long
 
@@ -1122,7 +1124,7 @@ class DockerExtensionTest extends Specification {
 
     def "validatePublishConfiguration with ImageSpec handles empty targets list"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         def publishSpec = project.objects.newInstance(
             com.kineticfire.gradle.docker.spec.PublishSpec,
             project.objects
@@ -1139,7 +1141,7 @@ class DockerExtensionTest extends Specification {
 
     def "getSourceTags handles sourceRefTag with default convention"() {
         given:
-        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project)
+        def imageSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, 'testImage', project.objects, project.providers, project.layout)
         imageSpec.sourceRefImageName.set('alpine')
         // sourceRefTag not explicitly set, should use convention
 

@@ -403,7 +403,7 @@ class ImageSpecTest extends Specification {
         imageSpec.contextTask == copyTask
     }
 
-    def "context(Closure) creates Copy task with correct configuration"() {
+    def "context(Closure) throws UnsupportedOperationException"() {
         given:
         def srcDir = project.file('src')
         def libsDir = project.file('libs')
@@ -417,14 +417,12 @@ class ImageSpecTest extends Specification {
         }
 
         then:
-        imageSpec.contextTask != null
-        def copyTask = imageSpec.contextTask.get()
-        copyTask.name == 'prepareTestImageContext'
-        copyTask.group == 'docker'
-        copyTask.description.contains('Prepare build context for Docker image')
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
+        ex.message.contains("Create tasks explicitly")
     }
 
-    def "context(Action) creates Copy task with correct configuration"() {
+    def "context(Action) throws UnsupportedOperationException"() {
         given:
         def srcDir = project.file('src')
 
@@ -438,14 +436,12 @@ class ImageSpecTest extends Specification {
         })
 
         then:
-        imageSpec.contextTask != null
-        def copyTask = imageSpec.contextTask.get()
-        copyTask.name == 'prepareTestImageContext'
-        copyTask.group == 'docker'
-        copyTask.description.contains('Prepare build context for Docker image')
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
+        ex.message.contains("Create tasks explicitly")
     }
 
-    def "context method overrides previous contextTask"() {
+    def "context method throws UnsupportedOperationException after setting contextTask"() {
         given:
         def manualTask = project.tasks.register('manualContext', org.gradle.api.tasks.Copy)
         def srcDir = project.file('src')
@@ -462,12 +458,11 @@ class ImageSpecTest extends Specification {
         }
 
         then:
-        imageSpec.contextTask != null
-        imageSpec.contextTask != manualTask
-        imageSpec.contextTask.get().name == 'prepareTestImageContext'
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
     }
 
-    def "multiple context configurations create separate tasks"() {
+    def "multiple context calls throw UnsupportedOperationException"() {
         given:
         def image1 = project.objects.newInstance(ImageSpec, 'webapp', project.objects, project.providers, project.layout)
         def image2 = project.objects.newInstance(ImageSpec, 'api', project.objects, project.providers, project.layout)
@@ -475,14 +470,17 @@ class ImageSpecTest extends Specification {
 
         when:
         image1.context { from(srcDir) }
+
+        then:
+        def ex1 = thrown(UnsupportedOperationException)
+        ex1.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
+
+        when:
         image2.context { from(srcDir) }
 
         then:
-        image1.contextTask != null
-        image2.contextTask != null
-        image1.contextTask.get().name == 'prepareWebappContext'
-        image2.contextTask.get().name == 'prepareApiContext'
-        image1.contextTask.get() != image2.contextTask.get()
+        def ex2 = thrown(UnsupportedOperationException)
+        ex2.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
     }
 
     // ===== IMAGE-LEVEL PULLIFMISSING TESTS =====

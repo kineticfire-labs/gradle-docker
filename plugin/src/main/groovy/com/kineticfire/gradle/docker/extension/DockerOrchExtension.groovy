@@ -32,17 +32,24 @@ abstract class DockerOrchExtension {
     
     private final NamedDomainObjectContainer<ComposeStackSpec> composeStacks
     private final ObjectFactory objectFactory
-    
+
     @Inject
     DockerOrchExtension(ObjectFactory objectFactory) {
         this.objectFactory = objectFactory
         this.composeStacks = objectFactory.domainObjectContainer(ComposeStackSpec) { name ->
             def stackSpec = objectFactory.newInstance(ComposeStackSpec, name, objectFactory)
-            // Note: Default project name should be set by the plugin using providers
-            // to avoid capturing Project reference during configuration cache
-            
+            // projectName will be set by the plugin during task configuration
             // Note: waitForHealthy and waitForRunning default configurations are handled by WaitSpec defaults
             return stackSpec
+        }
+    }
+
+    void configureProjectNames(String projectNamePrefix) {
+        // Set convention for all stacks
+        composeStacks.all { stack ->
+            if (!stack.projectName.isPresent()) {
+                stack.projectName.convention("${projectNamePrefix}-${stack.name}")
+            }
         }
     }
     

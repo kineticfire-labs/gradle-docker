@@ -16,7 +16,6 @@
 
 package com.kineticfire.gradle.docker.task
 
-import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.PublishTarget
 import com.kineticfire.gradle.docker.service.DockerService
 import org.gradle.api.Project
@@ -39,14 +38,9 @@ class DockerPublishTaskInheritanceTest extends Specification {
         task.dockerService.set(dockerService)
     }
 
-    def "buildSourceImageReference should use ImageSpec.getEffectiveSourceRef when available"() {
+    def "buildSourceImageReference should use effectiveSourceRef when available"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.sourceRefRegistry.set("docker.io")
-        imageSpec.sourceRefNamespace.set("library")
-        imageSpec.sourceRefImageName.set("nginx")
-        imageSpec.sourceRefTag.set("1.21")
-        task.imageSpec.set(imageSpec)
+        task.effectiveSourceRef.set("docker.io/library/nginx:1.21")
 
         when:
         def result = task.buildSourceImageReference()
@@ -71,12 +65,10 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should inherit namespace from source"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.registry.set("localhost:5000")
-        imageSpec.namespace.set("scenario3")
-        imageSpec.imageName.set("scenario3-time-server")
-        imageSpec.tags.set(["latest"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("localhost:5000")
+        task.namespace.set("scenario3")
+        task.imageName.set("scenario3-time-server")
+        task.tags.set(["latest"])
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         target.registry.set("localhost:5031")
@@ -95,12 +87,10 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should handle empty target (inherit everything)"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.registry.set("docker.io")
-        imageSpec.namespace.set("mycompany")
-        imageSpec.imageName.set("webapp")
-        imageSpec.tags.set(["v2.0"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("docker.io")
+        task.namespace.set("mycompany")
+        task.imageName.set("webapp")
+        task.tags.set(["v2.0"])
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         // Empty target - should inherit everything
@@ -114,11 +104,9 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should handle repository mode inheritance"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.registry.set("ghcr.io")
-        imageSpec.repository.set("company/project")
-        imageSpec.tags.set(["stable"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("ghcr.io")
+        task.repository.set("company/project")
+        task.tags.set(["stable"])
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         target.registry.set("docker.io")
@@ -134,11 +122,9 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should handle partial overrides"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.namespace.set("dev")
-        imageSpec.imageName.set("service")
-        imageSpec.tags.set(["latest"])
-        task.imageSpec.set(imageSpec)
+        task.namespace.set("dev")
+        task.imageName.set("service")
+        task.tags.set(["latest"])
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         target.registry.set("prod.company.com")
@@ -155,12 +141,10 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should handle sourceRef component inheritance"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.sourceRefRegistry.set("ghcr.io")
-        imageSpec.sourceRefNamespace.set("company")
-        imageSpec.sourceRefImageName.set("myapp")
-        imageSpec.sourceRefTag.set("v1.0")
-        task.imageSpec.set(imageSpec)
+        task.sourceRefRegistry.set("ghcr.io")
+        task.sourceRefNamespace.set("company")
+        task.sourceRefImageName.set("myapp")
+        task.sourceRefTag.set("v1.0")
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         target.registry.set("docker.io")
@@ -226,9 +210,7 @@ class DockerPublishTaskInheritanceTest extends Specification {
 
     def "buildTargetImageReferences should handle direct sourceRef"() {
         given:
-        def imageSpec = objectFactory.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        imageSpec.sourceRef.set("ghcr.io/company/app:v2.0")
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set("ghcr.io/company/app:v2.0")
 
         def target = objectFactory.newInstance(PublishTarget, "test", objectFactory)
         target.registry.set("docker.io")

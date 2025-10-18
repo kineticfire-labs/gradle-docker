@@ -29,7 +29,7 @@ class LogsSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        logsSpec = project.objects.newInstance(LogsSpec, project)
+        logsSpec = project.objects.newInstance(LogsSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

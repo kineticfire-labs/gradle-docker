@@ -18,7 +18,6 @@ package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.service.DockerService
-import com.kineticfire.gradle.docker.spec.ImageSpec
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -27,24 +26,21 @@ import java.util.concurrent.CompletableFuture
 
 /**
  * Comprehensive unit tests for DockerSaveTask
- * NOTE: pullIfMissing functionality moved to ImageSpec level
+ * Tests saveImage functionality with various compression types and configurations
  */
 class DockerSaveTaskComprehensiveTest extends Specification {
 
     Project project
     DockerSaveTask task
     DockerService mockDockerService = Mock()
-    ImageSpec testImageSpec
 
     def setup() {
         project = ProjectBuilder.builder().build()
         task = project.tasks.register('testDockerSave', DockerSaveTask).get()
         task.dockerService.set(mockDockerService)
-        
-        // Create real ImageSpec instance instead of mock
-        testImageSpec = project.objects.newInstance(ImageSpec, "test", project.objects, project.providers, project.layout)
-        testImageSpec.pullIfMissing.set(false) // Default to false for most tests
-        task.imageSpec.set(testImageSpec)
+
+        // pullIfMissing is now a direct property on the task (defaults to false)
+        task.pullIfMissing.set(false)
     }
 
     def "saveImage handles successful save operation"() {

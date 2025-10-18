@@ -62,6 +62,12 @@ class DockerPublishTaskTest extends Specification {
         task.hasProperty('publishTargets')
         task.hasProperty('imageIdFile')
         task.hasProperty('dockerService')
+        task.hasProperty('registry')
+        task.hasProperty('namespace')
+        task.hasProperty('repository')
+        task.hasProperty('version')
+        task.hasProperty('tags')
+        task.hasProperty('sourceRef')
     }
 
     // ===== NO TARGETS TEST =====

@@ -128,6 +128,9 @@ class TestIntegrationExtensionTest extends Specification {
         // Apply plugin to get full setup
         project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
 
+        // Get the extension created by the plugin
+        def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
+
         // Create compose stack
         def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
         def composeFile = project.file('docker-compose.yml')
@@ -146,7 +149,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', 'suite')
+        testIntegrationExt.usesCompose(testTask, 'testStack', 'suite')
 
         then:
         noExceptionThrown()
@@ -157,11 +160,12 @@ class TestIntegrationExtensionTest extends Specification {
 
     def "usesCompose configures class lifecycle correctly"() {
         given:
-        // Apply plugin to get full setup
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project, project.layout, project.providers)
+        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
+        testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
         // Create compose stack
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
@@ -175,23 +179,24 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', 'class')
+        testIntegrationExt.usesCompose(testTask, 'testStack', 'class')
 
         then:
         noExceptionThrown()
         // Should configure system properties for JUnit extension
         testTask.systemProperties['docker.compose.stack'] == 'testStack'
         testTask.systemProperties['docker.compose.lifecycle'] == 'class'
-        testTask.systemProperties['docker.compose.project'] == project.name
+        testTask.systemProperties['docker.compose.project'].get() == project.name
     }
 
     def "usesCompose configures method lifecycle correctly"() {
         given:
-        // Apply plugin to get full setup
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project, project.layout, project.providers)
+        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
+        testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
         // Create compose stack
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
@@ -205,18 +210,19 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', 'method')
+        testIntegrationExt.usesCompose(testTask, 'testStack', 'method')
 
         then:
         noExceptionThrown()
         // Should configure system properties for JUnit extension
         testTask.systemProperties['docker.compose.stack'] == 'testStack'
         testTask.systemProperties['docker.compose.lifecycle'] == 'method'
-        testTask.systemProperties['docker.compose.project'] == project.name
+        testTask.systemProperties['docker.compose.project'].get() == project.name
     }
 
     def "usesCompose fails when dockerOrch extension not found"() {
         given:
+        // Do NOT apply the plugin - we want to test the error case
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
@@ -231,10 +237,14 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Apply plugin to get dockerOrch extension
         project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Get the extension created by the plugin
+        def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
+
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'nonExistentStack', 'suite')
+        testIntegrationExt.usesCompose(testTask, 'nonExistentStack', 'suite')
 
         then:
         def ex = thrown(IllegalArgumentException)
@@ -245,6 +255,9 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Apply plugin to get full setup
         project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+
+        // Get the extension created by the plugin
+        def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
 
         // Create compose stack
         def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
@@ -260,7 +273,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', 'invalid')
+        testIntegrationExt.usesCompose(testTask, 'testStack', 'invalid')
 
         then:
         def ex = thrown(IllegalArgumentException)
@@ -274,6 +287,9 @@ class TestIntegrationExtensionTest extends Specification {
         // Apply plugin to get full setup
         project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
 
+        // Get the extension created by the plugin
+        def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
+
         // Create compose stack
         def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
         def composeFile = project.file('docker-compose.yml')
@@ -288,7 +304,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', lifecycle)
+        testIntegrationExt.usesCompose(testTask, 'testStack', lifecycle)
 
         then:
         noExceptionThrown()

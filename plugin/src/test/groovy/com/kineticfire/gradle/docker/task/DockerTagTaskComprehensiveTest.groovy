@@ -30,10 +30,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("source:image")
-        imageSpec.tags.set(["new:tag1", "new:tag2"])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set("source:image")
+        task.tags.set(["new:tag1", "new:tag2"])
 
         when:
         task.tagImage()
@@ -46,11 +44,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("docker.io")
-        imageSpec.repository.set("company/app")
-        imageSpec.tags.set(["1.0.0", "latest"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("docker.io")
+        task.repository.set("company/app")
+        task.tags.set(["1.0.0", "latest"])
 
         when:
         task.tagImage()
@@ -63,12 +59,10 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("ghcr.io")
-        imageSpec.namespace.set("mycompany")
-        imageSpec.imageName.set("myapp")
-        imageSpec.tags.set(["v1.0", "stable", "production"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("ghcr.io")
+        task.namespace.set("mycompany")
+        task.imageName.set("myapp")
+        task.tags.set(["v1.0", "stable", "production"])
 
         when:
         task.tagImage()
@@ -84,11 +78,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.namespace.set("company")
-        imageSpec.imageName.set("app")
-        imageSpec.tags.set(["1.0", "latest"])
-        task.imageSpec.set(imageSpec)
+        task.namespace.set("company")
+        task.imageName.set("app")
+        task.tags.set(["1.0", "latest"])
 
         when:
         task.tagImage()
@@ -101,11 +93,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("registry.io")
-        imageSpec.imageName.set("app")
-        imageSpec.tags.set(["test", "experimental"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("registry.io")
+        task.imageName.set("app")
+        task.tags.set(["test", "experimental"])
 
         when:
         task.tagImage()
@@ -118,10 +108,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set("app")
-        imageSpec.tags.set(["single"])
-        task.imageSpec.set(imageSpec)
+        task.imageName.set("app")
+        task.tags.set(["single"])
 
         when:
         task.tagImage()
@@ -135,14 +123,12 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "buildImageReferences in dual-mode scenarios"() {
         expect:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        if (sourceRef) imageSpec.sourceRef.set(sourceRef)
-        if (repository) imageSpec.repository.set(repository)
-        if (namespace) imageSpec.namespace.set(namespace)
-        if (imageName) imageSpec.imageName.set(imageName)
-        if (registry) imageSpec.registry.set(registry)
-        imageSpec.tags.set(tags)
-        task.imageSpec.set(imageSpec)
+        if (sourceRef) task.sourceRef.set(sourceRef)
+        if (repository) task.repository.set(repository)
+        if (namespace) task.namespace.set(namespace)
+        if (imageName) task.imageName.set(imageName)
+        if (registry) task.registry.set(registry)
+        task.tags.set(tags)
 
         def refs = task.buildImageReferences()
         refs == expectedRefs
@@ -160,11 +146,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("source:image")
+        task.sourceRef.set("source:image")
         // No tags set (empty list)
-        imageSpec.tags.set([])
-        task.imageSpec.set(imageSpec)
+        task.tags.set([])
 
         when:
         task.tagImage()
@@ -179,11 +163,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("registry.io")
-        imageSpec.tags.set(["tag"])
+        task.registry.set("registry.io")
+        task.tags.set(["tag"])
         // No sourceRef, repository, or imageName set
-        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
@@ -197,14 +179,12 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("complex.registry.io:5000/deep/namespace/app:v1.0.0")
-        imageSpec.tags.set([
+        task.sourceRef.set("complex.registry.io:5000/deep/namespace/app:v1.0.0")
+        task.tags.set([
             "simple:tag",
             "registry.io/target:latest",
             "another.registry.io:8080/namespace/app:stable"
         ])
-        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
@@ -221,10 +201,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("source:image")
-        imageSpec.tags.set(["target:tag"])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set("source:image")
+        task.tags.set(["target:tag"])
 
         def error = new DockerServiceException(
             DockerServiceException.ErrorType.TAG_FAILED,
@@ -243,10 +221,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "buildImageReferences handles empty tags gracefully"() {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("source:image")
-        imageSpec.tags.set([])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set("source:image")
+        task.tags.set([])
 
         when:
         def refs = task.buildImageReferences()
@@ -258,11 +234,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "buildImageReferences with repository format and multiple tags"() {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("registry.example.com")
-        imageSpec.repository.set("organization/project")
-        imageSpec.tags.set(["1.0.0", "1.0", "latest", "stable", "production"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("registry.example.com")
+        task.repository.set("organization/project")
+        task.tags.set(["1.0.0", "1.0", "latest", "stable", "production"])
 
         when:
         def refs = task.buildImageReferences()
@@ -280,12 +254,10 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "buildImageReferences with namespace format and multiple tags"() {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("ghcr.io")
-        imageSpec.namespace.set("myorganization/team")
-        imageSpec.imageName.set("application")
-        imageSpec.tags.set(["dev", "test", "staging", "prod"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("ghcr.io")
+        task.namespace.set("myorganization/team")
+        task.imageName.set("application")
+        task.tags.set(["dev", "test", "staging", "prod"])
 
         when:
         def refs = task.buildImageReferences()
@@ -302,10 +274,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "buildImageReferences with minimal configuration"() {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set("app")
-        imageSpec.tags.set(["latest"])
-        task.imageSpec.set(imageSpec)
+        task.imageName.set("app")
+        task.tags.set(["latest"])
 
         when:
         def refs = task.buildImageReferences()
@@ -319,10 +289,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "DockerTagTask builds references correctly in SourceRef mode"() {
         given: "Task configured with sourceRef mode"
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set("external.registry.io/existing/app:v2.1.0")
-        imageSpec.tags.set(["local:latest", "local:stable", "test:v2.1.0"])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set("external.registry.io/existing/app:v2.1.0")
+        task.tags.set(["local:latest", "local:stable", "test:v2.1.0"])
 
         when: "Building image references"
         def refs = task.buildImageReferences()
@@ -338,12 +306,10 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "DockerTagTask builds references correctly in Build mode"() {
         given: "Task configured with Build mode using nomenclature"
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        imageSpec.registry.set("build.registry.io")
-        imageSpec.namespace.set("mycompany/team")
-        imageSpec.imageName.set("newapp")
-        imageSpec.tags.set(["v1.0.0", "latest", "release"])
-        task.imageSpec.set(imageSpec)
+        task.registry.set("build.registry.io")
+        task.namespace.set("mycompany/team")
+        task.imageName.set("newapp")
+        task.tags.set(["v1.0.0", "latest", "release"])
 
         when: "Building image references"
         def refs = task.buildImageReferences()
@@ -358,11 +324,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "DockerTagTask validates mode requirements correctly"() {
         when: "Task has neither sourceRef nor imageName/repository"
         def task1 = project.tasks.create("dockerTagTest1", DockerTagTask)
-        def imageSpec1 = createImageSpec()
-        imageSpec1.registry.set("registry.io")
-        imageSpec1.tags.set(["tag"])
+        task1.registry.set("registry.io")
+        task1.tags.set(["tag"])
         // Missing both sourceRef and imageName/repository
-        task1.imageSpec.set(imageSpec1)
         task1.buildImageReferences()
 
         then: "Validation fails for insufficient configuration"
@@ -370,11 +334,9 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
 
         when: "Task has both sourceRef and build mode properties"
         def task2 = project.tasks.create("dockerTagTest2", DockerTagTask)
-        def imageSpec2 = createImageSpec()
-        imageSpec2.sourceRef.set("source:image")
-        imageSpec2.imageName.set("conflicting")
-        imageSpec2.tags.set(["tag"])
-        task2.imageSpec.set(imageSpec2)
+        task2.sourceRef.set("source:image")
+        task2.imageName.set("conflicting")
+        task2.tags.set(["tag"])
         def refs2 = task2.buildImageReferences()
 
         then: "SourceRef takes precedence (legacy behavior preserved)"
@@ -385,10 +347,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "DockerTagTask handles empty tag lists appropriately"() {
         given: "Task with sourceRef but no tags"
         def task1 = project.tasks.create("dockerTagTest1", DockerTagTask)
-        def imageSpec1 = createImageSpec()
-        imageSpec1.sourceRef.set("source:image")
-        imageSpec1.tags.set([])
-        task1.imageSpec.set(imageSpec1)
+        task1.sourceRef.set("source:image")
+        task1.tags.set([])
 
         when: "Building references with empty tags"
         def refs1 = task1.buildImageReferences()
@@ -398,10 +358,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
 
         and: "Task with build mode but no tags"
         def task2 = project.tasks.create("dockerTagTest2", DockerTagTask)
-        def imageSpec2 = createImageSpec()
-        imageSpec2.imageName.set("app")
-        imageSpec2.tags.set([])
-        task2.imageSpec.set(imageSpec2)
+        task2.imageName.set("app")
+        task2.tags.set([])
 
         when: "Building references with empty tags in build mode"
         task2.buildImageReferences()
@@ -413,12 +371,10 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
     def "DockerTagTask detects mode correctly based on properties"() {
         expect: "Mode detection works correctly for various configurations"
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
-        def imageSpec = createImageSpec()
-        if (sourceRef) imageSpec.sourceRef.set(sourceRef)
-        if (imageName) imageSpec.imageName.set(imageName)
-        if (repository) imageSpec.repository.set(repository)
-        imageSpec.tags.set(tags)
-        task.imageSpec.set(imageSpec)
+        if (sourceRef) task.sourceRef.set(sourceRef)
+        if (imageName) task.imageName.set(imageName)
+        if (repository) task.repository.set(repository)
+        task.tags.set(tags)
 
         def refs = task.buildImageReferences()
         def isSourceRefMode = refs.size() > 0 && refs[0] == sourceRef
@@ -437,13 +393,11 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        if (registry) imageSpec.registry.set(registry)
-        if (namespace) imageSpec.namespace.set(namespace)
-        if (imageName) imageSpec.imageName.set(imageName)
-        if (repository) imageSpec.repository.set(repository)
-        imageSpec.tags.set([singleTag])
-        task.imageSpec.set(imageSpec)
+        if (registry) task.registry.set(registry)
+        if (namespace) task.namespace.set(namespace)
+        if (imageName) task.imageName.set(imageName)
+        if (repository) task.repository.set(repository)
+        task.tags.set([singleTag])
 
         when:
         task.tagImage()
@@ -465,10 +419,8 @@ class DockerTagTaskComprehensiveTest extends DockerTaskTestBase {
         given:
         def task = project.tasks.create("dockerTagTest", DockerTagTask)
         task.dockerService.set(mockDockerService)
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set("testapp")
-        imageSpec.tags.set(["primary", "secondary", "tertiary"])
-        task.imageSpec.set(imageSpec)
+        task.imageName.set("testapp")
+        task.tags.set(["primary", "secondary", "tertiary"])
 
         when:
         task.tagImage()

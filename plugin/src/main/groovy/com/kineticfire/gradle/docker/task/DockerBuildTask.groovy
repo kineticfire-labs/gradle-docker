@@ -43,9 +43,9 @@ abstract class DockerBuildTask extends DefaultTask {
         repository.convention("")
         version.convention("")
         sourceRefMode.convention(false)
-
+        
         // Skip execution in sourceRef mode
-        onlyIf { !sourceRefMode.get() }
+        onlyIf { task -> !task.sourceRefMode.get() }
     }
     
     @Internal

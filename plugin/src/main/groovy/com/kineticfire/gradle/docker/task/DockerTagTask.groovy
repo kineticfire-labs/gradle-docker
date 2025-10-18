@@ -17,8 +17,7 @@
 package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
-import com.kineticfire.gradle.docker.spec.ImageSpec
-import com.kineticfire.gradle.docker.model.EffectiveImageProperties
+import com.kineticfire.gradle.docker.spec.AuthSpec
 import org.gradle.api.DefaultTask
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -27,9 +26,14 @@ import org.gradle.api.tasks.TaskAction
 
 /**
  * Task for tagging Docker images
+ *
+ * Configuration Cache Compatible: ✅
+ * - Uses flattened @Input properties only
+ * - No nested object serialization
+ * - No Project reference capture
  */
 abstract class DockerTagTask extends DefaultTask {
-    
+
     DockerTagTask() {
         // Set up default values for Provider API compatibility
         registry.convention("")
@@ -39,42 +43,79 @@ abstract class DockerTagTask extends DefaultTask {
         version.convention("")
         tags.convention([])
         sourceRef.convention("")
+        sourceRefRegistry.convention("")
+        sourceRefNamespace.convention("")
+        sourceRefImageName.convention("")
+        sourceRefRepository.convention("")
+        sourceRefTag.convention("")
+        pullIfMissing.convention(false)
+        effectiveSourceRef.convention("")
     }
-    
+
     @Internal
     abstract Property<DockerService> getDockerService()
-    
-    @Internal
-    abstract Property<ImageSpec> getImageSpec()
-    
+
     // SourceRef Mode Properties (for existing images)
     @Input
     @Optional
     abstract Property<String> getSourceRef()
 
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRegistry()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefNamespace()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefImageName()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefRepository()
+
+    @Input
+    @Optional
+    abstract Property<String> getSourceRefTag()
+
     // Docker Image Nomenclature Properties (for building new images)
     @Input
     @Optional
     abstract Property<String> getRegistry()
-    
+
     @Input
     @Optional
     abstract Property<String> getNamespace()
-    
+
     @Input
     @Optional
     abstract Property<String> getImageName()
-    
+
     @Input
     @Optional
     abstract Property<String> getRepository()
-    
+
     @Input
     @Optional
     abstract Property<String> getVersion()
-    
+
     @Input
     abstract ListProperty<String> getTags()
+
+    // PullIfMissing properties
+    @Input
+    @Optional
+    abstract Property<Boolean> getPullIfMissing()
+
+    @Input
+    @Optional
+    abstract Property<String> getEffectiveSourceRef()
+
+    @Nested
+    @Optional
+    abstract Property<AuthSpec> getPullAuth()
 
     @TaskAction
     void tagImage() {
@@ -86,17 +127,16 @@ abstract class DockerTagTask extends DefaultTask {
             throw new IllegalStateException("dockerService must be provided")
         }
 
-        // Use EffectiveImageProperties to detect sourceRef mode (like DockerPublishTask does)
-        def imageSpec = this.imageSpec.get()
-        def sourceRefValue = imageSpec.sourceRef.getOrElse("")
-        def tagsValue = imageSpec.tags.getOrElse([])
-        def isSourceRefMode = isInSourceRefMode(imageSpec)
+        // Use flattened properties instead of imageSpec
+        def sourceRefValue = sourceRef.getOrElse("")
+        def tagsValue = tags.getOrElse([])
+        def isSourceRefMode = isInSourceRefMode()
 
         if (isSourceRefMode) {
             // SourceRef Mode: Tag existing image with new tags
             if (!tagsValue.isEmpty()) {
-                def effectiveSourceRef = getEffectiveSourceRef(imageSpec)
-                def future = service.tagImage(effectiveSourceRef, tagsValue)
+                def effectiveSourceRefValue = getEffectiveSourceRefValue()
+                def future = service.tagImage(effectiveSourceRefValue, tagsValue)
                 future.get()
             } else {
                 // If no tags provided in sourceRef mode, it's a no-op
@@ -112,7 +152,7 @@ abstract class DockerTagTask extends DefaultTask {
             if (imageReferences.size() < 1) {
                 throw new IllegalStateException("At least one tag must be specified")
             }
-            
+
             if (imageReferences.size() == 1) {
                 // Single tag: no-op since image already has this tag from build
                 logger.info("Image already has tag from build, no additional tagging needed: ${imageReferences[0]}")
@@ -128,39 +168,75 @@ abstract class DockerTagTask extends DefaultTask {
     }
 
     /**
-     * Check if imageSpec is in sourceRef mode (like GradleDockerPlugin.isSourceRefMode)
+     * Check if task is in sourceRef mode
      */
-    private boolean isInSourceRefMode(imageSpec) {
+    private boolean isInSourceRefMode() {
         // Check direct sourceRef
-        if (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) {
+        if (sourceRef.isPresent() && !sourceRef.get().isEmpty()) {
             return true
         }
         // Check sourceRef components
-        def hasRepository = imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()
-        def hasImageName = imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()
+        def hasRepository = sourceRefRepository.isPresent() && !sourceRefRepository.get().isEmpty()
+        def hasImageName = sourceRefImageName.isPresent() && !sourceRefImageName.get().isEmpty()
         return hasRepository || hasImageName
     }
 
     /**
-     * Get the effective source reference for sourceRef mode using EffectiveImageProperties
+     * Get the effective source reference for sourceRef mode
      */
-    private String getEffectiveSourceRef(imageSpec) {
-        def effectiveProps = EffectiveImageProperties.fromImageSpec(imageSpec)
-        return effectiveProps.buildFullReference()
+    private String getEffectiveSourceRefValue() {
+        // Priority 1: Use pre-computed effectiveSourceRef if provided
+        def precomputedValue = effectiveSourceRef.getOrElse("")
+        if (!precomputedValue.isEmpty()) {
+            return precomputedValue
+        }
+
+        // Priority 2: Direct sourceRef
+        def sourceRefValue = sourceRef.getOrElse("")
+        if (!sourceRefValue.isEmpty()) {
+            return sourceRefValue
+        }
+
+        // Priority 3: SourceRef components
+        def sourceRefRegistryValue = sourceRefRegistry.getOrElse("")
+        def sourceRefNamespaceValue = sourceRefNamespace.getOrElse("")
+        def sourceRefRepositoryValue = sourceRefRepository.getOrElse("")
+        def sourceRefImageNameValue = sourceRefImageName.getOrElse("")
+        def sourceRefTagValue = sourceRefTag.getOrElse("latest")
+
+        // Repository approach
+        if (!sourceRefRepositoryValue.isEmpty()) {
+            def baseRef = sourceRefRegistryValue.isEmpty() ?
+                sourceRefRepositoryValue :
+                "${sourceRefRegistryValue}/${sourceRefRepositoryValue}"
+            return "${baseRef}:${sourceRefTagValue}"
+        }
+
+        // Namespace + imageName approach
+        if (!sourceRefImageNameValue.isEmpty()) {
+            def reference = ""
+            if (!sourceRefRegistryValue.isEmpty()) {
+                reference += sourceRefRegistryValue + "/"
+            }
+            if (!sourceRefNamespaceValue.isEmpty()) {
+                reference += sourceRefNamespaceValue + "/"
+            }
+            reference += sourceRefImageNameValue
+            reference += ":" + sourceRefTagValue
+            return reference
+        }
+
+        return ""
     }
 
     /**
-     * Build all image references from ImageSpec (dual-mode properties: SourceRef vs Build Mode)
+     * Build all image references (dual-mode properties: SourceRef vs Build Mode)
      */
     List<String> buildImageReferences() {
         def references = []
-        def imageSpecValue = imageSpec.orNull
-        if (!imageSpecValue) {
-            throw new IllegalStateException("imageSpec must be provided")
-        }
 
-        def sourceRefValue = imageSpecValue.sourceRef.getOrElse("")
-        def tagsValue = imageSpecValue.tags.getOrElse([])
+        def sourceRefValue = sourceRef.getOrElse("")
+        def tagsValue = tags.getOrElse([])
 
         if (!sourceRefValue.isEmpty()) {
             // SourceRef Mode: Use sourceRef as source, apply tags as targets
@@ -174,11 +250,10 @@ abstract class DockerTagTask extends DefaultTask {
                 throw new IllegalStateException("At least one tag must be specified")
             }
 
-            def registryValue = imageSpecValue.registry.getOrElse("")
-            def namespaceValue = imageSpecValue.namespace.getOrElse("")
-            def repositoryValue = imageSpecValue.repository.getOrElse("")
-            def imageNameValue = imageSpecValue.imageName.getOrElse("")
-            def versionValue = imageSpecValue.version.getOrElse("")
+            def registryValue = registry.getOrElse("")
+            def namespaceValue = namespace.getOrElse("")
+            def repositoryValue = repository.getOrElse("")
+            def imageNameValue = imageName.getOrElse("")
 
             if (repositoryValue.isEmpty() && imageNameValue.isEmpty()) {
                 throw new IllegalStateException("Either repository OR imageName must be specified when not using sourceRef")
@@ -209,20 +284,13 @@ abstract class DockerTagTask extends DefaultTask {
 
         return references
     }
-    
-    private void pullSourceRefIfNeeded() {
-        def imageSpecValue = imageSpec.orNull
-        if (!imageSpecValue) return
-        
-        imageSpecValue.validateModeConsistency()
-        imageSpecValue.validateSourceRefConfiguration()
-        imageSpecValue.validatePullIfMissingConfiguration()
 
-        if (imageSpecValue.pullIfMissing.getOrElse(false)) {
-            def sourceRefValue = imageSpecValue.getEffectiveSourceRef()
+    private void pullSourceRefIfNeeded() {
+        if (pullIfMissing.getOrElse(false)) {
+            def sourceRefValue = effectiveSourceRef.getOrElse("")
             if (sourceRefValue && !sourceRefValue.isEmpty()) {
-                def authConfig = imageSpecValue.pullAuth ? 
-                    imageSpecValue.pullAuth.toAuthConfig() : null
+                def authConfig = pullAuth.isPresent() ?
+                    pullAuth.get().toAuthConfig() : null
 
                 def service = dockerService.get()
                 if (!service.imageExists(sourceRefValue).get()) {

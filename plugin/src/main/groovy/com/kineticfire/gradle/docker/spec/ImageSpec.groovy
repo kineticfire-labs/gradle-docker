@@ -46,7 +46,7 @@ abstract class ImageSpec {
         registry.convention("")
         namespace.convention("")
         repository.convention("")
-        version.convention(providers.provider { project.version.toString() })
+        version.convention("")  // No default - version must be explicitly specified
         // tags.convention(["latest"]) // No default - tags must be explicitly specified
         buildArgs.convention([:])
         labels.convention([:])

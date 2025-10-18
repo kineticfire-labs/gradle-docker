@@ -133,7 +133,7 @@ class ImageSpecComprehensiveTest extends Specification {
         imageSpec.dockerfileName.get() == "Dockerfile.production"
     }
 
-    def "context DSL with Copy task configuration"() {
+    def "context DSL throws UnsupportedOperationException"() {
         given:
         def sourceDir = project.file("app")
         sourceDir.mkdirs()
@@ -147,11 +147,11 @@ class ImageSpecComprehensiveTest extends Specification {
         }
 
         then:
-        imageSpec.contextTask != null
-        imageSpec.contextTask.get().name.startsWith("prepareTestImageContext")
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
     }
 
-    def "context Action with Copy task configuration"() {
+    def "context Action throws UnsupportedOperationException"() {
         given:
         def sourceDir = project.file("source")
         sourceDir.mkdirs()
@@ -166,8 +166,8 @@ class ImageSpecComprehensiveTest extends Specification {
         })
 
         then:
-        imageSpec.contextTask != null
-        imageSpec.contextTask.get().name.startsWith("prepareTestImageContext")
+        def ex = thrown(UnsupportedOperationException)
+        ex.message.contains("Inline context() DSL is not supported with Gradle configuration cache")
     }
 
     // ===== NESTED SPEC CONFIGURATION TESTS =====
@@ -293,19 +293,21 @@ class ImageSpecComprehensiveTest extends Specification {
         imageSpec.registry.getOrElse("") == ""
         imageSpec.namespace.getOrElse("") == ""
         imageSpec.repository.getOrElse("") == ""
-        imageSpec.version.get() == project.version.toString()
+        imageSpec.version.getOrElse("") == ""  // Version must be explicitly specified (no project.version default for config cache)
         imageSpec.buildArgs.get().isEmpty()
         imageSpec.labels.get().isEmpty()
         imageSpec.sourceRef.getOrElse("") == ""
         imageSpec.context.get().asFile.path.endsWith("src/main/docker")
     }
 
-    def "version convention uses project version"() {
+    def "version must be explicitly set"() {
         given:
-        project.version = "3.0.0-SNAPSHOT"
         def newImageSpec = project.objects.newInstance(ImageSpec, 'versionTest', project.objects, project.providers, project.layout)
 
-        expect:
+        when:
+        newImageSpec.version.set("3.0.0-SNAPSHOT")
+
+        then:
         newImageSpec.version.get() == "3.0.0-SNAPSHOT"
     }
 

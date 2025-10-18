@@ -31,18 +31,17 @@ import javax.inject.Inject
  * Extension methods for Test task integration with Docker Compose
  */
 abstract class TestIntegrationExtension {
-    
+
     private final ProjectLayout layout
     private final Provider<String> projectNameProvider
     private final Logger logger
     // Store reference to DockerOrchExtension for configuration-time access
     private DockerOrchExtension dockerOrchExtension
-    
+
     @Inject
-    TestIntegrationExtension(ProjectLayout layout, ProviderFactory providers) {
+    TestIntegrationExtension(Project project, ProjectLayout layout, ProviderFactory providers) {
         this.layout = layout
-        this.projectNameProvider = providers.gradleProperty("project.name")
-            .orElse(providers.provider { "unknown-project" })
+        this.projectNameProvider = providers.provider { project.name }
         this.logger = Logging.getLogger(TestIntegrationExtension)
     }
     
@@ -119,12 +118,12 @@ abstract class TestIntegrationExtension {
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {
         // Class lifecycle uses JUnit extension to manage compose per test class
         // DO NOT add task dependencies - let JUnit extension handle lifecycle
-        
+
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "class")
-        test.systemProperty("docker.compose.project", projectNameProvider.get())
-        
+        test.systemProperty("docker.compose.project", projectNameProvider)
+
         logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
         logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
     }
@@ -132,12 +131,12 @@ abstract class TestIntegrationExtension {
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
         // Method lifecycle uses JUnit extension to manage compose per test method
         // DO NOT add task dependencies - let JUnit extension handle lifecycle
-        
+
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "method")
-        test.systemProperty("docker.compose.project", projectNameProvider.get())
-        
+        test.systemProperty("docker.compose.project", projectNameProvider)
+
         logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
         logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
     }

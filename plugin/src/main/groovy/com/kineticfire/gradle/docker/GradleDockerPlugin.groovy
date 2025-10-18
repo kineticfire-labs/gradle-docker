@@ -51,6 +51,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project.providers, project.layout)
         def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects)
+        dockerOrchExt.configureProjectNames(project.name)
 
         // Register task creation rules
         registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
@@ -202,7 +203,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             
             // Tag task
             project.tasks.register("dockerTag${capitalizedName}", DockerTagTask) { task ->
-                configureDockerTagTask(task, imageSpec, dockerService)
+                configureDockerTagTask(task, imageSpec, dockerService, project)
             }
             
             // Publish task
@@ -487,14 +488,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.tags.set(imageSpec.tags)
         task.sourceRef.set(imageSpec.sourceRef)
         task.pullIfMissing.set(imageSpec.pullIfMissing)
-        task.effectiveSourceRef.set(project.providers.provider {
-            try {
-                return imageSpec.getEffectiveSourceRef()
-            } catch (Exception e) {
-                // Return empty string if effective source ref cannot be determined (build mode)
-                return ""
-            }
-        })
+        // Evaluate effectiveSourceRef eagerly at configuration time (configuration cache compatible)
+        try {
+            task.effectiveSourceRef.set(imageSpec.getEffectiveSourceRef())
+        } catch (Exception e) {
+            // Return empty string if effective source ref cannot be determined (build mode)
+            task.effectiveSourceRef.set("")
+        }
         task.contextTaskName.set(imageSpec.contextTaskName)
         task.contextTaskPath.set(imageSpec.contextTaskPath)
 
@@ -505,9 +505,6 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.sourceRefRepository.set(imageSpec.sourceRefRepository)
         task.sourceRefTag.set(imageSpec.sourceRefTag)
 
-        // Set imageSpec for test compatibility (not serialized due to @Internal)
-        task.imageSpec.set(imageSpec)
-
         // Configure save specification if present
         if (imageSpec.save.present) {
             def saveSpec = imageSpec.save.get()
@@ -516,17 +513,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void configureDockerTagTask(task, imageSpec, dockerService) {
+    private void configureDockerTagTask(task, imageSpec, dockerService, project) {
         task.group = 'docker'
         task.description = "Tag Docker image: ${imageSpec.name}"
 
         // Configure service dependency
         task.dockerService.set(dockerService)
         task.usesService(dockerService)
-
-        // Configure imageSpec for pullIfMissing support
-        // Note: Configuration cache issues with contextTask will be addressed in architectural refactor (Part 2)
-        task.imageSpec.set(imageSpec)
 
         // Configure Docker nomenclature properties
         task.registry.set(imageSpec.registry)
@@ -538,6 +531,26 @@ class GradleDockerPlugin implements Plugin<Project> {
 
         // Configure SourceRef Mode properties
         task.sourceRef.set(imageSpec.sourceRef)
+        task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
+        task.sourceRefNamespace.set(imageSpec.sourceRefNamespace)
+        task.sourceRefImageName.set(imageSpec.sourceRefImageName)
+        task.sourceRefRepository.set(imageSpec.sourceRefRepository)
+        task.sourceRefTag.set(imageSpec.sourceRefTag)
+
+        // Configure pullIfMissing properties
+        task.pullIfMissing.set(imageSpec.pullIfMissing)
+        // Evaluate effectiveSourceRef eagerly at configuration time (configuration cache compatible)
+        try {
+            task.effectiveSourceRef.set(imageSpec.getEffectiveSourceRef())
+        } catch (Exception e) {
+            // Return empty string if effective source ref cannot be determined (build mode)
+            task.effectiveSourceRef.set("")
+        }
+
+        // Configure pullAuth if present
+        if (imageSpec.pullAuth != null) {
+            task.pullAuth.set(imageSpec.pullAuth)
+        }
     }
 
     private void configureDockerPublishTask(task, imageSpec, dockerService, project) {
@@ -557,19 +570,15 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.tags.set(imageSpec.tags)
         task.sourceRef.set(imageSpec.sourceRef)
         task.pullIfMissing.set(imageSpec.pullIfMissing)
-        task.effectiveSourceRef.set(project.providers.provider {
-            try {
-                return imageSpec.getEffectiveSourceRef()
-            } catch (Exception e) {
-                // Return empty string if effective source ref cannot be determined (build mode)
-                return ""
-            }
-        })
+        // Evaluate effectiveSourceRef eagerly at configuration time (configuration cache compatible)
+        try {
+            task.effectiveSourceRef.set(imageSpec.getEffectiveSourceRef())
+        } catch (Exception e) {
+            // Return empty string if effective source ref cannot be determined (build mode)
+            task.effectiveSourceRef.set("")
+        }
         task.contextTaskName.set(imageSpec.contextTaskName)
         task.contextTaskPath.set(imageSpec.contextTaskPath)
-
-        // Set imageSpec for test compatibility (not serialized due to @Internal)
-        task.imageSpec.set(imageSpec)
 
         // Configure SourceRef component properties
         task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
@@ -577,6 +586,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.sourceRefImageName.set(imageSpec.sourceRefImageName)
         task.sourceRefRepository.set(imageSpec.sourceRefRepository)
         task.sourceRefTag.set(imageSpec.sourceRefTag)
+
+        // Configure pullAuth if present
+        if (imageSpec.pullAuth != null) {
+            task.pullAuth.set(imageSpec.pullAuth)
+        }
 
         // Configure publish targets from DSL
         if (imageSpec.publish.present) {
@@ -722,8 +736,11 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void setupTestIntegration(Project project) {
-        def testIntegration = project.objects.newInstance(TestIntegrationExtension, project.layout, project.providers)
-        
+        def testIntegration = project.objects.newInstance(TestIntegrationExtension, project, project.layout, project.providers)
+
+        // Register the extension so tests can retrieve it
+        project.extensions.add(TestIntegrationExtension, 'testIntegration', testIntegration)
+
         // Wire the dockerOrchExtension reference
         def dockerOrchExt = project.extensions.findByType(DockerOrchExtension)
         testIntegration.setDockerOrchExtension(dockerOrchExt)

@@ -38,8 +38,11 @@ class DockerTagTaskTest extends Specification {
         task.dockerService.set(mockDockerService)
     }
 
-    protected Object createImageSpec(String name = "testImage") {
-        return project.objects.newInstance(com.kineticfire.gradle.docker.spec.ImageSpec, name, project)
+    protected Object createAuthSpec(String username = "testuser", String password = "testpass") {
+        def authSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.AuthSpec)
+        authSpec.username.set(username)
+        authSpec.password.set(password)
+        return authSpec
     }
 
     def "task can be created"() {
@@ -88,9 +91,7 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when neither sourceImage nor sourceRef is set"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.tags.set(['myapp:latest'])
-        task.imageSpec.set(imageSpec)
+        task.tags.set(['myapp:latest'])
 
         when:
         task.tagImage()
@@ -101,10 +102,8 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when tags are not set"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('sha256:abc123')
+        task.sourceRef.set('sha256:abc123')
         // No tags set, but this should not throw in sourceRef mode (it's a no-op)
-        task.imageSpec.set(imageSpec)
 
         when:
         task.tagImage()
@@ -115,10 +114,8 @@ class DockerTagTaskTest extends Specification {
 
     def "task fails when tags list is empty"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('sha256:abc123')
-        imageSpec.tags.set([])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('sha256:abc123')
+        task.tags.set([])
 
         when:
         task.tagImage()
@@ -221,10 +218,8 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage fails when dockerService is null"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set('myapp')
-        imageSpec.tags.set(['latest', 'stable'])
-        task.imageSpec.set(imageSpec)
+        task.imageName.set('myapp')
+        task.tags.set(['latest', 'stable'])
         task.dockerService.set(null)
 
         when:
@@ -234,10 +229,11 @@ class DockerTagTaskTest extends Specification {
         thrown(IllegalStateException)
     }
 
-    def "tagImage fails when imageSpec is not provided"() {
+    def "tagImage fails when required properties are not provided"() {
         given:
-        // imageSpec is not set
+        // No sourceRef, imageName, or repository set
         task.dockerService.set(mockDockerService)
+        task.tags.set(['latest'])
 
         when:
         task.tagImage()
@@ -248,10 +244,8 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage fails in build mode when no tags specified"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set('myapp')
-        imageSpec.tags.set([])  // Empty tags in build mode
-        task.imageSpec.set(imageSpec)
+        task.imageName.set('myapp')
+        task.tags.set([])  // Empty tags in build mode
         mockDockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
 
         when:
@@ -263,11 +257,10 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage handles pullIfMissing with image exists"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('alpine:3.16')
-        imageSpec.tags.set(['myapp:latest'])
-        imageSpec.pullIfMissing.set(true)
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('alpine:3.16')
+        task.tags.set(['myapp:latest'])
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
 
         mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(true)
         mockDockerService.tagImage('alpine:3.16', ['myapp:latest']) >> CompletableFuture.completedFuture(null)
@@ -283,11 +276,10 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage handles pullIfMissing with image missing"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('alpine:3.16')
-        imageSpec.tags.set(['myapp:latest'])
-        imageSpec.pullIfMissing.set(true)
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('alpine:3.16')
+        task.tags.set(['myapp:latest'])
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('alpine:3.16')
 
         mockDockerService.imageExists('alpine:3.16') >> CompletableFuture.completedFuture(false)
         mockDockerService.pullImage('alpine:3.16', null) >> CompletableFuture.completedFuture(null)
@@ -304,17 +296,13 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage handles pullIfMissing with pullAuth"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('private.registry.com/myapp:1.0.0')
-        imageSpec.tags.set(['myapp:latest'])
-        imageSpec.pullIfMissing.set(true)
+        task.sourceRef.set('private.registry.com/myapp:1.0.0')
+        task.tags.set(['myapp:latest'])
+        task.pullIfMissing.set(true)
+        task.effectiveSourceRef.set('private.registry.com/myapp:1.0.0')
 
-        def authSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.AuthSpec)
-        authSpec.username.set('testuser')
-        authSpec.password.set('testpass')
-        imageSpec.pullAuth = authSpec
-
-        task.imageSpec.set(imageSpec)
+        def authSpec = createAuthSpec('testuser', 'testpass')
+        task.pullAuth.set(authSpec)
 
         mockDockerService.imageExists('private.registry.com/myapp:1.0.0') >> CompletableFuture.completedFuture(false)
         mockDockerService.pullImage(_, _) >> CompletableFuture.completedFuture(null)
@@ -338,14 +326,12 @@ class DockerTagTaskTest extends Specification {
 
     def "isInSourceRefMode returns true with sourceRefRepository only"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRefRepository.set('myrepo/myimage')
-        task.imageSpec.set(imageSpec)
+        task.sourceRefRepository.set('myrepo/myimage')
 
         when:
-        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode')
         method.accessible = true
-        def result = method.invoke(task, imageSpec)
+        def result = method.invoke(task)
 
         then:
         result == true
@@ -353,14 +339,12 @@ class DockerTagTaskTest extends Specification {
 
     def "isInSourceRefMode returns true with sourceRefImageName only"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRefImageName.set('myimage')
-        task.imageSpec.set(imageSpec)
+        task.sourceRefImageName.set('myimage')
 
         when:
-        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode')
         method.accessible = true
-        def result = method.invoke(task, imageSpec)
+        def result = method.invoke(task)
 
         then:
         result == true
@@ -368,15 +352,13 @@ class DockerTagTaskTest extends Specification {
 
     def "isInSourceRefMode returns true with both sourceRefRepository and sourceRefImageName"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRefRepository.set('myrepo/myimage')
-        imageSpec.sourceRefImageName.set('myimage')
-        task.imageSpec.set(imageSpec)
+        task.sourceRefRepository.set('myrepo/myimage')
+        task.sourceRefImageName.set('myimage')
 
         when:
-        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode')
         method.accessible = true
-        def result = method.invoke(task, imageSpec)
+        def result = method.invoke(task)
 
         then:
         result == true
@@ -384,14 +366,12 @@ class DockerTagTaskTest extends Specification {
 
     def "isInSourceRefMode returns false with empty sourceRef and no components"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('')
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('')
 
         when:
-        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode')
         method.accessible = true
-        def result = method.invoke(task, imageSpec)
+        def result = method.invoke(task)
 
         then:
         result == false
@@ -399,15 +379,13 @@ class DockerTagTaskTest extends Specification {
 
     def "isInSourceRefMode returns true with direct sourceRef taking precedence"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('alpine:3.16')
-        imageSpec.sourceRefRepository.set('myrepo/myimage')
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('alpine:3.16')
+        task.sourceRefRepository.set('myrepo/myimage')
 
         when:
-        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode', Object)
+        def method = DockerTagTask.getDeclaredMethod('isInSourceRefMode')
         method.accessible = true
-        def result = method.invoke(task, imageSpec)
+        def result = method.invoke(task)
 
         then:
         result == true
@@ -417,10 +395,8 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage logs info when sourceRef mode has empty tags"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('alpine:3.16')
-        imageSpec.tags.set([])
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('alpine:3.16')
+        task.tags.set([])
 
         when:
         task.tagImage()
@@ -432,10 +408,8 @@ class DockerTagTaskTest extends Specification {
 
     def "tagImage returns early when build mode has single tag"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.imageName.set('myapp')
-        imageSpec.tags.set(['latest'])  // Single tag
-        task.imageSpec.set(imageSpec)
+        task.imageName.set('myapp')
+        task.tags.set(['latest'])  // Single tag
 
         when:
         task.tagImage()
@@ -447,9 +421,10 @@ class DockerTagTaskTest extends Specification {
 
     // ===== MISSING PULLSOURCEREFIFNEEDED TESTS =====
 
-    def "pullSourceRefIfNeeded does nothing when imageSpec is null"() {
+    def "pullSourceRefIfNeeded does nothing when effectiveSourceRef is empty"() {
         given:
-        task.imageSpec.set(null)
+        task.effectiveSourceRef.set('')
+        task.pullIfMissing.set(true)
 
         when:
         def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')
@@ -464,10 +439,8 @@ class DockerTagTaskTest extends Specification {
 
     def "pullSourceRefIfNeeded does nothing when pullIfMissing is false"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('alpine:3.16')
-        imageSpec.pullIfMissing.set(false)
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('alpine:3.16')
+        task.pullIfMissing.set(false)
 
         when:
         def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')
@@ -482,10 +455,8 @@ class DockerTagTaskTest extends Specification {
 
     def "pullSourceRefIfNeeded does nothing when sourceRef is empty"() {
         given:
-        def imageSpec = createImageSpec()
-        imageSpec.sourceRef.set('')
-        imageSpec.pullIfMissing.set(false)  // When sourceRef is empty, pullIfMissing must be false
-        task.imageSpec.set(imageSpec)
+        task.sourceRef.set('')
+        task.pullIfMissing.set(false)  // When sourceRef is empty, pullIfMissing must be false
 
         when:
         def method = DockerTagTask.getDeclaredMethod('pullSourceRefIfNeeded')

@@ -29,7 +29,7 @@ class WaitSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        waitSpec = project.objects.newInstance(WaitSpec, project)
+        waitSpec = project.objects.newInstance(WaitSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====
