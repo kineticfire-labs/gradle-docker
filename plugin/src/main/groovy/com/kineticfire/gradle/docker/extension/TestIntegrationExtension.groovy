@@ -39,9 +39,10 @@ abstract class TestIntegrationExtension {
     private DockerOrchExtension dockerOrchExtension
 
     @Inject
-    TestIntegrationExtension(Project project, ProjectLayout layout, ProviderFactory providers) {
+    TestIntegrationExtension(String projectName, ProjectLayout layout, ProviderFactory providers) {
         this.layout = layout
-        this.projectNameProvider = providers.provider { project.name }
+        // Store project name as a provider (configuration-cache safe)
+        this.projectNameProvider = providers.provider { projectName }
         this.logger = Logging.getLogger(TestIntegrationExtension)
     }
     

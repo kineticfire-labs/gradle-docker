@@ -37,7 +37,7 @@ class TestIntegrationExtensionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        extension = project.objects.newInstance(TestIntegrationExtension, project.layout, project.providers)
+        extension = project.objects.newInstance(TestIntegrationExtension, project.name)
     }
 
     def "constructor initializes with project"() {
@@ -161,7 +161,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose configures class lifecycle correctly"() {
         given:
         // Manually create extensions without applying the full plugin
-        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project, project.layout, project.providers)
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
         def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
         testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
@@ -192,7 +192,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose configures method lifecycle correctly"() {
         given:
         // Manually create extensions without applying the full plugin
-        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project, project.layout, project.providers)
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
         def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
         testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
