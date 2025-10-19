@@ -186,7 +186,7 @@ class TestIntegrationExtensionTest extends Specification {
         // Should configure system properties for JUnit extension
         testTask.systemProperties['docker.compose.stack'] == 'testStack'
         testTask.systemProperties['docker.compose.lifecycle'] == 'class'
-        testTask.systemProperties['docker.compose.project'].get() == project.name
+        testTask.systemProperties['docker.compose.project'] == project.name
     }
 
     def "usesCompose configures method lifecycle correctly"() {
@@ -217,7 +217,7 @@ class TestIntegrationExtensionTest extends Specification {
         // Should configure system properties for JUnit extension
         testTask.systemProperties['docker.compose.stack'] == 'testStack'
         testTask.systemProperties['docker.compose.lifecycle'] == 'method'
-        testTask.systemProperties['docker.compose.project'].get() == project.name
+        testTask.systemProperties['docker.compose.project'] == project.name
     }
 
     def "usesCompose fails when dockerOrch extension not found"() {

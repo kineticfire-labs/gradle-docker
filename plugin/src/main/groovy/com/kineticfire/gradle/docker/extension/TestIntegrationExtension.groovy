@@ -123,7 +123,7 @@ abstract class TestIntegrationExtension {
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "class")
-        test.systemProperty("docker.compose.project", projectNameProvider)
+        test.systemProperty("docker.compose.project", projectNameProvider.get())
 
         logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
         logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
@@ -136,7 +136,7 @@ abstract class TestIntegrationExtension {
         // Set system properties for JUnit extension to use
         test.systemProperty("docker.compose.stack", stackName)
         test.systemProperty("docker.compose.lifecycle", "method")
-        test.systemProperty("docker.compose.project", projectNameProvider)
+        test.systemProperty("docker.compose.project", projectNameProvider.get())
 
         logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
         logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
