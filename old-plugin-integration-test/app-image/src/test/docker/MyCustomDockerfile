@@ -1,8 +1,0 @@
-FROM eclipse-temurin:21-jre
-LABEL environment=custom
-LABEL dockerfile-name=MyCustomDockerfile
-ARG JAR_FILE
-COPY ${JAR_FILE} app.jar
-WORKDIR /app
-EXPOSE 8080
-CMD ["java", "-jar", "app.jar"]
