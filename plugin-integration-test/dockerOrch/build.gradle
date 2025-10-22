@@ -36,6 +36,9 @@ tasks.register('integrationTest') {
     dependsOn ':dockerOrch:verification:basic:app-image:integrationTest'
     dependsOn ':dockerOrch:verification:lifecycle-class:app-image:integrationTest'
     dependsOn ':dockerOrch:verification:lifecycle-method:app-image:integrationTest'
+    dependsOn ':dockerOrch:verification:wait-healthy:app-image:integrationTest'
+    dependsOn ':dockerOrch:verification:wait-running:app-image:integrationTest'
+    dependsOn ':dockerOrch:verification:mixed-wait:app-image:integrationTest'
 
     // Example tests
     dependsOn ':dockerOrch:examples:web-app:app-image:integrationTest'
@@ -59,6 +62,9 @@ tasks.named('clean') {
     dependsOn ':dockerOrch:verification:basic:app-image:clean'
     dependsOn ':dockerOrch:verification:lifecycle-class:app-image:clean'
     dependsOn ':dockerOrch:verification:lifecycle-method:app-image:clean'
+    dependsOn ':dockerOrch:verification:wait-healthy:app-image:clean'
+    dependsOn ':dockerOrch:verification:wait-running:app-image:clean'
+    dependsOn ':dockerOrch:verification:mixed-wait:app-image:clean'
 
     // Examples - clean at app-image level
     dependsOn ':dockerOrch:examples:web-app:app-image:clean'

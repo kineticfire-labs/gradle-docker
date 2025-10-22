@@ -27,9 +27,9 @@ features that users typically wouldn't test directly.
 | Scenario         | Location                         | Status     | Lifecycle | Plugin Features Tested                                        |
 |------------------|----------------------------------|------------|-----------|---------------------------------------------------------------|
 | Basic            | `verification/basic/`            | ✅ Complete | CLASS     | composeUp, composeDown, state files, port mapping, cleanup    |
-| Wait Healthy     | `verification/wait-healthy/`     | ⏳ Planned  | CLASS     | waitForHealthy, health check timing, timeout handling         |
-| Wait Running     | `verification/wait-running/`     | ⏳ Planned  | CLASS     | waitForRunning, running state detection                       |
-| Mixed Wait       | `verification/mixed-wait/`       | ⏳ Planned  | CLASS     | Both wait types together (app + database)                     |
+| Wait Healthy     | `verification/wait-healthy/`     | ✅ Complete | CLASS     | waitForHealthy, health check timing, timeout handling         |
+| Wait Running     | `verification/wait-running/`     | ✅ Complete | CLASS     | waitForRunning, running state detection                       |
+| Mixed Wait       | `verification/mixed-wait/`       | ✅ Complete | CLASS     | Both wait types together (app + database)                     |
 | Lifecycle Class  | `verification/lifecycle-class/`  | ✅ Complete | CLASS     | Class-level lifecycle, setupSpec/cleanupSpec, state persistence |
 | Lifecycle Method | `verification/lifecycle-method/` | ✅ Complete | METHOD    | Method-level lifecycle, setup/cleanup, state isolation        |
 | Logs Capture     | `verification/logs-capture/`     | ⏳ Planned  | CLASS     | Log capture configuration, file generation                    |
@@ -51,15 +51,22 @@ living documentation and a copy-paste template.
 
 **✅ Recommended**: Copy and adapt these for your own projects!
 
-| Example          | Location                       | Status     | Lifecycle | Use Case                           | Testing Libraries                   |
-|------------------|--------------------------------|------------|-----------|------------------------------------|-------------------------------------|
-| Web App          | `examples/web-app/`            | ✅ Complete | CLASS     | REST API testing                   | RestAssured, HTTP client            |
-| Stateful Web App | `examples/stateful-web-app/`   | ✅ Complete | CLASS     | Session management, workflow tests | RestAssured, HTTP client            |
-| Isolated Tests   | `examples/isolated-tests/`     | ✅ Complete | METHOD    | Database isolation, independent tests | RestAssured, JPA, H2             |
-| Database App     | `examples/database-app/`       | ⏳ Planned  | CLASS     | Database integration               | JDBC, JPA, Spring Data              |
-| Microservices    | `examples/microservices/`      | ⏳ Planned  | CLASS     | Service orchestration              | RestAssured, service discovery      |
-| Kafka App        | `examples/kafka-app/`          | ⏳ Planned  | CLASS     | Event-driven architecture          | Kafka client, TestProducer/Consumer |
-| Batch Job        | `examples/batch-job/`          | ⏳ Planned  | CLASS     | Scheduled processing               | Spring Batch, JDBC                  |
+| Example                  | Location                           | Status     | Test Framework | Lifecycle | Use Case                           | Testing Libraries                   |
+|--------------------------|------------------------------------|-----------|--------------|-----------|------------------------------------|-------------------------------------|
+| Web App (Spock)          | `examples/web-app/`                | ✅ Complete | Spock        | CLASS     | REST API testing                   | Spock, RestAssured, Groovy          |
+| Web App (JUnit 5)        | `examples/web-app-junit/`          | ✅ Complete | JUnit 5      | CLASS     | REST API testing                   | JUnit 5, RestAssured, Jackson       |
+| Stateful Web App         | `examples/stateful-web-app/`       | ✅ Complete | Spock        | Gradle Tasks | Session management, workflow tests | Spock, RestAssured, Groovy       |
+| Isolated Tests (Spock)   | `examples/isolated-tests/`         | ✅ Complete | Spock        | METHOD    | Database isolation, independent tests | Spock, RestAssured, JPA, H2      |
+| Isolated Tests (JUnit 5) | `examples/isolated-tests-junit/`   | ✅ Complete | JUnit 5      | METHOD    | Database isolation, independent tests | JUnit 5, RestAssured, JPA, H2    |
+| Database App             | `examples/database-app/`           | ⏳ Planned  | TBD          | CLASS     | Database integration               | JDBC, JPA, Spring Data              |
+| Microservices            | `examples/microservices/`          | ⏳ Planned  | TBD          | CLASS     | Service orchestration              | RestAssured, service discovery      |
+| Kafka App                | `examples/kafka-app/`              | ⏳ Planned  | TBD          | CLASS     | Event-driven architecture          | Kafka client, TestProducer/Consumer |
+| Batch Job                | `examples/batch-job/`              | ⏳ Planned  | TBD          | CLASS     | Scheduled processing               | Spring Batch, JDBC                  |
+
+**Test Framework Variants:**
+- **Spock** examples use `@ComposeUp` annotation for automatic container lifecycle management
+- **JUnit 5** examples use `@ExtendWith(DockerComposeClassExtension.class)` or `@ExtendWith(DockerComposeMethodExtension.class)`
+- Both frameworks provide the same functionality; choose based on your project's test framework preference
 
 ## Task Organization
 

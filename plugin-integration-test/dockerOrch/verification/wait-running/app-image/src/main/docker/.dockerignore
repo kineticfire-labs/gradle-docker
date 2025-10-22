@@ -1,0 +1,4 @@
+# Ignore everything except what we need
+*
+!*.jar
+!entrypoint.sh

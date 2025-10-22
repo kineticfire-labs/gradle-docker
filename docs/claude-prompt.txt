@@ -4,6 +4,25 @@ the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
 
+## wait for logs
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Design an approach for 'dockerOrch' integration tests to wait for a specific message in the docker container logs to occur before determining that the container is ready to being testing.
+
+  The current 'dockerOrch' accepts a 'waitForRunning' for 1 or more containers must be ready and/or 'waitForHealthy' where one or more containers must be healthy (as determined by the containers'
+  health checks) before the integration tests are executed.
+
+
+  waitForHealthy {
+                  waitForServices.set(['isolated-tests'])
+                  timeoutSeconds.set(60)
+                  pollSeconds.set(2)
+              }
+
 
 ## Unit Tests
 

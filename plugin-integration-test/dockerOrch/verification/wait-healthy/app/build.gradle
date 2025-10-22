@@ -14,28 +14,36 @@
  * limitations under the License.
  */
 
-pluginManagement {
-    plugins {
-        id 'com.kineticfire.gradle.gradle-docker' version "${providers.gradleProperty('plugin_version').get()}"
-    }
-    repositories {
-        mavenLocal()
-        gradlePluginPortal()
-        mavenCentral()
+plugins {
+    id 'java'
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+}
+
+group = 'com.kineticfire.test'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
     }
 }
 
-rootProject.name = 'scenario-1'
+repositories {
+    mavenCentral()
+}
 
-// Subprojects for this scenario
-include 'app'
-include 'app-image'
+dependencies {
+    implementation libs.spring.boot.starter.web
+    testImplementation libs.spring.boot.starter.test
+}
 
-// Build cache configuration (Gradle 9/10)
-buildCache {
-    local {
-        enabled = true
-        directory = file('build-cache')
-        removeUnusedEntriesAfterDays = 7
-    }
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+// Create executable JAR
+tasks.named('bootJar') {
+    archiveBaseName.set('wait-healthy-app')
+    archiveVersion.set(version)
 }

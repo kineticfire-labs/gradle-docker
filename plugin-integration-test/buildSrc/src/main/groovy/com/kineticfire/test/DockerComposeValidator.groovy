@@ -106,10 +106,111 @@ class DockerComposeValidator {
     }
 
     /**
-     * Check if container is healthy
+     * Check if container is healthy using docker inspect
+     *
+     * NOTE: This method uses 'docker inspect' which may lag slightly behind 'docker compose ps'.
+     * For checking health status immediately after compose up, consider using isServiceHealthyViaCompose()
+     * which uses the same mechanism as the plugin's wait logic.
      */
     static boolean isContainerHealthy(String projectName, String serviceName) {
         return getContainerStatus(projectName, serviceName) == 'healthy'
+    }
+
+    /**
+     * Check if service is healthy using docker compose ps
+     *
+     * This method uses 'docker compose ps' which matches the mechanism used by the plugin's
+     * waitForHealthy logic. Use this method when you need to verify the same state that
+     * the plugin just verified, avoiding timing issues between different Docker commands.
+     *
+     * @param projectName Docker Compose project name
+     * @param serviceName Service name from compose file
+     * @return true if service status contains 'healthy'
+     */
+    static boolean isServiceHealthyViaCompose(String projectName, String serviceName) {
+        try {
+            def process = [
+                'docker', 'compose',
+                '-p', projectName,
+                'ps', serviceName,
+                '--format', 'table'
+            ].execute()
+            process.waitFor()
+
+            if (process.exitValue() == 0) {
+                def output = process.text.toLowerCase()
+                // Check if status contains 'healthy' (e.g., "Up 2 minutes (healthy)")
+                return output.contains('healthy')
+            }
+
+            return false
+        } catch (Exception e) {
+            return false
+        }
+    }
+
+    /**
+     * Check if service is running using docker compose ps
+     *
+     * This method uses 'docker compose ps' which matches the mechanism used by the plugin's
+     * waitForRunning logic.
+     *
+     * @param projectName Docker Compose project name
+     * @param serviceName Service name from compose file
+     * @return true if service status contains 'up' or 'running'
+     */
+    static boolean isServiceRunningViaCompose(String projectName, String serviceName) {
+        try {
+            def process = [
+                'docker', 'compose',
+                '-p', projectName,
+                'ps', serviceName,
+                '--format', 'table'
+            ].execute()
+            process.waitFor()
+
+            if (process.exitValue() == 0) {
+                def output = process.text.toLowerCase()
+                // Check if status contains 'up' or 'running'
+                return output.contains('up') || output.contains('running')
+            }
+
+            return false
+        } catch (Exception e) {
+            return false
+        }
+    }
+
+    /**
+     * Check if container has a health check configured
+     * @param projectName Docker Compose project name
+     * @param serviceName Service name from compose file
+     * @return true if container has a health check, false otherwise
+     */
+    static boolean hasHealthCheck(String projectName, String serviceName) {
+        // First get container name
+        def nameProcess = [
+            'docker', 'ps', '-a',
+            '--filter', "name=${projectName}",
+            '--filter', "name=${serviceName}",
+            '--format', '{{.Names}}'
+        ].execute()
+        nameProcess.waitFor()
+        def containerName = nameProcess.text.trim().split('\n').find { it }
+
+        if (!containerName) {
+            return false
+        }
+
+        // Check if health check is configured
+        def healthProcess = [
+            'docker', 'inspect', containerName,
+            '--format', '{{if .State.Health}}true{{else}}false{{end}}'
+        ].execute()
+        healthProcess.waitFor()
+        def hasHealth = healthProcess.text.trim()
+
+        return hasHealth == 'true'
     }
 
     /**

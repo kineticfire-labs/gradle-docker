@@ -67,6 +67,18 @@ include 'dockerOrch:verification:lifecycle-method'
 include 'dockerOrch:verification:lifecycle-method:app'
 include 'dockerOrch:verification:lifecycle-method:app-image'
 
+include 'dockerOrch:verification:wait-healthy'
+include 'dockerOrch:verification:wait-healthy:app'
+include 'dockerOrch:verification:wait-healthy:app-image'
+
+include 'dockerOrch:verification:wait-running'
+include 'dockerOrch:verification:wait-running:app'
+include 'dockerOrch:verification:wait-running:app-image'
+
+include 'dockerOrch:verification:mixed-wait'
+include 'dockerOrch:verification:mixed-wait:app'
+include 'dockerOrch:verification:mixed-wait:app-image'
+
 // Example tests (user-facing demonstrations)
 include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'

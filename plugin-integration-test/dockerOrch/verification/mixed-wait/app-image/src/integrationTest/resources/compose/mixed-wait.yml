@@ -1,0 +1,50 @@
+# (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Docker Compose file for mixed-wait verification test
+# Tests both waitForHealthy (app) and waitForRunning (db) together
+
+services:
+  # Application service - HAS health check (uses waitForHealthy)
+  mixed-wait-app:
+    image: verification-mixed-wait-app:latest
+    ports:
+      - "8080"
+    depends_on:
+      - mixed-wait-db
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://mixed-wait-db:5432/testdb
+      - SPRING_DATASOURCE_USERNAME=testuser
+      - SPRING_DATASOURCE_PASSWORD=testpass
+      - STARTUP_DELAY_MS=5000
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 3s
+      timeout: 2s
+      retries: 10
+      start_period: 10s
+
+  # Database service - NO health check (uses waitForRunning)
+  mixed-wait-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=testdb
+      - POSTGRES_USER=testuser
+      - POSTGRES_PASSWORD=testpass
+    # Explicitly disable healthcheck (postgres image may have default healthcheck)
+    # Use test: ["NONE"] which is the standard Docker Compose way to disable healthchecks
+    healthcheck:
+      test: ["NONE"]
+    # NOTE: No ports exposed - database only accessible from app container

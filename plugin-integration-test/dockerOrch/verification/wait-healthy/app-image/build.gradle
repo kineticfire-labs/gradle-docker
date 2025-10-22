@@ -1,0 +1,190 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+repositories {
+    mavenLocal()  // Plugin must be in Maven local
+    mavenCentral()
+}
+
+dependencies {
+    // Testing dependencies from version catalog
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from app subproject using Provider API (Gradle 9/10)
+def jarFileProvider = project(':dockerOrch:verification:wait-healthy:app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Configure docker DSL
+docker {
+    images {
+        waitHealthyApp {
+            imageName = 'verification-wait-healthy-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareWaitHealthyAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for wait-healthy app image'
+                into layout.buildDirectory.dir('docker-context/waitHealthyApp')
+                from('src/main/docker')
+
+                // Copy JAR from app project
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':dockerOrch:verification:wait-healthy:app').tasks.named('bootJar')
+            }
+
+            // Pass JAR file name as build arg (lazy)
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+    }
+}
+
+// Configure dockerOrch DSL
+dockerOrch {
+    composeStacks {
+        waitHealthyTest {
+            files.from('src/integrationTest/resources/compose/wait-healthy.yml')
+            projectName = "verification-wait-healthy-test"
+
+            // Wait for app to be healthy with custom timeout/poll settings
+            waitForHealthy {
+                waitForServices.set(['wait-healthy-app'])
+                timeoutSeconds.set(90)
+                pollSeconds.set(1)
+            }
+        }
+    }
+}
+
+// Create integration test source set
+sourceSets {
+    integrationTest {
+        groovy {
+            srcDir 'src/integrationTest/groovy'
+        }
+        resources {
+            srcDir 'src/integrationTest/resources'
+        }
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+// Add buildSrc classes to integration test classpath
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Configure resource processing
+tasks.named('processIntegrationTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Register integration test task (Gradle 9/10 style)
+tasks.register('integrationTest', Test) {
+    description = 'Runs integration tests against Docker Compose stack'
+    group = 'verification'
+
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+
+    useJUnitPlatform()
+
+    // Pass state file location to tests (lazy)
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/waitHealthyTest-state.json').get().asFile.absolutePath
+
+    // Pass project name for validators
+    systemProperty 'COMPOSE_PROJECT_NAME', "verification-wait-healthy-test"
+
+    // Not cacheable - interacts with Docker
+    outputs.cacheIf { false }
+}
+
+// Ensure compose up waits for image build
+afterEvaluate {
+    tasks.named('composeUpWaitHealthyTest') {
+        dependsOn tasks.named('dockerBuildWaitHealthyApp')
+    }
+
+    // Ensure integrationTest has full workflow
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpWaitHealthyTest')
+        finalizedBy tasks.named('composeDownWaitHealthyTest')
+    }
+}
+
+// Full integration test workflow
+tasks.register('runIntegrationTest') {
+        description = 'Full integration test: build image -> up -> test -> down'
+        group = 'verification'
+
+        // Build image first (lazy)
+        dependsOn tasks.named('dockerBuildWaitHealthyApp')
+
+        // Then compose up
+        dependsOn tasks.named('composeUpWaitHealthyTest')
+
+        // Then run tests
+        dependsOn tasks.named('integrationTest')
+
+        // Always tear down
+        finalizedBy tasks.named('composeDownWaitHealthyTest')
+
+        doLast {
+            logger.lifecycle("Integration test complete for verification:wait-healthy")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupContainers') {
+    description = 'Force cleanup of any lingering containers'
+    group = 'verification'
+
+    doLast {
+        def projectName = "verification-wait-healthy-test"
+        def result = exec {
+            commandLine 'docker', 'ps', '-a', '-q', '--filter', "name=${projectName}"
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+
+        def containerIds = result.standardOutput.toString().trim()
+        if (containerIds) {
+            exec {
+                commandLine 'docker', 'rm', '-f'
+                args containerIds.split('\n')
+            }
+        }
+    }
+}
