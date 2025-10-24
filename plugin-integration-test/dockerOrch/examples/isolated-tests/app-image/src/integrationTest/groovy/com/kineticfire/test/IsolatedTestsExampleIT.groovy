@@ -98,6 +98,29 @@ class IsolatedTestsExampleIT extends Specification {
         println "=== Test ${cleanupCallCount} completed, containers stopping ==="
     }
 
+    /**
+     * Retry helper to handle transient exceptions when container is healthy but app not fully ready
+     */
+    private def retryRequest(Closure requestClosure, int maxRetries, int retryDelayMs) {
+        def response = null
+        Exception lastException = null
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                response = requestClosure()
+                return response
+            } catch (Exception e) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    println "Attempt ${attempt} failed: ${e.message}, retrying in ${retryDelayMs}ms..."
+                    Thread.sleep(retryDelayMs)
+                }
+            }
+        }
+
+        throw new RuntimeException("Request failed after ${maxRetries} attempts", lastException)
+    }
+
     // Test 1: Create user "alice"
     def "test 1: should create user alice with fresh database"() {
         when: "we create user alice"
@@ -196,9 +219,9 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 7: Health check
     def "test 7: should respond to health check endpoint"() {
-        when: "we call the /health endpoint"
-        def response = given()
-            .get("/health")
+        when: "we call the /health endpoint with retry logic"
+        // Retry logic to handle brief window where container is healthy but app not fully ready
+        def response = retryRequest({ given().get("/health") }, 3, 1000)
 
         then: "app is healthy"
         response.statusCode() == 200

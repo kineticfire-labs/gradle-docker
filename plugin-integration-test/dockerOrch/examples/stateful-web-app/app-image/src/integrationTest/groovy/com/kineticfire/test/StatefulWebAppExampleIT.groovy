@@ -61,6 +61,7 @@ import static io.restassured.RestAssured.given
 class StatefulWebAppExampleIT extends Specification {
 
     static String baseUrl
+    static String projectName
 
     // Session state carried across tests
     static String sessionId
@@ -76,12 +77,29 @@ class StatefulWebAppExampleIT extends Specification {
         // Extract the host port for the stateful-web-app service
         def port = stateData.services['stateful-web-app'].publishedPorts[0].host
         baseUrl = "http://localhost:${port}"
+        projectName = "example-stateful-web-app-test"
 
         println "=== Testing Stateful Web App at ${baseUrl} ==="
         println "=== Using CLASS lifecycle - state persists across tests ==="
 
         // Configure RestAssured
         RestAssured.baseURI = baseUrl
+    }
+
+    def cleanupSpec() {
+        // Force cleanup even if tests fail - finalizedBy doesn't execute when tests fail during execution
+        try {
+            println "=== Forcing cleanup of Docker Compose stack: ${projectName} ==="
+            def process = ['docker', 'compose', '-p', projectName, 'down', '-v'].execute()
+            process.waitFor()
+            if (process.exitValue() != 0) {
+                println "Warning: docker compose down returned ${process.exitValue()}"
+            } else {
+                println "Successfully cleaned up compose stack"
+            }
+        } catch (Exception e) {
+            println "Warning: Failed to cleanup Docker Compose stack: ${e.message}"
+        }
     }
 
     // Test 1: Register a new user (idempotent - handles existing users)

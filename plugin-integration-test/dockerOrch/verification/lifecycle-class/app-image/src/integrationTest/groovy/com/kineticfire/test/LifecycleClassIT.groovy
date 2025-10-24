@@ -71,7 +71,9 @@ class LifecycleClassIT extends Specification {
     def "containers should remain running between tests"() {
         expect: "same containers from setupSpec still running"
         DockerComposeValidator.isContainerRunning(projectName, 'state-app')
-        DockerComposeValidator.isContainerHealthy(projectName, 'state-app')
+        // Use isServiceHealthyViaCompose to match the plugin's health check mechanism
+        // This avoids timing lag between 'docker compose ps' (used by plugin) and 'docker inspect'
+        DockerComposeValidator.isServiceHealthyViaCompose(projectName, 'state-app')
     }
 
     def "state should persist across test methods - write"() {

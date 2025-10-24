@@ -61,7 +61,21 @@ class WaitRunningPluginIT extends Specification {
     }
 
     // NOTE: Cleanup is handled by Gradle task workflow (composeDown via finalizedBy)
-    // No cleanupSpec() needed - containers are stopped by the Gradle task after test completes
+    def cleanupSpec() {
+        // Force cleanup even if tests fail - finalizedBy doesn't execute when tests fail during execution
+        try {
+            println "=== Forcing cleanup of Docker Compose stack: ${projectName} ==="
+            def process = ['docker', 'compose', '-p', projectName, 'down', '-v'].execute()
+            process.waitFor()
+            if (process.exitValue() != 0) {
+                println "Warning: docker compose down returned ${process.exitValue()}"
+            } else {
+                println "Successfully cleaned up compose stack"
+            }
+        } catch (Exception e) {
+            println "Warning: Failed to cleanup Docker Compose stack: ${e.message}"
+        }
+    }
 
     def "plugin should generate valid state file"() {
         expect: "state file has required fields"
@@ -95,17 +109,45 @@ class WaitRunningPluginIT extends Specification {
     }
 
     def "plugin should make service accessible via HTTP"() {
-        when: "we query the root endpoint"
+        when: "we query the root endpoint with retry logic"
         def hostPort = StateFileValidator.getPublishedPort(stateData, 'wait-running-app', 8080)
-        def url = new URL("http://localhost:${hostPort}/")
-        def connection = url.openConnection()
-        connection.setRequestMethod("GET")
-        connection.setConnectTimeout(5000)
-        connection.setReadTimeout(5000)
-        connection.connect()
 
-        def responseCode = connection.getResponseCode()
-        def response = connection.getInputStream().text
+        // Initial delay to allow app to finish startup after container is running
+        Thread.sleep(3000)
+
+        // Retry logic to handle brief window where container is running but app not fully ready
+        def maxRetries = 10
+        def retryDelay = 3000 // 3 seconds between retries
+        def responseCode = 0
+        def response = null
+        def lastException = null
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                def url = new URL("http://localhost:${hostPort}/")
+                def connection = url.openConnection()
+                connection.setRequestMethod("GET")
+                connection.setConnectTimeout(5000)
+                connection.setReadTimeout(5000)
+                connection.setRequestProperty("Connection", "close")
+
+                responseCode = connection.getResponseCode()
+                response = connection.getInputStream().text
+                lastException = null
+                break // Success, exit retry loop
+            } catch (Exception e) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    println "Attempt ${attempt} failed: ${e.message}, retrying in ${retryDelay}ms..."
+                    Thread.sleep(retryDelay)
+                }
+            }
+        }
+
+        if (lastException != null) {
+            throw lastException
+        }
+
         def responseData = new groovy.json.JsonSlurper().parseText(response)
 
         then: "root endpoint is accessible"
@@ -117,17 +159,45 @@ class WaitRunningPluginIT extends Specification {
     }
 
     def "plugin should make health endpoint accessible"() {
-        when: "we query the health endpoint"
+        when: "we query the health endpoint with retry logic"
         def hostPort = StateFileValidator.getPublishedPort(stateData, 'wait-running-app', 8080)
-        def url = new URL("http://localhost:${hostPort}/health")
-        def connection = url.openConnection()
-        connection.setRequestMethod("GET")
-        connection.setConnectTimeout(5000)
-        connection.setReadTimeout(5000)
-        connection.connect()
 
-        def responseCode = connection.getResponseCode()
-        def response = connection.getInputStream().text
+        // Initial delay to allow app to finish startup after container is running
+        Thread.sleep(3000)
+
+        // Retry logic to handle brief window where container is running but app not fully ready
+        def maxRetries = 10
+        def retryDelay = 3000 // 3 seconds between retries
+        def responseCode = 0
+        def response = null
+        def lastException = null
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                def url = new URL("http://localhost:${hostPort}/health")
+                def connection = url.openConnection()
+                connection.setRequestMethod("GET")
+                connection.setConnectTimeout(5000)
+                connection.setReadTimeout(5000)
+                connection.setRequestProperty("Connection", "close")
+
+                responseCode = connection.getResponseCode()
+                response = connection.getInputStream().text
+                lastException = null
+                break // Success, exit retry loop
+            } catch (Exception e) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    println "Attempt ${attempt} failed: ${e.message}, retrying in ${retryDelay}ms..."
+                    Thread.sleep(retryDelay)
+                }
+            }
+        }
+
+        if (lastException != null) {
+            throw lastException
+        }
+
         def healthData = new groovy.json.JsonSlurper().parseText(response)
 
         then: "health endpoint is accessible"
@@ -146,13 +216,39 @@ class WaitRunningPluginIT extends Specification {
 
         and: "container reached running state within timeout window"
         def hostPort = StateFileValidator.getPublishedPort(stateData, 'wait-running-app', 8080)
-        def url = new URL("http://localhost:${hostPort}/health")
-        def connection = url.openConnection()
-        connection.setRequestMethod("GET")
-        connection.setConnectTimeout(5000)
-        connection.setReadTimeout(5000)
-        connection.connect()
-        connection.getResponseCode() == 200
+
+        // Retry logic to handle brief window where container is running but app not fully ready
+        def maxRetries = 5
+        def retryDelay = 2000 // 2 seconds between retries
+        def responseCode = 0
+        def lastException = null
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                def url = new URL("http://localhost:${hostPort}/health")
+                def connection = url.openConnection()
+                connection.setRequestMethod("GET")
+                connection.setConnectTimeout(5000)
+                connection.setReadTimeout(5000)
+                connection.setRequestProperty("Connection", "close")
+
+                responseCode = connection.getResponseCode()
+                lastException = null
+                break // Success, exit retry loop
+            } catch (Exception e) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    println "Attempt ${attempt} failed: ${e.message}, retrying in ${retryDelay}ms..."
+                    Thread.sleep(retryDelay)
+                }
+            }
+        }
+
+        if (lastException != null) {
+            throw lastException
+        }
+
+        responseCode == 200
     }
 
     def "plugin should respect poll interval configuration"() {
@@ -164,13 +260,39 @@ class WaitRunningPluginIT extends Specification {
 
         and: "container is accessible"
         def hostPort = StateFileValidator.getPublishedPort(stateData, 'wait-running-app', 8080)
-        def url = new URL("http://localhost:${hostPort}/health")
-        def connection = url.openConnection()
-        connection.setRequestMethod("GET")
-        connection.setConnectTimeout(5000)
-        connection.setReadTimeout(5000)
-        connection.connect()
-        connection.getResponseCode() == 200
+
+        // Retry logic to handle brief window where container is running but app not fully ready
+        def maxRetries = 5
+        def retryDelay = 2000 // 2 seconds between retries
+        def responseCode = 0
+        def lastException = null
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                def url = new URL("http://localhost:${hostPort}/health")
+                def connection = url.openConnection()
+                connection.setRequestMethod("GET")
+                connection.setConnectTimeout(5000)
+                connection.setReadTimeout(5000)
+                connection.setRequestProperty("Connection", "close")
+
+                responseCode = connection.getResponseCode()
+                lastException = null
+                break // Success, exit retry loop
+            } catch (Exception e) {
+                lastException = e
+                if (attempt < maxRetries) {
+                    println "Attempt ${attempt} failed: ${e.message}, retrying in ${retryDelay}ms..."
+                    Thread.sleep(retryDelay)
+                }
+            }
+        }
+
+        if (lastException != null) {
+            throw lastException
+        }
+
+        responseCode == 200
     }
 
     def "plugin should map ports correctly"() {

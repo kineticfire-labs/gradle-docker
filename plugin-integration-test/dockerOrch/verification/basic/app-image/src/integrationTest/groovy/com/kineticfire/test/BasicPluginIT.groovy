@@ -54,8 +54,21 @@ class BasicPluginIT extends Specification {
         stateData = StateFileValidator.parseStateFile(stateFile)
     }
 
-    // NOTE: Cleanup is handled by Gradle task workflow (composeDown via finalizedBy)
-    // No cleanupSpec() needed - containers are stopped by the Gradle task after test completes
+    def cleanupSpec() {
+        // Force cleanup even if tests fail - finalizedBy doesn't execute when tests fail during execution
+        try {
+            println "=== Forcing cleanup of Docker Compose stack: ${projectName} ==="
+            def process = ['docker', 'compose', '-p', projectName, 'down', '-v'].execute()
+            process.waitFor()
+            if (process.exitValue() != 0) {
+                println "Warning: docker compose down returned ${process.exitValue()}"
+            } else {
+                println "Successfully cleaned up compose stack"
+            }
+        } catch (Exception e) {
+            println "Warning: Failed to cleanup Docker Compose stack: ${e.message}"
+        }
+    }
 
     def "plugin should generate valid state file"() {
         expect: "state file has required fields"
@@ -77,7 +90,9 @@ class BasicPluginIT extends Specification {
 
     def "plugin should wait until container is healthy"() {
         expect: "container reports healthy status"
-        DockerComposeValidator.isContainerHealthy(projectName, 'web-app')
+        // Use isServiceHealthyViaCompose to match the plugin's health check mechanism
+        // This avoids timing lag between 'docker compose ps' (used by plugin) and 'docker inspect'
+        DockerComposeValidator.isServiceHealthyViaCompose(projectName, 'web-app')
 
         and: "health check was actually performed (not instant)"
         // State file timestamp should show the wait occurred

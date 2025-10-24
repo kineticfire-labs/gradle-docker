@@ -57,7 +57,21 @@ class MixedWaitPluginIT extends Specification {
     }
 
     // NOTE: Cleanup is handled by Gradle task workflow (composeDown via finalizedBy)
-    // No cleanupSpec() needed - containers are stopped by the Gradle task after test completes
+    def cleanupSpec() {
+        // Force cleanup even if tests fail - finalizedBy doesn't execute when tests fail during execution
+        try {
+            println "=== Forcing cleanup of Docker Compose stack: ${projectName} ==="
+            def process = ['docker', 'compose', '-p', projectName, 'down', '-v'].execute()
+            process.waitFor()
+            if (process.exitValue() != 0) {
+                println "Warning: docker compose down returned ${process.exitValue()}"
+            } else {
+                println "Successfully cleaned up compose stack"
+            }
+        } catch (Exception e) {
+            println "Warning: Failed to cleanup Docker Compose stack: ${e.message}"
+        }
+    }
 
     def "plugin should generate valid state file with both services"() {
         expect: "state file has required fields"

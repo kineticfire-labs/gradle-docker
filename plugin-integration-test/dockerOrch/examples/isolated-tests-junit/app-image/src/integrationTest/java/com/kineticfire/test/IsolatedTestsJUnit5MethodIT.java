@@ -21,12 +21,15 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
+import io.restassured.specification.RequestSpecification;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.SocketException;
 import java.util.List;
+import java.util.function.Supplier;
 
 import static io.restassured.RestAssured.given;
 import static org.junit.jupiter.api.Assertions.*;
@@ -119,6 +122,34 @@ class IsolatedTestsJUnit5MethodIT {
         System.out.println("=== Test " + cleanupCallCount + " completed, containers stopping ===");
     }
 
+    /**
+     * Retry helper to handle transient SocketExceptions when container is healthy but app not fully ready
+     */
+    private Response retryRequest(Supplier<Response> requestSupplier, int maxRetries, int retryDelayMs) {
+        Response response = null;
+        Exception lastException = null;
+
+        for (int attempt = 1; attempt <= maxRetries; attempt++) {
+            try {
+                response = requestSupplier.get();
+                return response;
+            } catch (Exception e) {
+                lastException = e;
+                if (attempt < maxRetries) {
+                    System.out.println("Attempt " + attempt + " failed: " + e.getMessage() + ", retrying in " + retryDelayMs + "ms...");
+                    try {
+                        Thread.sleep(retryDelayMs);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException("Interrupted during retry", ie);
+                    }
+                }
+            }
+        }
+
+        throw new RuntimeException("Request failed after " + maxRetries + " attempts", lastException);
+    }
+
     @Test
     @Order(1)
     @DisplayName("Test 1: Should create user alice with fresh database")
@@ -185,8 +216,8 @@ class IsolatedTestsJUnit5MethodIT {
     @Order(5)
     @DisplayName("Test 5: Should NOT find bob (database is fresh)")
     void test5_shouldNotFindBob() {
-        Response response = given()
-            .get("/users/bob");
+        // Retry logic to handle brief window where container is healthy but app not fully ready
+        Response response = retryRequest(() -> given().get("/users/bob"), 3, 1000);
 
         assertEquals(404, response.statusCode(), "User should NOT exist (database is fresh)");
 

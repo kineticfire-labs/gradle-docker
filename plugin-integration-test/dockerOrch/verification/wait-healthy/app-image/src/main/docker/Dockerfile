@@ -1,8 +1,8 @@
 # Multi-stage build for efficient image
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:17-jre
 
 # Create app user
-RUN addgroup -S app && adduser -S app -G app
+RUN groupadd -r app && useradd -r -g app app
 
 # Set working directory
 WORKDIR /app
@@ -14,6 +14,11 @@ COPY ${JAR_FILE} app.jar
 # Copy entrypoint script
 COPY entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
+
+# Install wget for health checks
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget && \
+    rm -rf /var/lib/apt/lists/*
 
 # Change ownership
 RUN chown -R app:app /app
