@@ -209,10 +209,30 @@ internals here.
    - Follow the [README](plugin-integration-test/docker/README.md) for tracking integration test scenarios for the 
      `docker` task against the plugin aspects tested
    - Write integration test scenarios for the `docker` task at `plugin-integration-test/docker/scenario-<number>/`
-- For 'docker compose' type tasks (using `composeUp` and `composeDown`) that test Docker images: 
+- For 'docker compose' type tasks (using `composeUp` and `composeDown`) that test Docker images:
    - Follow the [README](plugin-integration-test/compose/README.md) for tracking integration test scenarios for the
      `dockerORch` task against the plugin aspects tested
   - Write integration test scenarios for the `dockerOrch` task at `plugin-integration-test/docker/scenario-<number>/`
+- **Integration Test Source Set Convention**: The plugin automatically creates the `integrationTest` source set when
+  the java or groovy plugin is present. Do NOT manually create source set boilerplate.
+  - Put integration tests in `src/integrationTest/java` or `src/integrationTest/groovy`
+  - Put compose files in `src/integrationTest/resources/compose/`
+  - Use `integrationTestImplementation` for dependencies
+  - The `integrationTest` task is automatically registered
+  - Only add customization if needed (overrides convention)
+- **Example minimal setup**:
+  ```groovy
+  dockerOrch {
+      composeStacks {
+          myTest { files.from('src/integrationTest/resources/compose/app.yml') }
+      }
+  }
+
+  dependencies {
+      integrationTestImplementation 'org.spockframework:spock-core:2.3'
+  }
+  // Convention provides source set, task, configurations automatically!
+  ```
 
 Write concise, clear comments to explain the demonstration code to a user.
 - Explain non-obvious settings or configurations not fully shown, such as optional settings, default values, and

@@ -1106,3 +1106,251 @@ See the working examples in this repository:
 
 For more detailed information on Spock and JUnit 5 extensions, see
 [Spock and JUnit Test Extensions Guide](spock-junit-test-extensions.md).
+
+## Integration Test Source Set Convention
+
+The gradle-docker plugin automatically creates an `integrationTest` source set when the java or groovy plugin
+is applied to your project. This eliminates the need for manual boilerplate configuration.
+
+### Automatic Setup
+
+When you apply the gradle-docker plugin to a project with the java or groovy plugin, the plugin automatically
+provides:
+
+1. **Source directories**:
+   - `src/integrationTest/java` (always configured)
+   - `src/integrationTest/groovy` (when groovy plugin is applied)
+   - `src/integrationTest/resources` (always configured)
+
+2. **Configurations**:
+   - `integrationTestImplementation` (extends `testImplementation`)
+   - `integrationTestRuntimeOnly` (extends `testRuntimeOnly`)
+
+3. **Tasks**:
+   - `integrationTest` - runs all integration tests using JUnit Platform
+   - `processIntegrationTestResources` - processes test resources with INCLUDE duplicatesStrategy
+
+4. **Classpath**:
+   - Integration tests automatically have access to main source set classes
+   - Integration tests inherit dependencies from test configurations
+
+### Minimal Configuration Example
+
+```groovy
+plugins {
+    id 'groovy'  // or 'java'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+docker {
+    images {
+        myApp {
+            imageName = 'my-app'
+            tags = ['latest']
+            context.set(file('src/main/docker'))
+        }
+    }
+}
+
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "my-app-test"
+            waitForHealthy {
+                waitForServices.set(['my-app'])
+            }
+        }
+    }
+}
+
+// Add integration test dependencies
+dependencies {
+    integrationTestImplementation 'org.spockframework:spock-core:2.3'
+    // or for JUnit:
+    // integrationTestImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+}
+
+// Wire Docker operations to integration tests
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerBuildMyApp')
+    }
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpMyTest')
+        finalizedBy tasks.named('composeDownMyTest')
+    }
+}
+
+// That's it! Convention provides source set, configurations, and task automatically.
+```
+
+### How It Works
+
+**Trigger**: The convention applies automatically when the java or groovy plugin is present in your project.
+
+**When it applies**:
+- ✅ Your project has java or groovy plugin applied
+- ✅ The gradle-docker plugin is applied
+- ✅ You haven't manually created the integrationTest source set
+
+**When it doesn't apply**:
+- ❌ No java/groovy plugin (not a JVM project)
+- ❌ You manually created integrationTest source set before applying the plugin (your config takes precedence)
+
+### Language Support
+
+Write integration tests in:
+- **Java only**: Use `java` plugin, tests in `src/integrationTest/java`
+- **Groovy/Spock only**: Use `groovy` plugin, tests in `src/integrationTest/groovy`
+- **Both**: Use `groovy` plugin, place tests in either directory
+
+The convention works regardless of your main application language.
+
+**Example**: Java application with Spock integration tests:
+```groovy
+plugins {
+    id 'java'          // Main app is Java
+    id 'groovy'        // Add groovy for Spock tests
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+dependencies {
+    // Main app dependencies
+    implementation 'org.springframework.boot:spring-boot-starter-web:3.2.0'
+
+    // Integration tests use Spock (Groovy)
+    integrationTestImplementation 'org.spockframework:spock-core:2.3'
+}
+
+// Convention automatically configures both:
+// - src/integrationTest/java/      (available but may be empty)
+// - src/integrationTest/groovy/    (put Spock tests here)
+```
+
+### Customizing the Convention
+
+Override any aspect using standard Gradle DSL:
+
+**Change source directories**:
+```groovy
+sourceSets {
+    integrationTest {
+        groovy.srcDirs = ['custom/test/path']
+        resources.srcDirs = ['custom/resources']
+    }
+}
+```
+
+**Customize the test task**:
+```groovy
+tasks.named('integrationTest') {
+    maxParallelForks = 4
+    systemProperty 'custom.prop', 'value'
+    // Any Test task configuration
+}
+```
+
+**Add additional dependencies**:
+```groovy
+dependencies {
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
+    integrationTestRuntimeOnly 'ch.qos.logback:logback-classic:1.4.11'
+}
+```
+
+### Disable the Convention
+
+If you need complete control, create the source set yourself before applying the plugin:
+
+```groovy
+// Option 1: Create source set manually
+sourceSets {
+    integrationTest {
+        // Your custom configuration
+    }
+}
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+// Plugin sees existing source set and won't create its own
+```
+
+### Benefits
+
+**Before convention** (per project):
+- ~40-50 lines of repetitive boilerplate code
+- Manual maintenance across multiple projects
+- Risk of inconsistency and copy-paste errors
+- Steep learning curve for new users
+
+**After convention**:
+- 0 lines of boilerplate required
+- Automatic consistency across all projects
+- Plugin ensures best practices
+- Works out of the box
+
+### Migration Guide for Existing Projects
+
+If you have existing projects with manual integrationTest source set configuration:
+
+**Step 1**: Identify boilerplate to remove
+Look for these blocks in your `build.gradle`:
+```groovy
+sourceSets {
+    integrationTest {
+        groovy.srcDir 'src/integrationTest/groovy'
+        resources.srcDir 'src/integrationTest/resources'
+        compileClasspath += sourceSets.main.output
+        runtimeClasspath += sourceSets.main.output
+    }
+}
+
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+tasks.named('processIntegrationTestResources') {
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+tasks.register('integrationTest', Test) {
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    useJUnitPlatform()
+    outputs.cacheIf { false }
+}
+```
+
+**Step 2**: Remove standard boilerplate
+Delete the blocks above from your `build.gradle`.
+
+**Step 3**: Keep only customizations
+Retain any project-specific customizations:
+```groovy
+// Keep customizations like this:
+tasks.named('integrationTest') {
+    maxParallelForks = 4
+    systemProperty 'test.db.url', 'jdbc:h2:mem:test'
+}
+```
+
+**Step 4**: Verify
+```bash
+./gradlew clean integrationTest
+```
+
+**Result**: Same functionality, less code, easier maintenance.
+
+### Complete Examples
+
+See these integration test examples for complete working demonstrations:
+- `plugin-integration-test/dockerOrch/examples/web-app/` - Spock-based tests
+- `plugin-integration-test/dockerOrch/examples/web-app-junit/` - JUnit-based tests
+- `plugin-integration-test/dockerOrch/examples/isolated-tests/` - Test isolation pattern
+- `plugin-integration-test/dockerOrch/verification/basic/` - Minimal setup
+
+Each example includes inline comments explaining the convention.

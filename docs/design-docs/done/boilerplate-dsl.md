@@ -1,7 +1,7 @@
 # Integration Test Source Set Convention
 
-**Status**: Implemented
-**Date**: 2025-01-24 (Proposed) / 2025-10-24 (Implemented)
+**Status**: Implemented and Documented
+**Date**: 2025-01-24 (Proposed) / 2025-10-24 (Implemented) / 2025-10-25 (Documented)
 **Author**: Analysis and Implementation by Claude Code
 
 ## Problem Statement
@@ -570,4 +570,31 @@ All three original recommendations were implemented exactly as proposed:
 2. ✅ Support both Groovy and Java test files transparently
 3. ✅ Made convention overridable via standard Gradle DSL
 
-The implementation successfully eliminates 40+ lines of repetitive boilerplate code per project while maintaining full backward compatibility and Gradle 9/10 configuration cache support.
+The implementation successfully eliminates 40+ lines of repetitive boilerplate code per project while maintaining full
+backward compatibility and Gradle 9/10 configuration cache support.
+
+## Documentation Updates
+
+**Date**: 2025-10-25
+**Status**: Complete
+
+### Usage Documentation
+Updated `docs/usage/usage-docker-orch.md` with comprehensive convention guide including:
+- Automatic setup explanation
+- Minimal configuration examples
+- Language support (Java/Groovy)
+- Customization options
+- Migration guide for existing projects
+- Complete working examples
+
+### Development Documentation
+Updated `CLAUDE.md` integration test requirements to:
+- Reference the automatic source set convention
+- Provide minimal setup example
+- Guide AI agents to use convention instead of boilerplate
+
+### Benefits Delivered
+- Users can now understand the convention without reading code
+- Migration path provided for existing projects
+- Examples demonstrate best practices
+- Consistent guidance for both human and AI developers
