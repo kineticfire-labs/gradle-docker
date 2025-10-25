@@ -68,6 +68,8 @@ tasks.register('integrationTest') {
     dependsOn providers.provider { project(':docker:scenario-10').tasks.named('integrationTest') }
     dependsOn providers.provider { project(':docker:scenario-11').tasks.named('integrationTest') }
     dependsOn providers.provider { project(':docker:scenario-12').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-13').tasks.named('integrationTest') }
+    dependsOn providers.provider { project(':docker:scenario-99').tasks.named('integrationTest') }
 }
 
 // Aggregate cleanup task
@@ -88,4 +90,6 @@ tasks.register('cleanAll') {
     dependsOn providers.provider { project(':docker:scenario-10').tasks.named('clean') }
     dependsOn providers.provider { project(':docker:scenario-11').tasks.named('clean') }
     dependsOn providers.provider { project(':docker:scenario-12').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-13').tasks.named('clean') }
+    dependsOn providers.provider { project(':docker:scenario-99').tasks.named('clean') }
 }
