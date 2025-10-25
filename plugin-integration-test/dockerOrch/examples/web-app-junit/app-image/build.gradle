@@ -87,32 +87,38 @@ sourceSets {
     }
 }
 
-// Add JUnit 5, REST testing dependencies and plugin classes
+// ============================================================================
+// NORMAL PLUGIN USERS NEED EVERYTHING ABOVE THIS LINE
+// ============================================================================
+
+// NORMAL PLUGIN USERS NEED: Add JUnit 5, REST testing dependencies and plugin classes
 dependencies {
     // JUnit 5 for integration tests (includes API, engine, and params)
     integrationTestImplementation libs.junit.jupiter
     integrationTestRuntimeOnly libs.junit.platform.launcher
 
-    // REST testing
+    // REST testing (application-specific - users choose their own testing libraries)
     integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
     integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
     integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 
-    // Add plugin classes for @ExtendWith annotation access
+    // ESSENTIAL: Add plugin classes for @ExtendWith annotation access to use JUnit 5 extension
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
 }
 
+// NORMAL PLUGIN USERS NEED: Extend configurations
 configurations {
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
-// Configure resource processing
+// NORMAL PLUGIN USERS NEED: Configure resource processing
 tasks.named('processIntegrationTestResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
-// Register integration test task
+// NORMAL PLUGIN USERS NEED: Register integration test task with JUnit 5 extension configuration
+// This task IS needed - it configures the JUnit 5 extension via system properties
 tasks.register('integrationTest', Test) {
     description = 'Runs CLASS lifecycle integration tests using JUnit 5 extension'
     group = 'verification'
@@ -122,20 +128,21 @@ tasks.register('integrationTest', Test) {
 
     useJUnitPlatform()
 
-    // Configure system properties for JUnit extension
+    // ESSENTIAL: Configure system properties for JUnit 5 extension
+    // These properties tell the extension which stack to manage
     systemProperty 'docker.compose.stack', 'webAppTest'
     systemProperty 'docker.compose.project', 'example-web-app-junit-test'
     systemProperty 'docker.compose.file', file('src/integrationTest/resources/compose/web-app.yml').absolutePath
     systemProperty 'docker.compose.waitServices', 'web-app'
 
     // NOTE: No systemProperty for COMPOSE_STATE_FILE needed - extension generates it
-    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
+    // NOTE: No dependsOn composeUp / finalizedBy composeDown needed - extension manages container lifecycle
 
     // Not cacheable - interacts with Docker
     outputs.cacheIf { false }
 }
 
-// Ensure Docker image is built before running integration tests
+// NORMAL PLUGIN USERS NEED: Ensure Docker image is built before running integration tests
 afterEvaluate {
     tasks.named('integrationTest') {
         dependsOn tasks.named('dockerBuildWebApp')

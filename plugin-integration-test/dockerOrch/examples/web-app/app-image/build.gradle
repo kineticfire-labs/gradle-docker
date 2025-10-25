@@ -95,26 +95,28 @@ sourceSets {
     }
 }
 
-// NOTE: User-facing examples do NOT use buildSrc validators
-// Examples show how real users would test their applications
+// ============================================================================
+// NORMAL PLUGIN USERS NEED EVERYTHING ABOVE THIS LINE
+// ============================================================================
 
-// Add REST testing dependencies for examples
+// Add REST testing dependencies (application-specific - users choose their own testing libraries)
 dependencies {
     integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
     integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
 }
 
+// NORMAL PLUGIN USERS NEED: Extend configurations
 configurations {
     integrationTestImplementation.extendsFrom testImplementation
     integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
 }
 
-// Configure resource processing
+// NORMAL PLUGIN USERS NEED: Configure resource processing
 tasks.named('processIntegrationTestResources') {
     duplicatesStrategy = DuplicatesStrategy.INCLUDE
 }
 
-// Register integration test task (Gradle 9/10 style)
+// NORMAL PLUGIN USERS NEED: Register integration test task (Gradle 9/10 style)
 tasks.register('integrationTest', Test) {
     description = 'Runs integration tests against Docker Compose stack'
     group = 'verification'
@@ -124,10 +126,12 @@ tasks.register('integrationTest', Test) {
 
     useJUnitPlatform()
 
+    // not needed for normal plugin usage; verification test only
     // Pass state file location to tests (lazy)
     systemProperty 'COMPOSE_STATE_FILE',
         layout.buildDirectory.file('compose-state/webAppTest-state.json').get().asFile.absolutePath
 
+    // not needed for normal plugin usage; verification test only
     // Pass project name (examples don't typically need validators, but included for completeness)
     systemProperty 'COMPOSE_PROJECT_NAME', "example-web-app-test"
 
@@ -135,7 +139,8 @@ tasks.register('integrationTest', Test) {
     outputs.cacheIf { false }
 }
 
-// Ensure compose up waits for image build
+// NORMAL PLUGIN USERS NEED: Orchestrate task dependencies
+// Ensure compose up waits for image build, and integrationTest depends on compose lifecycle
 afterEvaluate {
     tasks.named('composeUpWebAppTest') {
         dependsOn tasks.named('dockerBuildWebApp')
@@ -148,7 +153,8 @@ afterEvaluate {
     }
 }
 
-// Full integration test workflow
+// NOT needed for normal plugin usage; verification test only
+// Redundant wrapper task - users can just run 'integrationTest' directly
 tasks.register('runIntegrationTest') {
         description = 'Full integration test: build image -> up -> test -> down'
         group = 'verification'
@@ -170,7 +176,8 @@ tasks.register('runIntegrationTest') {
     }
 }
 
-// Cleanup task
+// NOT needed for normal plugin usage; verification test only
+// Safety net for manual cleanup - composeDown should handle this automatically
 tasks.register('cleanupContainers') {
     description = 'Force cleanup of any lingering containers'
     group = 'verification'

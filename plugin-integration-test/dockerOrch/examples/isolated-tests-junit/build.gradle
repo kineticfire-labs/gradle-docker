@@ -28,6 +28,15 @@
  *   - Complete isolation between tests
  */
 
+// ============================================================================
+// NOTE: NORMAL PLUGIN USERS DO NOT NEED THIS FILE
+// ============================================================================
+// This is a test infrastructure coordinator that aggregates multi-project test scenarios.
+// Normal plugin users would work in a single project or organize their multi-project
+// builds using standard Gradle patterns. See the app-image/build.gradle for the actual
+// plugin usage example that users need.
+// ============================================================================
+
 plugins {
     id 'base'
 }
