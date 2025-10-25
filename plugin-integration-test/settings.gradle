@@ -99,3 +99,7 @@ include 'dockerOrch:examples:isolated-tests:app-image'
 include 'dockerOrch:examples:isolated-tests-junit'
 include 'dockerOrch:examples:isolated-tests-junit:app'
 include 'dockerOrch:examples:isolated-tests-junit:app-image'
+
+include 'dockerOrch:examples:database-app'
+include 'dockerOrch:examples:database-app:app'
+include 'dockerOrch:examples:database-app:app-image'

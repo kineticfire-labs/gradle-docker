@@ -46,6 +46,7 @@ tasks.register('integrationTest') {
     dependsOn ':dockerOrch:examples:stateful-web-app:app-image:integrationTest'
     dependsOn ':dockerOrch:examples:isolated-tests:app-image:integrationTest'
     dependsOn ':dockerOrch:examples:isolated-tests-junit:app-image:integrationTest'
+    dependsOn ':dockerOrch:examples:database-app:app-image:integrationTest'
 
     doLast {
         logger.lifecycle("✅ All dockerOrch tests complete")
@@ -72,4 +73,5 @@ tasks.named('clean') {
     dependsOn ':dockerOrch:examples:stateful-web-app:app-image:clean'
     dependsOn ':dockerOrch:examples:isolated-tests:app-image:clean'
     dependsOn ':dockerOrch:examples:isolated-tests-junit:app-image:clean'
+    dependsOn ':dockerOrch:examples:database-app:app-image:clean'
 }
