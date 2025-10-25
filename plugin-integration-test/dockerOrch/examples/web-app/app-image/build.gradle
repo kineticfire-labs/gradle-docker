@@ -81,22 +81,19 @@ dockerOrch {
     }
 }
 
-// Create integration test source set
-sourceSets {
-    integrationTest {
-        groovy {
-            srcDir 'src/integrationTest/groovy'
-        }
-        resources {
-            srcDir 'src/integrationTest/resources'
-        }
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
-}
-
 // ============================================================================
-// NORMAL PLUGIN USERS NEED EVERYTHING ABOVE THIS LINE
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+// Because we configured dockerOrch.composeStacks above, the gradle-docker plugin
+// automatically provides:
+//   - integrationTest source set (src/integrationTest/groovy, src/integrationTest/resources)
+//   - integrationTest task (runs tests with JUnit Platform)
+//   - integrationTestImplementation and integrationTestRuntimeOnly configurations
+//   - Configuration extensions (integrationTestImplementation extends testImplementation)
+//   - Resource processing (with INCLUDE duplicatesStrategy)
+//
+// BEFORE this convention: ~44 lines of boilerplate per project
+// AFTER this convention: Just add your dependencies and customizations!
 // ============================================================================
 
 // Add REST testing dependencies (application-specific - users choose their own testing libraries)
@@ -105,27 +102,8 @@ dependencies {
     integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
 }
 
-// NORMAL PLUGIN USERS NEED: Extend configurations
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-// NORMAL PLUGIN USERS NEED: Configure resource processing
-tasks.named('processIntegrationTestResources') {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-// NORMAL PLUGIN USERS NEED: Register integration test task (Gradle 9/10 style)
-tasks.register('integrationTest', Test) {
-    description = 'Runs integration tests against Docker Compose stack'
-    group = 'verification'
-
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-
-    useJUnitPlatform()
-
+// Customize the convention-created integrationTest task (test-specific system properties)
+tasks.named('integrationTest') {
     // not needed for normal plugin usage; verification test only
     // Pass state file location to tests (lazy)
     systemProperty 'COMPOSE_STATE_FILE',
@@ -134,9 +112,6 @@ tasks.register('integrationTest', Test) {
     // not needed for normal plugin usage; verification test only
     // Pass project name (examples don't typically need validators, but included for completeness)
     systemProperty 'COMPOSE_PROJECT_NAME', "example-web-app-test"
-
-    // Not cacheable - interacts with Docker
-    outputs.cacheIf { false }
 }
 
 // NORMAL PLUGIN USERS NEED: Orchestrate task dependencies

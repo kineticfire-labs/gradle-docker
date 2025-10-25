@@ -50,6 +50,7 @@ version = '1.0.0'
 
 // Aggregate task to run all Docker integration tests
 //   - Probably want to run 'cleanAll' before invoking this task
+// Note: use register() here because this aggregator project doesn't have java plugin
 tasks.register('integrationTest') {
     description = 'Run integration tests for all Docker projects'
     group = 'verification'

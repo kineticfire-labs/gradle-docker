@@ -24,13 +24,6 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    // Testing dependencies from version catalog
-    testImplementation libs.groovy.all
-    testImplementation libs.spock.core
-    testRuntimeOnly libs.junit.platform.launcher
-}
-
 // Get JAR file from app subproject using Provider API (Gradle 9/10)
 def jarFileProvider = project(':dockerOrch:examples:stateful-web-app:app').tasks.named('bootJar').flatMap { it.archiveFile }
 def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
@@ -81,48 +74,39 @@ dockerOrch {
     }
 }
 
-// Create integration test source set
-sourceSets {
-    integrationTest {
-        groovy {
-            srcDir 'src/integrationTest/groovy'
-        }
-        resources {
-            srcDir 'src/integrationTest/resources'
-        }
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
-}
+// ============================================================================
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+// Because we configured dockerOrch.composeStacks above (or have java/groovy plugin), the gradle-docker plugin
+// automatically provides:
+//   - integrationTest source set (src/integrationTest/groovy, src/integrationTest/resources)
+//   - integrationTest task (runs tests with JUnit Platform)
+//   - integrationTestImplementation and integrationTestRuntimeOnly configurations
+//   - Configuration extensions (integrationTestImplementation extends testImplementation)
+//   - Resource processing (with INCLUDE duplicatesStrategy)
+//
+// BEFORE this convention: ~50 lines of boilerplate per project
+// AFTER this convention: Just add your dependencies and customizations!
+// ============================================================================
 
 // NOTE: User-facing examples do NOT use buildSrc validators
 // Examples show how real users would test their applications
 
-// Add REST testing dependencies for examples
 dependencies {
+    // Testing dependencies from version catalog
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+
+    // Add REST testing dependencies for examples
     integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
     integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
 }
 
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-// Configure resource processing
-tasks.named('processIntegrationTestResources') {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
 // Register integration test task (Gradle 9/10 style)
-tasks.register('integrationTest', Test) {
+tasks.named('integrationTest') {
     description = 'Runs integration tests against Docker Compose stack'
     group = 'verification'
-
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-
-    useJUnitPlatform()
 
     // Pass state file location to tests (lazy)
     systemProperty 'COMPOSE_STATE_FILE',
@@ -130,9 +114,6 @@ tasks.register('integrationTest', Test) {
 
     // Pass project name (examples don't typically need validators, but included for completeness)
     systemProperty 'COMPOSE_PROJECT_NAME', "example-stateful-web-app-test"
-
-    // Not cacheable - interacts with Docker
-    outputs.cacheIf { false }
 }
 
 // Ensure compose up waits for image build

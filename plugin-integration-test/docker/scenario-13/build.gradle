@@ -35,7 +35,7 @@ plugins {
 
 // Ensure integration tests are run from top-level only
 if (rootProject.name != 'plugin-integration-test') {
-    tasks.register('integrationTest') {
+    tasks.named('integrationTest') {
         description = 'Integration test must be run from top-level directory'
         group = 'verification'
         doFirst {
@@ -104,7 +104,7 @@ tasks.register('ensureSourceImage', EnsureDockerImageTask) {
 // Skip label verification for this test as we're only testing the Repository Mode sourceRef
 
 // Task that runs integration test workflow (sourceRef mode)
-tasks.register('integrationTest') {
+tasks.named('integrationTest') {
     description = 'Run sourceRef Repository Mode test: ensure local → verify (no operations)'
     group = 'verification'
 

@@ -42,7 +42,7 @@ plugins {
 
 // Ensure integration tests are run from top-level only
 if (rootProject.name != 'plugin-integration-test') {
-    tasks.register('integrationTest') {
+    tasks.named('integrationTest') {
         description = 'Integration test must be run from top-level directory'
         group = 'verification'
         doFirst {
@@ -153,7 +153,7 @@ registerVerifyBuildArgsTask(project, [
 ])
 
 // Task that runs complete integration test workflow
-tasks.register('integrationTest') {
+tasks.named('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → save → publish → verify'
     group = 'verification'
 
@@ -165,7 +165,7 @@ tasks.register('integrationTest') {
     dependsOn 'verifySavedDockerImages'
     dependsOn 'verifyRegistryDockerImages'
     dependsOn 'verifyDockerBuildArgs'
-    dependsOn 'stopTestRegistries'
+    finalizedBy 'stopTestRegistries'
 }
 
 // Configure task ordering without direct task references

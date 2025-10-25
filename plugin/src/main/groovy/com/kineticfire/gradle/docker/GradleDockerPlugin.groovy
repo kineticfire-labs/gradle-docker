@@ -30,6 +30,9 @@ import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.testing.Test
+import org.gradle.api.tasks.SourceSetContainer
+import org.gradle.api.tasks.SourceSet
+import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.util.GradleVersion
 import org.gradle.api.JavaVersion
 
@@ -61,9 +64,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Setup cleanup hooks
         configureCleanupHooks(project, dockerService, composeService)
-        
+
         // Setup test integration extension methods
         setupTestIntegration(project)
+
+        // Setup integration test source set conventions
+        // Applied automatically when dockerOrch.composeStacks is configured
+        setupIntegrationTestSourceSet(project, dockerOrchExt)
     }
     
     private void validateRequirements(Project project) {
@@ -806,7 +813,160 @@ class GradleDockerPlugin implements Plugin<Project> {
         project.logger.debug("Test integration extension methods configured")
     }
 
+    /**
+     * Setup integration test source set convention.
+     * The convention automatically creates the integrationTest source set, configurations,
+     * and task when the java plugin is applied.
+     *
+     * Rationale: Create the integrationTest source set immediately (like the java plugin creates 'test')
+     * so that configurations are available for the dependencies block. The source set is always available
+     * whether the user needs it or not - similar to how 'test' source set works.
+     *
+     * @param project The Gradle project
+     * @param dockerOrchExt The DockerOrchExtension instance (unused, kept for signature compatibility)
+     */
+    private void setupIntegrationTestSourceSet(Project project, DockerOrchExtension dockerOrchExt) {
+        // Create source set immediately when java plugin is present
+        // This ensures configurations are available for the dependencies block
+        project.plugins.withId('java') {
+            project.logger.info("Java plugin detected, applying integration test source set convention")
+            createIntegrationTestSourceSetIfNeeded(project)
+        }
+    }
 
+    /**
+     * Create integrationTest source set if it doesn't already exist.
+     * Supports both Java and Groovy test files transparently.
+     *
+     * @param project The Gradle project
+     */
+    private void createIntegrationTestSourceSetIfNeeded(Project project) {
+        def sourceSets = project.extensions.findByType(SourceSetContainer)
+        if (!sourceSets) {
+            project.logger.debug("SourceSetContainer not found, skipping integration test convention")
+            return
+        }
+
+        // Check if user already created integrationTest source set (user override protection)
+        def existingSourceSet = sourceSets.findByName('integrationTest')
+        if (existingSourceSet) {
+            project.logger.info("Integration test source set already exists, skipping convention")
+            return
+        }
+
+        project.logger.info("Creating integrationTest source set via convention")
+
+        // Get main source set to configure classpaths
+        def mainSourceSet = sourceSets.getByName('main')
+
+        // Create source set (classpaths will be configured after configurations exist)
+        def integrationTestSourceSet = sourceSets.create('integrationTest') { sourceSet ->
+            // ALWAYS configure Java source directory
+            sourceSet.java.srcDir('src/integrationTest/java')
+
+            // Configure Groovy source directory if groovy plugin is applied
+            // (groovy plugin automatically applies java plugin)
+            project.plugins.withId('groovy') {
+                sourceSet.groovy.srcDir('src/integrationTest/groovy')
+            }
+
+            // Always configure resources
+            sourceSet.resources.srcDir('src/integrationTest/resources')
+        }
+
+        // Configure configurations
+        configureIntegrationTestConfigurations(project)
+
+        // Configure classpaths AFTER configurations exist
+        // Explicitly set classpaths to include main output, like Java plugin does for test source set
+        integrationTestSourceSet.compileClasspath = project.files(
+            mainSourceSet.output,
+            project.configurations.getByName('integrationTestCompileClasspath')
+        )
+        integrationTestSourceSet.runtimeClasspath = project.files(
+            integrationTestSourceSet.output,
+            mainSourceSet.output,
+            project.configurations.getByName('integrationTestRuntimeClasspath')
+        )
+
+        // Configure resource processing
+        configureIntegrationTestResourceProcessing(project)
+
+        // Register integration test task
+        registerIntegrationTestTask(project, sourceSets)
+
+        project.logger.lifecycle("Integration test convention applied: source set, configurations, and task created")
+    }
+
+    /**
+     * Configure integrationTest configurations to extend from test configurations.
+     * This allows integration tests to automatically inherit test dependencies.
+     *
+     * @param project The Gradle project
+     */
+    private void configureIntegrationTestConfigurations(Project project) {
+        project.configurations {
+            // Extend from test configurations - integration tests inherit test dependencies
+            integrationTestImplementation.extendsFrom testImplementation
+            integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+        }
+
+        project.logger.debug("Integration test configurations configured")
+    }
+
+    /**
+     * Configure integration test resource processing task.
+     * Sets duplicatesStrategy to INCLUDE to allow resource overlays.
+     *
+     * @param project The Gradle project
+     */
+    private void configureIntegrationTestResourceProcessing(Project project) {
+        // Task is created automatically by java plugin when source set is created
+        project.tasks.named('processIntegrationTestResources') { task ->
+            task.duplicatesStrategy = DuplicatesStrategy.INCLUDE
+        }
+
+        project.logger.debug("Integration test resource processing configured")
+    }
+
+    /**
+     * Register the integrationTest task.
+     * Configured to run integration tests against Docker Compose environments.
+     *
+     * @param project The Gradle project
+     * @param sourceSets The source set container
+     */
+    private void registerIntegrationTestTask(Project project, SourceSetContainer sourceSets) {
+        def integrationTestSourceSet = sourceSets.getByName('integrationTest')
+
+        // Check if task already exists (user may have created it)
+        if (project.tasks.findByName('integrationTest')) {
+            project.logger.info("Integration test task already exists, skipping convention")
+            return
+        }
+
+        project.logger.info("Registering integrationTest task via convention")
+
+        project.tasks.register('integrationTest', Test) { task ->
+            task.description = 'Runs integration tests'
+            task.group = 'verification'
+
+            // Configure test task
+            task.testClassesDirs = integrationTestSourceSet.output.classesDirs
+            task.classpath = integrationTestSourceSet.runtimeClasspath
+
+            // Support both JUnit and Spock
+            task.useJUnitPlatform()
+
+            // Docker integration tests are NOT cacheable (interact with external Docker daemon)
+            task.outputs.cacheIf { false }
+
+            // Prevent parallel execution with regular tests (avoid port conflicts, resource contention)
+            task.mustRunAfter(project.tasks.named('test'))
+        }
+
+        project.logger.debug("Integration test task registered")
+    }
 
     /**
      * Determines if an ImageSpec is configured for sourceRef mode (working with existing images)

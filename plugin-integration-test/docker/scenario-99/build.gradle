@@ -61,7 +61,7 @@ if (rootProject.name != 'plugin-integration-test') {
     }
 
     // Placeholder for regular integrationTest
-    tasks.register('integrationTest') {
+    tasks.named('integrationTest') {
         description = 'Placeholder - Docker Hub tests must be run explicitly'
         group = 'verification'
         doFirst {
@@ -333,7 +333,7 @@ tasks.named('verifyDockerHubPublish') { mustRunAfter 'dockerPublish' }
 tasks.named('cleanDockerHubTestImages') { mustRunAfter 'verifyDockerHubPublish' }
 
 // Regular integrationTest does NOT run Docker Hub tests
-tasks.register('integrationTest') {
+tasks.named('integrationTest') {
     description = 'Placeholder - Docker Hub tests must be run explicitly'
     group = 'verification'
 

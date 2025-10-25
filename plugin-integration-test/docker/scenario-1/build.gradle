@@ -42,7 +42,7 @@ plugins {
 
 // Ensure integration tests are run from top-level only
 if (rootProject.name != 'plugin-integration-test') {
-    tasks.register('integrationTest') {
+    tasks.named('integrationTest') {
         description = 'Integration test must be run from top-level directory'
         group = 'verification'
         doFirst {
@@ -160,7 +160,8 @@ registerVerifyLabelsTask(project, [
 ])
 
 // Task that runs complete integration test workflow
-tasks.register('integrationTest') {
+// Note: integrationTest task created by convention, we just customize it
+tasks.named('integrationTest') {
     description = 'Run complete Docker integration test: clean → build → verify'
     group = 'verification'
     dependsOn 'cleanDockerImages'

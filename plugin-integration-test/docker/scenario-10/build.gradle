@@ -35,7 +35,7 @@ plugins {
 
 // Ensure integration tests are run from top-level only
 if (rootProject.name != 'plugin-integration-test') {
-    tasks.register('integrationTest') {
+    tasks.named('integrationTest') {
         description = 'Integration test must be run from top-level directory'
         group = 'verification'
         doFirst {
@@ -124,7 +124,7 @@ registerVerifyBuildArgsTask(project, [
 // The verifyDockerLabels task doesn't handle null labels properly
 
 // Task that runs integration test workflow (sourceRef mode)
-tasks.register('integrationTest') {
+tasks.named('integrationTest') {
     description = 'Run sourceRef integration test: ensure local → tag → save → verify (pullIfMissing=true, no pull)'
     group = 'verification'
 

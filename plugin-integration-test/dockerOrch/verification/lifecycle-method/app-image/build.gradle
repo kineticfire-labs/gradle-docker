@@ -60,19 +60,20 @@ docker {
 // The @ComposeUp annotation on the test class handles all Docker Compose orchestration.
 // This demonstrates how to use the Spock extension for METHOD lifecycle management.
 
-// Integration test source set
-sourceSets {
-    integrationTest {
-        groovy {
-            srcDir 'src/integrationTest/groovy'
-        }
-        resources {
-            srcDir 'src/integrationTest/resources'
-        }
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
-}
+// ============================================================================
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+// Because we have the java/groovy plugin applied, the gradle-docker plugin
+// automatically provides:
+//   - integrationTest source set (src/integrationTest/groovy, src/integrationTest/resources)
+//   - integrationTest task (runs tests with JUnit Platform)
+//   - integrationTestImplementation and integrationTestRuntimeOnly configurations
+//   - Configuration extensions (integrationTestImplementation extends testImplementation)
+//   - Resource processing (with INCLUDE duplicatesStrategy)
+//
+// BEFORE this convention: ~50 lines of boilerplate per project
+// AFTER this convention: Just add your dependencies and customizations!
+// ============================================================================
 
 // Add buildSrc validators and plugin dependencies
 dependencies {
@@ -84,24 +85,10 @@ dependencies {
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
 }
 
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-tasks.named('processIntegrationTestResources') {
-    duplicatesStrategy = DuplicatesStrategy.INCLUDE
-}
-
-// Integration test task
-tasks.register('integrationTest', Test) {
+// Customize the convention-created integrationTest task
+// (Convention provides task registration, we only add test-specific customizations)
+tasks.named('integrationTest') {
     description = 'Runs METHOD lifecycle verification tests using @ComposeUp extension'
-    group = 'verification'
-
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-
-    useJUnitPlatform()
 
     // NOTE: No systemProperty settings needed - @ComposeUp extension handles everything
     // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
