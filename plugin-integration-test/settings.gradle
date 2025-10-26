@@ -83,6 +83,10 @@ include 'dockerOrch:verification:existing-images'
 include 'dockerOrch:verification:existing-images:app'
 include 'dockerOrch:verification:existing-images:app-image'
 
+include 'dockerOrch:verification:logs-capture'
+include 'dockerOrch:verification:logs-capture:app'
+include 'dockerOrch:verification:logs-capture:app-image'
+
 // Example tests (user-facing demonstrations)
 include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'

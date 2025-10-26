@@ -42,10 +42,10 @@ The dockerOrch integration tests are organized into two categories:
 | `wait-running/` | ✅ Complete | CLASS | waitForRunning, running state detection | Done |
 | `mixed-wait/` | ✅ Complete | CLASS | Both wait types together (app + database) | Done |
 | `existing-images/` | ✅ Complete | CLASS | Public images (nginx, redis), sourceRef pattern | Done |
-| `logs-capture/` | ❌ Not Implemented | CLASS | Log capture configuration, file generation | **MEDIUM** |
+| `logs-capture/` | ✅ Complete | CLASS | Log capture configuration, file generation, tailLines | Done |
 | `multi-service/` | ❌ Not Implemented | CLASS | Complex orchestration (3+ services) | **MEDIUM** |
 
-**Progress**: 7 of 9 scenarios complete (78%)
+**Progress**: 8 of 9 scenarios complete (89%)
 
 **Lifecycle Types:**
 - **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
@@ -344,30 +344,44 @@ custom images. This demonstrates the `sourceRef` pattern and realistic mixed wai
 
 ---
 
-### Phase 5: Demonstrate Log Capture (MEDIUM - Priority 4)
+### Phase 5: Demonstrate Log Capture (✅ COMPLETE - 2025-10-26)
 
 **Goal**: Show how to capture container logs for debugging
 
 **Scenario**: `verification/logs-capture/`
 
-**Tests**:
+**Tests** (15 integration tests):
 - Verify log file is created at configured location
-- Verify log file contains expected content
+- Verify log file contains expected content (startup messages, application logs)
 - Test `tailLines` configuration (captures last N lines)
-- Test log capture with multiple services
+- Test service-specific log capture
+- Validate log file accessibility and size constraints
 
 **Configuration**:
 - **Lifecycle**: CLASS
-- **Log Capture**: Configure `outputFile` and `tailLines` in dockerOrch DSL
+- **Log Capture**: Configure `writeTo` (RegularFileProperty) and `tailLines` in dockerOrch DSL
+- **Stacks**: Three separate stacks demonstrating full capture, tail capture, and service-specific capture
 
 **Rationale**: Log capture is essential for debugging test failures. Users need to know how to configure and access
 logs.
 
-**Acceptance Criteria**:
-- Tests verify log files are created
-- Tests validate log content (app startup messages, request logs)
-- README explains log capture configuration
-- Shows how to use logs for debugging
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ Tests verify log files are created at correct locations
+- ✅ Tests validate log content (Spring Boot startup, application initialization, health checks)
+- ✅ Full log capture: 43 lines captured
+- ✅ Tail log capture: 20 lines captured (respecting `tailLines.set(20)`)
+- ✅ Service-specific log capture: 43 lines from specified service only
+- ✅ README explains log capture configuration patterns
+- ✅ All 15 integration tests passing
+- ✅ Zero containers remaining after cleanup
+
+**Implementation Summary**:
+- `logs-capture/app/` - Spring Boot app with logging endpoints and startup messages
+- `logs-capture/app-image/` - Docker config with 3 compose stacks (full, tail, service-specific)
+- Integration tests: LogsCapturePluginIT.groovy with 15 complete tests
+- Docker Compose: Single service with health check, logs captured during `composeDown`
+- Unique task orchestration: composeUp → triggerLogMessages → composeDown → integrationTest
+- Build successful, all tests passing, comprehensive README documentation
 
 ---
 
@@ -510,4 +524,5 @@ Before declaring the integration test suite "complete":
 **Phase 2 Status**: ✅ COMPLETE
 **Phase 3 Status**: ✅ COMPLETE
 **Phase 4 Status**: ✅ COMPLETE
-**Next Phase**: Phase 5 - Demonstrate Log Capture (MEDIUM priority)
+**Phase 5 Status**: ✅ COMPLETE
+**Next Phase**: Phase 6 - Demonstrate Multi-Service Orchestration (MEDIUM priority)

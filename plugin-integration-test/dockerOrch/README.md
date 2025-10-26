@@ -33,7 +33,7 @@ features that users typically wouldn't test directly.
 | Lifecycle Class  | `verification/lifecycle-class/`  | ✅ Complete | CLASS     | Class-level lifecycle, setupSpec/cleanupSpec, state persistence |
 | Lifecycle Method | `verification/lifecycle-method/` | ✅ Complete | METHOD    | Method-level lifecycle, setup/cleanup, state isolation        |
 | Existing Images  | `verification/existing-images/`  | ✅ Complete | CLASS     | Public images (nginx, redis), sourceRef pattern               |
-| Logs Capture     | `verification/logs-capture/`     | ⏳ Planned  | CLASS     | Log capture configuration, file generation                    |
+| Logs Capture     | `verification/logs-capture/`     | ✅ Complete | CLASS     | Log capture (full, tail, service-specific), writeTo, tailLines |
 | Multi Service    | `verification/multi-service/`    | ⏳ Planned  | CLASS     | Complex orchestration (3+ services)                           |
 
 **Lifecycle Types:**
