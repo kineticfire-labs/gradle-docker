@@ -41,11 +41,11 @@ The dockerOrch integration tests are organized into two categories:
 | `wait-healthy/` | ✅ Complete | CLASS | waitForHealthy, health check timing, timeout handling | Done |
 | `wait-running/` | ✅ Complete | CLASS | waitForRunning, running state detection | Done |
 | `mixed-wait/` | ✅ Complete | CLASS | Both wait types together (app + database) | Done |
+| `existing-images/` | ✅ Complete | CLASS | Public images (nginx, redis), sourceRef pattern | Done |
 | `logs-capture/` | ❌ Not Implemented | CLASS | Log capture configuration, file generation | **MEDIUM** |
 | `multi-service/` | ❌ Not Implemented | CLASS | Complex orchestration (3+ services) | **MEDIUM** |
-| `existing-images/` | ❌ Not Implemented | CLASS | Public images (nginx, redis), sourceRef pattern | **MEDIUM** |
 
-**Progress**: 6 of 9 scenarios complete (67%)
+**Progress**: 7 of 9 scenarios complete (78%)
 
 **Lifecycle Types:**
 - **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
@@ -294,36 +294,53 @@ showing:
 
 ---
 
-### Phase 4: Demonstrate Public Image Usage (MEDIUM - Priority 3)
+### Phase 4: Demonstrate Public Image Usage (✅ COMPLETE - 2025-10-26)
 
 **Goal**: Show how to use existing Docker Hub images
 
 **Scenario**: `verification/existing-images/`
 
 **Stack**:
+- Spring Boot app with nginx and redis integration
 - Nginx (public image, no build needed)
 - Redis (public image, no build needed)
-- Custom app that uses both services
 
-**Tests**:
-- Verify Nginx serves static content
-- Verify Redis accepts connections
-- Test app interaction with both services
-- Validate sourceRef pattern for public images
+**Tests** (10 integration tests):
+- Verify state file structure with all three services
+- Verify all containers are running
+- Verify mixed wait strategy (app HEALTHY, nginx/redis RUNNING)
+- Verify port mappings for all services
+- Nginx serves static content
+- App health endpoint accessible
+- App fetches content from nginx
+- App tests redis connection (PING/PONG)
+- App stores and retrieves data from redis
+- App deletes data from redis
 
 **Configuration**:
 - **Lifecycle**: CLASS
-- **Images**: Use `sourceRef` to reference public images (no Dockerfile)
-- **Wait Strategy**: `waitForRunning` (most public images lack health checks)
+- **Images**: Use `sourceRef` to reference public images (no Dockerfile for nginx/redis)
+- **Wait Strategy**: MIXED (waitForHealthy for app, waitForRunning for nginx/redis)
+- **Health Check**: Spring Boot app uses wget-based health check
 
 **Rationale**: Users often need to test against standard services (databases, caches, web servers) without building
-custom images. This demonstrates the `sourceRef` pattern.
+custom images. This demonstrates the `sourceRef` pattern and realistic mixed wait strategy.
 
-**Acceptance Criteria**:
-- Uses public images from Docker Hub (no custom Dockerfiles)
-- Demonstrates `sourceRef` configuration
-- Tests validate service functionality
-- README explains public image usage pattern
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ Uses public images from Docker Hub (nginx:alpine, redis:alpine)
+- ✅ Demonstrates `sourceRef` configuration pattern
+- ✅ Tests validate service functionality (nginx content, redis CRUD operations)
+- ✅ README explains public image usage pattern and mixed wait strategy
+- ✅ All 10 integration tests passing
+- ✅ Zero containers remaining after cleanup
+
+**Implementation Summary**:
+- `existing-images/app/` - Spring Boot app with REST endpoints for nginx/redis interaction
+- `existing-images/app-image/` - Docker config with mixed wait strategy (waitForHealthy + waitForRunning)
+- Integration tests: ExistingImagesPluginIT.groovy with 10 complete tests
+- Docker Compose: app with health check, nginx:alpine with static content mount, redis:alpine
+- Build successful, all tests passing, comprehensive README documentation
+- Demonstrates TWO important patterns: sourceRef for public images AND mixed wait strategy
 
 ---
 
@@ -488,7 +505,9 @@ Before declaring the integration test suite "complete":
 
 ---
 
-**Last Updated**: 2025-10-20
+**Last Updated**: 2025-10-26
 **Phase 1 Status**: ✅ COMPLETE
 **Phase 2 Status**: ✅ COMPLETE
-**Next Phase**: Phase 3 - Demonstrate Real Database Integration (HIGH priority)
+**Phase 3 Status**: ✅ COMPLETE
+**Phase 4 Status**: ✅ COMPLETE
+**Next Phase**: Phase 5 - Demonstrate Log Capture (MEDIUM priority)

@@ -32,9 +32,9 @@ features that users typically wouldn't test directly.
 | Mixed Wait       | `verification/mixed-wait/`       | ✅ Complete | CLASS     | Both wait types together (app + database)                     |
 | Lifecycle Class  | `verification/lifecycle-class/`  | ✅ Complete | CLASS     | Class-level lifecycle, setupSpec/cleanupSpec, state persistence |
 | Lifecycle Method | `verification/lifecycle-method/` | ✅ Complete | METHOD    | Method-level lifecycle, setup/cleanup, state isolation        |
+| Existing Images  | `verification/existing-images/`  | ✅ Complete | CLASS     | Public images (nginx, redis), sourceRef pattern               |
 | Logs Capture     | `verification/logs-capture/`     | ⏳ Planned  | CLASS     | Log capture configuration, file generation                    |
 | Multi Service    | `verification/multi-service/`    | ⏳ Planned  | CLASS     | Complex orchestration (3+ services)                           |
-| Existing Images  | `verification/existing-images/`  | ⏳ Planned  | CLASS     | Public images (nginx, redis), sourceRef pattern               |
 
 **Lifecycle Types:**
 - **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
@@ -58,7 +58,7 @@ living documentation and a copy-paste template.
 | Stateful Web App         | `examples/stateful-web-app/`       | ✅ Complete | Spock        | Gradle Tasks | Session management, workflow tests | Spock, RestAssured, Groovy       |
 | Isolated Tests (Spock)   | `examples/isolated-tests/`         | ✅ Complete | Spock        | METHOD    | Database isolation, independent tests | Spock, RestAssured, JPA, H2      |
 | Isolated Tests (JUnit 5) | `examples/isolated-tests-junit/`   | ✅ Complete | JUnit 5      | METHOD    | Database isolation, independent tests | JUnit 5, RestAssured, JPA, H2    |
-| Database App             | `examples/database-app/`           | ⏳ Planned  | TBD          | CLASS     | Database integration               | JDBC, JPA, Spring Data              |
+| Database App (Spock)     | `examples/database-app/`           | ✅ Complete | Spock        | CLASS     | PostgreSQL integration, CRUD + JDBC validation | Spock, RestAssured, JPA, PostgreSQL, Groovy SQL |
 | Microservices            | `examples/microservices/`          | ⏳ Planned  | TBD          | CLASS     | Service orchestration              | RestAssured, service discovery      |
 | Kafka App                | `examples/kafka-app/`              | ⏳ Planned  | TBD          | CLASS     | Event-driven architecture          | Kafka client, TestProducer/Consumer |
 | Batch Job                | `examples/batch-job/`              | ⏳ Planned  | TBD          | CLASS     | Scheduled processing               | Spring Batch, JDBC                  |

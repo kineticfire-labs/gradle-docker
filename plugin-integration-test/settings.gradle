@@ -79,6 +79,10 @@ include 'dockerOrch:verification:mixed-wait'
 include 'dockerOrch:verification:mixed-wait:app'
 include 'dockerOrch:verification:mixed-wait:app-image'
 
+include 'dockerOrch:verification:existing-images'
+include 'dockerOrch:verification:existing-images:app'
+include 'dockerOrch:verification:existing-images:app-image'
+
 // Example tests (user-facing demonstrations)
 include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'

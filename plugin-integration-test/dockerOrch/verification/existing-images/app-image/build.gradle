@@ -1,0 +1,211 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.gradle-docker'
+}
+
+repositories {
+    mavenLocal()  // Plugin must be in Maven local
+    mavenCentral()
+}
+
+// Get JAR file from app subproject using Provider API (Gradle 9/10)
+def jarFileProvider = project(':dockerOrch:verification:existing-images:app').tasks.named('bootJar')
+    .flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// ============================================================================
+// DOCKER DSL - Build custom app image
+// ============================================================================
+docker {
+    images {
+        existingImagesApp {
+            imageName = 'verification-existing-images-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareExistingImagesAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for existing-images app'
+                into layout.buildDirectory.dir('docker-context/existingImagesApp')
+                from('src/main/docker')
+
+                // Copy JAR from app project
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':dockerOrch:verification:existing-images:app').tasks.named('bootJar')
+            }
+
+            // Pass JAR file name as build arg (lazy)
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+
+        // ====================================================================
+        // PUBLIC IMAGES - Demonstrate sourceRef pattern
+        // ====================================================================
+        // These images come from Docker Hub, no Dockerfile needed
+        // This demonstrates how to use existing public images in tests
+
+        nginx {
+            // Use public nginx image (alpine variant for smaller size)
+            // Note: tags are still required even for sourceRef images
+            tags = ['alpine']
+
+            sourceRef {
+                registry('docker.io')
+                namespace('library')
+                imageName('nginx')
+                tag('alpine')
+            }
+            // No build needed - image pulled from Docker Hub
+            // No contextTask needed - using pre-built image
+        }
+
+        redis {
+            // Use public redis image (alpine variant for smaller size)
+            // Note: tags are still required even for sourceRef images
+            tags = ['alpine']
+
+            sourceRef {
+                registry('docker.io')
+                namespace('library')
+                imageName('redis')
+                tag('alpine')
+            }
+            // No build needed - image pulled from Docker Hub
+            // No contextTask needed - using pre-built image
+        }
+    }
+}
+
+// ============================================================================
+// DOCKER ORCH DSL - Configure compose stack with mixed wait strategy
+// ============================================================================
+dockerOrch {
+    composeStacks {
+        existingImagesTest {
+            files.from('src/integrationTest/resources/compose/existing-images.yml')
+            projectName = "verification-existing-images-test"
+
+            // MIXED WAIT STRATEGY:
+            // - Custom app has health check -> use waitForHealthy
+            // - Public images (nginx, redis) don't have health checks -> use waitForRunning
+            waitForHealthy {
+                waitForServices.set(['existing-images-app'])
+                timeoutSeconds.set(90)  // Longer timeout for health checks
+                pollSeconds.set(1)
+            }
+
+            waitForRunning {
+                waitForServices.set(['nginx', 'redis'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+
+dependencies {
+    // Testing dependencies from version catalog
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+
+    // Add buildSrc classes to integration test classpath (for validators)
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+}
+
+// Register integration test task (Gradle 9/10 style)
+tasks.named('integrationTest') {
+    description = 'Runs integration tests against Docker Compose stack with public images'
+    group = 'verification'
+
+    // Pass state file location to tests (lazy)
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/existingImagesTest-state.json').get().asFile.absolutePath
+
+    // Pass project name for validators
+    systemProperty 'COMPOSE_PROJECT_NAME', "verification-existing-images-test"
+}
+
+// Ensure compose up waits for image build (app only - public images pulled automatically)
+afterEvaluate {
+    tasks.named('composeUpExistingImagesTest') {
+        dependsOn tasks.named('dockerBuildExistingImagesApp')
+        // Note: nginx and redis images are pulled automatically by Docker Compose
+        // No explicit pull task needed - Docker Compose handles it
+    }
+
+    // Ensure integrationTest has full workflow
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpExistingImagesTest')
+        finalizedBy tasks.named('composeDownExistingImagesTest')
+    }
+}
+
+// Full integration test workflow
+tasks.register('runIntegrationTest') {
+    description = 'Full integration test: build image -> up -> test -> down'
+    group = 'verification'
+
+    // Build custom app image first (lazy)
+    dependsOn tasks.named('dockerBuildExistingImagesApp')
+
+    // Then compose up (pulls public images + starts all services)
+    dependsOn tasks.named('composeUpExistingImagesTest')
+
+    // Then run tests
+    dependsOn tasks.named('integrationTest')
+
+    // Always tear down
+    finalizedBy tasks.named('composeDownExistingImagesTest')
+
+    doLast {
+        logger.lifecycle("Integration test complete for verification:existing-images")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupContainers') {
+    description = 'Force cleanup of any lingering containers'
+    group = 'verification'
+
+    doLast {
+        def projectName = "verification-existing-images-test"
+        def result = exec {
+            commandLine 'docker', 'ps', '-a', '-q', '--filter', "name=${projectName}"
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+
+        def containerIds = result.standardOutput.toString().trim()
+        if (containerIds) {
+            exec {
+                commandLine 'docker', 'rm', '-f'
+                args containerIds.split('\n')
+            }
+        }
+    }
+}

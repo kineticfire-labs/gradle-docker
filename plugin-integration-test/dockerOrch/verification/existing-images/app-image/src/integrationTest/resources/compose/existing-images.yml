@@ -1,0 +1,58 @@
+# (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Docker Compose file for existing-images verification test
+# Demonstrates using public Docker Hub images (nginx, redis) with custom app image
+# MIXED WAIT STRATEGY: Custom app has health check (waitForHealthy), public images don't (waitForRunning)
+
+services:
+  # Custom app service - built from our Dockerfile
+  existing-images-app:
+    image: verification-existing-images-app:latest
+    ports:
+      - "8080"  # Random host port to avoid conflicts
+    environment:
+      - SPRING_PROFILES_ACTIVE=test
+      - NGINX_HOST=nginx
+      - NGINX_PORT=80
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - nginx
+      - redis
+    # Health check for Spring Boot app - ensures app is ready before tests run
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  # Public nginx image from Docker Hub - serves static content
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80"  # Random host port to avoid conflicts
+    volumes:
+      # Mount static HTML file from test resources
+      # Note: Path is relative to compose file location
+      - ../static/index.html:/usr/share/nginx/html/index.html:ro
+    # NO healthcheck - public images typically don't have health checks
+
+  # Public redis image from Docker Hub - provides caching
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379"  # Random host port to avoid conflicts
+    # NO healthcheck - public images typically don't have health checks
