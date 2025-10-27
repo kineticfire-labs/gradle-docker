@@ -87,6 +87,10 @@ include 'dockerOrch:verification:logs-capture'
 include 'dockerOrch:verification:logs-capture:app'
 include 'dockerOrch:verification:logs-capture:app-image'
 
+include 'dockerOrch:verification:multi-service'
+include 'dockerOrch:verification:multi-service:app'
+include 'dockerOrch:verification:multi-service:app-image'
+
 // Example tests (user-facing demonstrations)
 include 'dockerOrch:examples:web-app'
 include 'dockerOrch:examples:web-app:app'

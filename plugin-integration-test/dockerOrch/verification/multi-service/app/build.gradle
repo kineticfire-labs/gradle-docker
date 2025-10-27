@@ -1,0 +1,48 @@
+plugins {
+    id 'java'
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+}
+
+group = 'com.kineticfire.test'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot Web
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Spring Boot Data JPA (PostgreSQL)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // Spring Boot Data Redis
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+
+    // PostgreSQL Driver
+    implementation libs.postgresql
+
+    // Lettuce (Redis client, included in spring-boot-starter-data-redis)
+    // No need to explicitly include it
+
+    // Logging
+    implementation 'org.slf4j:slf4j-api'
+    implementation 'ch.qos.logback:logback-classic'
+}
+
+tasks.named('bootJar') {
+    archiveBaseName.set('multi-service-app')
+    archiveVersion.set(version)
+}
+
+tasks.named('jar') {
+    enabled = false
+}

@@ -34,7 +34,7 @@ features that users typically wouldn't test directly.
 | Lifecycle Method | `verification/lifecycle-method/` | ✅ Complete | METHOD    | Method-level lifecycle, setup/cleanup, state isolation        |
 | Existing Images  | `verification/existing-images/`  | ✅ Complete | CLASS     | Public images (nginx, redis), sourceRef pattern               |
 | Logs Capture     | `verification/logs-capture/`     | ✅ Complete | CLASS     | Log capture (full, tail, service-specific), writeTo, tailLines |
-| Multi Service    | `verification/multi-service/`    | ⏳ Planned  | CLASS     | Complex orchestration (3+ services)                           |
+| Multi Service    | `verification/multi-service/`    | ✅ Complete | CLASS     | Complex orchestration (4 services: app, postgres, redis, nginx), mixed wait strategies |
 
 **Lifecycle Types:**
 - **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same

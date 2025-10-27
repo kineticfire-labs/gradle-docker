@@ -43,9 +43,9 @@ The dockerOrch integration tests are organized into two categories:
 | `mixed-wait/` | ✅ Complete | CLASS | Both wait types together (app + database) | Done |
 | `existing-images/` | ✅ Complete | CLASS | Public images (nginx, redis), sourceRef pattern | Done |
 | `logs-capture/` | ✅ Complete | CLASS | Log capture configuration, file generation, tailLines | Done |
-| `multi-service/` | ❌ Not Implemented | CLASS | Complex orchestration (3+ services) | **MEDIUM** |
+| `multi-service/` | ✅ Complete | CLASS | Complex orchestration (4 services: app, postgres, redis, nginx), mixed wait strategies | Done |
 
-**Progress**: 8 of 9 scenarios complete (89%)
+**Progress**: 9 of 9 scenarios complete (100%)
 
 **Lifecycle Types:**
 - **CLASS** - Containers start once per test class in setupSpec/@BeforeAll, all test methods run against same
@@ -385,35 +385,50 @@ logs.
 
 ---
 
-### Phase 6: Demonstrate Multi-Service Orchestration (MEDIUM - Priority 5)
+### Phase 6: Demonstrate Multi-Service Orchestration (✅ COMPLETE - 2025-10-27)
 
-**Goal**: Show complex orchestration with 3+ services
+**Goal**: Show complex orchestration with 4 services
 
 **Scenario**: `verification/multi-service/`
 
 **Stack**:
-- Web app (custom image)
+- Spring Boot app (custom image, with health check)
 - PostgreSQL database (public image)
 - Redis cache (public image)
 - Nginx reverse proxy (public image)
 
-**Tests**:
-- Verify all services start correctly
-- Test service dependencies (app depends on database and cache)
-- Validate inter-service communication
-- Test wait strategies for multiple services
+**Tests** (15 integration tests):
+- Verify state file contains all 4 services
+- Verify all containers are running
+- Verify app container is healthy
+- Verify mixed wait strategies reflected in state file
+- Test app health endpoint (verifies database and redis connections)
+- Test PostgreSQL database integration (save, retrieve, count messages)
+- Test Redis cache integration (store, retrieve, delete values)
+- Test nginx reverse proxy functionality (proxying to app)
+- Verify service dependencies (app depends on postgres and redis, nginx depends on app)
 
 **Configuration**:
 - **Lifecycle**: CLASS
-- **Wait Strategy**: Mixed (healthy for app, running for others)
+- **Wait Strategy**: Mixed (`waitForHealthy` for app, `waitForRunning` for postgres/redis/nginx)
+- **Test Framework**: Spock with internal validators (DockerComposeValidator, StateFileValidator)
 
-**Rationale**: Real applications often have complex orchestration requirements.
+**Rationale**: Real applications often have complex orchestration requirements with multiple interdependent services.
 
-**Acceptance Criteria**:
-- 3+ services in Docker Compose file
-- Tests verify all services communicate correctly
-- Demonstrates service dependencies
-- Shows mixed wait strategies
+**Acceptance Criteria**: ✅ ALL MET
+- ✅ 4 services in Docker Compose file (app, postgres, redis, nginx)
+- ✅ All 15 integration tests pass successfully
+- ✅ Tests verify all services communicate correctly (app → postgres, app → redis, nginx → app)
+- ✅ Demonstrates service dependencies via Docker Compose `depends_on`
+- ✅ Shows mixed wait strategies (waitForHealthy + waitForRunning)
+- ✅ Zero containers remaining after cleanup
+
+**Implementation Summary**:
+- `multi-service/app/` - Spring Boot app with REST endpoints for database, cache, and info
+- `multi-service/app-image/` - Docker config with mixed wait strategy and 4-service compose stack
+- Integration tests: MultiServicePluginIT.groovy with 15 complete tests
+- Docker Compose: app with health check, postgres, redis, nginx with proper dependencies
+- Build successful in 1m 42s, all tests passing, zero containers remaining
 
 ---
 
@@ -519,10 +534,11 @@ Before declaring the integration test suite "complete":
 
 ---
 
-**Last Updated**: 2025-10-26
+**Last Updated**: 2025-10-27
 **Phase 1 Status**: ✅ COMPLETE
 **Phase 2 Status**: ✅ COMPLETE
 **Phase 3 Status**: ✅ COMPLETE
 **Phase 4 Status**: ✅ COMPLETE
 **Phase 5 Status**: ✅ COMPLETE
-**Next Phase**: Phase 6 - Demonstrate Multi-Service Orchestration (MEDIUM priority)
+**Phase 6 Status**: ✅ COMPLETE
+**Next Phase**: Phase 7 - Advanced User Examples (LOW priority)
