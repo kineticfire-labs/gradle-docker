@@ -29,6 +29,7 @@ import com.github.dockerjava.core.DockerClientImpl
 import com.github.dockerjava.httpclient5.ApacheDockerHttpClient
 import com.kineticfire.gradle.docker.exception.DockerServiceException
 import com.kineticfire.gradle.docker.model.*
+import com.kineticfire.gradle.docker.util.DockerfilePathResolver
 
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
@@ -151,22 +152,23 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 def dockerfileFile = context.dockerfile.toFile()
                 def contextFile = context.contextPath.toFile()
 
-                // Check if dockerfile is within the context directory
-                if (!dockerfileFile.absolutePath.startsWith(contextFile.absolutePath)) {
-                    throw new IllegalArgumentException(
-                        "Dockerfile must be within the build context directory. " +
-                        "Dockerfile: ${dockerfileFile.absolutePath}, Context: ${contextFile.absolutePath}"
-                    )
-                }
+                // Validate Dockerfile location using utility
+                DockerfilePathResolver.validateDockerfileLocation(
+                    contextFile.toPath(),
+                    dockerfileFile.toPath()
+                )
 
-                // Calculate relative path for Docker API
-                def relativePath = contextFile.toPath().relativize(dockerfileFile.toPath()).toString()
+                // Calculate relative path using utility
+                def relativePath = DockerfilePathResolver.calculateRelativePath(
+                    contextFile.toPath(),
+                    dockerfileFile.toPath()
+                )
 
                 def actualDockerfile = dockerfileFile
 
                 // If dockerfile is in a subdirectory, create a temporary copy at the context root
-                if (relativePath.contains("/") || relativePath.contains("\\")) {
-                    def tempDockerfileName = "Dockerfile.tmp.${System.currentTimeMillis()}"
+                if (DockerfilePathResolver.needsTemporaryDockerfile(relativePath)) {
+                    def tempDockerfileName = DockerfilePathResolver.generateTempDockerfileName()
                     def tempDockerfile = new File(contextFile, tempDockerfileName)
                     tempDockerfile.text = dockerfileFile.text
                     actualDockerfile = tempDockerfile

@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.util.ImageReferenceBuilder
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.DirectoryProperty
@@ -157,39 +158,21 @@ abstract class DockerBuildTask extends DefaultTask {
     
     /**
      * Build full image references from nomenclature properties
+     * Delegates to ImageReferenceBuilder utility for pure logic
      */
     List<String> buildImageReferences() {
-        def references = []
-        
         def registryValue = registry.getOrElse("")
         def namespaceValue = namespace.getOrElse("")
         def repositoryValue = repository.getOrElse("")
         def imageNameValue = imageName.getOrElse("")
-        def versionValue = version.getOrElse("")
         def tagsValue = tags.getOrElse([])
-        
-        if (!repositoryValue.isEmpty()) {
-            // Using repository format
-            def baseRef = registryValue.isEmpty() ? repositoryValue : "${registryValue}/${repositoryValue}"
-            tagsValue.each { tag ->
-                references.add("${baseRef}:${tag}")
-            }
-        } else if (!imageNameValue.isEmpty()) {
-            // Using namespace + imageName format
-            def baseRef = ""
-            if (!registryValue.isEmpty()) {
-                baseRef += "${registryValue}/"
-            }
-            if (!namespaceValue.isEmpty()) {
-                baseRef += "${namespaceValue}/"
-            }
-            baseRef += imageNameValue
-            
-            tagsValue.each { tag ->
-                references.add("${baseRef}:${tag}")
-            }
-        }
-        
-        return references
+
+        return ImageReferenceBuilder.buildImageReferences(
+            registryValue,
+            namespaceValue,
+            repositoryValue,
+            imageNameValue,
+            tagsValue
+        )
     }
 }

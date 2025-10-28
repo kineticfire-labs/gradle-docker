@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.exception.ComposeServiceException
 import com.kineticfire.gradle.docker.model.*
+import com.kineticfire.gradle.docker.util.ComposeOutputParser
 import com.google.common.annotations.VisibleForTesting
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
@@ -130,91 +131,26 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         try {
             def composeCommand = getComposeCommand()
             def command = composeCommand + ["-p", projectName, "ps", "--format", "json"]
-            
+
             def result = processExecutor.execute(command)
-            
+
             if (!result.isSuccess()) {
                 serviceLogger.warn("Failed to get stack services for project ${projectName}: ${result.stderr}")
                 return [:]
             }
-            
-            def services = [:]
-            if (result.stdout?.trim()) {
-                // Parse JSON lines (docker compose ps outputs one JSON object per line)
-                result.stdout.split('\n').each { line ->
-                    if (line?.trim()) {
-                        try {
-                            def json = new groovy.json.JsonSlurper().parseText(line)
-                            def serviceName = json.Service ?: json.Name?.split('_')?.getAt(1) // fallback parsing
-                            def status = json.State ?: json.Status
-                            def portMappings = parsePortMappings(json.Ports)
 
-                            if (serviceName) {
-                                def serviceState = parseServiceState(status)
-                                services[serviceName] = new ServiceInfo(
-                                    json.ID ?: 'unknown',
-                                    serviceName,
-                                    serviceState.toString(),
-                                    portMappings
-                                )
-                            }
-                        } catch (Exception e) {
-                            serviceLogger.debug("Failed to parse service info line: ${line} - ${e.message}")
-                        }
-                    }
-                }
-            }
-            
-            return services
-            
+            // Delegate parsing to ComposeOutputParser utility
+            return ComposeOutputParser.parseServicesJson(result.stdout)
+
         } catch (Exception e) {
             serviceLogger.warn("Error getting stack services: ${e.message}")
             return [:]
         }
     }
     
-    protected ServiceStatus parseServiceState(String status) {
-        if (!status) return ServiceStatus.UNKNOWN
-
-        def lowerStatus = status.toLowerCase()
-        if (lowerStatus.contains('running') || lowerStatus.contains('up')) {
-            if (lowerStatus.contains('healthy')) {
-                return ServiceStatus.HEALTHY
-            }
-            return ServiceStatus.RUNNING
-        } else if (lowerStatus.contains('exit') || lowerStatus.contains('stop')) {
-            return ServiceStatus.STOPPED
-        } else if (lowerStatus.contains('restart') || lowerStatus.contains('restarting')) {
-            return ServiceStatus.RESTARTING
-        } else {
-            return ServiceStatus.UNKNOWN
-        }
-    }
-
-    protected List<PortMapping> parsePortMappings(String portsString) {
-        if (!portsString) return []
-
-        def portMappings = []
-        // Docker Compose ps --format json returns ports like "0.0.0.0:9091->8080/tcp, :::9091->8080/tcp"
-        portsString.split(',').each { portEntry ->
-            def trimmed = portEntry.trim()
-            if (trimmed) {
-                try {
-                    // Parse format: "0.0.0.0:9091->8080/tcp" or "9091->8080/tcp"
-                    def matcher = trimmed =~ /(?:[\d\.]+:)?(\d+)->(\d+)(?:\/(\w+))?/
-                    if (matcher.find()) {
-                        def hostPort = matcher.group(1) as Integer
-                        def containerPort = matcher.group(2) as Integer
-                        def protocol = matcher.group(3) ?: 'tcp'
-                        portMappings << new PortMapping(containerPort, hostPort, protocol)
-                    }
-                } catch (Exception e) {
-                    serviceLogger.debug("Failed to parse port mapping: ${trimmed} - ${e.message}")
-                }
-            }
-        }
-        return portMappings
-    }
+    // Parsing methods removed - now using ComposeOutputParser utility
+    // parseServiceState() -> ComposeOutputParser.parseServiceState()
+    // parsePortMappings() -> ComposeOutputParser.parsePortMappings()
 
     @Override
     CompletableFuture<Void> downStack(String projectName) {

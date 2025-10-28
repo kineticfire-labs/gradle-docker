@@ -45,6 +45,21 @@ This package may be challenging to unit test since it makes external calls to 'd
 that does not require complex mocks.  Consider how code could be refactored to push external calls to the smallest functions (by code and branch size) possible
 to increase unit test coverage without mocks or complex mocks.
 
+## Unit Tests - refactor
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Your task is to identify how the plugin source code at @plugin/src/main/ could be refactored to increase unit test coverage for the com.kineticfire.gradle.docker package.  Analyze
+  the source code, determine how the code can be changed to increase test coverage without using complex mocks such as moving external calls to functions with minimal code thus
+  allowing testing of other code that is not making external calls.  Study the code base and determine how it could best be shaped to allow for greater unit test coverage.
+
+  All changes must be compatible with Gradle 9 and 10, especially the build cache configuration, per at @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Present your findings and recommendations.
+
 
 
 ## Exploring dockerOrch
