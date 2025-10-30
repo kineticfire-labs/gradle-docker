@@ -57,9 +57,15 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     
     protected final DockerClient dockerClient
     protected final ExecutorService executorService
+    protected final FileOperations fileOperations
     
     @Inject
     DockerServiceImpl() {
+        this(new DefaultFileOperations())
+    }
+    
+    protected DockerServiceImpl(FileOperations fileOperations) {
+        this.fileOperations = fileOperations
         this.dockerClient = createDockerClient()
         this.executorService = Executors.newCachedThreadPool { runnable ->
             Thread thread = new Thread(runnable, "docker-service-${System.currentTimeMillis()}")
@@ -169,16 +175,18 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 // If dockerfile is in a subdirectory, create a temporary copy at the context root
                 if (DockerfilePathResolver.needsTemporaryDockerfile(relativePath)) {
                     def tempDockerfileName = DockerfilePathResolver.generateTempDockerfileName()
-                    def tempDockerfile = new File(contextFile, tempDockerfileName)
-                    tempDockerfile.text = dockerfileFile.text
-                    actualDockerfile = tempDockerfile
+                    def tempDockerfilePath = contextFile.toPath().resolve(tempDockerfileName)
+                    def dockerfileContent = fileOperations.readText(dockerfileFile.toPath())
+                    fileOperations.writeText(tempDockerfilePath, dockerfileContent)
+                    actualDockerfile = fileOperations.toFile(tempDockerfilePath)
 
                     // Temporary workaround for Docker Java client subdirectory dockerfile issue
 
                     // Schedule cleanup
+                    def tempPath = tempDockerfilePath
                     Runtime.runtime.addShutdownHook {
-                        if (tempDockerfile.exists()) {
-                            tempDockerfile.delete()
+                        if (fileOperations.exists(tempPath)) {
+                            fileOperations.delete(tempPath)
                         }
                     }
                 }
@@ -279,7 +287,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 println "Saving image ${imageId} to ${outputFile} with compression: ${compression}"
                 
                 // Create parent directories
-                Files.createDirectories(outputFile.parent)
+                fileOperations.createDirectories(outputFile.parent)
                 
                 def inputStream = dockerClient.saveImageCmd(imageId).exec()
                 

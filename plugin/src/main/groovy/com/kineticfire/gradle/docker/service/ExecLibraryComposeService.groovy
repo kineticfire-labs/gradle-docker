@@ -35,24 +35,25 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     protected ProcessExecutor processExecutor
     protected CommandValidator commandValidator
     protected ServiceLogger serviceLogger
+    protected TimeService timeService
     
     @Inject
     ExecLibraryComposeService() {
-        this.processExecutor = new DefaultProcessExecutor()
-        this.commandValidator = new DefaultCommandValidator(new DefaultProcessExecutor())
-        this.serviceLogger = new DefaultServiceLogger(ExecLibraryComposeService.class)
-
-        commandValidator.validateDockerCompose()
-        serviceLogger.info("ComposeService initialized with docker-compose CLI")
+        this(new DefaultProcessExecutor(), 
+             new DefaultCommandValidator(new DefaultProcessExecutor()), 
+             new DefaultServiceLogger(ExecLibraryComposeService.class),
+             new SystemTimeService())
     }
     
     @VisibleForTesting
     ExecLibraryComposeService(ProcessExecutor processExecutor, 
                               CommandValidator commandValidator, 
-                              ServiceLogger serviceLogger) {
+                              ServiceLogger serviceLogger,
+                              TimeService timeService) {
         this.processExecutor = processExecutor
         this.commandValidator = commandValidator
         this.serviceLogger = serviceLogger
+        this.timeService = timeService
         
         commandValidator.validateDockerCompose()
         serviceLogger.info("ComposeService initialized with docker-compose CLI")
@@ -254,10 +255,10 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
             try {
                 serviceLogger.info("Waiting for services: ${config.services}")
                 
-                def startTime = System.currentTimeMillis()
+                def startTime = timeService.currentTimeMillis()
                 def timeoutMillis = config.timeout.toMillis()
                 
-                while (System.currentTimeMillis() - startTime < timeoutMillis) {
+                while (timeService.currentTimeMillis() - startTime < timeoutMillis) {
                     // Check service states
                     def allReady = true
                     for (serviceName in config.services) {
@@ -273,7 +274,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
                         return config.targetState
                     }
                     
-                    Thread.sleep(config.pollInterval.toMillis())
+                    timeService.sleep(config.pollInterval.toMillis())
                 }
                 
                 throw new ComposeServiceException(

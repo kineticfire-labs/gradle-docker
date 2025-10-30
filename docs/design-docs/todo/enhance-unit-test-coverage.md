@@ -75,6 +75,57 @@ Utility Package (NEW):
 
 **Next Step:** Ready to begin Phase 2 (Inject I/O Dependencies)
 
+### Phase 2: Inject I/O Dependencies - 🟡 PARTIALLY COMPLETED (2025-01-28)
+
+**Status:** Infrastructure created, but not yet integrated into existing code.
+
+**Completed Deliverables:**
+1. ✅ Created `FileOperations` interface and `DefaultFileOperations` implementation
+   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/FileOperations.groovy`
+   - Interface methods: `createDirectories`, `writeText`, `readText`, `exists`, `delete`, `toFile`
+   - Serializable for Gradle 9/10 configuration cache compatibility
+   
+2. ✅ Created `TimeService` interface and `SystemTimeService` implementation
+   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/TimeService.groovy`
+   - Interface methods: `currentTimeMillis`, `sleep`
+   - Serializable for Gradle 9/10 configuration cache compatibility
+
+3. ✅ All tests passing
+   - Build: `./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal`
+   - Result: **2,321 tests completed, 0 failures, 25 skipped**
+   - Duration: 10m 44s
+
+**NOT Yet Completed:**
+- ❌ Refactor `DockerServiceImpl` to inject and use `FileOperations`
+- ❌ Refactor `ExecLibraryComposeService` to inject and use `TimeService`
+- ❌ Write unit tests that mock `FileOperations` dependencies
+- ❌ Write unit tests that mock `TimeService` dependencies
+- ❌ Update existing tests to use mocked dependencies
+- ❌ Document external call boundaries in gap file
+
+**Current Coverage Status:**
+```
+Instructions: 81.0% (29,914/36,910)
+Branches:     80.2% (2,092/2,608)
+Lines:        86.9% (2,876/3,310)
+
+Package                                  Instructions  Branches
+--------------------------------------------------------------
+com.kineticfire.gradle.docker.service        52.5%    64.2%
+com.kineticfire.gradle.docker.util           96.9%    96.5%
+```
+
+**Note:** The interfaces are ready for use but have not been integrated into the codebase yet. The service classes still use direct file I/O and time operations. Phase 2 will need to be completed in the future to:
+1. Actually refactor DockerServiceImpl and ExecLibraryComposeService
+2. Write tests demonstrating the mockability benefits
+3. Measure actual coverage improvements
+
+**Next Steps:**
+- Complete Phase 2 by integrating FileOperations into DockerServiceImpl
+- Complete Phase 2 by integrating TimeService into ExecLibraryComposeService
+- Write comprehensive tests using mocks
+- OR proceed to Phase 3 and return to complete Phase 2 later
+
 ## Analysis of Current Test Coverage Issues
 
 ### Package-Level Coverage Breakdown
@@ -1139,49 +1190,51 @@ class MockBuilder {
 - ✅ Coverage on `util` package: 96.9% (near 100% target)
 - ✅ Zero regressions in existing functionality
 
-### Phase 2: Inject I/O Dependencies (Weeks 3-4)
+### Phase 2: Inject I/O Dependencies (Weeks 3-4) - 🟡 PARTIALLY COMPLETED
 
 **Goal:** Make ~150 lines of I/O code mockable through dependency injection
 
 **Tasks:**
-1. Create `FileOperations` interface and implementation
-   - Write minimal `DefaultFileOperations`
-   - Create test mock in `MockBuilder`
+1. ✅ Create `FileOperations` interface and implementation
+   - ✅ Write minimal `DefaultFileOperations`
+   - ❌ Create test mock in `MockBuilder` (NOT DONE)
 
-2. Create `TimeService` interface and implementation
-   - Write minimal `SystemTimeService`
-   - Create test mock in `MockBuilder`
+2. ✅ Create `TimeService` interface and implementation
+   - ✅ Write minimal `SystemTimeService`
+   - ❌ Create test mock in `MockBuilder` (NOT DONE)
 
-3. Refactor `DockerServiceImpl`
-   - Add `FileOperations` parameter to constructor
-   - Update all file I/O to use `fileOps`
-   - Add `@VisibleForTesting` constructor
+3. ❌ Refactor `DockerServiceImpl` (NOT DONE)
+   - ❌ Add `FileOperations` parameter to constructor
+   - ❌ Update all file I/O to use `fileOps`
+   - ❌ Add `@VisibleForTesting` constructor
 
-4. Refactor `ExecLibraryComposeService`
-   - Add `TimeService` parameter to constructor
-   - Update all time operations to use `timeService`
-   - Update existing `@VisibleForTesting` constructor
+4. ❌ Refactor `ExecLibraryComposeService` (NOT DONE)
+   - ❌ Add `TimeService` parameter to constructor
+   - ❌ Update all time operations to use `timeService`
+   - ❌ Update existing `@VisibleForTesting` constructor
 
-5. Update tests
-   - Use mocked `FileOperations` in tests
-   - Use mocked `TimeService` in tests
-   - Verify tests run faster (no actual I/O or waits)
+5. ❌ Update tests (NOT DONE)
+   - ❌ Use mocked `FileOperations` in tests
+   - ❌ Use mocked `TimeService` in tests
+   - ❌ Verify tests run faster (no actual I/O or waits)
 
-6. Document external calls
-   - Update `docs/design-docs/testing/unit-test-gaps.md`
-   - Document thin boundary methods that cannot be unit tested
+6. ❌ Document external calls (NOT DONE)
+   - ❌ Update `docs/design-docs/testing/unit-test-gaps.md`
+   - ❌ Document thin boundary methods that cannot be unit tested
 
 **Deliverables:**
-- 2 new service interfaces with default implementations
-- Updated service classes with injected dependencies
-- Updated tests using mocks
-- Documentation of external call boundaries
+- ✅ 2 new service interfaces with default implementations (INFRASTRUCTURE ONLY)
+- ❌ Updated service classes with injected dependencies (NOT DONE)
+- ❌ Updated tests using mocks (NOT DONE)
+- ❌ Documentation of external call boundaries (NOT DONE)
 
 **Acceptance Criteria:**
-- All unit tests pass
-- Tests run ≥50% faster (no actual file I/O or sleep calls)
-- Coverage on `service` package: 70%+ → 85%+
-- Gap file documents all external boundaries
+- ✅ All unit tests pass (infrastructure doesn't break existing tests)
+- ❌ Tests run ≥50% faster (no actual file I/O or sleep calls) - NOT APPLICABLE YET
+- ❌ Coverage on `service` package: 70%+ → 85%+ - NO IMPROVEMENT YET (still 52.5%)
+- ❌ Gap file documents all external boundaries - NOT DONE
+
+**Status:** Infrastructure created but not yet integrated. Requires additional work to complete Phase 2.
 
 ### Phase 3: Refactor Large Methods (Weeks 5-6)
 
@@ -1578,8 +1631,8 @@ class DockerServiceImplTest extends Specification {
 
 ---
 
-**Document Version:** 1.1
+**Document Version:** 1.2
 **Last Updated:** 2025-01-28
-**Status:** Phase 1 Complete - Ready for Phase 2
-**Estimated Effort:** 7 weeks (1 week completed)
+**Status:** Phase 1 Complete, Phase 2 Partially Complete (Infrastructure Only)
+**Estimated Effort:** 7 weeks (Phase 1 complete, Phase 2 infrastructure created)
 **Target Completion:** TBD

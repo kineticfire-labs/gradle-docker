@@ -301,9 +301,9 @@ tasks.register('coverageSummary', CoverageSummaryTask) {
 tasks.test {
     // ProjectBuilder tests are heavyweight - fork periodically to prevent resource exhaustion
     // 31 test files use ProjectBuilder.builder().build() which creates full Gradle projects
-    maxParallelForks = 4  // Run 4 test processes in parallel
+    maxParallelForks = 2  // Run 2 test processes in parallel (reduced to avoid OOM)
     forkEvery = 10  // Fork a new JVM after every 10 test classes
-    maxHeapSize = '1536m'  // More memory per fork
+    maxHeapSize = '2g'  // 2GB per fork = 4GB total max
 
     // Improve test output
     testLogging {

@@ -37,14 +37,16 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
     ProcessExecutor mockProcessExecutor
     CommandValidator mockCommandValidator
     ServiceLogger mockServiceLogger
+    TimeService mockTimeService
     TestExecLibraryComposeService service
 
     def setup() {
         mockProcessExecutor = Mock(ProcessExecutor)
         mockCommandValidator = Mock(CommandValidator)
         mockServiceLogger = Mock(ServiceLogger)
+        mockTimeService = Mock(TimeService)
 
-        service = new TestExecLibraryComposeService(mockProcessExecutor, mockCommandValidator, mockServiceLogger)
+        service = new TestExecLibraryComposeService(mockProcessExecutor, mockCommandValidator, mockServiceLogger, mockTimeService)
     }
 
     // ============ Constructor Tests ============
@@ -54,7 +56,7 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         mockCommandValidator.validateDockerCompose() >> {}
 
         when:
-        def svc = new TestExecLibraryComposeService(mockProcessExecutor, mockCommandValidator, mockServiceLogger)
+        def svc = new TestExecLibraryComposeService(mockProcessExecutor, mockCommandValidator, mockServiceLogger, mockTimeService)
 
         then:
         svc != null
@@ -70,8 +72,9 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
     static class TestExecLibraryComposeService extends ExecLibraryComposeService {
         TestExecLibraryComposeService(ProcessExecutor processExecutor,
                                       CommandValidator commandValidator,
-                                      ServiceLogger serviceLogger) {
-            super(processExecutor, commandValidator, serviceLogger)
+                                      ServiceLogger serviceLogger,
+                                      TimeService timeService) {
+            super(processExecutor, commandValidator, serviceLogger, timeService)
         }
 
         @Override
@@ -435,6 +438,10 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         mockCommandValidator.detectComposeCommand() >> ['docker', 'compose']
         mockProcessExecutor.execute(_ as List) >> new ProcessResult(0, "service1  starting", "")
 
+        // Mock time progression to trigger timeout - use >>> for thread-safe list of responses
+        mockTimeService.currentTimeMillis() >>> [0L, 0L, 250L, 250L, 250L]  // Extra values in case of multiple calls
+        mockTimeService.sleep(_ as Long) >> { /* no-op */ }
+
         when:
         def future = service.waitForServices(config)
         future.get()
@@ -453,6 +460,11 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
 
         mockCommandValidator.detectComposeCommand() >> ['docker', 'compose']
         mockProcessExecutor.execute(_ as List) >> { throw new RuntimeException("Process failed") }
+
+        // Mock time service to trigger timeout after exception is thrown
+        // Timeout is 10 seconds (10000ms), so time needs to exceed that to trigger timeout
+        mockTimeService.currentTimeMillis() >>> [0L, 0L, 10001L, 10001L, 10001L]
+        mockTimeService.sleep(_ as Long) >> {}
 
         when:
         def future = service.waitForServices(config)

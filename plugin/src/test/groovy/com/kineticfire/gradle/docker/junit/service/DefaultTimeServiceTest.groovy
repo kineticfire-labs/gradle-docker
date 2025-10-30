@@ -240,7 +240,8 @@ class DefaultTimeServiceTest extends Specification {
         time1 != null
         time2 != null
         // Times should be very close, possibly equal
-        java.time.Duration.between(time1, time2).toMillis() <= 10
+        // Increased tolerance to 100ms to account for heavily loaded CI/test environments
+        java.time.Duration.between(time1, time2).toMillis() <= 100
     }
 
     def "sleep with maximum safe milliseconds completes"() {

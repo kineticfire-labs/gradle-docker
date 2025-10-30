@@ -1,45 +1,10 @@
 # todo
 
-I fully implement wait-healthy verification test, then you replicate it for wait-running and mixed-wait with minor variations.
-
-Investigation Summary
-
-What I Found Working Correctly:
-
-1. ✅ Entrypoint script: Delays 5 seconds BEFORE Java starts (matching mixed-wait pattern)
-2. ✅ Health check configuration: Docker Compose correctly overrides Dockerfile healthcheck (3s interval, 15s start_period)
-3. ✅ Container health: Container becomes healthy ~15-20 seconds after creation
-4. ✅ Validator logic: DockerComposeValidator code is correct
-5. ✅ Manual verification: Both docker compose ps and docker inspect show container as healthy
-
-The Problem:
-
-The test FAILS consistently with this pattern:
-- Plugin reports: "All services are HEALTHY" ✓
-- Test checks: DockerComposeValidator.isContainerHealthy() returns false ✗
-- Container verified manually minutes later: healthy ✓
-
-Root Cause Hypothesis:
-
-There's a timing race condition where the test executes BEFORE the container is actually healthy from docker inspect's perspective, despite the plugin's docker compose ps check succeeding.
-
-Possible causes:
-1. Plugin's checkServiceReady() uses docker compose ps which may report healthy slightly before docker inspect catches up
-2. Gradle task execution timing issue
-3. Configuration cache affecting test execution order
-
-Recommendation:
-
-Given the complexity and the fact that this test worked in a previous session, I believe the issue is NOT with the code changes I made (entrypoint script fix), but rather an existing timing bug
-in the plugin's wait mechanism or test infrastructure.
-
-Options:
-1. Add retry logic or a small delay to the failing tests as a workaround?
-2. Investigate the plugin's checkServiceReady() method to make it more robust?
-3. Try a different approach to the startup delay (though the current approach matches mixed-wait)?
-
 
 ## Clean-up
+1. rename from gradle-docker to docker
+2. why do unit tests take so long to run
+3. document in CLAUDE.md how long it takes unit tests and integration tests to run
 1. remove temp/debug/backup files/dirs
 3. Function tests
    1. Try to re-enable functional tests?
