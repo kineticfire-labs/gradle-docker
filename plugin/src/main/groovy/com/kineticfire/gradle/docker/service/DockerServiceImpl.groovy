@@ -30,6 +30,7 @@ import com.github.dockerjava.httpclient5.ApacheDockerHttpClient
 import com.kineticfire.gradle.docker.exception.DockerServiceException
 import com.kineticfire.gradle.docker.model.*
 import com.kineticfire.gradle.docker.util.DockerfilePathResolver
+import com.google.common.annotations.VisibleForTesting
 
 import org.gradle.api.services.BuildService
 import org.gradle.api.services.BuildServiceParameters
@@ -113,119 +114,21 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
             try {
                 println "Building Docker image with context: ${context.contextPath}"
                 println "Requested tags: ${context.tags}"
-                
-                def buildImageResultCallback = new BuildImageResultCallback() {
-                    @Override
-                    void onNext(BuildResponseItem item) {
-                        // Handle stream output (build progress)
-                        if (item.stream) {
-                            def message = item.stream.trim()
-                            if (message) {
-                                println "Docker build: ${message}"
-                            }
-                        }
-                        
-                        // Handle errors
-                        if (item.errorDetail) {
-                            System.err.println("Docker build error: ${item.errorDetail.message}")
-                        }
-                        if (item.error) {
-                            System.err.println("Docker build error: ${item.error}")
-                        }
-                        
-                        // Pass to parent to handle image ID capture
-                        super.onNext(item)
-                    }
-                    
-                    @Override
-                    void onError(Throwable throwable) {
-                        System.err.println("Docker build callback error: ${throwable.message}")
-                        super.onError(throwable)
-                    }
-                    
-                    @Override
-                    void onComplete() {
-                        println "Docker build callback completed"
-                        super.onComplete()
-                    }
-                }
-                
-                // Build with the primary tag first (prefer non-latest tags, fallback to first tag)
-                def primaryTag = context.tags.find { !it.endsWith(':latest') } ?: context.tags.first()
-                
-                // Docker Java client has issues with subdirectory dockerfiles
-                // When dockerfile is in a subdirectory, create a temporary copy at the root
-                def dockerfileFile = context.dockerfile.toFile()
-                def contextFile = context.contextPath.toFile()
 
-                // Validate Dockerfile location using utility
-                DockerfilePathResolver.validateDockerfileLocation(
-                    contextFile.toPath(),
-                    dockerfileFile.toPath()
-                )
+                // 1. Prepare configuration (pure logic - testable)
+                def config = prepareBuildConfiguration(context)
 
-                // Calculate relative path using utility
-                def relativePath = DockerfilePathResolver.calculateRelativePath(
-                    contextFile.toPath(),
-                    dockerfileFile.toPath()
-                )
+                // 2. Execute build (external call - documented in gap file)
+                def imageId = executeBuild(config)
 
-                def actualDockerfile = dockerfileFile
-
-                // If dockerfile is in a subdirectory, create a temporary copy at the context root
-                if (DockerfilePathResolver.needsTemporaryDockerfile(relativePath)) {
-                    def tempDockerfileName = DockerfilePathResolver.generateTempDockerfileName()
-                    def tempDockerfilePath = contextFile.toPath().resolve(tempDockerfileName)
-                    def dockerfileContent = fileOperations.readText(dockerfileFile.toPath())
-                    fileOperations.writeText(tempDockerfilePath, dockerfileContent)
-                    actualDockerfile = fileOperations.toFile(tempDockerfilePath)
-
-                    // Temporary workaround for Docker Java client subdirectory dockerfile issue
-
-                    // Schedule cleanup
-                    def tempPath = tempDockerfilePath
-                    Runtime.runtime.addShutdownHook {
-                        if (fileOperations.exists(tempPath)) {
-                            fileOperations.delete(tempPath)
-                        }
-                    }
+                // 3. Apply additional tags (external call - documented in gap file)
+                if (!config.additionalTags.isEmpty()) {
+                    applyAdditionalTags(imageId, config.additionalTags)
                 }
 
-                def buildCmd = dockerClient.buildImageCmd()
-                    .withDockerfile(actualDockerfile)
-                    .withBaseDirectory(contextFile)
-                    .withTag(primaryTag)  // Use single primary tag for build
-                    .withNoCache(false)
-                    
-                // Add build arguments individually
-                context.buildArgs.each { key, value ->
-                    buildCmd.withBuildArg(key, value)
-                }
-
-                // Add labels as a map
-                if (!context.labels.isEmpty()) {
-                    buildCmd.withLabels(context.labels)
-                }
-
-                def result = buildCmd.exec(buildImageResultCallback)
-                println "Build command executed, awaiting image ID..."
-                
-                def imageId = result.awaitImageId()
-                println "Received image ID: ${imageId}"
-                
-                // Apply additional tags if there are more than one
-                if (context.tags.size() > 1) {
-                    def additionalTags = context.tags.findAll { it != primaryTag }
-                    println "Applying additional tags: ${additionalTags}"
-                    additionalTags.each { tag ->
-                        println "Tagging ${imageId} as ${tag}"
-                        dockerClient.tagImageCmd(imageId, tag.split(':')[0], tag.split(':')[1]).exec()
-                    }
-                }
-                
                 println "Successfully built Docker image with all tags: ${context.tags} (ID: ${imageId})"
                 return imageId
-                
+
             } catch (DockerException e) {
                 throw new DockerServiceException(
                     DockerServiceException.ErrorType.BUILD_FAILED,
@@ -241,6 +144,111 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 )
             }
         }, executorService)
+    }
+
+    /**
+     * External boundary method - Execute Docker build command.
+     * This method is documented in unit-test-gaps.md as it requires a real Docker daemon.
+     * Keep this method minimal with only Docker API calls.
+     *
+     * @param config Build configuration
+     * @return Image ID of built image
+     */
+    private String executeBuild(BuildConfiguration config) {
+        def buildImageResultCallback = new BuildImageResultCallback() {
+            @Override
+            void onNext(BuildResponseItem item) {
+                // Handle stream output (build progress)
+                if (item.stream) {
+                    def message = item.stream.trim()
+                    if (message) {
+                        println "Docker build: ${message}"
+                    }
+                }
+
+                // Handle errors
+                if (item.errorDetail) {
+                    System.err.println("Docker build error: ${item.errorDetail.message}")
+                }
+                if (item.error) {
+                    System.err.println("Docker build error: ${item.error}")
+                }
+
+                // Pass to parent to handle image ID capture
+                super.onNext(item)
+            }
+
+            @Override
+            void onError(Throwable throwable) {
+                System.err.println("Docker build callback error: ${throwable.message}")
+                super.onError(throwable)
+            }
+
+            @Override
+            void onComplete() {
+                println "Docker build callback completed"
+                super.onComplete()
+            }
+        }
+
+        def actualDockerfile = config.dockerfileFile
+
+        // Handle subdirectory Dockerfile workaround if needed
+        if (config.needsTemporaryDockerfile) {
+            def tempDockerfileName = DockerfilePathResolver.generateTempDockerfileName()
+            def tempDockerfilePath = config.contextFile.toPath().resolve(tempDockerfileName)
+            def dockerfileContent = fileOperations.readText(config.dockerfileFile.toPath())
+            fileOperations.writeText(tempDockerfilePath, dockerfileContent)
+            actualDockerfile = fileOperations.toFile(tempDockerfilePath)
+
+            // Schedule cleanup
+            def tempPath = tempDockerfilePath
+            Runtime.runtime.addShutdownHook {
+                if (fileOperations.exists(tempPath)) {
+                    fileOperations.delete(tempPath)
+                }
+            }
+        }
+
+        def buildCmd = dockerClient.buildImageCmd()
+            .withDockerfile(actualDockerfile)
+            .withBaseDirectory(config.contextFile)
+            .withTag(config.primaryTag)
+            .withNoCache(false)
+
+        // Add build arguments
+        config.buildArgs.each { key, value ->
+            buildCmd.withBuildArg(key, value)
+        }
+
+        // Add labels
+        if (!config.labels.isEmpty()) {
+            buildCmd.withLabels(config.labels)
+        }
+
+        def result = buildCmd.exec(buildImageResultCallback)
+        println "Build command executed, awaiting image ID..."
+
+        def imageId = result.awaitImageId()
+        println "Received image ID: ${imageId}"
+
+        return imageId
+    }
+
+    /**
+     * External boundary method - Apply additional tags to built image.
+     * This method is documented in unit-test-gaps.md as it requires a real Docker daemon.
+     * Keep this method minimal with only Docker API calls.
+     *
+     * @param imageId Image ID to tag
+     * @param additionalTags List of additional tags to apply
+     */
+    private void applyAdditionalTags(String imageId, List<String> additionalTags) {
+        println "Applying additional tags: ${additionalTags}"
+        additionalTags.each { tag ->
+            println "Tagging ${imageId} as ${tag}"
+            dockerClient.tagImageCmd(imageId, tag.split(':')[0], tag.split(':')[1]).exec()
+        }
     }
     
     @Override
@@ -448,6 +456,106 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         }, executorService)
     }
     
+    /**
+     * Pure function - Select primary tag from tag list.
+     * Prefers non-latest tags, falls back to first tag.
+     * This is 100% unit testable with no external dependencies.
+     *
+     * @param tags List of image tags
+     * @return Primary tag to use for initial build
+     */
+    @VisibleForTesting
+    protected static String selectPrimaryTag(List<String> tags) {
+        if (!tags || tags.isEmpty()) {
+            throw new IllegalArgumentException("Tag list cannot be null or empty")
+        }
+        return tags.find { !it.endsWith(':latest') } ?: tags.first()
+    }
+
+    /**
+     * Pure function - Prepare build configuration from context.
+     * Orchestrates validation and path resolution using utilities.
+     * This is 100% unit testable with no external dependencies.
+     *
+     * @param context Build context from task
+     * @return BuildConfiguration object with all build parameters
+     */
+    @VisibleForTesting
+    protected static BuildConfiguration prepareBuildConfiguration(BuildContext context) {
+        if (context == null) {
+            throw new IllegalArgumentException("Build context cannot be null")
+        }
+
+        def dockerfileFile = context.dockerfile.toFile()
+        def contextFile = context.contextPath.toFile()
+
+        // Validate Dockerfile location using utility
+        DockerfilePathResolver.validateDockerfileLocation(
+            contextFile.toPath(),
+            dockerfileFile.toPath()
+        )
+
+        // Calculate relative path using utility
+        def relativePath = DockerfilePathResolver.calculateRelativePath(
+            contextFile.toPath(),
+            dockerfileFile.toPath()
+        )
+
+        // Determine if temporary Dockerfile is needed
+        def needsTemp = DockerfilePathResolver.needsTemporaryDockerfile(relativePath)
+
+        // Select primary tag
+        def primaryTag = selectPrimaryTag(context.tags)
+
+        // Determine additional tags
+        def additionalTags = context.tags.size() > 1 ?
+            context.tags.findAll { it != primaryTag } :
+            []
+
+        return new BuildConfiguration(
+            contextFile,
+            dockerfileFile,
+            needsTemp,
+            primaryTag,
+            additionalTags,
+            context.buildArgs,
+            context.labels
+        )
+    }
+
+    /**
+     * Value object holding build configuration.
+     * Immutable and easily testable.
+     */
+    @VisibleForTesting
+    protected static class BuildConfiguration {
+        final File contextFile
+        final File dockerfileFile
+        final boolean needsTemporaryDockerfile
+        final String primaryTag
+        final List<String> additionalTags
+        final Map<String, String> buildArgs
+        final Map<String, String> labels
+
+        BuildConfiguration(
+            File contextFile,
+            File dockerfileFile,
+            boolean needsTemporaryDockerfile,
+            String primaryTag,
+            List<String> additionalTags,
+            Map<String, String> buildArgs,
+            Map<String, String> labels
+        ) {
+            this.contextFile = contextFile
+            this.dockerfileFile = dockerfileFile
+            this.needsTemporaryDockerfile = needsTemporaryDockerfile
+            this.primaryTag = primaryTag
+            this.additionalTags = additionalTags ?: []
+            this.buildArgs = buildArgs ?: [:]
+            this.labels = labels ?: [:]
+        }
+    }
+
     @Override
     void close() {
         try {
@@ -455,7 +563,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 executorService.shutdown()
                 // Debug: Docker service executor shutdown
             }
-            
+
             if (dockerClient) {
                 dockerClient.close()
                 // Debug: Docker client closed

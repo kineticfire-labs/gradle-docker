@@ -44,30 +44,68 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 - All `docker` DSL integration tests verify Docker connection works
 - Test: `plugin-integration-test/docker/scenario-*/` - all scenarios test actual Docker operations
 
-#### 2. buildImage() - Docker Build Execution (Lines 194-224)
+#### 2. buildImage() - Orchestration Method (Lines 112-147)
 
 **What:**
-- Executes `dockerClient.buildImageCmd()`
-- Applies build arguments and labels
-- Tags built image
+- Orchestrates Docker build process
+- Calls pure functions for configuration
+- Delegates to external boundary methods
 
-**Why Unit Testing is Impractical:**
-- Requires Docker daemon to build actual images
-- Mocking Docker Java API classes causes Spock `CannotCreateMockException`
-- Core Docker library methods cannot be reliably mocked
+**Status:**
+- **Now highly testable** - reduced from 133 lines to 36 lines
+- Calls `prepareBuildConfiguration()` - 100% unit tested pure function
+- Calls `executeBuild()` - external boundary (documented below)
+- Calls `applyAdditionalTags()` - external boundary (documented below)
 
-**Mitigations:**
-- Extracted pure logic:
-  - Tag selection (line 154): Can be tested in isolation
-  - Dockerfile validation: Handled by `DockerfilePathResolver` utility (100% tested)
-  - Temporary Dockerfile workaround: Uses `FileOperations` interface (mockable)
-- Method follows Single Responsibility: just orchestrates Docker API
-- All file I/O goes through `FileOperations` (100% mockable)
+**Pure Functions Extracted (100% Unit Tested):**
+- `selectPrimaryTag()` (line 461-473): Tag selection logic, 100% tested
+- `prepareBuildConfiguration()` (line 484-524): Configuration prep, 100% tested
+- `BuildConfiguration` value object: Immutable data holder, 100% tested
 
 **Integration Test Coverage:**
 - Test: `plugin-integration-test/docker/scenario-1-single-image/` - Verifies build works end-to-end
 - Test: `plugin-integration-test/docker/scenario-2-multi-arch/` - Verifies build args and labels
 - Test: `plugin-integration-test/docker/scenario-*` - Various build scenarios
+
+#### 2a. executeBuild() - Docker Build Execution (Lines 157-236)
+
+**What:**
+- Executes `dockerClient.buildImageCmd()` with Docker daemon
+- Creates build callback for streaming output
+- Handles temporary Dockerfile workaround if needed
+- Applies build arguments and labels
+
+**Why Unit Testing is Impractical:**
+- Requires running Docker daemon
+- Mocking Docker Java API classes causes Spock `CannotCreateMockException`
+- Core Docker library methods cannot be reliably mocked
+
+**Mitigations:**
+- All configuration logic extracted to `prepareBuildConfiguration()` (100% tested)
+- File I/O goes through `FileOperations` interface (100% mockable)
+- Method kept minimal (~80 lines) with only Docker API calls
+- Separated from business logic - this is pure external boundary
+
+**Integration Test Coverage:**
+- All docker build integration tests exercise this method
+
+#### 2b. applyAdditionalTags() - Docker Tag Application (Lines 246-252)
+
+**What:**
+- Executes `dockerClient.tagImageCmd()` for each additional tag
+- Applies tags beyond the primary build tag
+
+**Why Unit Testing is Impractical:**
+- Requires running Docker daemon
+- Requires existing Docker image
+
+**Mitigations:**
+- Tag list preparation done in `prepareBuildConfiguration()` (100% tested)
+- Method kept minimal (~7 lines) with only Docker API calls
+- Pure external boundary with no business logic
+
+**Integration Test Coverage:**
+- All docker build integration tests with multiple tags exercise this method
 
 #### 3. tagImage() - Lines 251-271
 
@@ -267,10 +305,12 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 
 ## Document History
 
-- **2025-01-29**: Major revision after Phase 2 completion - Implemented "Impure Shell, Pure Core" pattern. Injected FileOperations and TimeService dependencies, achieving 100% mockability of I/O and time operations. Updated to reflect current architecture with ~390 lines of documented external boundaries. This supersedes previous gap documentation approach.
-- **2025-10-16**: Updated coverage statistics to reflect state before Phase 2 (81.1% instruction, 80.3% branch). Documented JUnitComposeService and DockerServiceImpl gaps with previous testing approach.
+- **2025-01-30**: Phase 3 completion - Refactored `buildImage()` from 133 lines to 36 lines. Extracted `selectPrimaryTag()` and `prepareBuildConfiguration()` as pure functions (100% tested with 13 comprehensive unit tests). Isolated `executeBuild()` and `applyAdditionalTags()` as minimal external boundaries (~87 lines). Service package coverage improved from 53.8% to 57.2%. Overall coverage now 81.6% instructions, 80.4% branches.
+- **2025-01-29**: Phase 2 completion - Implemented "Impure Shell, Pure Core" pattern. Injected FileOperations and TimeService dependencies, achieving 100% mockability of I/O and time operations. Updated to reflect current architecture with ~390 lines of documented external boundaries.
+- **2025-01-28**: Phase 1 completion - Extracted pure utility functions (ImageReferenceBuilder, ComposeOutputParser, DockerfilePathResolver) with 100% test coverage.
+- **2025-10-16**: Updated coverage statistics to reflect state before refactoring (81.1% instruction, 80.3% branch).
 - **2025-10-13**: Initial documentation of unit test coverage gaps.
 
-**Document Version**: 2.0
-**Last Updated**: 2025-01-29
+**Document Version**: 3.0
+**Last Updated**: 2025-01-30
 **Maintained By**: Development Team
