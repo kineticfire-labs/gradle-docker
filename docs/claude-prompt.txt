@@ -4,6 +4,9 @@ the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
 
+./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
+
+
 ## wait for logs
 
 You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
