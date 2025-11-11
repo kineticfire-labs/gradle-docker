@@ -190,6 +190,128 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         ex.cause.message.contains("Failed to start compose stack")
     }
 
+    // ============ buildUpCommand Tests ============
+
+    def "buildUpCommand builds command with single compose file"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        command == ['docker', 'compose', '-f', composeFile.toString(),
+                    '-p', 'test-project', 'up', '-d']
+    }
+
+    def "buildUpCommand builds command with multiple compose files"() {
+        given:
+        def file1 = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def file2 = Files.write(tempDir.resolve("docker-compose.override.yml"), "services:".bytes)
+        def config = new ComposeConfig([file1, file2], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        command.contains('-f')
+        command.indexOf(file1.toString()) < command.indexOf(file2.toString())
+        command.contains('up')
+        command.contains('-d')
+    }
+
+    def "buildUpCommand includes env files when present"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def envFile = Files.write(tempDir.resolve(".env"), "VAR=value".bytes)
+        def config = new ComposeConfig([composeFile], [envFile], "test-project", "test-stack", [:])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        command.contains('--env-file')
+        command.contains(envFile.toString())
+    }
+
+    def "buildUpCommand uses custom project name"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "custom-project-name", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        def projectIndex = command.indexOf('-p')
+        projectIndex >= 0
+        command[projectIndex + 1] == 'custom-project-name'
+    }
+
+    def "buildUpCommand does not mutate base command"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+        def originalSize = baseCommand.size()
+
+        when:
+        service.buildUpCommand(config, baseCommand)
+
+        then:
+        baseCommand.size() == originalSize  // Ensure clone() worked
+    }
+
+    def "buildUpCommand handles edge cases: #scenario"() {
+        given:
+        // Create the necessary files in tempDir
+        def composeFile = Files.write(tempDir.resolve("compose-${scenario}.yml"), "services:".bytes)
+        def createdEnvFiles = envFileNames.collect { name ->
+            Files.write(tempDir.resolve(name), "VAR=value".bytes)
+        }
+        def config = new ComposeConfig([composeFile], createdEnvFiles, projectName, stackName, [:])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        command.contains('up')
+        command.contains('-d')
+        command.contains(projectName)
+
+        where:
+        scenario                  | envFileNames                 | projectName                              | stackName
+        "no env files"            | []                           | "proj1"                                  | "stack1"
+        "multiple env files"      | [".env", ".env.local"]       | "proj2"                                  | "stack2"
+        "long project name"       | []                           | "very-long-project-name-with-hyphens"    | "stack3"
+    }
+
+    def "buildUpCommand includes all compose files in correct order"() {
+        given:
+        def file1 = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def file2 = Files.write(tempDir.resolve("docker-compose.override.yml"), "services:".bytes)
+        def file3 = Files.write(tempDir.resolve("docker-compose.local.yml"), "services:".bytes)
+        def config = new ComposeConfig([file1, file2, file3], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildUpCommand(config, baseCommand)
+
+        then:
+        command.count { it == '-f' } == 3
+        def file1Index = command.indexOf(file1.toString())
+        def file2Index = command.indexOf(file2.toString())
+        def file3Index = command.indexOf(file3.toString())
+        file1Index < file2Index
+        file2Index < file3Index
+    }
+
     // ============ getStackServices Tests ============
 
     def "getStackServices parses JSON output correctly"() {
@@ -321,6 +443,80 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         def ex = thrown(ExecutionException)
         ex.cause instanceof ComposeServiceException
         ex.cause.errorType == ComposeServiceException.ErrorType.SERVICE_STOP_FAILED
+    }
+
+    // ============ buildDownCommand Tests ============
+
+    def "buildDownCommand builds command with single compose file"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildDownCommand(config, baseCommand)
+
+        then:
+        command == ['docker', 'compose', '-f', composeFile.toString(),
+                    '-p', 'test-project', 'down', '--remove-orphans']
+    }
+
+    def "buildDownCommand includes remove-orphans flag"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildDownCommand(config, baseCommand)
+
+        then:
+        command.contains('--remove-orphans')
+    }
+
+    def "buildDownCommand handles multiple compose files"() {
+        given:
+        def file1 = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def file2 = Files.write(tempDir.resolve("docker-compose.override.yml"), "services:".bytes)
+        def config = new ComposeConfig([file1, file2], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildDownCommand(config, baseCommand)
+
+        then:
+        command.count { it == '-f' } == 2
+        command.contains(file1.toString())
+        command.contains(file2.toString())
+    }
+
+    def "buildDownCommand includes env files when present"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def envFile = Files.write(tempDir.resolve(".env"), "VAR=value".bytes)
+        def config = new ComposeConfig([composeFile], [envFile], "test-project", "test-stack", [:])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildDownCommand(config, baseCommand)
+
+        then:
+        command.contains('--env-file')
+        command.contains(envFile.toString())
+    }
+
+    def "buildDownCommand does not mutate base command"() {
+        given:
+        def composeFile = Files.write(tempDir.resolve("docker-compose.yml"), "services:".bytes)
+        def config = new ComposeConfig([composeFile], "test-project", "test-stack")
+        def baseCommand = ['docker', 'compose']
+        def originalSize = baseCommand.size()
+
+        when:
+        service.buildDownCommand(config, baseCommand)
+
+        then:
+        baseCommand.size() == originalSize  // Ensure clone() worked
     }
 
     // ============ downStack(ComposeConfig) Tests ============
@@ -537,6 +733,133 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         then:
         ready == false
         1 * mockServiceLogger.debug(_ as String)
+    }
+
+    // ============ buildLogsCommand Tests ============
+
+    def "buildLogsCommand builds basic command"() {
+        given:
+        // LogsConfig has default tailLines=100, which will be included in the command
+        def config = new LogsConfig(["service1"])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('-p')
+        command.contains('test-project')
+        command.contains('logs')
+        command.contains('--tail')
+        command.contains('100')
+        command.contains('service1')
+    }
+
+    def "buildLogsCommand includes follow flag when enabled"() {
+        given:
+        def config = new LogsConfig(["service1"], 0, true)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('--follow')
+    }
+
+    def "buildLogsCommand includes tail lines when specified"() {
+        given:
+        def config = new LogsConfig(["service1"], 100, false)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('--tail')
+        command.contains('100')
+    }
+
+    def "buildLogsCommand handles multiple services"() {
+        given:
+        def config = new LogsConfig(["service1", "service2", "service3"])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('service1')
+        command.contains('service2')
+        command.contains('service3')
+    }
+
+    def "buildLogsCommand handles empty services list"() {
+        given:
+        // LogsConfig has default tailLines=100, which will be included even with empty services
+        def config = new LogsConfig([])
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('-p')
+        command.contains('test-project')
+        command.contains('logs')
+        command.contains('--tail')
+        command.contains('100')
+        !command.any { it.startsWith('service') }  // No service names
+    }
+
+    def "buildLogsCommand combines all options"() {
+        given:
+        def config = new LogsConfig(["service1", "service2"], 50, true)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('--follow')
+        command.contains('--tail')
+        command.contains('50')
+        command.contains('service1')
+        command.contains('service2')
+    }
+
+    def "buildLogsCommand handles edge cases: #scenario"() {
+        given:
+        def config = new LogsConfig(services, tailLines, follow)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand(projectName, config, baseCommand)
+
+        then:
+        command.contains(projectName)
+        command.contains('logs')
+
+        where:
+        scenario                      | projectName  | services          | tailLines | follow
+        "no services, no options"     | "proj1"      | []                | 0         | false
+        "single service with follow"  | "proj2"      | ["web"]           | 0         | true
+        "multiple services with tail" | "proj3"      | ["web", "db"]     | 200       | false
+        "all options combined"        | "proj4"      | ["web"]           | 100       | true
+    }
+
+    def "buildLogsCommand includes tail even when zero passed (LogsConfig enforces min of 1)"() {
+        given:
+        // LogsConfig uses Math.max(1, tailLines), so 0 becomes 1
+        def config = new LogsConfig(["service1"], 0, false)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = service.buildLogsCommand("test-project", config, baseCommand)
+
+        then:
+        command.contains('--tail')
+        command.contains('1')  // LogsConfig enforces minimum of 1
     }
 
     // ============ captureLogs Tests ============

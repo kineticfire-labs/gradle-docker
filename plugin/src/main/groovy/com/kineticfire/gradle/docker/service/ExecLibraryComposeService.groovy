@@ -62,7 +62,38 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
     protected List<String> getComposeCommand() {
         return commandValidator.detectComposeCommand()
     }
-    
+
+    /**
+     * Pure function - Build docker compose up command from configuration.
+     * 100% unit testable with no external dependencies.
+     *
+     * @param config Compose configuration
+     * @param baseCommand Base compose command (e.g., ['docker', 'compose'])
+     * @return Complete command list ready for execution
+     */
+    @VisibleForTesting
+    protected List<String> buildUpCommand(ComposeConfig config, List<String> baseCommand) {
+        def command = baseCommand.clone()
+
+        // Add compose files
+        config.composeFiles.each { file ->
+            command.addAll(["-f", file.toString()])
+        }
+
+        // Add project name
+        command.addAll(["-p", config.projectName])
+
+        // Add env files
+        config.envFiles.each { envFile ->
+            command.addAll(["--env-file", envFile.toString()])
+        }
+
+        // Add the up command
+        command.addAll(["up", "-d"])
+
+        return command
+    }
+
     @Override
     CompletableFuture<ComposeState> upStack(ComposeConfig config) {
         if (config == null) {
@@ -71,28 +102,14 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         return CompletableFuture.supplyAsync({
             try {
                 serviceLogger.info("Starting Docker Compose stack: ${config.stackName}")
-                
+
+                // Build command (pure logic - extracted)
                 def composeCommand = getComposeCommand()
-                def command = composeCommand.clone()
-                
-                // Add compose files
-                config.composeFiles.each { file ->
-                    command.addAll(["-f", file.toString()])
-                }
-                
-                // Add project name
-                command.addAll(["-p", config.projectName])
-                
-                // Add env files
-                config.envFiles.each { envFile ->
-                    command.addAll(["--env-file", envFile.toString()])
-                }
-                
-                // Add the up command
-                command.addAll(["up", "-d"])
-                
+                def command = buildUpCommand(config, composeCommand)
+
                 serviceLogger.debug("Executing: ${command.join(' ')}")
-                
+
+                // Execute command (external call - keep minimal)
                 def workingDir = config.composeFiles.first().parent.toFile()
                 def result = processExecutor.execute(command, workingDir)
                 
@@ -191,6 +208,37 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         })
     }
     
+    /**
+     * Pure function - Build docker compose down command from configuration.
+     * 100% unit testable with no external dependencies.
+     *
+     * @param config Compose configuration
+     * @param baseCommand Base compose command (e.g., ['docker', 'compose'])
+     * @return Complete command list ready for execution
+     */
+    @VisibleForTesting
+    protected List<String> buildDownCommand(ComposeConfig config, List<String> baseCommand) {
+        def command = baseCommand.clone()
+
+        // Add compose files for proper teardown
+        config.composeFiles.each { file ->
+            command.addAll(["-f", file.toString()])
+        }
+
+        // Add project name
+        command.addAll(["-p", config.projectName])
+
+        // Add env files if present
+        config.envFiles.each { envFile ->
+            command.addAll(["--env-file", envFile.toString()])
+        }
+
+        // Add the down command
+        command.addAll(["down", "--remove-orphans"])
+
+        return command
+    }
+
     @Override
     CompletableFuture<Void> downStack(ComposeConfig config) {
         if (config == null) {
@@ -199,28 +247,14 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         return CompletableFuture.runAsync({
             try {
                 serviceLogger.info("Stopping Docker Compose stack: ${config.stackName} (project: ${config.projectName})")
-                
+
+                // Build command (pure logic - extracted)
                 def composeCommand = getComposeCommand()
-                def command = composeCommand.clone()
-                
-                // Add compose files for proper teardown
-                config.composeFiles.each { file ->
-                    command.addAll(["-f", file.toString()])
-                }
-                
-                // Add project name
-                command.addAll(["-p", config.projectName])
-                
-                // Add env files if present
-                config.envFiles.each { envFile ->
-                    command.addAll(["--env-file", envFile.toString()])
-                }
-                
-                // Add the down command
-                command.addAll(["down", "--remove-orphans"])
-                
+                def command = buildDownCommand(config, composeCommand)
+
                 serviceLogger.debug("Executing: ${command.join(' ')}")
-                
+
+                // Execute command (external call - keep minimal)
                 def workingDir = config.composeFiles.first().parent.toFile()
                 def result = processExecutor.execute(command, workingDir)
                 
@@ -319,6 +353,34 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
     }
     
+    /**
+     * Pure function - Build docker compose logs command from configuration.
+     * 100% unit testable with no external dependencies.
+     *
+     * @param projectName Docker Compose project name
+     * @param config Logs configuration
+     * @param baseCommand Base compose command (e.g., ['docker', 'compose'])
+     * @return Complete command list ready for execution
+     */
+    @VisibleForTesting
+    protected List<String> buildLogsCommand(String projectName, LogsConfig config, List<String> baseCommand) {
+        def command = baseCommand + ["-p", projectName, "logs"]
+
+        if (config.follow) {
+            command.add("--follow")
+        }
+
+        if (config.tailLines > 0) {
+            command.addAll(["--tail", config.tailLines.toString()])
+        }
+
+        if (config.services && !config.services.isEmpty()) {
+            command.addAll(config.services)
+        }
+
+        return command
+    }
+
     @Override
     CompletableFuture<String> captureLogs(String projectName, LogsConfig config) {
         if (projectName == null) {
@@ -330,22 +392,12 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         return CompletableFuture.supplyAsync({
             try {
                 serviceLogger.info("Capturing logs for project: ${projectName}")
-                
+
+                // Build command (pure logic - extracted)
                 def composeCommand = getComposeCommand()
-                def command = composeCommand + ["-p", projectName, "logs"]
-                
-                if (config.follow) {
-                    command.add("--follow")
-                }
-                
-                if (config.tailLines > 0) {
-                    command.addAll(["--tail", config.tailLines.toString()])
-                }
-                
-                if (config.services && !config.services.isEmpty()) {
-                    command.addAll(config.services)
-                }
-                
+                def command = buildLogsCommand(projectName, config, composeCommand)
+
+                // Execute command (external call - keep minimal)
                 def result = processExecutor.execute(command)
                 
                 if (!result.isSuccess()) {
