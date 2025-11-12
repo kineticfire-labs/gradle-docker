@@ -180,7 +180,7 @@ class ComposeOutputParserTest extends Specification {
         services.containsKey("web")
         services["web"].containerId == "abc123"
         services["web"].containerName == "web"
-        services["web"].state == "RUNNING"
+        services["web"].state == "running"
         services["web"].publishedPorts.size() == 1
     }
 
@@ -196,8 +196,8 @@ class ComposeOutputParserTest extends Specification {
         services.size() == 2
         services.containsKey("web")
         services.containsKey("db")
-        services["web"].state == "RUNNING"
-        services["db"].state == "HEALTHY"
+        services["web"].state == "running"
+        services["db"].state == "healthy"
     }
 
     def "parseServicesJson extracts service name from Name field when Service missing"() {
@@ -260,7 +260,7 @@ class ComposeOutputParserTest extends Specification {
 
         then:
         services.size() == 1
-        services["web"].state == "RUNNING"
+        services["web"].state == "running"
     }
 
     def "parseServicesJson handles missing ID field (defaults to 'unknown')"() {
@@ -318,7 +318,7 @@ class ComposeOutputParserTest extends Specification {
         info != null
         info.containerId == "abc123"
         info.containerName == "web"
-        info.state == "RUNNING"
+        info.state == "running"
         info.publishedPorts.size() == 1
     }
 
@@ -347,7 +347,7 @@ class ComposeOutputParserTest extends Specification {
         then:
         info != null
         info.containerName == "database"
-        info.state == "HEALTHY"
+        info.state == "healthy"
     }
 
     def "parseServiceInfoFromJson handles Name field without underscores"() {

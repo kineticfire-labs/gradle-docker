@@ -146,7 +146,7 @@ class ComposeOutputParser {
         return new ServiceInfo(
             json.ID ?: 'unknown',
             serviceName,
-            serviceState.name(),
+            serviceState.toString(),
             portMappings
         )
     }

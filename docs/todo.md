@@ -19,7 +19,7 @@
 7. Be sure using "docker compose" and not with hyphen "docker-compose"
 8. put all the dependencies in the toml file
 9. "docker ps -a" should leave any containers after integration test code runs
-9. if i `./gradlw build` then functional tests should run
+9. if do `./gradlew build` then functional tests should run
 10. tests that are *.disabled
 11. todo statements in CLAUDE.md
 12. there are disabled functional tests

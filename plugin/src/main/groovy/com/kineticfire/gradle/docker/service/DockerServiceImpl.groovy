@@ -119,11 +119,11 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
                 def config = prepareBuildConfiguration(context)
 
                 // 2. Execute build (external call - documented in gap file)
-                def imageId = executeBuild(config)
+                def imageId = this.executeBuild(config)
 
                 // 3. Apply additional tags (external call - documented in gap file)
                 if (!config.additionalTags.isEmpty()) {
-                    applyAdditionalTags(imageId, config.additionalTags)
+                    this.applyAdditionalTags(imageId, config.additionalTags)
                 }
 
                 println "Successfully built Docker image with all tags: ${context.tags} (ID: ${imageId})"
@@ -154,7 +154,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
      * @param config Build configuration
      * @return Image ID of built image
      */
-    private String executeBuild(BuildConfiguration config) {
+    protected String executeBuild(BuildConfiguration config) {
         def buildImageResultCallback = new BuildImageResultCallback() {
             @Override
             void onNext(BuildResponseItem item) {
@@ -243,7 +243,7 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
      * @param imageId Image ID to tag
      * @param additionalTags List of additional tags to apply
      */
-    private void applyAdditionalTags(String imageId, List<String> additionalTags) {
+    protected void applyAdditionalTags(String imageId, List<String> additionalTags) {
         println "Applying additional tags: ${additionalTags}"
         additionalTags.each { tag ->
             println "Tagging ${imageId} as ${tag}"
