@@ -26,7 +26,6 @@ import org.gradle.testkit.runner.GradleRunner
  */
 class PullIfMissingFunctionalTest extends Specification {
 
-    @Ignore("Validation method exists in ImageSpec.validatePullIfMissingConfiguration() but is never called - validation not enforced")
     def "pullIfMissing validation prevents conflicting configuration"() {
         given:
         def projectDir = File.createTempDir()
@@ -69,13 +68,12 @@ class PullIfMissingFunctionalTest extends Specification {
 
         then:
         result.output.contains("Cannot set pullIfMissing=true when build context is configured")
-        result.task(':dockerSaveMyImage').outcome == TaskOutcome.FAILED
+        // Build fails at configuration time, so task is never created (which is correct behavior)
 
         cleanup:
         projectDir.deleteDir()
     }
 
-    @Ignore("Different validation triggers first - expects specific pullIfMissing validation that doesn't run")
     def "pullIfMissing validation requires sourceRef when enabled"() {
         given:
         def projectDir = File.createTempDir()
@@ -110,8 +108,8 @@ class PullIfMissingFunctionalTest extends Specification {
                 .buildAndFail()
 
         then:
-        result.output.contains("pullIfMissing=true requires either sourceRef or sourceRefImageName")
-        result.task(':dockerSaveMyImage').outcome == TaskOutcome.FAILED
+        result.output.contains("pullIfMissing=true requires either sourceRef, sourceRefRepository, or sourceRefImageName")
+        // Build fails at configuration time, so task is never created (which is correct behavior)
 
         cleanup:
         projectDir.deleteDir()

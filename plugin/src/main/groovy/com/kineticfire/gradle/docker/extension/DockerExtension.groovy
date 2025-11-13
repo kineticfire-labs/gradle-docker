@@ -105,7 +105,13 @@ abstract class DockerExtension {
             // Consider it explicit if path doesn't end with the convention path
             hasExplicitContext = !contextPath.endsWith(conventionPath)
         }
-        
+
+        // Call ImageSpec's pullIfMissing-specific validation methods
+        // Note: validateModeConsistency() is NOT called here because the plugin design
+        // intentionally allows mixing Build Mode and SourceRef properties (they are used by different tasks)
+        imageSpec.validatePullIfMissingConfiguration()
+        imageSpec.validateSourceRefConfiguration()
+
         // Validate required properties for nomenclature (only if not using sourceRef)
         if (!hasSourceRef) {
             validateNomenclature(imageSpec)
