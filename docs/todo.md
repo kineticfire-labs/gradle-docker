@@ -2,6 +2,9 @@
 
 ## Re-enable functional tests
 
+### Phase 2
+3. DockerPublishValidationFunctionalTest.groovy - 6 tests skipped (disabled with @IgnoreIf for Gradle 9)
+4. ImageReferenceValidationFunctionalTest.groovy - 8 tests commented out
 
 
 ## Clean-up

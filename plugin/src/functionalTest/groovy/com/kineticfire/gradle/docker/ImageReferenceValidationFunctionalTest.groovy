@@ -101,7 +101,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -135,7 +135,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 
@@ -166,7 +166,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 
@@ -197,7 +197,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 
@@ -233,7 +233,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -269,7 +269,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -301,7 +301,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 
@@ -332,7 +332,7 @@ CMD ["echo", "test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 

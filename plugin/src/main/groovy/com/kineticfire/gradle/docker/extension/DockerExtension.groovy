@@ -123,6 +123,34 @@ abstract class DockerExtension {
                     "Cannot mix Build Mode and SourceRef Mode"
                 )
             }
+
+            // Validate SourceRef approach consistency (repository vs namespace+imageName)
+            def hasRepositoryApproach = imageSpec.sourceRefRepository.isPresent() &&
+                                       !imageSpec.sourceRefRepository.get().isEmpty()
+            def hasNamespaceComponent = (imageSpec.sourceRefNamespace.isPresent() &&
+                                         !imageSpec.sourceRefNamespace.get().isEmpty()) ||
+                                        (imageSpec.sourceRefImageName.isPresent() &&
+                                         !imageSpec.sourceRefImageName.get().isEmpty())
+
+            // Cannot mix repository and namespace approaches
+            if (hasRepositoryApproach && hasNamespaceComponent) {
+                throw new GradleException(
+                    "Cannot use both repository approach and namespace+imageName approach"
+                )
+            }
+
+            // If using namespace, imageName is also required
+            // Note: imageName alone (without namespace) is valid
+            def hasNamespace = imageSpec.sourceRefNamespace.isPresent() &&
+                              !imageSpec.sourceRefNamespace.get().isEmpty()
+            def hasImageName = imageSpec.sourceRefImageName.isPresent() &&
+                              !imageSpec.sourceRefImageName.get().isEmpty()
+
+            if (hasNamespace && !hasImageName) {
+                throw new GradleException(
+                    "When using namespace+imageName approach, both namespace and imageName are required"
+                )
+            }
         }
 
         // Validate required properties - must have at least one context source

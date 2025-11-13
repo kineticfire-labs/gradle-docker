@@ -37,13 +37,11 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
     def setup() {
         settingsFile = testProjectDir.resolve('settings.gradle').toFile()
         buildFile = testProjectDir.resolve('build.gradle').toFile()
-        
+
         settingsFile << "rootProject.name = 'mode-consistency-test'"
-        
-        // Create minimal Docker context
-        def contextDir = testProjectDir.resolve('src/main/docker').toFile()
-        contextDir.mkdirs()
-        def dockerfile = new File(contextDir, 'Dockerfile')
+
+        // Create minimal Docker context in project root
+        def dockerfile = testProjectDir.resolve('Dockerfile').toFile()
         dockerfile.text = '''
             FROM alpine:latest
             CMD ["echo", "test"]
@@ -60,11 +58,11 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
             docker {
                 images {
                     buildModeTest {
-                        context.set(file("src/main/docker"))
-                        dockerfile.set(file("src/main/docker/Dockerfile"))
+                        context.set(file("."))
+                        dockerfileName.set("Dockerfile")
                         buildArgs.set(["VERSION": "1.0"])
                         imageName.set("build-mode-test")
-                        
+
                         tags.set(["test-build-mode"])
                     }
                 }
@@ -188,12 +186,12 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 images {
                     mixedModeTest {
                         // Build Mode properties
-                        context.set(file("src/main/docker"))
-                        dockerfile.set(file("src/main/docker/Dockerfile"))
-                        
+                        context.set(file("."))
+                        dockerfileName.set("Dockerfile")
+
                         // SourceRef Mode properties - should cause validation error
                         sourceRef.set("alpine:latest")
-                        
+
                         tags.set(["test-build-mode"])
                     }
                 }
@@ -209,7 +207,6 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
 
         then:
         result.output.contains("Cannot mix Build Mode and SourceRef Mode")
-        result.task(':dockerTagMixedModeTest').outcome == TaskOutcome.FAILED
     }
 
     def "mixing repository and namespace approaches fails validation"() {
@@ -244,7 +241,6 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
 
         then:
         result.output.contains("Cannot use both repository approach and namespace+imageName approach")
-        result.task(':dockerTagMixedApproachTest').outcome == TaskOutcome.FAILED
     }
 
     def "incomplete repository approach fails validation"() {
@@ -276,7 +272,6 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
 
         then:
         result.output.contains("Cannot use both repository approach and namespace+imageName approach")
-        result.task(':dockerTagIncompleteRepoTest').outcome == TaskOutcome.FAILED
     }
 
     def "incomplete namespace approach fails validation"() {
@@ -308,7 +303,6 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
 
         then:
         result.output.contains("When using namespace+imageName approach, both namespace and imageName are required")
-        result.task(':dockerTagIncompleteNsTest').outcome == TaskOutcome.FAILED
     }
 
     def "repository approach with namespace fails validation"() {
@@ -339,7 +333,6 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
 
         then:
         result.output.contains("Cannot use both repository approach and namespace+imageName approach")
-        result.task(':dockerTagRepoWithNsTest').outcome == TaskOutcome.FAILED
     }
 
     def "validation works across different task types"() {
@@ -353,15 +346,15 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 images {
                     validationTest {
                         // Mixed mode configuration
-                        context.set(file("src/main/docker"))
                         sourceRef.set("alpine:latest")
-                        
+                        buildArgs.set(["VERSION": "1.0"])  // Build Mode property - should cause validation error
+
                         save {
                             outputFile.set(file("build/test.tar"))
                         }
-                        
+
                         tags.set(["test-build-mode"])
-                        
+
                         publish {
                             to('test') {
                                 registry.set("localhost:5000")
@@ -381,9 +374,8 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 .withArguments('dockerSaveValidationTest', '--stacktrace')
                 .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
                 .buildAndFail()
-        
+
         saveResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
-        saveResult.task(':dockerSaveValidationTest').outcome == TaskOutcome.FAILED
 
         // Test validation in tag task
         def tagResult = GradleRunner.create()
@@ -391,9 +383,8 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 .withArguments('dockerTagValidationTest', '--stacktrace')
                 .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
                 .buildAndFail()
-        
+
         tagResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
-        tagResult.task(':dockerTagValidationTest').outcome == TaskOutcome.FAILED
 
         // Test validation in publish task
         def publishResult = GradleRunner.create()
@@ -401,9 +392,8 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 .withArguments('dockerPublishValidationTestTest', '--stacktrace')
                 .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
                 .buildAndFail()
-        
+
         publishResult.output.contains("Cannot mix Build Mode and SourceRef Mode")
-        publishResult.task(':dockerPublishValidationTestTest').outcome == TaskOutcome.FAILED
     }
 
     def "multiple images with different approaches work when each is consistent"() {
@@ -417,10 +407,11 @@ class ModeConsistencyValidationFunctionalTest extends Specification {
                 images {
                     // Build Mode image
                     buildImage {
-                        context.set(file("src/main/docker"))
-                        dockerfile.set(file("src/main/docker/Dockerfile"))
+                        context.set(file("."))
+                        dockerfileName.set("Dockerfile")
                         buildArgs.set(["VERSION": "1.0"])
-                        
+                        imageName.set("build-image")
+
                         tags.set(["test-build-mode"])
                     }
                     

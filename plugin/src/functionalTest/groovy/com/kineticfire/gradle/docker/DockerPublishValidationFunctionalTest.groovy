@@ -104,7 +104,7 @@ CMD ["echo", "functional test image"]
         when: "Gradle tasks are listed to trigger configuration and validation"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -137,7 +137,7 @@ CMD ["echo", "functional test image"]
         when: "Gradle tasks are executed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .buildAndFail()
 
@@ -180,7 +180,7 @@ CMD ["echo", "functional test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('dockerPublishRepoTest', '--dry-run')
             .build()
 
@@ -225,7 +225,7 @@ CMD ["echo", "functional test image"]
         when: "Plugin configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('dockerPublishTimeServer', '--dry-run')
             .build()
 
@@ -252,7 +252,7 @@ CMD ["echo", "functional test image"]
         when: "Gradle configuration is processed"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks')
             .build()
 
@@ -300,7 +300,7 @@ CMD ["echo", "functional test image"]
         when: "Gradle processes complex configuration"
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir)
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
