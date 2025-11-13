@@ -2,7 +2,6 @@
 
 ## Re-enable functional tests
 
-- Calculating task graph as no cached configuration is available for tasks: clean functionalTest build publishToMavenLocal
 - Phase 3
 
 
