@@ -2,7 +2,6 @@
 
 
 ## Clean-up
-1. rename from gradle-docker to docker
 2. why do unit tests take so long to run
 3. document in CLAUDE.md how long it takes unit tests and integration tests to run
 1. remove temp/debug/backup files/dirs
