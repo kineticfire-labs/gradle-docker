@@ -166,6 +166,15 @@ class DockerProviderAPIFunctionalTest extends Specification {
         result.output.contains('Provider chain resolution verification completed')
     }
 
+    /*
+     * COMMENTED OUT: This test was corrupted and incomplete. It was already marked as @Ignore.
+     * The test code has syntax errors and needs to be rewritten from scratch if needed.
+     *
+     * Original annotation: @Ignore("Temporarily disabled due to complex Provider API issues")
+     * Test name: "docker Provider API supports late-bound property resolution with interdependencies"
+     */
+
+    /*
     @Ignore("Temporarily disabled due to complex Provider API issues")
     def "docker Provider API supports late-bound property resolution with interdependencies"() {
         given:
@@ -199,7 +208,14 @@ class DockerProviderAPIFunctionalTest extends Specification {
             def namespaceProvider = providers.provider {
                 def mode = deploymentModeProvider.get()
                 def projectName = project.name
-                return "${baseVersion}-${safeBranch}-build.${buildNumber}").split(File.pathSeparator).collect { new File(it) })
+                return "TODO: THIS TEST WAS INCOMPLETE/CORRUPTED"
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyProviderComposition', '--info')
             .build()
 
@@ -210,4 +226,5 @@ class DockerProviderAPIFunctionalTest extends Specification {
         result.output.contains('Namespace: development/base/apps')
         result.output.contains('Provider composition verification completed')
     }
+    */
 }

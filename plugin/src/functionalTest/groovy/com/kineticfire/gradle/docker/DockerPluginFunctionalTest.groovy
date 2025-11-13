@@ -241,11 +241,27 @@ class DockerPluginFunctionalTest extends Specification {
     def "creates compose tasks for configured stacks with proper naming"() {
         given:
         settingsFile << "rootProject.name = 'test-compose-tasks'"
+
+        // Create minimal compose files for the test
+        def devComposeFile = testProjectDir.resolve('docker-compose.dev.yml').toFile()
+        devComposeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+
+        def testComposeFile = testProjectDir.resolve('docker-compose.test.yml').toFile()
+        testComposeFile << """
+            services:
+              test:
+                image: alpine:latest
+        """
+
         buildFile << """
             plugins {
                 id 'com.kineticfire.gradle.docker'
             }
-            
+
             dockerOrch {
                 composeStacks {
                     devEnv {
