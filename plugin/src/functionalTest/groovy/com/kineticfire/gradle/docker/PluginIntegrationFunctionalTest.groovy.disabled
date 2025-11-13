@@ -51,7 +51,7 @@ class PluginIntegrationFunctionalTest extends Specification {
         buildFile << """
             plugins {
                 id 'java'
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             task verifyExtensionMethods {
@@ -89,7 +89,7 @@ class PluginIntegrationFunctionalTest extends Specification {
         buildFile << """
             plugins {
                 id 'java'
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {

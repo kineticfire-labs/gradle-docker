@@ -59,7 +59,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-plugin-apply'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
         """
 
@@ -84,7 +84,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-docker-nomenclature'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -146,7 +146,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-compose-config'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -199,7 +199,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-task-creation'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -243,7 +243,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-compose-tasks'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -279,7 +279,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-auth-config'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -330,7 +330,7 @@ class DockerPluginFunctionalTest extends Specification {
         settingsFile << "rootProject.name = 'test-build-config'"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {

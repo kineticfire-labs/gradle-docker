@@ -124,7 +124,7 @@ gradlePlugin {
     
     plugins {
         gradleDockerPlugin {
-            id = 'com.kineticfire.gradle.gradle-docker'
+            id = 'com.kineticfire.gradle.docker'
             implementationClass = 'com.kineticfire.gradle.docker.GradleDockerPlugin'
             displayName = 'Gradle Docker Plugin'
             description = 'Provides Docker image build/publish and Compose orchestration for Gradle projects'

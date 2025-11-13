@@ -36,7 +36,7 @@
 
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 // Ensure integration tests are run from top-level only

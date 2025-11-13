@@ -79,7 +79,7 @@ CMD ["echo", "functional test image"]
         given: "Build file with multiple valid publish targets"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -120,7 +120,7 @@ CMD ["echo", "functional test image"]
         given: "Build file with invalid image tag names"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -152,7 +152,7 @@ CMD ["echo", "functional test image"]
         given: "Build file with valid repository formats"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -199,7 +199,7 @@ CMD ["echo", "functional test image"]
         given: "Configuration that uses enhanced validation features"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -239,7 +239,7 @@ CMD ["echo", "functional test image"]
         given: "Build file with empty docker block"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -266,7 +266,7 @@ CMD ["echo", "functional test image"]
         given: "Build file with complex image configuration"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {

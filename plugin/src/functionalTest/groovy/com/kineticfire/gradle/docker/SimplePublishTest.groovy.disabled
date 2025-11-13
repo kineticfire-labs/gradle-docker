@@ -45,7 +45,7 @@ class SimplePublishTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {

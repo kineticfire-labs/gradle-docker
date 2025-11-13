@@ -39,7 +39,7 @@ class DockerOrchExtensionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().withProjectDir(tempDir.toFile()).build()
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
         extension = project.extensions.getByType(DockerOrchExtension)
     }
 

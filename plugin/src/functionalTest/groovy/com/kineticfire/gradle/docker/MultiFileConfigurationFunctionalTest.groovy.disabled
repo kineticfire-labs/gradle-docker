@@ -98,7 +98,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -167,7 +167,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -233,7 +233,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -279,7 +279,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -309,7 +309,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -358,7 +358,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -411,7 +411,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -466,7 +466,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -539,7 +539,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -600,7 +600,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -659,7 +659,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {
@@ -696,7 +696,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             dockerOrch {

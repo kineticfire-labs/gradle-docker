@@ -2,4 +2,4 @@
 gradle-docker = "1.0.0"
 
 [plugins]
-gradle-docker = { id = "com.kineticfire.gradle.gradle-docker", version.ref = "gradle-docker" }
+gradle-docker = { id = "com.kineticfire.gradle.docker", version.ref = "gradle-docker" }

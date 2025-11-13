@@ -89,7 +89,7 @@ class DockerContextApiFunctionalTest extends Specification {
             }
             
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {
@@ -148,7 +148,7 @@ class DockerContextApiFunctionalTest extends Specification {
             }
             
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {
@@ -196,7 +196,7 @@ class DockerContextApiFunctionalTest extends Specification {
         
         buildFile << """
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {
@@ -232,7 +232,7 @@ class DockerContextApiFunctionalTest extends Specification {
         
         buildFile << """
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {
@@ -288,7 +288,7 @@ class DockerContextApiFunctionalTest extends Specification {
         
         buildFile << """
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {
@@ -345,7 +345,7 @@ class DockerContextApiFunctionalTest extends Specification {
         
         buildFile << """
             // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.gradle-docker'
+            apply plugin: 'com.kineticfire.gradle.docker'
             
             docker {
                 images {

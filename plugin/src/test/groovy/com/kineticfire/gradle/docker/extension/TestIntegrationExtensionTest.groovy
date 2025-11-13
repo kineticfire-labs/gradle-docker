@@ -126,7 +126,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose configures suite lifecycle correctly"() {
         given:
         // Apply plugin to get full setup
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         // Get the extension created by the plugin
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
@@ -236,7 +236,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose fails when compose stack not found"() {
         given:
         // Apply plugin to get dockerOrch extension
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         // Get the extension created by the plugin
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
@@ -254,7 +254,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose fails with invalid lifecycle"() {
         given:
         // Apply plugin to get full setup
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         // Get the extension created by the plugin
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
@@ -285,7 +285,7 @@ class TestIntegrationExtensionTest extends Specification {
     def "usesCompose handles different lifecycle values case-insensitively: #lifecycle"() {
         given:
         // Apply plugin to get full setup
-        project.pluginManager.apply('com.kineticfire.gradle.gradle-docker')
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         // Get the extension created by the plugin
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)

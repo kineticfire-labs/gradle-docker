@@ -74,7 +74,7 @@ CMD ["echo", "test image"]
         given: "Build file with valid full image references"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -118,7 +118,7 @@ CMD ["echo", "test image"]
         given: "Build file with invalid image reference"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -149,7 +149,7 @@ CMD ["echo", "test image"]
         given: "Build file with inconsistent image names"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -180,7 +180,7 @@ CMD ["echo", "test image"]
         given: "Build file with missing tags"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -211,7 +211,7 @@ CMD ["echo", "test image"]
         given: "Build file with complex registry configurations"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -248,7 +248,7 @@ CMD ["echo", "test image"]
         given: "Build file with special characters in image references"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -284,7 +284,7 @@ CMD ["echo", "test image"]
         given: "Build file with empty tags list"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -315,7 +315,7 @@ CMD ["echo", "test image"]
         given: "Build file attempting to use old simple tag format"
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {

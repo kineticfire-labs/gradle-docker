@@ -48,7 +48,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -127,7 +127,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -186,7 +186,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -266,7 +266,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             def registryProvider = providers.gradleProperty('publish.registry').orElse('docker.io')
@@ -332,7 +332,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -383,7 +383,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -461,7 +461,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -504,7 +504,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             def sourceImageProvider = providers.gradleProperty('source.image')
@@ -575,7 +575,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -643,7 +643,7 @@ class DockerPublishFunctionalTest extends Specification {
 
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -721,7 +721,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -765,7 +765,7 @@ class DockerPublishFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {

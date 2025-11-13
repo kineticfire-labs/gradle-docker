@@ -24,4 +24,4 @@ postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 spring-dependency-management = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
-kineticfire-docker = { id = "com.kineticfire.gradle.gradle-docker", version = "1.0.0-SNAPSHOT" }
+kineticfire-docker = { id = "com.kineticfire.gradle.docker", version = "1.0.0-SNAPSHOT" }

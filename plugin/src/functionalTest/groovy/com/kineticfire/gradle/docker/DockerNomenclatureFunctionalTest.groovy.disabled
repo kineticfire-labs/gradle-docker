@@ -50,7 +50,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -84,7 +84,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -120,7 +120,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -158,7 +158,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -213,7 +213,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -264,7 +264,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             docker {
@@ -330,7 +330,7 @@ class DockerNomenclatureFunctionalTest extends Specification {
         
         buildFile << """
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
             
             def registryProvider = providers.gradleProperty('app.registry').orElse('docker.io')

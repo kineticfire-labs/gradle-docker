@@ -16,7 +16,7 @@
 
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 group = 'com.kineticfire.test'

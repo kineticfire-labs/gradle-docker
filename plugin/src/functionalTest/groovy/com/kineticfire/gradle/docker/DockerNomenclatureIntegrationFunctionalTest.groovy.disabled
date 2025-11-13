@@ -53,7 +53,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
             import com.kineticfire.gradle.docker.model.SaveCompression
 
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -178,7 +178,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
             import com.kineticfire.gradle.docker.model.SaveCompression
 
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             def buildVersionProvider = providers.provider {
@@ -308,7 +308,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
             import com.kineticfire.gradle.docker.model.SaveCompression
 
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             def environmentProvider = providers.gradleProperty('deploy.env').orElse('development')

@@ -45,7 +45,7 @@ class SourceRefComponentAssemblyFunctionalTest extends Specification {
         given:
         buildFile.text = '''
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -84,7 +84,7 @@ class SourceRefComponentAssemblyFunctionalTest extends Specification {
         given:
         buildFile.text = '''
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
@@ -121,7 +121,7 @@ class SourceRefComponentAssemblyFunctionalTest extends Specification {
         given:
         buildFile.text = '''
             plugins {
-                id 'com.kineticfire.gradle.gradle-docker'
+                id 'com.kineticfire.gradle.docker'
             }
 
             docker {
