@@ -2,8 +2,15 @@
 
 ## Re-enable functional tests
 
-- Phase 3
-
+- Phase 4 - ✅ COMPLETE
+   - ComposeFunctionalTest.groovy: 6 tests (all skipped - tests obsolete compose {} DSL)
+   - MultiFileConfigurationFunctionalTest.groovy: 12 tests (all passing)
+   - PluginIntegrationFunctionalTest.groovy: 2 tests (all skipped - test framework compatibility issues)
+   - PullIfMissingFunctionalTest.groovy: 6 tests (4 passing + 2 skipped - validation not enforced) 
+- Check at end for ignore: 
+   - Tests obsolete DSL   
+   - Validation that doesn't run or isn't used
+- Do we have 100% functional test coverage?
 
 
 ## Clean-up
@@ -26,10 +33,6 @@
 9. if do `./gradlew build` then functional tests should run
 10. tests that are *.disabled
 11. todo statements in CLAUDE.md
-12. there are disabled functional tests
-13. These are probably not needed:
-   1. old-plugin-integration-test
-   2. plugin-usage-demo
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it

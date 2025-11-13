@@ -66,9 +66,6 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         buildFile = testProjectDir.resolve('build.gradle').toFile()
     }
 
-    // TEMPORARILY DISABLED - All tests in this class use withPluginClasspath() which is incompatible with Gradle 9.0.0 TestKit
-    /*
-
     def "plugin creates compose tasks with multi-file configuration"() {
         given:
         settingsFile << "rootProject.name = 'test-multi-file'"
@@ -114,7 +111,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -183,7 +180,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -253,7 +250,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -295,7 +292,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpIncomplete', '--info')
             .buildAndFail()
 
@@ -325,7 +322,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpEmpty', '--info')
             .buildAndFail()
 
@@ -374,7 +371,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -427,7 +424,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -487,7 +484,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -555,7 +552,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -617,7 +614,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--group', 'docker compose')
             .build()
 
@@ -681,7 +678,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('help', '--task', 'composeUpFullApp')
             .build()
 
@@ -712,16 +709,14 @@ class MultiFileConfigurationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpInvalidPath', '--info')
             .buildAndFail()
 
         then:
-        result.output.contains('does not exist') || 
-        result.output.contains('file not found') || 
+        result.output.contains('does not exist') ||
+        result.output.contains('file not found') ||
         result.output.contains('path.yml') ||
         result.output.contains('relative-missing.yml')
     }
-
-    */
 }

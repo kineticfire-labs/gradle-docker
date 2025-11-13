@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker
 
 import org.gradle.testkit.runner.GradleRunner
 import org.gradle.testkit.runner.TaskOutcome
+import spock.lang.Ignore
 import spock.lang.Specification
 import spock.lang.TempDir
 
@@ -25,16 +26,16 @@ import java.nio.file.Path
 
 /**
  * Functional tests for Docker Compose operations
- * 
- * TEMPORARY DISABLED: These tests are temporarily commented out due to known incompatibility 
- * between Gradle TestKit and Gradle 9.0.0. The issue is tracked and will be re-enabled 
- * when TestKit compatibility is improved or an alternative testing approach is implemented.
- * 
- * Issue: InvalidPluginMetadataException when using withPluginClasspath() in Gradle 9.0.0
- * Root cause: Gradle 9.0.0 TestKit has breaking changes in plugin classpath resolution
- * 
- * Tests affected: All tests using withPluginClasspath() method (6 tests)
- * Functionality affected: 
+ *
+ * NOTE: These tests validate OBSOLETE plugin functionality from an older DSL design.
+ * The original design used `compose {}` configuration block.
+ * The current design uses `dockerOrch {}` configuration block.
+ *
+ * All 6 tests in this class are marked @Ignore as they test the old DSL which no longer exists.
+ * To re-enable these tests, they would need to be completely rewritten for the current DSL.
+ *
+ * Original functionality tested (now obsolete):
+ * - compose {} configuration block - OBSOLETE (now dockerOrch {})
  * - Docker Compose up task execution
  * - Docker Compose down task execution
  * - Environment file support
@@ -55,9 +56,7 @@ class ComposeFunctionalTest extends Specification {
         buildFile = testProjectDir.resolve('build.gradle').toFile()
     }
 
-    // TEMPORARILY DISABLED - All tests in this class use withPluginClasspath() which is incompatible with Gradle 9.0.0 TestKit
-    /*
-
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose up task executes successfully with valid compose file"() {
         given:
         settingsFile << "rootProject.name = 'test-compose'"
@@ -92,7 +91,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpTest', '--info')
             .build()
 
@@ -101,6 +100,7 @@ class ComposeFunctionalTest extends Specification {
         result.output.contains('Starting Docker Compose stack') || result.output.contains('compose')
     }
 
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose down task executes successfully"() {
         given:
         settingsFile << "rootProject.name = 'test-compose-down'"
@@ -132,7 +132,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeDownTest', '--info')
             .build()
 
@@ -141,6 +141,7 @@ class ComposeFunctionalTest extends Specification {
         result.output.contains('Stopping Docker Compose stack') || result.output.contains('compose')
     }
 
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose up task with environment file"() {
         given:
         settingsFile << "rootProject.name = 'test-compose-env'"
@@ -183,7 +184,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpEnv_test', '--info')
             .build()
 
@@ -192,6 +193,7 @@ class ComposeFunctionalTest extends Specification {
         result.output.contains('Starting Docker Compose stack') || result.output.contains('compose')
     }
 
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose up task with profiles"() {
         given:
         settingsFile << "rootProject.name = 'test-compose-profiles'"
@@ -235,7 +237,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpDev', '--info')
             .build()
 
@@ -244,6 +246,7 @@ class ComposeFunctionalTest extends Specification {
         result.output.contains('Starting Docker Compose stack') || result.output.contains('compose')
     }
 
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose up task fails with invalid compose file"() {
         given:
         settingsFile << "rootProject.name = 'test-invalid-compose'"
@@ -277,7 +280,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpBroken', '--info')
             .buildAndFail()
 
@@ -286,6 +289,7 @@ class ComposeFunctionalTest extends Specification {
         result.output.contains('Docker Compose') || result.output.contains('compose')
     }
 
+    @Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
     def "compose up task fails when Docker Compose not available"() {
         given:
         settingsFile << "rootProject.name = 'test-no-compose'"
@@ -317,7 +321,7 @@ class ComposeFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpTest', '--info')
             .buildAndFail()
 
@@ -325,5 +329,4 @@ class ComposeFunctionalTest extends Specification {
         result.task(':composeUpTest').outcome == TaskOutcome.FAILED
         result.output.contains('Docker Compose') || result.output.contains('compose')
     }
-    */
 }
