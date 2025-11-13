@@ -3,8 +3,10 @@
 ## Re-enable functional tests
 
 - Check at end for ignore:
-   - Tests obsolete DSL
    - Validation that doesn't run or isn't used
+   - I identified 2 functional tests in PullIfMissingFunctionalTest.groovy that are marked @Ignore because they test validation logic that exists in the code but
+     is never actually called by the plugin.
+
 - Do we have 100% functional test coverage?
 
 
