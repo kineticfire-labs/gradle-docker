@@ -320,7 +320,7 @@ provides:
 ```groovy
 plugins {
     id 'groovy'  // or 'java'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 docker {
@@ -393,7 +393,7 @@ The convention works regardless of your main application language.
 plugins {
     id 'java'          // Main app is Java
     id 'groovy'        // Add groovy for Spock tests
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 dependencies {
@@ -454,7 +454,7 @@ sourceSets {
 
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 // Plugin sees existing source set and won't create its own
 ```

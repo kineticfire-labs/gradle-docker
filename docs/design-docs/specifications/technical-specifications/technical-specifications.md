@@ -40,7 +40,7 @@ Users apply the plugin and configure Docker operations using an intuitive DSL:
 
 ```groovy
 plugins { 
-    id "com.kineticfire.gradle.gradle-docker" version "1.0.0" 
+    id "com.kineticfire.gradle.docker" version "1.0.0" 
 }
 
 docker {
@@ -867,7 +867,7 @@ class GradleDockerPluginFunctionalSpec extends Specification {
     def "should generate per-image tasks"() {
         given:
         buildFile << """
-            plugins { id 'com.kineticfire.gradle.gradle-docker' }
+            plugins { id 'com.kineticfire.gradle.docker' }
             docker {
                 images {
                     image('alpine') {
@@ -1034,7 +1034,7 @@ gradlePlugin {
     
     plugins {
         gradleDockerPlugin {
-            id = 'com.kineticfire.gradle.gradle-docker'
+            id = 'com.kineticfire.gradle.docker'
             implementationClass = 'com.kineticfire.gradle.docker.GradleDockerPlugin'
             displayName = 'Gradle Docker Plugin'
             description = 'Provides Docker image build/publish and Compose orchestration for Gradle projects'
@@ -1044,7 +1044,7 @@ gradlePlugin {
 }
 ```
 
-**Plugin Descriptor** (`src/main/resources/META-INF/gradle-plugins/com.kineticfire.gradle.gradle-docker.properties`):
+**Plugin Descriptor** (`src/main/resources/META-INF/gradle-plugins/com.kineticfire.gradle.docker.properties`):
 ```properties
 implementation-class=com.kineticfire.gradle.docker.GradleDockerPlugin
 ```
@@ -1077,7 +1077,7 @@ plugin/
 │   │   │       ├── ComposeStackSpec.groovy
 │   │   │       └── [other spec classes]
 │   │   └── resources/META-INF/gradle-plugins/
-│   │       └── com.kineticfire.gradle.gradle-docker.properties
+│   │       └── com.kineticfire.gradle.docker.properties
 │   ├── test/groovy/                               # Unit tests
 │   └── functionalTest/groovy/                     # Functional tests
 └── build.gradle

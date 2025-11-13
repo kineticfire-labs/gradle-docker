@@ -1,8 +1,8 @@
-# Refactor Plugin ID: `com.kineticfire.gradle.gradle-docker` → `com.kineticfire.gradle.docker`
+# Refactor Plugin ID: `com.kineticfire.gradle.docker` → `com.kineticfire.gradle.docker`
 
 ## Objective
 
-Change the plugin ID from `com.kineticfire.gradle.gradle-docker` to `com.kineticfire.gradle.docker` throughout the
+Change the plugin ID from `com.kineticfire.gradle.docker` to `com.kineticfire.gradle.docker` throughout the
 entire codebase, including plugin implementation, tests, and documentation.
 
 **Reason**: Simplify plugin ID by removing the redundant "gradle" prefix. The project and repository will remain named
@@ -11,7 +11,7 @@ entire codebase, including plugin implementation, tests, and documentation.
 **Current usage**:
 ```groovy
 plugins {
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 ```
 
@@ -34,7 +34,7 @@ plugins {
 5. **Documentation**: ~20+ README and usage documentation files in `docs/` and `plugin-integration-test/`
 
 ### Total Occurrences:
-- **Direct string references**: ~40+ occurrences of `com.kineticfire.gradle.gradle-docker`
+- **Direct string references**: ~40+ occurrences of `com.kineticfire.gradle.docker`
 - **Implicit references**: Plugin descriptor generated from `plugin/build.gradle`
 - **Total files to modify**: ~107 files
 
@@ -56,7 +56,7 @@ gradlePlugin {
 
     plugins {
         gradleDockerPlugin {
-            id = 'com.kineticfire.gradle.gradle-docker'
+            id = 'com.kineticfire.gradle.docker'
             implementationClass = 'com.kineticfire.gradle.docker.GradleDockerPlugin'
             ...
         }
@@ -80,7 +80,7 @@ gradlePlugin {
 
 **Impact**: This is the **single source of truth** for the plugin ID. When Gradle builds the plugin:
 - It generates `META-INF/gradle-plugins/com.kineticfire.gradle.docker.properties`
-- The old `com.kineticfire.gradle.gradle-docker.properties` will no longer be generated
+- The old `com.kineticfire.gradle.docker.properties` will no longer be generated
 - The `implementationClass` remains unchanged: `com.kineticfire.gradle.docker.GradleDockerPlugin`
 
 **Verification Step**:
@@ -113,7 +113,7 @@ rg "com\.kineticfire\.gradle\.gradle-docker" plugin/src/test/
 ```groovy
 // Pattern 1: Plugin application in tests
 // BEFORE:
-project.apply plugin: 'com.kineticfire.gradle.gradle-docker'
+project.apply plugin: 'com.kineticfire.gradle.docker'
 
 // AFTER:
 project.apply plugin: 'com.kineticfire.gradle.docker'
@@ -121,7 +121,7 @@ project.apply plugin: 'com.kineticfire.gradle.docker'
 // Pattern 2: Plugin ID in plugins block
 // BEFORE:
 plugins {
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 // AFTER:
@@ -131,7 +131,7 @@ plugins {
 
 // Pattern 3: String literals in assertions
 // BEFORE:
-assert pluginId == 'com.kineticfire.gradle.gradle-docker'
+assert pluginId == 'com.kineticfire.gradle.docker'
 
 // AFTER:
 assert pluginId == 'com.kineticfire.gradle.docker'
@@ -167,7 +167,7 @@ rg "com\.kineticfire\.gradle\.gradle-docker" plugin/src/functionalTest/
 // BEFORE:
 buildFile << """
     plugins {
-        id 'com.kineticfire.gradle.gradle-docker'
+        id 'com.kineticfire.gradle.docker'
     }
 
     docker {
@@ -236,7 +236,7 @@ cd plugin
 // BEFORE:
 pluginManagement {
     plugins {
-        id 'com.kineticfire.gradle.gradle-docker' version "${providers.gradleProperty('plugin_version').get()}"
+        id 'com.kineticfire.gradle.docker' version "${providers.gradleProperty('plugin_version').get()}"
     }
     repositories {
         mavenLocal()
@@ -259,7 +259,7 @@ pluginManagement {
 ```
 
 **Impact**: This change affects ALL 59 build.gradle files in integration tests that use
-`id 'com.kineticfire.gradle.gradle-docker'` without specifying version (version comes from pluginManagement).
+`id 'com.kineticfire.gradle.docker'` without specifying version (version comes from pluginManagement).
 
 #### 4.2 Update All Integration Test build.gradle Files
 **Files to update** (~59 files):
@@ -284,7 +284,7 @@ rg --files-with-matches "com\.kineticfire\.gradle\.gradle-docker" plugin-integra
 // BEFORE:
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 docker {
@@ -355,7 +355,7 @@ First, add the plugin to your `build.gradle`:
 
 ```gradle
 plugins {
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 ```
 
@@ -502,7 +502,7 @@ cd plugin
 # Verify plugin descriptor file
 ls -la build/resources/main/META-INF/gradle-plugins/
 # Should contain: com.kineticfire.gradle.docker.properties
-# Should NOT contain: com.kineticfire.gradle.gradle-docker.properties
+# Should NOT contain: com.kineticfire.gradle.docker.properties
 
 cat build/resources/main/META-INF/gradle-plugins/com.kineticfire.gradle.docker.properties
 # Expected content:
@@ -602,7 +602,7 @@ rg "com\.kineticfire\.gradle\.gradle-docker" --type-not md | grep -v "refactor-p
   - [ ] `plugin/build.gradle` line 127 changed to `id = 'com.kineticfire.gradle.docker'`
   - [ ] Plugin builds successfully
   - [ ] Plugin descriptor file `com.kineticfire.gradle.docker.properties` exists
-  - [ ] Old plugin descriptor file `com.kineticfire.gradle.gradle-docker.properties` does NOT exist
+  - [ ] Old plugin descriptor file `com.kineticfire.gradle.docker.properties` does NOT exist
 
 - [ ] Phase 2: Unit tests updated
   - [ ] 2 unit test files updated
@@ -624,7 +624,7 @@ rg "com\.kineticfire\.gradle\.gradle-docker" --type-not md | grep -v "refactor-p
   - [ ] 4 usage documentation files updated (`docs/usage/*.md`)
   - [ ] ~20 README files updated (`plugin-integration-test/**/README.md`)
   - [ ] Design documentation files updated (`docs/design-docs/**/*.md`)
-  - [ ] No remaining occurrences of `com.kineticfire.gradle.gradle-docker` (except in this plan file)
+  - [ ] No remaining occurrences of `com.kineticfire.gradle.docker` (except in this plan file)
 
 - [ ] Final verification
   - [ ] Complete workflow runs successfully from clean state

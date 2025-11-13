@@ -147,7 +147,7 @@ This file is written after successful `composeUp` and passed to test tasks via s
 plugins {
   id "groovy"
   id "java" // for integration tests in Java
-  id "com.kineticfire.gradle.gradle-docker" version "0.1.0"
+  id "com.kineticfire.gradle.docker" version "0.1.0"
 }
 
 repositories { mavenCentral() }

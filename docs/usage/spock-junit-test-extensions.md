@@ -598,7 +598,7 @@ Both Spock and JUnit 5 extensions require:
 ```gradle
 plugins {
     id 'java'  // or 'groovy' for Spock
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 
 repositories {

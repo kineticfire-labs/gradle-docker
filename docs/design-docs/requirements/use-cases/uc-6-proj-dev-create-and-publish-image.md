@@ -86,7 +86,7 @@ The plugin generates tasks using the pattern `docker<Action><ImageName>` where:
 
 DSL configuration to build, tag, save, and publish (traditional single context):
 ```groovy
-plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
+plugins { id "com.kineticfire.gradle.docker" version "0.1.0" }
 
 docker {
     images {
@@ -182,7 +182,7 @@ Invoke tasks to build, save, tag, and publish the images:
 
 DSL configuration using Gradle Copy tasks to aggregate multiple context sources:
 ```groovy
-plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
+plugins { id "com.kineticfire.gradle.docker" version "0.1.0" }
 
 docker {
     images {
@@ -378,7 +378,7 @@ Invoke tasks to publish images without building:
 
 DSL to save images to file without building:
 ```groovy
-plugins { id "com.kineticfire.gradle.gradle-docker" version "0.1.0" }
+plugins { id "com.kineticfire.gradle.docker" version "0.1.0" }
 
 docker {
     images {

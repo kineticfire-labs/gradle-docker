@@ -241,7 +241,7 @@ private void createIntegrationTestSourceSet(Project project) {
 plugins {
     id 'java'
     id 'groovy'  // Add groovy plugin for Spock
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 dependencies {
@@ -278,7 +278,7 @@ src/
 ```groovy
 plugins {
     id 'groovy'  // Includes java plugin
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 dependencies {
@@ -312,7 +312,7 @@ src/
 plugins {
     id 'java'
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 dependencies {

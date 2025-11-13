@@ -9,7 +9,7 @@ First, add the plugin to your `build.gradle`:
 
 ```gradle
 plugins {
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 ```
 
@@ -168,7 +168,7 @@ class WebAppIT extends Specification {
 
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 
 repositories {
@@ -448,7 +448,7 @@ class WebAppJUnit5ClassIT {
 
 plugins {
     id 'java'
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 
 repositories {
@@ -661,7 +661,7 @@ Gradle tasks provide suite-level orchestration using `composeUp*` and `composeDo
 // build.gradle
 plugins {
     id 'java'
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 
 dockerOrch {
@@ -1139,7 +1139,7 @@ provides:
 ```groovy
 plugins {
     id 'groovy'  // or 'java'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 docker {
@@ -1212,7 +1212,7 @@ The convention works regardless of your main application language.
 plugins {
     id 'java'          // Main app is Java
     id 'groovy'        // Add groovy for Spock tests
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 dependencies {
@@ -1273,7 +1273,7 @@ sourceSets {
 
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 // Plugin sees existing source set and won't create its own
 ```

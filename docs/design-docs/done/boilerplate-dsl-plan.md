@@ -580,7 +580,7 @@ class IntegrationTestConventionTest extends Specification {
 def "convention applies when java plugin and dockerOrch configured"() {
     given: "project with java plugin"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch with compose stack configured"
     project.dockerOrch {
@@ -617,7 +617,7 @@ def "convention applies when java plugin and dockerOrch configured"() {
 def "convention applies with groovy plugin and configures both java and groovy directories"() {
     given: "project with groovy plugin"
     project.plugins.apply('groovy')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch configured"
     project.dockerOrch {
@@ -643,7 +643,7 @@ def "convention applies with groovy plugin and configures both java and groovy d
 def "convention does not apply when dockerOrch has no compose stacks"() {
     given: "project with java plugin"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch not configured (no compose stacks)"
     // Don't configure dockerOrch.composeStacks
@@ -661,7 +661,7 @@ def "convention does not apply when dockerOrch has no compose stacks"() {
 ```groovy
 def "convention does not apply without java or groovy plugin"() {
     given: "project WITHOUT java plugin"
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch configured"
     project.dockerOrch {
@@ -683,7 +683,7 @@ def "convention does not apply without java or groovy plugin"() {
 def "configurations extend from test configurations"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -709,7 +709,7 @@ def "configurations extend from test configurations"() {
 def "integrationTest task is registered with correct configuration"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -735,7 +735,7 @@ def "integrationTest task is registered with correct configuration"() {
 def "integrationTest task is configured correctly"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -774,7 +774,7 @@ def "convention does not override user-created source set"() {
     }
 
     and: "plugin applied with dockerOrch configured"
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -798,7 +798,7 @@ def "convention does not override user-created source set"() {
 def "convention does not override user-created task"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -824,7 +824,7 @@ def "convention does not override user-created task"() {
 def "resource processing is configured with INCLUDE duplicates strategy"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -848,7 +848,7 @@ def "resource processing is configured with INCLUDE duplicates strategy"() {
 def "java-only project does not configure groovy directory"() {
     given: "project with java plugin (not groovy)"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -875,7 +875,7 @@ def "java-only project does not configure groovy directory"() {
 def "groovy directory added when groovy plugin applied after gradle-docker"() {
     given: "project with java and gradle-docker plugins"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -905,8 +905,8 @@ def "applying plugin multiple times does not cause errors"() {
     project.plugins.apply('java')
 
     when: "plugin applied twice"
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch configured"
     project.dockerOrch {
@@ -928,7 +928,7 @@ def "applying plugin multiple times does not cause errors"() {
 def "convention applies when multiple compose stacks configured"() {
     given: "project with java plugin"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "multiple compose stacks configured"
     project.dockerOrch {
@@ -953,7 +953,7 @@ def "convention applies when multiple compose stacks configured"() {
 def "convention does not apply when dockerOrch block is empty"() {
     given: "project with java plugin"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
 
     and: "dockerOrch block exists but has no compose stacks"
     project.dockerOrch {
@@ -974,7 +974,7 @@ def "convention does not apply when dockerOrch block is empty"() {
 def "user can add additional source directories to convention-created source set"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -1005,7 +1005,7 @@ def "user can add additional source directories to convention-created source set
 def "user can customize convention-created task"() {
     given: "project with java plugin and dockerOrch"
     project.plugins.apply('java')
-    project.plugins.apply('com.kineticfire.gradle.gradle-docker')
+    project.plugins.apply('com.kineticfire.gradle.docker')
     project.dockerOrch {
         composeStacks {
             myStack { files.from('compose.yml') }
@@ -1109,7 +1109,7 @@ convention-demo/
 ```groovy
 plugins {
     id 'groovy'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 repositories {
@@ -1383,7 +1383,7 @@ When you configure Docker Compose orchestration, the plugin automatically provid
 ```groovy
 plugins {
     id 'groovy'  // or 'java'
-    id 'com.kineticfire.gradle.gradle-docker'
+    id 'com.kineticfire.gradle.docker'
 }
 
 docker {

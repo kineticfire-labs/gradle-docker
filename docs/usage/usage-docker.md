@@ -8,7 +8,7 @@ First, add the plugin to your `build.gradle`:
 
 ```gradle
 plugins {
-    id 'com.kineticfire.gradle.gradle-docker' version '1.0.0'
+    id 'com.kineticfire.gradle.docker' version '1.0.0'
 }
 ```
 
