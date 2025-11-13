@@ -25,12 +25,10 @@ import java.nio.file.Path
 
 /**
  * Functional tests for TestIntegrationExtension using GradleRunner
- * 
- * NOTE: These tests are disabled due to test framework compatibility issues 
- * with Gradle 9.0.0 configuration cache. The functionality they test is 
- * verified by integration tests in plugin-integration-test/app-image/src/integrationTest/
+ *
+ * Tests the usesCompose() method and composeStateFileFor() helper that are invoked
+ * from build.gradle files. Integration tests cover annotation-based usage.
  */
-@Ignore("Disabled due to test framework compatibility with Gradle 9.0.0 configuration cache")
 class TestExtensionFunctionalTest extends Specification {
 
     @TempDir
@@ -74,9 +72,9 @@ class TestExtensionFunctionalTest extends Specification {
                     println "State file: \${stateFile}"
                     println "Dependencies: \${testTask.dependsOn}"
                     println "Finalizers: \${testTask.finalizedBy.getDependencies()}"
-                    
+
                     assert stateFile.endsWith('testStack-state.json')
-                    assert testTask.dependsOn.contains('composeUpTestStack')
+                    assert testTask.dependsOn.any { it.toString().contains('composeUpTestStack') }
                 }
             }
         """
@@ -84,7 +82,6 @@ class TestExtensionFunctionalTest extends Specification {
         // Create dummy compose file
         def composeFile = testProjectDir.resolve('test-compose.yml').toFile()
         composeFile << """
-            version: '3'
             services:
               test:
                 image: alpine
@@ -93,7 +90,7 @@ class TestExtensionFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyExtension', '--stacktrace')
             .build()
 
@@ -123,7 +120,7 @@ class TestExtensionFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyStateFile', '--stacktrace')
             .build()
 
@@ -173,15 +170,15 @@ class TestExtensionFunctionalTest extends Specification {
                 }
             }
         """
-        
+
         // Create dummy compose files
-        testProjectDir.resolve('class-compose.yml').toFile() << "version: '3'\nservices:\n  test:\n    image: alpine"
-        testProjectDir.resolve('method-compose.yml').toFile() << "version: '3'\nservices:\n  test:\n    image: alpine"
+        testProjectDir.resolve('class-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+        testProjectDir.resolve('method-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
 
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyLifecycles', '--stacktrace')
             .build()
 

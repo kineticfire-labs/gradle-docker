@@ -2,14 +2,6 @@
 
 ## Re-enable functional tests
 
-### From Phase 1:
-- ComposeStackSpecFunctionalTest and DockerContextApiFunctionalTest compile successfully but don't appear in test results (may have @Ignore annotations or
-  other issues - requires deeper investigation)
-- TestExtensionFunctionalTest has 3 tests that are all skipped (likely conditional tests)
-- Configuration cache warning still appears as expected (this is the known limitation, not a blocker)
-
-When run functional tests, succeed and get message:
-Configuration cache entry discarded because incompatible task was found: 'task `:functionalTest` of type `org.gradle.api.tasks.testing.Test`'.
 
 
 ## Clean-up
