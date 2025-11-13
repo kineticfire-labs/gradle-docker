@@ -58,9 +58,6 @@ class ComposeStackSpecFunctionalTest extends Specification {
         buildFile = testProjectDir.resolve('build.gradle').toFile()
     }
 
-    // TEMPORARILY DISABLED - All tests in this class use withPluginClasspath() which is incompatible with Gradle 9.0.0 TestKit
-    /*
-
     def "multi-file compose configuration with composeFiles(String...) works correctly"() {
         given:
         settingsFile << "rootProject.name = 'test-multi-compose'"
@@ -112,7 +109,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -162,7 +159,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -211,7 +208,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -260,7 +257,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('help', '--task', 'composeUpCombined')
             .build()
 
@@ -310,8 +307,8 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('tasks', '--group', 'compose')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks', '--group', 'docker compose')
             .build()
 
         then:
@@ -351,13 +348,13 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('composeUpPartial', '--info')
             .buildAndFail()
 
         then:
-        result.task(':composeUpPartial').outcome == TaskOutcome.FAILED
-        result.output.contains('missing.yml') || result.output.contains('file') || result.output.contains('not found')
+        // Build fails during configuration or execution - either is valid for file validation
+        result.output.contains('missing.yml') || result.output.contains('file') || result.output.contains('not found') || result.output.contains('does not exist')
     }
 
     def "single-file composeFile configurations still work (backward compatibility)"() {
@@ -390,7 +387,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -450,8 +447,8 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
-            .withArguments('tasks', '--group', 'compose')
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks', '--group', 'docker compose')
             .build()
 
         then:
@@ -506,7 +503,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('help', '--task', 'composeUpMigrated')
             .build()
 
@@ -514,5 +511,4 @@ class ComposeStackSpecFunctionalTest extends Specification {
         result.task(':help').outcome == TaskOutcome.SUCCESS
         result.output.contains('composeUpMigrated') || result.output.contains('migrated')
     }
-    */
 }

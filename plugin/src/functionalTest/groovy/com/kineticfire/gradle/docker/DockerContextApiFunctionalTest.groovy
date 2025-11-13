@@ -61,16 +61,11 @@ class DockerContextApiFunctionalTest extends Specification {
         Files.createDirectories(testProjectDir.resolve('build/libs'))
     }
 
-    // TEMPORARY DISABLED: Gradle 9.0.0 TestKit compatibility issue
-    // Error: "Test runtime classpath does not contain plugin metadata file 'plugin-under-test-metadata.properties'"
-    // The withPluginClasspath() method has known compatibility issues with Gradle 9.0.0 TestKit
-    // See: docs/design-docs/functional-test-testkit-gradle-issue.md for details
-    // Will re-enable when TestKit compatibility is resolved
-    /*
+    
     def "can configure contextTask property for Docker image"() {
         given:
         settingsFile << "rootProject.name = 'test-context-task'"
-        
+
         // Create test files
         def dockerfile = testProjectDir.resolve('src/main/docker/Dockerfile').toFile()
         dockerfile << """
@@ -78,22 +73,24 @@ class DockerContextApiFunctionalTest extends Specification {
             COPY app.jar /app.jar
             CMD ["java", "-jar", "/app.jar"]
         """
-        
+
         def jarFile = testProjectDir.resolve('build/libs/app.jar').toFile()
         jarFile.parentFile.mkdirs()
         jarFile.createNewFile()
-        
+
         buildFile << """
             plugins {
                 id 'java'
+                id 'com.kineticfire.gradle.docker'
             }
-            
-            // Apply plugin using legacy plugin syntax to avoid TestKit issues
-            apply plugin: 'com.kineticfire.gradle.docker'
-            
+
             docker {
                 images {
                     myapp {
+                        imageName.set('myapp')
+                        version.set('1.0.0')
+                        tags.set(['test', 'latest'])
+
                         contextTask = tasks.register('prepareDockerContext', Copy) {
                             group = 'docker'
                             description = 'Prepare Docker build context'
@@ -103,8 +100,7 @@ class DockerContextApiFunctionalTest extends Specification {
                                 include '*.jar'
                             }
                         }
-                        dockerfile = 'Dockerfile'
-                        tags = ['myapp:test']
+                        dockerfileName.set('Dockerfile')
                     }
                 }
             }
@@ -113,7 +109,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -121,7 +117,7 @@ class DockerContextApiFunctionalTest extends Specification {
         result.output.contains('prepareDockerContext')
         result.output.contains('Build tasks')
     }
-    */
+
 
     /*
     def "can configure inline context block for Docker image"() {
@@ -169,7 +165,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -212,7 +208,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -268,7 +264,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('tasks', '--all')
             .build()
 
@@ -328,7 +324,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyContextTask')
             .build()
 
@@ -368,7 +364,7 @@ class DockerContextApiFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath(System.getProperty("java.class.path").split(":").collect { new File(it) })
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('help', '--configuration-cache')
             .build()
 
