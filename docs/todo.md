@@ -2,7 +2,6 @@
 
 ## Re-enable functional tests
 
-- Finish Phase 2 with DockerNomenclatureIntegrationFunctionalTest.groovy.disabled
 - Calculating task graph as no cached configuration is available for tasks: clean functionalTest build publishToMavenLocal
 - Phase 3
 
