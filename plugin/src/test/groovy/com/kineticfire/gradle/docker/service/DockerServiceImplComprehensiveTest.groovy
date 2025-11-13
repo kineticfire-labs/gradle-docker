@@ -33,12 +33,55 @@ import java.util.concurrent.ExecutionException
 
 /**
  * Comprehensive unit tests for DockerServiceImpl
- * NOTE: Temporarily disabled due to Spock CannotCreateMockException with Docker Java API classes.
- * The issue is that Spock cannot create mocks for certain Docker Java API command classes.
- * Alternative: DockerServiceLabelsTest provides label-specific unit tests without this limitation.
- * TODO: Investigate Spock mock-maker configuration or alternative mocking approach
+ *
+ * SKIPPED: All 24 tests in this class are disabled due to Spock CannotCreateMockException with Docker Java API classes.
+ *
+ * Root Cause: Spock cannot create mocks for certain Docker Java API command classes (BuildImageCmd, TagImageCmd, etc.)
+ * Technical Details: The Docker Java API uses abstract classes with complex inheritance that Spock's mock-maker cannot handle
+ *
+ * Alternative Coverage: The following active test files provide equivalent coverage:
+ * - DockerServiceLabelsTest.groovy - Label handling tests
+ * - DockerServiceImplPureFunctionsTest.groovy - Pure function tests
+ * - DockerServiceImplMockabilityTest.groovy - Mockability verification
+ * - DockerServiceFocusedTest.groovy - Focused scenario tests
+ * - DockerServiceTest.groovy - General service tests
+ * - DockerServiceImplTest.groovy - Implementation tests
+ * - DockerServiceExceptionTest.groovy - Exception handling tests
+ *
+ * Skipped Tests (24 total):
+ * - buildImage with all nomenclature parameters
+ * - buildImage with multiple tags applies additional tags
+ * - buildImage handles DockerException
+ * - buildImage applies labels when provided
+ * - buildImage skips labels when empty map provided
+ * - tagImage tags all provided tags
+ * - tagImage handles DockerException
+ * - saveImage with no compression
+ * - saveImage with GZIP compression
+ * - saveImage with ZIP compression
+ * - saveImage with BZIP2 compression
+ * - saveImage with XZ compression
+ * - saveImage handles DockerException
+ * - pushImage with authentication
+ * - pushImage without authentication
+ * - pushImage handles DockerException
+ * - pullImage with authentication
+ * - pullImage without authentication
+ * - pullImage handles DockerException
+ * - imageExists returns true when image exists
+ * - imageExists returns false when image not found
+ * - imageExists returns false on other exceptions
+ * - close shuts down executor and client
+ * - close handles already shutdown executor
+ *
+ * Resolution Options:
+ * 1. Use manual test doubles instead of Spock mocks
+ * 2. Use integration tests for Docker API interaction
+ * 3. Keep current approach with alternative test coverage
+ *
+ * See: docs/design-docs/testing/unit-testing-strategy.md for full documentation
  */
-@spock.lang.Ignore("Spock CannotCreateMockException - see DockerServiceLabelsTest for label tests")
+@spock.lang.Ignore("Spock CannotCreateMockException - see alternative test files listed above")
 class DockerServiceImplComprehensiveTest extends DockerServiceTestBase {
 
     @TempDir

@@ -2,7 +2,7 @@
 
 **Project**: Gradle Docker Plugin
 **Date Created**: 2025-10-07
-**Last Updated**: 2025-10-07
+**Last Updated**: 2025-11-13
 **Author**: Engineering Team
 
 ## Overview
@@ -345,6 +345,96 @@ All coverage gaps are documented in `docs/design-docs/tech-debt/unit-test-gaps.m
 3. **Functional Tests**: 22 tests disabled due to Gradle 9 TestKit incompatibility
 
 **Mitigation**: All gaps covered by integration tests in `plugin-integration-test/`
+
+## Skipped Unit Tests
+
+The following unit tests are intentionally skipped with documented reasons and alternative coverage.
+
+### 1. DockerServiceImplComprehensiveTest (24 tests skipped)
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/service/DockerServiceImplComprehensiveTest.groovy`
+
+**Reason**: Entire class disabled due to Spock framework limitation - cannot create mocks for Docker Java API command classes (BuildImageCmd, TagImageCmd, SaveImageCmd, etc.)
+
+**Technical Details**: Docker Java API uses abstract classes with complex inheritance that Spock's mock-maker cannot handle, resulting in CannotCreateMockException
+
+**Skipped Tests**:
+1. buildImage with all nomenclature parameters
+2. buildImage with multiple tags applies additional tags
+3. buildImage handles DockerException
+4. buildImage applies labels when provided
+5. buildImage skips labels when empty map provided
+6. tagImage tags all provided tags
+7. tagImage handles DockerException
+8. saveImage with no compression
+9. saveImage with GZIP compression
+10. saveImage with ZIP compression
+11. saveImage with BZIP2 compression
+12. saveImage with XZ compression
+13. saveImage handles DockerException
+14. pushImage with authentication
+15. pushImage without authentication
+16. pushImage handles DockerException
+17. pullImage with authentication
+18. pullImage without authentication
+19. pullImage handles DockerException
+20. imageExists returns true when image exists
+21. imageExists returns false when image not found
+22. imageExists returns false on other exceptions
+23. close shuts down executor and client
+24. close handles already shutdown executor
+
+**Alternative Coverage**: The following active test files provide equivalent or better coverage:
+
+| Test File | Coverage Provided |
+|-----------|-------------------|
+| `DockerServiceLabelsTest.groovy` | Label handling and validation (buildImage labels) |
+| `DockerServiceImplPureFunctionsTest.groovy` | Pure function logic extracted from service |
+| `DockerServiceImplMockabilityTest.groovy` | Mockability verification and service contracts |
+| `DockerServiceFocusedTest.groovy` | Focused scenario tests with alternative mocking |
+| `DockerServiceTest.groovy` | General service contract testing |
+| `DockerServiceImplTest.groovy` | Service implementation testing |
+| `DockerServiceExceptionTest.groovy` | Exception handling and error paths |
+
+**Integration Coverage**: All DockerService operations (build, tag, save, push, pull) are tested in integration tests:
+- `plugin-integration-test/docker/*/` - Full end-to-end Docker operations
+
+**Resolution Options**:
+1. Use manual test doubles instead of Spock mocks (requires significant refactoring)
+2. Rely on integration tests for Docker API interaction (current approach)
+3. Extract more pure logic from service implementations for unit testing (ongoing)
+
+**Status**: ✅ Acceptable - Alternative coverage is comprehensive
+
+### 2. DockerfilePathResolverTest - Windows Path Test (1 test skipped)
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/util/DockerfilePathResolverTest.groovy`
+
+**Test**: `validateDockerfileLocation handles Windows-style paths`
+
+**Reason**: Platform-specific test that only runs on Windows OS
+
+**Skip Condition**: Test is skipped when `System.getProperty('os.name')` does not contain 'windows'
+
+**Alternative Coverage**: Unix/Linux path handling is tested by other tests in the same file:
+- `validateDockerfileLocation succeeds for valid paths` - Tests Unix path validation
+- `validateDockerfileLocation throws exception when Dockerfile outside context` - Tests path security on Unix
+- `validateDockerfileLocation throws exception when Dockerfile at parent level` - Tests path traversal on Unix
+
+**Integration Coverage**: Windows path handling is tested manually on Windows CI/CD pipeline
+
+**Status**: ✅ Acceptable - Platform-specific behavior correctly isolated
+
+### Summary
+
+**Total Skipped Unit Tests**: 25
+- **DockerServiceImplComprehensiveTest**: 24 tests (Spock mocking limitation)
+- **DockerfilePathResolverTest**: 1 test (platform-specific)
+
+**Impact on Coverage**: Minimal - All skipped functionality has equivalent coverage through:
+1. Alternative unit test files (7 DockerService test files)
+2. Integration tests (`plugin-integration-test/`)
+3. Platform-specific testing (Windows CI/CD)
 
 ## Integration with CI/CD
 

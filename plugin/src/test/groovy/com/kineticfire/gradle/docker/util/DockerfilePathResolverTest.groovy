@@ -104,6 +104,22 @@ class DockerfilePathResolverTest extends Specification {
         noExceptionThrown()
     }
 
+    /**
+     * SKIPPED on non-Windows platforms: This test validates Windows-specific path handling
+     *
+     * Reason: This test verifies that DockerfilePathResolver correctly handles Windows-style paths
+     * (e.g., C:\Users\user\project) which cannot be tested on Unix/Linux systems
+     *
+     * Platform: Only runs on Windows OS
+     * Skip Condition: Skipped when os.name does not contain 'windows'
+     *
+     * Alternative Coverage: Unix/Linux path handling is tested by other tests in this file:
+     * - validateDockerfileLocation succeeds for valid paths
+     * - validateDockerfileLocation throws exception when Dockerfile outside context
+     * - validateDockerfileLocation throws exception when Dockerfile at parent level
+     *
+     * See: docs/design-docs/testing/unit-testing-strategy.md for full documentation
+     */
     @spock.lang.IgnoreIf({ !System.getProperty('os.name').toLowerCase().contains('windows') })
     def "validateDockerfileLocation handles Windows-style paths"() {
         given:
