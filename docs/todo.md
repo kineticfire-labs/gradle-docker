@@ -2,13 +2,8 @@
 
 ## Re-enable functional tests
 
-- Phase 4 - ✅ COMPLETE
-   - ComposeFunctionalTest.groovy: 6 tests (all skipped - tests obsolete compose {} DSL)
-   - MultiFileConfigurationFunctionalTest.groovy: 12 tests (all passing)
-   - PluginIntegrationFunctionalTest.groovy: 2 tests (all skipped - test framework compatibility issues)
-   - PullIfMissingFunctionalTest.groovy: 6 tests (4 passing + 2 skipped - validation not enforced) 
-- Check at end for ignore: 
-   - Tests obsolete DSL   
+- Check at end for ignore:
+   - Tests obsolete DSL
    - Validation that doesn't run or isn't used
 - Do we have 100% functional test coverage?
 
