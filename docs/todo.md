@@ -2,9 +2,10 @@
 
 ## Re-enable functional tests
 
-### Phase 2
-3. DockerPublishValidationFunctionalTest.groovy - 6 tests skipped (disabled with @IgnoreIf for Gradle 9)
-4. ImageReferenceValidationFunctionalTest.groovy - 8 tests commented out
+- Finish Phase 2 with DockerNomenclatureIntegrationFunctionalTest.groovy.disabled
+- Calculating task graph as no cached configuration is available for tasks: clean functionalTest build publishToMavenLocal
+- Phase 3
+
 
 
 ## Clean-up

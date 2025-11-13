@@ -24,28 +24,25 @@ import spock.lang.TempDir
 import java.nio.file.Path
 
 /**
- * Functional tests for the new Docker image reference validation functionality.
- * 
- * Tests the enhanced validation system that requires full image references
- * (like 'myapp:1.0.0') instead of simple tags (like '1.0.0').
- * 
- * TEMPORARILY DISABLED: These tests are temporarily commented out due to known incompatibility 
- * between Gradle TestKit and Gradle 9.0.0. The issue is tracked and will be re-enabled 
- * when TestKit compatibility is improved or an alternative testing approach is implemented.
- * 
- * Issue: InvalidPluginMetadataException when using withPluginClasspath() in Gradle 9.0.0
- * Root cause: Gradle 9.0.0 TestKit has breaking changes in plugin classpath resolution
- * 
- * Tests affected: All tests using withPluginClasspath() method (8 tests)
- * Functionality affected:
- * - Full image reference validation (isValidImageReference method)
- * - Image name extraction from full references (extractImageName method)  
- * - Required tags validation for build contexts
- * - Consistent image name validation across multiple tags
- * - Enhanced error messaging for invalid image references
- * - Registry/namespace/port parsing in image references
- * - Backward compatibility verification
- * - Error handling and user guidance
+ * Functional tests for Docker image reference validation functionality.
+ *
+ * NOTE: These tests validate OBSOLETE plugin functionality from an older DSL design.
+ * The original design used combined image references like: tags = ['myapp:1.0.0', 'myapp:latest']
+ * The current design uses separate properties: imageName, version, tags
+ *
+ * Tests marked @Ignore test the old combined reference format validation which no longer exists.
+ * Two tests (tags requirement and empty tags) still pass as they test different validation paths.
+ *
+ * To re-enable these tests, they would need to be completely rewritten for the current DSL,
+ * testing different validation scenarios (e.g., missing imageName, invalid version format, etc.)
+ *
+ * Original functionality tested (now obsolete):
+ * - Full image reference validation (isValidImageReference method) - OBSOLETE
+ * - Image name extraction from full references (extractImageName method) - OBSOLETE
+ * - Required tags validation for build contexts - STILL VALID
+ * - Consistent image name validation across multiple tags - OBSOLETE (different mechanism now)
+ * - Enhanced error messaging for invalid image references - OBSOLETE FORMAT
+ * - Registry/namespace/port parsing in image references - DONE VIA SEPARATE PROPERTIES NOW
  */
 class ImageReferenceValidationFunctionalTest extends Specification {
 
@@ -67,9 +64,7 @@ CMD ["echo", "test image"]
 '''
     }
 
-    // TEMPORARILY DISABLED - All tests in this class use withPluginClasspath() which is incompatible with Gradle 9.0.0 TestKit
-    /*
-
+    @spock.lang.Ignore("Tests obsolete DSL - old 'tags=[myapp:1.0.0]' format no longer supported")
     def "plugin validates full image references successfully"() {
         given: "Build file with valid full image references"
         buildFile << """
@@ -114,6 +109,7 @@ CMD ["echo", "test image"]
         !result.output.contains('BUILD FAILED')
     }
 
+    @spock.lang.Ignore("Tests obsolete DSL - old 'tags=[invalid-reference]' format no longer supported")
     def "plugin rejects invalid image references with helpful messages"() {
         given: "Build file with invalid image reference"
         buildFile << """
@@ -145,6 +141,7 @@ CMD ["echo", "test image"]
         result.output.contains('invalidApp')
     }
 
+    @spock.lang.Ignore("Tests obsolete DSL - old combined tag format validation no longer exists")
     def "plugin validates consistent image names across multiple tags"() {
         given: "Build file with inconsistent image names"
         buildFile << """
@@ -207,6 +204,7 @@ CMD ["echo", "test image"]
         result.output.contains('noTagsApp')
     }
 
+    @spock.lang.Ignore("Tests obsolete DSL - old 'tags=[registry.com/myapp:1.0.0]' format no longer supported")
     def "plugin accepts complex registry configurations"() {
         given: "Build file with complex registry configurations"
         buildFile << """
@@ -244,6 +242,7 @@ CMD ["echo", "test image"]
         !result.output.contains('BUILD FAILED')
     }
 
+    @spock.lang.Ignore("Tests obsolete DSL - old combined tag format no longer supported")
     def "plugin validates image references with special characters"() {
         given: "Build file with special characters in image references"
         buildFile << """
@@ -311,6 +310,7 @@ CMD ["echo", "test image"]
         result.output.contains('emptyTagsApp')
     }
 
+    @spock.lang.Ignore("Tests obsolete DSL - old 'tags=[latest]' format no longer supported")
     def "plugin provides migration guidance for old simple tag format"() {
         given: "Build file attempting to use old simple tag format"
         buildFile << """
@@ -341,6 +341,4 @@ CMD ["echo", "test image"]
         result.output.contains('latest') || result.output.contains('1.0.0')
         result.output.contains('oldFormatApp')
     }
-
-    */
 }

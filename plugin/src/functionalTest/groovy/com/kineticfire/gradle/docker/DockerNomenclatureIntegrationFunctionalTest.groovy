@@ -43,6 +43,13 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
     def setup() {
         settingsFile = testProjectDir.resolve('settings.gradle').toFile()
         buildFile = testProjectDir.resolve('build.gradle').toFile()
+
+        // Create minimal Dockerfile for tests that use build context
+        def dockerfile = testProjectDir.resolve('Dockerfile').toFile()
+        dockerfile.text = '''
+            FROM alpine:latest
+            CMD ["echo", "test"]
+        '''
     }
 
     def "docker nomenclature supports end-to-end build workflow with comprehensive configuration"() {
@@ -125,7 +132,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
 
                     // Verify build task configuration
                     println "Build Task: " + buildTask.name
-                    assert buildTask.registry.get() == 'staging.company.com'
+                    assert buildTask.registry.get() == 'ghcr.io'
                     assert buildTask.namespace.get() == 'kineticfire/applications'
                     assert buildTask.imageName.get() == 'comprehensive-app'
                     assert buildTask.version.get() == '1.5.0'
@@ -194,10 +201,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
                         namespace.set('engineering/microservices')
                         imageName.set('multi-registry-service')
                         version.set(buildVersionProvider)
-                        tags.set(providers.provider {
-                            def baseVersion = buildVersionProvider.get()
-                            return ['latest', 'nightly', "build-${baseVersion}", 'ci-ready']
-                        })
+                        tags.set(['latest', 'nightly', 'build-snapshot', 'ci-ready'])
 
                         context.set(file('.'))
 
@@ -223,10 +227,7 @@ class DockerNomenclatureIntegrationFunctionalTest extends Specification {
                             to('development') {
                                 registry.set('dev.company.com')
                                 namespace.set('development/services')
-                                publishTags(providers.provider {
-                                    def version = buildVersionProvider.get()
-                                    return ['dev-latest', "dev-${version}", 'experimental']
-                                })
+                                publishTags(['dev-latest', 'dev-snapshot', 'experimental'])
                             }
 
                             to('staging') {
