@@ -213,15 +213,19 @@ def "tags property accepts provider"() {
 - Boundary conditions
 
 ```groovy
-def "validateModeConsistency throws when mixing sourceRef and build properties"() {
+def "validatePullIfMissingConfiguration throws when pullIfMissing conflicts with build context"() {
+    given:
+    def contextDir = project.file('build-context')
+    contextDir.mkdirs()
+
     when:
-    imageSpec.sourceRef.set('alpine:latest')
-    imageSpec.buildArgs.set(['ARG1': 'value1'])
-    imageSpec.validateModeConsistency()
-    
+    imageSpec.pullIfMissing.set(true)
+    imageSpec.context.set(contextDir)
+    imageSpec.validatePullIfMissingConfiguration()
+
     then:
     def ex = thrown(GradleException)
-    ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    ex.message.contains("Cannot set pullIfMissing=true when build context is configured")
 }
 ```
 

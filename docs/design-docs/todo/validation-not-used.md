@@ -377,4 +377,30 @@ Users now receive immediate, helpful feedback when:
 
 **This architectural gap has been resolved** through selective validation integration that respects the plugin's design philosophy.
 
-**Future Action**: None required - implementation complete and all tests passing.
+---
+
+## Removal Decision (2025-11-13)
+
+Following the integration of the other validation methods, `validateModeConsistency()` was identified as conflicting
+with the plugin's intentional design. Rather than keeping unused code in the codebase, the decision was made to remove:
+
+### What Was Removed
+- **Source Code**: The 81-line `validateModeConsistency()` method from `ImageSpec.groovy` (lines 378-458)
+- **Unit Tests**: 34 unit test methods across 2 test files:
+  - 17 test methods from `ImageSpecTest.groovy` (2 sections: lines 772-870 and 1111-1197)
+  - 17 test methods from `ImageSpecAdditionalTest.groovy` (2 sections: lines 83-183 and 197-277)
+- **Documentation References**: Updated comment in `DockerExtension.groovy` and example in `unit-testing-strategy.md`
+- **Total Code Reduction**: ~450 lines
+
+### Rationale
+This removal reduces maintenance burden and prevents future confusion about why the method exists but isn't used.
+The method enforced strict separation between Build Mode and SourceRef Mode, which conflicts with the plugin's
+intentional design that allows these modes to coexist on a single `ImageSpec` for different tasks.
+
+### Verification
+All test suites must pass after removal:
+- Unit tests: Expected ~2358 tests (reduction of 34 from 2392)
+- Functional tests: Expected 112 tests, 0 failures
+- Integration tests: Expected BUILD SUCCESSFUL
+
+**Status**: Removal complete - verification pending

@@ -107,8 +107,6 @@ abstract class DockerExtension {
         }
 
         // Call ImageSpec's pullIfMissing-specific validation methods
-        // Note: validateModeConsistency() is NOT called here because the plugin design
-        // intentionally allows mixing Build Mode and SourceRef properties (they are used by different tasks)
         imageSpec.validatePullIfMissingConfiguration()
         imageSpec.validateSourceRefConfiguration()
 
