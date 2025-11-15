@@ -107,11 +107,13 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   `build.gradle`) using Gradle 9’s version catalog.
 - Do not use outdated dependency definition approaches.
 
-## Handle Functional Test Dependency Issues
-- **Treat the `TestKit` dependency as incompatible with Gradle 9’s build cache**; see 
-  `docs/design-docs/functional-test-testkit-gradle-issue.md`.
-- **Write functional tests, but disable them if required** due to the `TestKit` issue.
-- Do not declare success if functional tests are missing or skipped without justification.
+## Handle Functional Test Configuration Cache
+- **TestKit is compatible with Gradle 9 and 10** but has configuration cache limitations (GitHub issue #34505).
+- **Functional tests are marked as incompatible with configuration cache** in build.gradle to work around TestKit
+  service cleanup conflicts.
+- **All functional tests must be enabled and passing** - this is a hard requirement for project acceptance criteria.
+- Do not declare success if functional tests are missing, disabled, or skipped without explicit documented
+  justification.
 
 ## Follow Docker Requirements
 - **Do not specify `version` in Docker Compose files**; it is deprecated and generates warnings.
@@ -121,7 +123,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 - **All unit tests and functional tests must pass.**
   - Do not declare success until every unit and functional test passes.
   - Run: `./gradlew clean test functionalTest` (from `plugin/` directory).
-  - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
+  - Do not treat partial pass rates (e.g., "most tests passed") as acceptable.
+  - All functional tests must be enabled (no `.disabled` files) unless explicitly documented gap exists.
 - **The plugin must build successfully.**
   - Do not declare success until the build completes without errors.
   - Run: `./gradlew -Pplugin_version=<version> build` (from `plugin/` directory).

@@ -3,7 +3,7 @@
 ## Re-enable functional tests
 
 - functional-tests-enable.md:  phases 4 - 6
-   - on Phase 5, verifying no lingering docker containers 
+   - on Phase 6 
 - Do we have 100% functional test coverage?
 
 
