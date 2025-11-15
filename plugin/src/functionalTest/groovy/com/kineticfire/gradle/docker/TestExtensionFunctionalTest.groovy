@@ -186,4 +186,359 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('Class lifecycle: class')
         result.output.contains('Method lifecycle: method')
     }
+
+    def "suite lifecycle configures without error"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    suiteStack {
+                        files.from('suite-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('suiteTest', Test) {
+                usesCompose stack: 'suiteStack', lifecycle: 'suite'
+            }
+
+            task verifySuiteLifecycle {
+                doLast {
+                    def testTask = tasks.getByName('suiteTest')
+                    // Verify task exists and was configured
+                    assert testTask != null
+                    println "Suite lifecycle test task configured successfully"
+                }
+            }
+        """
+
+        testProjectDir.resolve('suite-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifySuiteLifecycle')
+            .build()
+
+        then:
+        result.output.contains('Suite lifecycle test task configured successfully')
+    }
+
+    def "method lifecycle configures without error"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    methodStack {
+                        files.from('method-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('perMethodExec', Test) {
+                usesCompose stack: 'methodStack', lifecycle: 'method'
+            }
+
+            task verifyMethodLifecycle {
+                doLast {
+                    def testTask = tasks.getByName('perMethodExec')
+                    // Verify task exists and was configured
+                    assert testTask != null
+                    println "Method lifecycle test task configured successfully"
+                }
+            }
+        """
+
+        testProjectDir.resolve('method-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyMethodLifecycle')
+            .build()
+
+        then:
+        result.output.contains('Method lifecycle test task configured successfully')
+    }
+
+    def "extension methods work with custom test tasks"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    customStack {
+                        files.from('custom-compose.yml')
+                    }
+                }
+            }
+
+            // Custom test task type
+            tasks.register('customTestTask', Test) {
+                usesCompose stack: 'customStack', lifecycle: 'suite'
+            }
+
+            task verifyCustomTask {
+                doLast {
+                    def customTask = tasks.getByName('customTestTask')
+                    // Verify task was configured without error
+                    assert customTask != null
+                    println "Custom test task configured successfully"
+                }
+            }
+        """
+
+        testProjectDir.resolve('custom-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyCustomTask')
+            .build()
+
+        then:
+        result.output.contains('Custom test task configured successfully')
+    }
+
+    def "test task depends on composeUp with suite lifecycle"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    depStack {
+                        files.from('dep-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('depTest', Test) {
+                usesCompose stack: 'depStack', lifecycle: 'suite'
+            }
+
+            task verifyDependencies {
+                doLast {
+                    def testTask = tasks.getByName('depTest')
+                    def deps = testTask.dependsOn
+                    println "Dependencies: \${deps}"
+                    assert deps.any { it.toString().contains('composeUpDepStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('dep-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDependencies')
+            .build()
+
+        then:
+        result.output.contains('composeUpDepStack')
+    }
+
+    def "test task finalizedBy composeDown with suite lifecycle"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    finStack {
+                        files.from('fin-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('finTest', Test) {
+                usesCompose stack: 'finStack', lifecycle: 'suite'
+            }
+
+            task verifyFinalizers {
+                doLast {
+                    def testTask = tasks.getByName('finTest')
+                    def finalizers = testTask.finalizedBy.getDependencies()
+                    println "Finalizers: \${finalizers}"
+                    assert finalizers.any { it.name.contains('composeDownFinStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('fin-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyFinalizers')
+            .build()
+
+        then:
+        result.output.contains('composeDownFinStack')
+    }
+
+    def "usesCompose extension configures test task"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    propStack {
+                        files.from('prop-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('propTest', Test) {
+                usesCompose stack: 'propStack', lifecycle: 'suite'
+            }
+
+            task verifyTaskConfig {
+                doLast {
+                    def testTask = tasks.getByName('propTest')
+                    // Verify task was configured by extension
+                    assert testTask != null
+                    println "Test task configured via usesCompose extension"
+                }
+            }
+        """
+
+        testProjectDir.resolve('prop-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyTaskConfig')
+            .build()
+
+        then:
+        result.output.contains('Test task configured via usesCompose extension')
+    }
+
+    def "invalid lifecycle name rejected with error"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    errStack {
+                        files.from('err-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('errorTest', Test) {
+                usesCompose stack: 'errStack', lifecycle: 'invalid'
+            }
+        """
+
+        testProjectDir.resolve('err-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help')
+            .buildAndFail()
+
+        then:
+        result.output.contains('invalid') || result.output.contains('lifecycle')
+    }
+
+    def "stack name not found in dockerOrch rejected with error"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    existingStack {
+                        files.from('existing-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('notFoundTest', Test) {
+                usesCompose stack: 'nonExistentStack', lifecycle: 'suite'
+            }
+        """
+
+        testProjectDir.resolve('existing-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help')
+            .buildAndFail()
+
+        then:
+        result.output.contains('nonExistentStack') || result.output.contains('not found')
+    }
+
+    def "composeStateFileFor works without configured stack"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            task verifyStateFileAnyStack {
+                doLast {
+                    def stateFile = composeStateFileFor('arbitraryStack').get()
+                    println "State file: \${stateFile}"
+                    assert stateFile.endsWith('arbitraryStack-state.json')
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyStateFileAnyStack')
+            .build()
+
+        then:
+        result.output.contains('arbitraryStack-state.json')
+    }
 }

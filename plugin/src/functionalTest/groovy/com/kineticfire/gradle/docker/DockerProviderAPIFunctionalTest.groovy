@@ -166,49 +166,40 @@ class DockerProviderAPIFunctionalTest extends Specification {
         result.output.contains('Provider chain resolution verification completed')
     }
 
-    /*
-     * COMMENTED OUT: This test was corrupted and incomplete. It was already marked as @Ignore.
-     * The test code has syntax errors and needs to be rewritten from scratch if needed.
-     *
-     * Original annotation: @Ignore("Temporarily disabled due to complex Provider API issues")
-     * Test name: "docker Provider API supports late-bound property resolution with interdependencies"
-     */
-
-    /*
-    @Ignore("Temporarily disabled due to complex Provider API issues")
-    def "docker Provider API supports late-bound property resolution with interdependencies"() {
+    def "provider map chains work correctly"() {
         given:
-        settingsFile << "rootProject.name = 'test-late-bound-providers'"
+        settingsFile << "rootProject.name = 'test-provider-map'"
 
         buildFile << """
-            import com.kineticfire.gradle.docker.model.SaveCompression
-
             plugins {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            // Late-bound providers with interdependencies
-            def baseImageProvider = providers.gradleProperty('base.image').orElse('ubuntu:20.04')
+            docker {
+                images {
+                    mapTest {
+                        // Chain multiple map operations
+                        def baseVersion = providers.provider { '1.0.0' }
+                        def mappedVersion = baseVersion
+                            .map { v -> "v\${v}" }
+                            .map { v -> "\${v}-release" }
+                            .map { v -> v.toUpperCase() }
 
-            def deploymentModeProvider = providers.gradleProperty('deployment.mode').orElse('development')
-
-            def registryProvider = providers.provider {
-                def mode = deploymentModeProvider.get()
-                switch (mode) {
-                    case 'production':
-                        return 'prod.company.com:5000'
-                    case 'staging':
-                        return 'staging.company.com'
-                    case 'development':
-                    default:
-                        return 'dev.company.com'
+                        imageName.set('map-test')
+                        tags.set(providers.provider { ['latest'] })
+                        version.set(mappedVersion)
+                        context.set(file('.'))
+                    }
                 }
             }
 
-            def namespaceProvider = providers.provider {
-                def mode = deploymentModeProvider.get()
-                def projectName = project.name
-                return "TODO: THIS TEST WAS INCOMPLETE/CORRUPTED"
+            task verifyMapChain {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildMapTest')
+                    def version = buildTask.version.get()
+                    println "Mapped version: \${version}"
+                    assert version == 'V1.0.0-RELEASE'
+                }
             }
         """
 
@@ -216,15 +207,335 @@ class DockerProviderAPIFunctionalTest extends Specification {
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
-            .withArguments('verifyProviderComposition', '--info')
+            .withArguments('verifyMapChain')
             .build()
 
         then:
-        result.task(':verifyProviderComposition').outcome == TaskOutcome.SUCCESS
-        result.output.contains('=== Provider Composition Verification ===')
-        result.output.contains('Registry: base.registry.com')
-        result.output.contains('Namespace: development/base/apps')
-        result.output.contains('Provider composition verification completed')
+        result.output.contains('Mapped version: V1.0.0-RELEASE')
     }
-    */
+
+    def "provider flatMap resolves correctly"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-flatmap'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    flatMapTest {
+                        def envProvider = providers.provider { 'prod' }
+                        def registryProvider = envProvider.flatMap { env ->
+                            providers.provider {
+                                env == 'prod' ? 'prod.registry.io' : 'dev.registry.io'
+                            }
+                        }
+
+                        registry.set(registryProvider)
+                        imageName.set('flatmap-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyFlatMap {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildFlatMapTest')
+                    def registry = buildTask.registry.get()
+                    println "FlatMapped registry: \${registry}"
+                    assert registry == 'prod.registry.io'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyFlatMap')
+            .build()
+
+        then:
+        result.output.contains('FlatMapped registry: prod.registry.io')
+    }
+
+    def "provider zip combines values"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-zip'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    zipTest {
+                        def nameProvider = providers.provider { 'myapp' }
+                        def versionProvider = providers.provider { '2.0' }
+
+                        def combinedProvider = nameProvider.zip(versionProvider) { name, version ->
+                            "\${name}-\${version}"
+                        }
+
+                        imageName.set(combinedProvider)
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyZip {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildZipTest')
+                    def imageName = buildTask.imageName.get()
+                    println "Zipped image name: \${imageName}"
+                    assert imageName == 'myapp-2.0'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyZip')
+            .build()
+
+        then:
+        result.output.contains('Zipped image name: myapp-2.0')
+    }
+
+    def "nested providers resolve correctly"() {
+        given:
+        settingsFile << "rootProject.name = 'test-nested-providers'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    nestedTest {
+                        def level1 = providers.provider { 'base' }
+                        def level2 = providers.provider { level1.get() + '-middle' }
+                        def level3 = providers.provider { level2.get() + '-final' }
+
+                        namespace.set(level3)
+                        imageName.set('nested-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyNested {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildNestedTest')
+                    def namespace = buildTask.namespace.get()
+                    println "Nested namespace: \${namespace}"
+                    assert namespace == 'base-middle-final'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyNested')
+            .build()
+
+        then:
+        result.output.contains('Nested namespace: base-middle-final')
+    }
+
+    def "providers resolve during execution not configuration"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-lifecycle'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            def configTimeValue = 'config'
+            def execTimeValue = 'exec'
+
+            docker {
+                images {
+                    lifecycleTest {
+                        // Provider should NOT resolve during configuration
+                        def lazyProvider = providers.provider {
+                            println "Provider resolving"
+                            execTimeValue
+                        }
+
+                        namespace.set(lazyProvider)
+                        imageName.set('lifecycle-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyLifecycle {
+                doLast {
+                    // Provider should resolve here during execution
+                    def buildTask = tasks.getByName('dockerBuildLifecycleTest')
+                    def namespace = buildTask.namespace.get()
+                    println "Namespace resolved: \${namespace}"
+                    assert namespace == 'exec'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyLifecycle')
+            .build()
+
+        then:
+        result.output.contains('Namespace resolved: exec')
+        result.output.contains('Provider resolving')
+    }
+
+    def "provider orElse provides fallback"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-fallback'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    fallbackTest {
+                        // Provider with fallback chain
+                        def registryProvider = providers.gradleProperty('custom.registry')
+                            .orElse(providers.environmentVariable('DOCKER_REGISTRY'))
+                            .orElse('default.registry.io')
+
+                        registry.set(registryProvider)
+                        imageName.set('fallback-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyFallback {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildFallbackTest')
+                    def registry = buildTask.registry.get()
+                    println "Registry with fallback: \${registry}"
+                    // Should use last fallback since property/env not set
+                    assert registry == 'default.registry.io'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyFallback')
+            .build()
+
+        then:
+        result.output.contains('Registry with fallback: default.registry.io')
+    }
+
+    def "provider with gradle property resolution"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-gradleprop'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    propTest {
+                        registry.set(providers.gradleProperty('docker.registry').orElse('docker.io'))
+                        namespace.set(providers.gradleProperty('docker.namespace').orElse('library'))
+                        imageName.set('prop-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyGradleProperty {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildPropTest')
+                    def registry = buildTask.registry.get()
+                    def namespace = buildTask.namespace.get()
+                    println "Registry: \${registry}, Namespace: \${namespace}"
+                    assert registry == 'custom.registry.io'
+                    assert namespace == 'myorg'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyGradleProperty', '-Pdocker.registry=custom.registry.io', '-Pdocker.namespace=myorg')
+            .build()
+
+        then:
+        result.output.contains('Registry: custom.registry.io, Namespace: myorg')
+    }
+
+    def "provider with environment variable resolution"() {
+        given:
+        settingsFile << "rootProject.name = 'test-provider-env'"
+
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    envTest {
+                        registry.set(providers.environmentVariable('TEST_REGISTRY').orElse('docker.io'))
+                        imageName.set('env-test')
+                        tags.set(['latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            task verifyEnvVar {
+                doLast {
+                    def buildTask = tasks.getByName('dockerBuildEnvTest')
+                    def registry = buildTask.registry.get()
+                    println "Registry from env: \${registry}"
+                    // Should use fallback since TEST_REGISTRY not set
+                    assert registry == 'docker.io'
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyEnvVar')
+            .build()
+
+        then:
+        result.output.contains('Registry from env: docker.io')
+    }
 }
