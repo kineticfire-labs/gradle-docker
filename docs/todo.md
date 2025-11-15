@@ -4,6 +4,7 @@
 
 - Do we have 100% functional test coverage?
    - increase-functional-test-coverage.md 
+   - Phase 4 to 6
 
 
 ## Clean-up
