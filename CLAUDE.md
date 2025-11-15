@@ -176,6 +176,11 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ### Meeting Functional Testing Requirements (`docs/project-standards/testing/functional-testing.md`)
 1. 100% functionality coverage is required.
 2. Validate end-to-end behavior.
+3. Use Gradle TestKit to test the Gradle plugin functionality (DSL, task creation, validation)
+4. Test plugin DSL, configuration, validation, task registration
+5. DO NOT call actual Docker/Compose commands
+6. DO NOT verify real containers, images, networks
+7. Focus on Gradle integration, not Docker integration
 
 
 ### Adhere to Integration Testing Requirements
