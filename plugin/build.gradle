@@ -344,17 +344,13 @@ tasks.register('functionalTest', Test) {
     environment 'GRADLE_OPTS', '--no-daemon --no-parallel --no-configuration-cache'
 }
 
-// TEMPORARILY REMOVED: functionalTest dependency from check task
-// Due to Gradle 9.0.0 TestKit compatibility issues, functional tests are disabled
-// and marked as incompatible with configuration cache. Including them in the standard
-// build flow causes configuration cache to be discarded for ALL tasks.
-//
-// To run functional tests manually: ./gradlew functionalTest
-// See: docs/design-docs/functional-test-testkit-gradle-issue.md
-//
-// tasks.named('check') {
-//     dependsOn tasks.functionalTest
-// }
+// Functional tests re-enabled after confirming TestKit works with Gradle 9
+// TestKit has configuration cache limitations (GitHub issue #34505), but tests are fully functional.
+// The configuration cache incompatibility only affects the functionalTest task itself (already marked
+// as notCompatibleWithConfigurationCache in the task configuration above at line 328-331).
+tasks.check {
+    dependsOn tasks.functionalTest
+}
 
 tasks.named('test') {
     // Use JUnit Platform for Spock tests
