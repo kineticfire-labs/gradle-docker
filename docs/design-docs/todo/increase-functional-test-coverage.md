@@ -496,47 +496,61 @@ various Gradle environments** (multi-project, configuration cache, different Gra
 
 **File**: Created `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/ValidationMessagesFunctionalTest.groovy` ✅ New file with 12 tests
 
-## Minor Gaps (Priority 3)
+## Minor Gaps (Priority 3) ✅ COMPLETE
 
-### 13. Task Naming Conventions
-**Current Coverage**: 85%
-**Tests Needed**: 4-6 tests
+### 13. Task Naming Conventions ✅
+**Current Coverage**: 100% (was 85%)
+**Tests Added**: 8 tests
 
-#### Missing Test Scenarios
+#### Test Scenarios ✅
 
-- [ ] CamelCase image names generate correct task names
-- [ ] Hyphenated image names generate correct task names
-- [ ] Special characters in names handled correctly
-- [ ] Task names don't conflict with Gradle built-ins
+- ✅ CamelCase image names generate correct task names
+- ✅ PascalCase image names generate correct task names
+- ✅ Hyphenated image names generate correct task names
+- ✅ Underscored image names generate correct task names
+- ✅ Numeric image names generate correct task names
+- ✅ Task names don't conflict with Gradle built-ins
+- ✅ Task name capitalization is correct
+- ✅ Multiple naming conventions coexist
 
-**File**: Enhance existing test files
+**File**: Created `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/TaskNamingFunctionalTest.groovy` ✅ New file with 8 tests
 
-### 14. Aggregate Task Behavior
-**Current Coverage**: 70%
-**Tests Needed**: 4-6 tests
+### 14. Aggregate Task Behavior ✅
+**Current Coverage**: 100% (was 70%)
+**Tests Added**: 11 tests
 
-#### Missing Test Scenarios
+#### Test Scenarios ✅
 
-- [ ] dockerBuild aggregates all build tasks
-- [ ] dockerImages aggregates all per-image tasks
-- [ ] composeUp aggregates all compose stacks
-- [ ] Empty aggregates (no images configured)
+- ✅ dockerBuild aggregates all build tasks
+- ✅ dockerTag aggregates all tag tasks
+- ✅ dockerSave aggregates all save tasks
+- ✅ dockerPublish aggregate task exists
+- ✅ dockerImages aggregates all per-image tasks
+- ✅ composeUp aggregates all compose stacks
+- ✅ composeDown aggregates all compose stacks
+- ✅ Empty dockerBuild aggregate (no images configured)
+- ✅ Empty dockerImages aggregate (no images configured)
+- ✅ Empty composeUp aggregate (no stacks configured)
+- ✅ Empty composeDown aggregate (no stacks configured)
 
-**File**: Enhance existing test files
+**File**: Created `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/AggregateTaskBehaviorFunctionalTest.groovy` ✅ New file with 11 tests
 
-### 15. BuildService Lifecycle
-**Current Coverage**: 0%
-**Tests Needed**: 4-6 tests
+### 15. BuildService Lifecycle ✅
+**Current Coverage**: 100% (was 0%)
+**Tests Added**: 8 tests
 
-#### Missing Test Scenarios
+#### Test Scenarios ✅
 
-- [ ] DockerService registered as shared service
-- [ ] ComposeService registered as shared service
-- [ ] JsonService registered as shared service
-- [ ] Services shared across tasks
-- [ ] Service lifecycle managed by Gradle
+- ✅ DockerService registered as shared service
+- ✅ ComposeService registered as shared service
+- ✅ JsonService registered as shared service
+- ✅ All required services are registered
+- ✅ Services shared across multiple projects
+- ✅ Service instance sharing across tasks
+- ✅ Service lifecycle managed by Gradle
+- ✅ Service registration is idempotent
 
-**File**: Create `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/BuildServiceFunctionalTest.groovy`
+**File**: Created `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/BuildServiceFunctionalTest.groovy` ✅ New file with 8 tests
 
 ## Implementation Plan
 
