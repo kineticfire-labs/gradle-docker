@@ -397,10 +397,13 @@ This removal reduces maintenance burden and prevents future confusion about why 
 The method enforced strict separation between Build Mode and SourceRef Mode, which conflicts with the plugin's
 intentional design that allows these modes to coexist on a single `ImageSpec` for different tasks.
 
-### Verification
-All test suites must pass after removal:
-- Unit tests: Expected ~2358 tests (reduction of 34 from 2392)
-- Functional tests: Expected 112 tests, 0 failures
-- Integration tests: Expected BUILD SUCCESSFUL
+### Verification Results ✅
+All test suites passed after removal:
+- **Unit tests**: ✅ 2358 tests passed (exact reduction of 34 from 2392)
+- **Functional tests**: ✅ 112 tests passed, 0 failures
+- **Integration tests**: ✅ BUILD SUCCESSFUL in 15m 54s
+- **No lingering containers**: ✅ Verified clean state
 
-**Status**: Removal complete - verification pending
+**Status**: ✅ **COMPLETE** - Removal executed and fully verified (2025-11-14)
+
+**Additional Fix Applied**: Increased JVM heap size to 3GB in `plugin-integration-test/gradle.properties` to support memory-intensive XZ compression in integration test scenario-11.
