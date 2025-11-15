@@ -17,7 +17,6 @@
 package com.kineticfire.gradle.docker
 
 import org.gradle.testkit.runner.GradleRunner
-import spock.lang.Ignore
 import spock.lang.Specification
 import spock.lang.TempDir
 
@@ -25,12 +24,10 @@ import java.nio.file.Path
 
 /**
  * Functional tests for plugin integration with test extensions
- * 
- * NOTE: These tests are disabled due to test framework compatibility issues 
- * with Gradle 9.0.0 configuration cache. The functionality they test is 
- * verified by integration tests in plugin-integration-test/app-image/src/integrationTest/
+ *
+ * Tests the integration between the Docker plugin and test extensions, including
+ * the usesCompose() method and composeStateFileFor() extension method.
  */
-@Ignore("Disabled due to test framework compatibility with Gradle 9.0.0 configuration cache")
 class PluginIntegrationFunctionalTest extends Specification {
 
     @TempDir
@@ -74,7 +71,7 @@ class PluginIntegrationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyExtensionMethods', '--stacktrace')
             .build()
 
@@ -99,26 +96,26 @@ class PluginIntegrationFunctionalTest extends Specification {
                     }
                 }
             }
-            
-            tasks.register('integrationTest', Test) {
+
+            tasks.register('myCustomTest', Test) {
                 usesCompose stack: 'testStack', lifecycle: 'suite'
             }
-            
+
             task verifyUsesCompose {
                 doLast {
-                    def testTask = tasks.getByName('integrationTest')
-                    
+                    def testTask = tasks.getByName('myCustomTest')
+
                     println "Dependencies: \${testTask.dependsOn}"
                     println "Finalizers: \${testTask.finalizedBy.getDependencies()}"
-                    
-                    def hasUpDep = testTask.dependsOn.contains('composeUpTestStack')
-                    def hasDownFinalizer = testTask.finalizedBy.getDependencies().any { 
-                        it.toString().contains('composeDownTestStack') 
+
+                    def hasUpDep = testTask.dependsOn.any { it.toString().contains('composeUpTestStack') }
+                    def hasDownFinalizer = testTask.finalizedBy.getDependencies().any {
+                        it.toString().contains('composeDownTestStack')
                     }
-                    
+
                     println "Has composeUp dependency: \${hasUpDep}"
                     println "Has composeDown finalizer: \${hasDownFinalizer}"
-                    
+
                     assert hasUpDep
                     assert hasDownFinalizer
                 }
@@ -128,7 +125,6 @@ class PluginIntegrationFunctionalTest extends Specification {
         // Create dummy compose file
         def composeFile = testProjectDir.resolve('test-compose.yml').toFile()
         composeFile << """
-            version: '3'
             services:
               test:
                 image: alpine
@@ -137,7 +133,7 @@ class PluginIntegrationFunctionalTest extends Specification {
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
-            .withPluginClasspath()
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyUsesCompose', '--stacktrace')
             .build()
 
