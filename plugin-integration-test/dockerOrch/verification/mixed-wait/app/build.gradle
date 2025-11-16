@@ -38,10 +38,10 @@ dependencies {
     implementation libs.spring.boot.starter.web
 
     // Spring Boot JDBC support (for JdbcTemplate)
-    implementation 'org.springframework.boot:spring-boot-starter-jdbc'
+    implementation libs.spring.boot.starter.jdbc
 
     // PostgreSQL JDBC driver
-    runtimeOnly 'org.postgresql:postgresql:42.7.2'
+    runtimeOnly libs.postgresql
 
     // Testing
     testImplementation libs.spring.boot.starter.test

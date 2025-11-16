@@ -46,6 +46,10 @@ groovy-all = { module = "org.apache.groovy:groovy-all", version.ref = "groovy" }
 spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test" }
 spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa" }
+spring-boot-starter-data-redis = { module = "org.springframework.boot:spring-boot-starter-data-redis" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc" }
+slf4j-api = { module = "org.slf4j:slf4j-api" }
+logback-classic = { module = "ch.qos.logback:logback-classic" }
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 h2-database = { module = "com.h2database:h2", version.ref = "h2" }
 jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
