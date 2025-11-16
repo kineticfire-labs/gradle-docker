@@ -14,8 +14,13 @@ plugins {
 
 ## Recommended Directory Layout
 
+Includes references to the use of the `dockerOrch` DSL for testing a Linux image; see `usage-docker-orch.md` for more
+information.
+
 ```
-the-application-project/                  # a project that (1) builds an application and (2) puts the application in a Linux image
+the-application-project/                  # a project that (1) builds an application and tests it, and (2) puts the
+│                                           application in a Linux image and tests the unit of delivery by spinning up
+│                                           the container and testing it
 ├─ app/                                   # builds the application, such as a JAR (or other artifact)
 │  ├─ build.gradle
 │  └─ src/
@@ -40,6 +45,74 @@ the-application-project/                  # a project that (1) builds an applica
       └─ compose/                          # compose state files (JSON) per stack
 ```
 
+## Quick Start: Minimal Example
+
+The absolute minimum configuration to build a Docker image:
+
+```groovy
+docker {
+    images {
+        myApp {  // DSL block name - generates task: dockerBuildMyApp
+            // Required: image name
+            imageName = 'my-app'
+
+            // Required: one or more tags
+            tags = ['latest']
+
+            // Required: task to prepare Docker build context (files needed for 'docker build')
+            contextTask = tasks.register('prepareContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')  // Must contain Dockerfile
+            }
+        }
+    }
+}
+
+// Run: ./gradlew dockerBuildMyApp (task name from DSL block name 'myApp')
+```
+
+**What this does:**
+- Copies files from `src/main/docker/` (including Dockerfile) to `build/docker-context/`
+- Builds Docker image named `my-app:latest` using `build/docker-context/Dockerfile`
+- Stores image in local Docker daemon
+
+## Build Context Setup
+
+### What is contextTask?
+
+`contextTask` prepares the **Docker build context** - the directory containing all files available during `docker build`.
+This typically includes:
+- Dockerfile
+- Application artifacts (JAR, WAR, etc.)
+- Configuration files, scripts, assets
+
+### Directory Convention
+
+The plugin follows this convention:
+- **Context output**: `layout.buildDirectory.dir('docker-context/<imageName>')`
+- **Default Dockerfile location**: `build/docker-context/<imageName>/Dockerfile`
+- **Override with**: `dockerfile.set(file(...))` (full path) or `dockerfileName.set(...)` (name within context)
+
+### Example
+
+```groovy
+docker {
+    images {
+        webApp {  // DSL block name - generates tasks: dockerBuildWebApp, dockerSaveWebApp, etc.
+            imageName = 'web-app'  // Docker image name - NOT used for task names
+            tags = ['latest']
+
+            // Convention: output to docker-context/<dslBlockName>
+            contextTask = tasks.register('prepareWebAppContext', Copy) {
+                into layout.buildDirectory.dir('docker-context/webApp')
+                from('src/main/docker')
+            }
+            // Default Dockerfile: build/docker-context/webApp/Dockerfile
+        }
+    }
+}
+```
+
 ## Two Usage Modes
 
 The plugin supports two distinct usage modes:
@@ -52,15 +125,85 @@ The plugin supports two distinct usage modes:
    2. **Image Name Mode** - registry, namespace, imageName, tag
    3. **Repository Mode** - registry, repository, tag
 
+### When to Use Each Mode
+
+| Scenario                              | Mode           | Why                                       |
+|---------------------------------------|----------------|-------------------------------------------|
+| Building from scratch with Dockerfile | Build Mode     | Creating new image                        |
+| Building custom application image     | Build Mode     | Need to specify Dockerfile, build context |
+| Tagging existing image locally        | SourceRef Mode | No build needed, image already exists     |
+| Publishing third-party image          | SourceRef Mode | Image already built                       |
+
+
 ## Gradle 9 and 10 Compatibility
 
-This plugin is fully compatible with Gradle 9 and 10, including configuration cache support. Follow these patterns for 
+This plugin is fully compatible with Gradle 9 and 10, including configuration cache support. Follow these patterns for
 best compatibility in [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md).
 
+### Why Use Provider API?
+
+The Provider API enables:
+- **Configuration cache** (Gradle 9/10 requirement)
+- **Lazy evaluation** - values resolved at execution time, not configuration time
+- **Performance** - avoids unnecessary work during configuration
+
+Example:
+```groovy
+// Good: Lazy evaluation with Provider API
+version.set(providers.provider { project.version.toString() })
+buildArgs.put('JAR_FILE', jarFileNameProvider)
+
+// Bad: Eager evaluation (breaks configuration cache)
+version.set(project.version.toString())  // Evaluated during configuration
+```
+
+See `gradle-9-and-10-compatibility-practices.md` for complete details.
+
+## Property Assignment Styles
+
+The plugin supports two property assignment styles:
+
+### Style 1: Simple Assignment (Groovy DSL Convenience)
+
+```groovy
+docker {
+    images {
+        myApp {
+            imageName = 'my-app'
+            tags = ['latest', '1.0.0']
+            registry = 'ghcr.io'
+        }
+    }
+}
+```
+
+**When to use**: Simple, static values in Groovy DSL.
+
+### Style 2: Explicit .set() (Gradle Provider API)
+
+```groovy
+docker {
+    images {
+        myApp {
+            imageName.set('my-app')
+            tags.set(['latest', '1.0.0'])
+            registry.set('ghcr.io')
+            version.set(providers.provider { project.version.toString() })
+        }
+    }
+}
+```
+
+**When to use**:
+- **Required for Kotlin DSL**
+- Provider values (`.provider`, `.map`, `.flatMap`)
+- Complex value composition
+
+**Both styles work in Groovy DSL.** Choose based on preference and use case.
 
 ## Build Mode: Building New Docker Images
 
-Use Docker nomenclature properties for building new images. 
+Use Docker nomenclature properties for building new images.
 
 Two naming approaches:
 1. registry (optional) + namespace (optional) + name + tag(s)
@@ -76,6 +219,70 @@ Recommended:
 
 Choose one of two naming approaches:
 
+### Minimal Build Configuration
+
+```groovy
+docker {
+    images {
+        simpleApp {
+            imageName = 'simple-app'
+            tags = ['latest']
+
+            contextTask = tasks.register('prepareSimpleContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')
+            }
+        }
+    }
+}
+```
+
+This is the minimum required configuration for Build Mode.
+
+### Multi-Project JAR Build (Common Pattern)
+
+**Common use case**: Build a Docker image containing a JAR from another Gradle project.
+
+```groovy
+// Get JAR file from app subproject using Provider API (Gradle 9/10 compatible)
+def jarFileProvider = project(':app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+docker {
+    images {
+        webApp {
+            imageName = 'web-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareWebAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for web app image'
+                into layout.buildDirectory.dir('docker-context/webApp')
+                from('src/main/docker')
+
+                // Copy JAR from app project using provider
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':app').tasks.named('bootJar')
+            }
+
+            // Pass JAR file name as build arg (lazy evaluation)
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+    }
+}
+```
+
+**Key points:**
+- Uses `.flatMap()` to get task output as Provider
+- Uses `.map()` to transform provider value
+- JAR filename evaluated at execution time, not configuration time
+- `dependsOn` ensures JAR is built before context preparation
+
 ### Approach 1: Registry + Namespace + ImageName + Tag(s)
 
 ```groovy
@@ -84,47 +291,47 @@ import static com.kineticfire.gradle.docker.model.SaveCompression.NONE
 docker {
     images {
         timeServer {
-            // Build configuration
+            // Build configuration - prepares Docker build context
             contextTask = tasks.register('prepareTimeServerContext', Copy) {
                 group = 'docker'
                 description = 'Prepare Docker build context for time server image'
                 into layout.buildDirectory.dir('docker-context/timeServer')
                 from('src/main/docker')
-                
-                // Capture version during configuration for configuration cache compatibility
-                def versionString = project.version.toString()
-                from(file('../../app/build/libs')) {
-                   include 'app-*.jar'
-                   rename { String fileName -> "app-${versionString}.jar" }
+
+                // Example: copy JAR from multi-project build
+                def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+                from(jarFileProvider) {
+                    rename { "app-${project.version}.jar" }
                 }
-                dependsOn ':app:jar'
+                dependsOn project(':app').tasks.named('jar')
             }
-            
+
             // Approach 1: Image Name Mode - registry, namespace, imageName, tag(s)
-            registry.set("ghcr.io")                     // Optional registry
-            namespace.set("kineticfire/stuff")          // Optional namespace
-            imageName.set("time-server")                // Required: image name
-            version.set(providers.provider { project.version.toString() })     // Defaults to project.version
-            tags.set(["latest", "1.0.0"])               // Required: one or more tags
-            
-            // optional build arguments using 'put' w/ provider API (Gradle 9/10 compatible)
+            registry = "ghcr.io"                     // Optional registry
+            namespace = "kineticfire/stuff"          // Optional namespace
+            imageName = "time-server"                // Required: image name
+            // version defaults to project.version; override if needed:
+            // version.set(providers.provider { project.version.toString() })
+            tags = ["latest", "1.0.0"]               // Required: one or more tags
+
+            // Optional build arguments using 'put' w/ provider API (Gradle 9/10 compatible)
             buildArgs.put("JAR_FILE", providers.provider { "app-${project.version}.jar" })
             buildArgs.put("BUILD_VERSION", providers.provider { project.version.toString() })
-           
-            // optional build arguments using 'putAll' w/ provider
+
+            // Optional build arguments using 'putAll' w/ provider
             //buildArgs.putAll(providers.provider {
             //  [
             //          'JAR_FILE': "app-${project.version}.jar",
             //          'BUILD_VERSION': project.version.toString()
             //  ]
             //})
-            
-            // optional custom labels using 'put' w/ provider API (Gradle 9/10 compatible)
+
+            // Optional custom labels using 'put' w/ provider API (Gradle 9/10 compatible)
             labels.put("org.opencontainers.image.revision", providers.provider { gitSha })
             labels.put("org.opencontainers.image.version", providers.provider { project.version.toString() })
             labels.put("maintainer", "team@kineticfire.com")
 
-            // optional custom labels using 'putAll' w/ provider
+            // Optional custom labels using 'putAll' w/ provider
             //labels.putAll(providers.provider {
             //  [
             //          "org.opencontainers.image.revision": gitSha,
@@ -132,17 +339,19 @@ docker {
             //          "maintainer": "team@kineticfire.com"
             //  ]
             //})
-           
-            // no dockerfile, so defaults to 'build/docker-context/timeServer/Dockerfile'
-            // or: dockerfileName.set("CustomDockerFile") // specify path to Dockerfile in 'build/docker-context/timeServer/' 
-            // or: dockerfile.set(file("build/docker-context/timeServer/other/CustomDockerfile")) // specify path to Dockerfile
-            
+
+            // No dockerfile specified, so defaults to 'build/docker-context/timeServer/Dockerfile'
+            // Override options:
+            //   dockerfileName.set("CustomDockerFile")  // name within context directory
+            //   dockerfile.set(file("path/to/CustomDockerfile"))  // absolute path
+
+            // Optional: save image to file
             save {
-                compression.set(NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP; optional-- if omitted, then defaults to 'NONE'
+                compression.set(NONE)  // Enum: NONE, GZIP, BZIP2, XZ, ZIP; defaults to NONE
                 outputFile.set(layout.buildDirectory.file("docker-images/time-server.tar.gz"))
             }
-            
-            // see section 'Comprehensive Publishing Examples'
+
+            // Optional: publish to registries (see section 'Comprehensive Publishing Examples')
             publish {
                 to('localRegistry') {
                     registry.set("localhost:5000")
@@ -163,16 +372,20 @@ import static com.kineticfire.gradle.docker.model.SaveCompression.ZIP
 docker {
     images {
         myApp {
-            contextTask = tasks.register('prepareMyAppContext', Copy) { /* ... */ }
-            
+            contextTask = tasks.register('prepareMyAppContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')
+            }
+
             // Approach 2: registry (optional) + repository + tag(s)
-            registry.set("docker.io")                   // Optional registry  
-            repository.set("acme/my-awesome-app")       // Required: full repository path
-            version.set(providers.provider { "1.2.3" })
-            tags.set(["latest", "stable"])              // Required: one or more tags
-            
+            registry = "docker.io"                   // Optional registry
+            repository = "acme/my-awesome-app"       // Required: full repository path
+            // version defaults to project.version; override if needed:
+            // version.set(providers.provider { "1.2.3" })
+            tags = ["latest", "stable"]              // Required: one or more tags
+
             labels.put("description", providers.provider { "My awesome application" })
-            
+
             save {
                 compression.set(ZIP)
                 outputFile.set(file("build/my-app.zip"))
@@ -195,7 +408,7 @@ docker {
             // Use existing image - NO build properties allowed
             sourceRef.set("ghcr.io/acme/myapp:1.2.3")
             // defaults to pullIfMissing.set(false)
-            
+
             // Apply new local tags to the sourceRef
             tags.set(["local:latest", "local:stable"])
         }
@@ -213,16 +426,16 @@ docker {
         remoteImage {
             sourceRef.set("ghcr.io/acme/private-app:1.0.0")
             // defaults to pullIfMissing.set(false)
-            
+
             save {
                 compression.set(GZIP)
                 outputFile.set(layout.buildDirectory.file("docker-images/private-app.tar.gz"))
-                
+
                 // Optional authentication - only needed if registry requires credentials
                 // If omitted and registry requires auth, Docker will return an auth error
                 auth {
                     username.set("myuser")
-                    password.set("mypass") 
+                    password.set("mypass")
                     // serverAddress extracted automatically from image reference
                 }
             }
@@ -241,29 +454,29 @@ docker {
         myExistingImage {
             sourceRef.set("my-app:1.0.0")
            // defaults to pullIfMissing.set(false)
-            
+
             // Apply tags first
             tags.set(["timeServer:1.0.0", "timeServer:stable"])
-            
+
             // Save to file
             save {
                 compression.set(BZIP2)  // Enum value required
                 outputFile.set(file("build/docker-images/my-app-v1.0.0.tar.bz2"))
             }
-            
+
             // Publish to registries
             publish {
                 to('dockerhub') {
                     registry.set("docker.io")
                     repository.set("acme/myapp")
                     publishTags.set(["published-latest"])
-                    
+
                     auth {
                         username.set("dockeruser")
                         password.set("dockerpass")
                     }
                 }
-                
+
                 to('backup') {
                     registry.set("backup.registry.com")
                     namespace.set("acme")
@@ -426,6 +639,59 @@ docker {
 }
 ```
 
+## Provider API Patterns
+
+Common Provider API patterns for configuration cache compatibility:
+
+### Pattern 1: Task Output as Provider
+
+```groovy
+// Get JAR file from task output
+def jarFileProvider = project(':app').tasks.named('bootJar').flatMap { it.archiveFile }
+
+// Transform provider value
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Use in buildArgs
+buildArgs.put('JAR_FILE', jarFileNameProvider)
+```
+
+### Pattern 2: Environment Variables
+
+```groovy
+// Read environment variable as provider
+pullAuth {
+    username.set(providers.environmentVariable("GHCR_USER"))
+    password.set(providers.environmentVariable("GHCR_TOKEN"))
+}
+```
+
+### Pattern 3: Project Properties
+
+```groovy
+// Use project version as provider
+version.set(providers.provider { project.version.toString() })
+
+// Compose providers
+buildArgs.put('APP_VERSION', providers.provider { project.version.toString() })
+```
+
+### Pattern 4: Provider Composition
+
+```groovy
+// Chain multiple transformations
+def jarFileProvider = project(':app').tasks.named('bootJar')
+    .flatMap { it.archiveFile }
+    .map { it.asFile.name }
+
+// Use .get() only at execution time (inside task action or Copy spec)
+from(jarFileProvider) {
+    rename { jarFileProvider.get() }  // OK: executed during Copy task action
+}
+```
+
+**Key rule**: Never call `.get()` during configuration phase (outside of task actions).
+
 ## Comprehensive Publishing Examples
 
 ### Basic Registry Examples
@@ -437,7 +703,7 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
+
             publish {
                 to('privateRegistry') {
                     registry.set("my-company.com:5000")
@@ -461,17 +727,17 @@ docker {
             // build a new image
             contextTask = ...
 
-            registry.set('my-company.com:5000')
-            namespace.set('library')
-            imageName.set('my-image')
-            tags.set('1.21')
-           
+            registry = 'my-company.com:5000'
+            namespace = 'library'
+            imageName = 'my-image'
+            tags = ['1.21']
+
             // use 'sourceRef' for existing image
             //sourceRefRegistry.set('my-company.com:5000')
             //sourceRefNamespace.set('library')
             //sourceRefImageName.set('nginx')
             //sourceRefTag.set('1.21')
-            
+
             publish {
                 to('privateRegistry') {
                 }
@@ -488,17 +754,17 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
-            registry.set("docker.io")  // Explicit Docker Hub registry
-            repository.set("username/myapp")
-            publishTags.set(["latest", "v1.0"])
-            
+
+            registry = "docker.io"  // Explicit Docker Hub registry
+            repository = "username/myapp"
+            publishTags = ["latest", "v1.0"]
+
             publish {
                 to('dockerhub') {
                     registry.set("docker.io")  // Explicit Docker Hub registry
                     repository.set("username/myapp")
                     publishTags.set(["latest", "v1.0"])
-                    
+
                     auth {
                         username.set(providers.environmentVariable("DOCKERHUB_USERNAME"))
                         // Use Personal Access Token (preferred) instead of password
@@ -518,17 +784,17 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
-            registry.set("ghcr.io")
-            repository.set("username/myapp")
-            publishTags.set(["latest"])
-            
+
+            registry = "ghcr.io"
+            repository = "username/myapp"
+            publishTags = ["latest"]
+
             publish {
                 to('ghcr') {
                     registry.set("ghcr.io")
                     repository.set("username/myapp")
                     publishTags.set(["latest"])
-                    
+
                     auth {
                         username.set(providers.environmentVariable("GHCR_USERNAME"))
                         password.set(providers.environmentVariable("GHCR_PASSWORD"))
@@ -549,7 +815,7 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
+
             publish {
                 to('privateRegistry') {
                     registry.set("my-company.com:5000")
@@ -569,14 +835,14 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
+
             publish {
                 to('authenticatedRegistry') {
                     registry.set("secure-registry.company.com")
                     namespace.set("engineering")
                     imageName.set("myapp")
                     publishTags.set(["latest", "v2.1"])
-                    
+
                     auth {
                         username.set(providers.environmentVariable("REGISTRY_USERNAME"))
                         password.set(providers.environmentVariable("REGISTRY_PASSWORD"))
@@ -597,7 +863,7 @@ docker {
     images {
         myApp {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
-            
+
             publish {
                 to('localDev') {
                     registry.set("localhost:5000")  // Example for local dev registry
@@ -611,25 +877,25 @@ docker {
 }
 ```
 
-**Note**: Environment variables are validated automatically by the plugin with helpful error messages if missing or 
+**Note**: Environment variables are validated automatically by the plugin with helpful error messages if missing or
 empty, including registry-specific suggestions for common variable names.
 
 ## Key API Properties
 
 ### Docker Nomenclature Properties
-- `registry.set(String)` - Registry hostname (e.g., "ghcr.io", "localhost:5000")
-- `namespace.set(String)` - Namespace/organization (e.g., "kineticfire/stuff")  
-- `imageName.set(String)` - Image name (e.g., "my-app")
-- `repository.set(String)` - Alternative to namespace+imageName (e.g., "acme/my-app")
-- `version.set(String)` - Image version (defaults to project.version)
-- `tags.set(List<String>)` - Tag names only (e.g., ["latest", "1.0.0"])
-- `labels.put(String, String)` - Custom Docker labels for build (**NEW!**)
+- `registry` or `registry.set(String)` - Registry hostname (e.g., "ghcr.io", "localhost:5000")
+- `namespace` or `namespace.set(String)` - Namespace/organization (e.g., "kineticfire/stuff")
+- `imageName` or `imageName.set(String)` - Image name (e.g., "my-app")
+- `repository` or `repository.set(String)` - Alternative to namespace+imageName (e.g., "acme/my-app")
+- `version` or `version.set(String)` - Image version (defaults to project.version; override if needed)
+- `tags` or `tags.set(List<String>)` - Tag names only (e.g., ["latest", "1.0.0"])
+- `labels.put(String, String)` - Custom Docker labels for build
 
 ### docker.compression Enum
 Use enum values instead of strings:
 - `docker.compression.NONE` - No compression
 - `docker.compression.GZIP` - Gzip compression (.tar.gz)
-- `docker.compression.BZIP2` - Bzip2 compression (.tar.bz2)  
+- `docker.compression.BZIP2` - Bzip2 compression (.tar.bz2)
 - `docker.compression.XZ` - XZ compression (.tar.xz)
 - `docker.compression.ZIP` - ZIP compression (.zip)
 
@@ -640,7 +906,7 @@ Use enum values instead of strings:
 - `sourceRefNamespace.set(String)` - Source namespace component (e.g., "library")
 - `sourceRefImageName.set(String)` - Source image name component (e.g., "alpine")
 - `sourceRefTag.set(String)` - Source tag component (defaults to "latest" if omitted)
-- `sourceRefRepository.set(String)` - Source repository component (e.g., "company/app") - alternative to 
+- `sourceRefRepository.set(String)` - Source repository component (e.g., "company/app") - alternative to
   namespace+imageName
 
 ### pullAuth Configuration (Image-Level)
@@ -651,13 +917,13 @@ pullAuth {
 }
 ```
 
-**Note**: pullAuth is separate from publish auth - pullAuth is used for pulling source images, while publish auth is 
+**Note**: pullAuth is separate from publish auth - pullAuth is used for pulling source images, while publish auth is
 used for pushing to target registries.
 
-### Authentication for Save Operations  
+### Authentication for Save Operations
 
 ```groovy
-save {    
+save {
     // Optional - only add if registry requires authentication
     // If omitted, operation proceeds without auth (may fail if registry requires it)
     auth {
@@ -668,17 +934,45 @@ save {
 }
 ```
 
-**Note**: Authentication blocks are always optional. If a registry requires authentication and none is provided, Docker 
+**Note**: Authentication blocks are always optional. If a registry requires authentication and none is provided, Docker
 will return a descriptive authentication error.
 
 ## Running Generated Tasks
 
-The plugin automatically generates tasks based on the DSL block name:
+### Task Naming Convention
+
+The plugin generates task names based on the **DSL block name** (the identifier used in the `images { }` block),
+NOT the `imageName` property value.
+
+**Pattern**: `docker<Operation><CapitalizedDslBlockName>`
+
+**Example:**
+```groovy
+docker {
+    images {
+        webApp {  // <-- DSL block name: "webApp" (used for task names)
+            imageName = 'example-web-app'  // <-- Docker image name (NOT used for task names)
+            tags = ['latest']
+        }
+    }
+}
+```
+
+**Generated tasks:**
+- `dockerBuildWebApp` - Build operation + capitalized "webApp"
+- `dockerSaveWebApp` - Save operation + capitalized "webApp"
+- `dockerTagWebApp` - Tag operation + capitalized "webApp"
+- `dockerPublishWebApp` - Publish operation + capitalized "webApp"
+- `dockerImageWebApp` - All operations + capitalized "webApp"
+
+**Note**: The Docker image will be named `example-web-app:latest`, but tasks use the DSL block name `webApp`.
+
+### Task Execution Examples
 
 ```bash
 # For a specific DSL block named 'timeServer'
 ./gradlew dockerBuildTimeServer    # Build only
-./gradlew dockerTagTimeServer      # Tag only  
+./gradlew dockerTagTimeServer      # Tag only
 ./gradlew dockerSaveTimeServer     # Save only
 ./gradlew dockerPublishTimeServer  # Publish only
 
@@ -688,7 +982,7 @@ The plugin automatically generates tasks based on the DSL block name:
 # Run specific operation across ALL images
 ./gradlew dockerBuild     # Build all images
 ./gradlew dockerSave      # Save all images
-./gradlew dockerTag       # Tag all images  
+./gradlew dockerTag       # Tag all images
 ./gradlew dockerPublish   # Publish all images
 
 # Run ALL operations for ALL images
@@ -702,7 +996,7 @@ The plugin automatically generates tasks based on the DSL block name:
 - **Required**: Either `repository` OR `imageName` must be specified
 - **No sourceRef**: Cannot use `sourceRef` with build properties (contextTask, buildArgs, labels, etc.)
 
-### SourceRef Mode Rules  
+### SourceRef Mode Rules
 - **Required sourceRef**: Must specify valid `sourceRef` image reference
 - **No build properties**: Cannot use contextTask, buildArgs, labels, dockerfile when using `sourceRef`
 - **Authentication**: Optional for all registries; provide auth block if registry requires credentials
@@ -716,20 +1010,103 @@ The plugin automatically generates tasks based on the DSL block name:
 - **Authentication**: use `pullAuth` block for pull operations, separate from publish authentication
 
 #### SourceRef vs Build Context
-- **Cannot combine**: pullIfMissing=true with build context (contextTask, dockerfile, buildArgs) will throw validation error
+- **Cannot combine**: pullIfMissing=true with build context (contextTask, dockerfile, buildArgs) will throw validation
+  error
 - **Either/or**: use pullIfMissing for existing images OR build context for new images, not both
 
 #### Component Assembly Priority
 1. Full `sourceRef.set("registry/namespace/image:tag")` takes precedence over all components
 2. Repository approach: `sourceRefRepository` takes precedence over `sourceRefNamespace + sourceRefImageName`
 3. Namespace approach: used when `sourceRefRepository` is not specified
-4. Required: either `sourceRef` OR `sourceRefRepository` OR `sourceRefImageName` must be specified when using pullIfMissing=true
+4. Required: either `sourceRef` OR `sourceRefRepository` OR `sourceRefImageName` must be specified when using
+   pullIfMissing=true
 
 #### Component Assembly Patterns
 - **Full Reference**: `sourceRef.set("ghcr.io/company/app:v1.0")` - complete image reference
-- **Repository Assembly**: `sourceRefRegistry + sourceRefRepository + sourceRefTag` - mirrors build mode repository approach
-- **Namespace Assembly**: `sourceRefRegistry + sourceRefNamespace + sourceRefImageName + sourceRefTag` - mirrors build mode namespace approach
+- **Repository Assembly**: `sourceRefRegistry + sourceRefRepository + sourceRefTag` - mirrors build mode repository
+  approach
+- **Namespace Assembly**: `sourceRefRegistry + sourceRefNamespace + sourceRefImageName + sourceRefTag` - mirrors build
+  mode namespace approach
 - **Mutually Exclusive**: Cannot mix repository and namespace approaches in same image configuration
+
+## Task Dependencies
+
+### Automatic Dependencies
+
+The plugin automatically configures these dependencies:
+
+- `dockerSaveTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
+- `dockerPublishTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
+- `dockerImageTimeServer` depends on all configured operations for that image
+- `dockerImages` depends on all `dockerImage*` tasks
+
+### Multi-Project Task Dependencies
+
+For multi-project builds, wire task dependencies using `afterEvaluate`:
+
+```groovy
+// Ensure JAR is built before Docker context is prepared
+afterEvaluate {
+    tasks.named('prepareWebAppContext') {
+        dependsOn project(':app').tasks.named('bootJar')
+    }
+}
+```
+
+This pattern is common when:
+- Building Docker images from JARs in other projects
+- Copying artifacts from multi-project builds
+- Coordinating build order across projects
+
+## Integration with dockerOrch DSL
+
+The `docker` and `dockerOrch` DSLs are **independent** but commonly used together:
+- **docker DSL**: Build, tag, save, and publish Docker images
+- **dockerOrch DSL**: Test images using Docker Compose orchestration
+
+They are **mutually exclusive in purpose** - use `docker` DSL for image operations, `dockerOrch` DSL for testing.
+
+### Common Pattern: Build then Test
+
+```groovy
+// Build image with docker DSL
+docker {
+    images {
+        myApp {
+            imageName = 'my-app'
+            tags = ['latest']
+            contextTask = tasks.register('prepareContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')
+            }
+        }
+    }
+}
+
+// Test image with dockerOrch DSL
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = 'my-app-test'
+
+            waitForHealthy {
+                waitForServices.set(['my-app'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+
+// Wire tasks: build image before compose up
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerBuildMyApp')
+    }
+}
+```
+
+**Note**: See `docs/usage/usage-docker-orch.md` for complete `dockerOrch` DSL documentation.
 
 ## Key Benefits
 
@@ -759,7 +1136,8 @@ These tasks run specific operations across all images:
 - `dockerPublish` - Publish all configured images to registries
 
 ## Per-Image Operation Tasks
-These tasks run specific operations for specific images:
+These tasks run specific operations for specific images and are dynamically created based on the name of the DSL block
+such as, in this case, `timeServer`:
 
 - `dockerBuildTimeServer` - Build timeServer image
 - `dockerSaveTimeServer` - Save timeServer image to file
@@ -797,13 +1175,3 @@ tasks.register('integrationTest') {
 ```
 
 This ensures all configured operations (build, tag, save, publish) are executed before verification.
-
-## Task Dependencies
-
-### Automatic Dependencies
-The plugin automatically configures these dependencies:
-
-- `dockerSaveTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
-- `dockerPublishTimeServer` depends on `dockerBuildTimeServer` (when image has build context)
-- `dockerImageTimeServer` depends on all configured operations for that image
-- `dockerImages` depends on all `dockerImage*` tasks
