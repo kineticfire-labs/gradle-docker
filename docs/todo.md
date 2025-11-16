@@ -2,10 +2,12 @@
 
 ## Re-enable functional tests
 
+- dependencies-toml.md
+   - Priority 1 - 4
+   - Priority 5 - 6 (criteria)
 
 ## Clean-up
 8. put all the dependencies in the toml file
-9. if do `./gradlew build` then functional tests should run
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it

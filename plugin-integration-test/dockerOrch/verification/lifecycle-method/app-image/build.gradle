@@ -78,8 +78,8 @@ docker {
 // Add buildSrc validators and plugin dependencies
 dependencies {
     integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
 
     // Add plugin classes for @ComposeUp annotation access
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"

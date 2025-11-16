@@ -98,8 +98,8 @@ dockerOrch {
 
 // Add REST testing dependencies (application-specific - users choose their own testing libraries)
 dependencies {
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
 }
 
 // Customize the convention-created integrationTest task (test-specific system properties)

@@ -20,6 +20,7 @@ junit-platform = "1.10.1"
 postgres = "42.7.1"
 h2 = "2.2.224"
 jedis = "5.1.0"
+rest-assured = "5.5.0"
 
 [libraries]
 groovy = { module = "org.apache.groovy:groovy", version.ref = "groovy" }
@@ -47,6 +48,8 @@ spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-
 postgresql = { module = "org.postgresql:postgresql", version.ref = "postgres" }
 h2-database = { module = "com.h2database:h2", version.ref = "h2" }
 jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
+rest-assured = { module = "io.rest-assured:rest-assured", version.ref = "rest-assured" }
+rest-assured-json-path = { module = "io.rest-assured:json-path", version.ref = "rest-assured" }
 
 [plugins]
 spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }

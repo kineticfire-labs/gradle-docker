@@ -94,9 +94,9 @@ dependencies {
     integrationTestRuntimeOnly libs.junit.platform.launcher
 
     // REST testing
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
-    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+    integrationTestImplementation libs.jackson.databind
 
     // Add plugin classes for @ExtendWith annotation access
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"

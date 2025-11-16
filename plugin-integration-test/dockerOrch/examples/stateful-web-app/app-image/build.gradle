@@ -99,8 +99,8 @@ dependencies {
     testRuntimeOnly libs.junit.platform.launcher
 
     // Add REST testing dependencies for examples
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
 }
 
 // Register integration test task (Gradle 9/10 style)

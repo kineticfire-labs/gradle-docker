@@ -61,9 +61,9 @@ dependencies {
     testRuntimeOnly libs.junit.platform.launcher
 
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.5.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.5.0'
-    integrationTestImplementation 'org.postgresql:postgresql:42.7.2'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+    integrationTestImplementation libs.postgresql
 }
 
 // Configure integration test task

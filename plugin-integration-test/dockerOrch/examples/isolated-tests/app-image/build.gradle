@@ -84,8 +84,8 @@ dependencies {
 
     // Add plugin classes and REST testing dependencies
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
-    integrationTestImplementation 'io.rest-assured:rest-assured:5.5.0'
-    integrationTestImplementation 'io.rest-assured:json-path:5.5.0'
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
 }
 
 // Register integration test task
