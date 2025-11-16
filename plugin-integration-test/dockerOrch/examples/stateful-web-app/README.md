@@ -1,3 +1,5 @@
+[← Back to Examples](../README.md)
+
 # Example: Testing Stateful Workflows with CLASS Lifecycle
 
 **Type**: User-Facing Example
@@ -124,6 +126,12 @@ tasks.named('integrationTest') {
 
 ## See Also
 
+**Related Examples:**
 - [CLASS Lifecycle Without State](../web-app/README.md) - Tests that don't share state
 - [METHOD Lifecycle Example](../isolated-tests/README.md) - Complete isolation between tests
-- [Main Examples README](../README.md) - All examples
+- [Database Integration Example](../database-app/README.md) - Multi-service with PostgreSQL
+
+**Documentation:**
+- [Main Examples README](../README.md) - All examples and decision guide
+- [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
+- [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details

@@ -70,6 +70,64 @@ The plugin supports two container lifecycle modes for integration testing:
    - Tests can share data and build on each other
    - Use when: Testing workflows, read-only operations, performance matters
 
+## Decision Guide
+
+### When to Use Test Framework Extensions (Recommended)
+
+**Use `@ComposeUp` (Spock) or `@ExtendWith(DockerComposeExtension)` (JUnit 5) when:**
+- ✅ You want automatic container lifecycle management
+- ✅ You're writing standard integration tests
+- ✅ You don't need custom orchestration logic
+- ✅ You prefer declarative configuration over imperative tasks
+
+**Benefits:**
+- Automatic cleanup (even if tests fail)
+- Minimal boilerplate
+- Clear lifecycle semantics (CLASS or METHOD)
+- No manual task dependency wiring
+
+**All examples in this directory use test framework extensions.**
+
+### When to Use Gradle Tasks (Advanced)
+
+**Use `composeUp*`/`composeDown*` Gradle tasks when:**
+- Manual container control in CI/CD pipelines
+- Custom orchestration beyond test lifecycle
+- Need to run containers outside of test execution
+- Complex multi-stack scenarios
+
+**Trade-offs:**
+- More verbose configuration
+- Manual task dependency management
+- Must handle cleanup explicitly
+
+### Choosing CLASS vs METHOD Lifecycle
+
+| Scenario | Lifecycle | Why |
+|----------|-----------|-----|
+| Read-only API tests | **CLASS** | Containers start once, all tests read the same data |
+| Database CRUD tests (each test modifies) | **METHOD** | Each test needs fresh database |
+| Workflow tests (register → login → update) | **CLASS** | Tests build on each other, share state |
+| Isolated unit-like integration tests | **METHOD** | Complete independence, can run in any order |
+| Performance-critical test suites | **CLASS** | Faster - containers start once |
+| Testing idempotency | **METHOD** | Prove tests work in any order |
+
+### Choosing Spock vs JUnit 5
+
+Both frameworks work identically with this plugin. Choose based on your preference:
+
+**Spock:**
+- Groovy-based, expressive BDD syntax
+- Use `@ComposeUp(lifecycle = LifecycleMode.CLASS/METHOD)`
+- Uses `@Shared` for shared state
+- `setupSpec()`/`cleanupSpec()` for CLASS, `setup()`/`cleanup()` for METHOD
+
+**JUnit 5:**
+- Java-based, standard Java testing
+- Use `@ExtendWith(DockerComposeClassExtension.class)` or `DockerComposeMethodExtension.class`
+- Uses `static` variables for shared state
+- `@BeforeAll`/`@AfterAll` for CLASS, `@BeforeEach`/`@AfterEach` for METHOD
+
 ## Lifecycle Patterns
 
 ### CLASS Lifecycle
@@ -293,21 +351,69 @@ database isolation. Tests can run in any order.
 
 ## Running Examples
 
-From `plugin-integration-test/` directory:
+**⚠️ Important**: All commands must be run from `plugin-integration-test/` directory.
+
+### Run All Examples
 
 ```bash
-# Run all examples
 ./gradlew dockerOrch:examples:integrationTest
+```
 
-# Spock examples
+**Expected Result**: All 6 example test suites pass. No lingering containers remain.
+
+### Run by Lifecycle Type
+
+**CLASS Lifecycle Examples** (faster, containers start once):
+```bash
+# Spock + CLASS
+./gradlew :dockerOrch:examples:web-app:integrationTest           # Basic REST API
+./gradlew :dockerOrch:examples:database-app:integrationTest      # Multi-service + PostgreSQL
+./gradlew :dockerOrch:examples:stateful-web-app:integrationTest  # Stateful workflows
+
+# JUnit 5 + CLASS
+./gradlew :dockerOrch:examples:web-app-junit:integrationTest     # Basic REST API
+```
+
+**METHOD Lifecycle Examples** (complete isolation, containers restart per test):
+```bash
+# Spock + METHOD
+./gradlew :dockerOrch:examples:isolated-tests:integrationTest    # Proves isolation
+
+# JUnit 5 + METHOD
+./gradlew :dockerOrch:examples:isolated-tests-junit:integrationTest  # Proves isolation
+```
+
+### Run by Test Framework
+
+**Spock Examples:**
+```bash
 ./gradlew :dockerOrch:examples:web-app:integrationTest
 ./gradlew :dockerOrch:examples:database-app:integrationTest
 ./gradlew :dockerOrch:examples:stateful-web-app:integrationTest
 ./gradlew :dockerOrch:examples:isolated-tests:integrationTest
+```
 
-# JUnit 5 examples
+**JUnit 5 Examples:**
+```bash
 ./gradlew :dockerOrch:examples:web-app-junit:integrationTest
 ./gradlew :dockerOrch:examples:isolated-tests-junit:integrationTest
+```
+
+### Expected Test Results
+
+Each example should:
+- ✅ Build Docker image successfully
+- ✅ Start containers and wait for healthy status
+- ✅ Run all tests (passing)
+- ✅ Stop containers automatically
+- ✅ Leave no containers running (`docker ps -a` shows none)
+
+### Verify No Lingering Containers
+
+After running examples:
+```bash
+docker ps -a
+# Should show no containers from examples (project names: example-*)
 ```
 
 ## Example Test Structure
@@ -513,6 +619,65 @@ Same as Spock - both use `useJUnitPlatform()`.
 - **[dockerOrch DSL Usage Guide](../../docs/usage/usage-docker-orch.md)** - Complete guide to Docker Compose
   orchestration
 - **[Plugin Verification Tests](../verification/README.md)** - For plugin mechanics validation
+
+---
+
+## Adding New Examples
+
+**Consistency Checklist**: When adding a new example, ensure the following for consistency:
+
+### Documentation Requirements
+
+- [ ] **Main README updated** (`README.md` in this directory):
+  - [ ] Add new example section with description, directory, use case, lifecycle, stack, tests, and key features
+  - [ ] Include "See:" link to individual README
+  - [ ] Update "Running Examples" section with new commands
+  - [ ] Update "Run All Examples" expected count
+  - [ ] Verify "Run by Lifecycle Type" and "Run by Test Framework" sections include new example
+
+- [ ] **Individual README created** (`<example-name>/README.md`):
+  - [ ] Add breadcrumb navigation at top (linking back to main README)
+  - [ ] Document example type, test framework, lifecycle, and use case
+  - [ ] Include "Purpose" section explaining what the example demonstrates
+  - [ ] Include "Key Features" bulleted list
+  - [ ] Include "Test Structure" with code example showing annotation usage
+  - [ ] Include "Configuration" section with dependencies
+  - [ ] Include "Running" section with `./gradlew` command
+  - [ ] Include "See Also" section with cross-references to related examples
+  - [ ] Follow 120-character line length limit
+
+- [ ] **Code Quality**:
+  - [ ] Test class uses `@ComposeUp` (Spock) or `@ExtendWith` (JUnit 5) annotation
+  - [ ] Test includes comprehensive comments explaining the approach
+  - [ ] Test includes "Why this pattern?" explanation
+  - [ ] Build file includes plugin dependency: `integrationTestImplementation "com.kineticfire.gradle:..."`
+  - [ ] Compose file does not include deprecated `version` field
+  - [ ] All code follows 120-character line length limit
+
+### Validation Requirements
+
+- [ ] **Test execution**:
+  - [ ] Run: `./gradlew :dockerOrch:examples:<example-name>:integrationTest`
+  - [ ] Verify all tests pass
+  - [ ] Verify no lingering containers: `docker ps -a` shows no containers after completion
+  - [ ] Verify expected output matches documentation
+
+- [ ] **Consistency verification**:
+  - [ ] Main README description matches actual test code implementation
+  - [ ] Individual README code examples match actual test code
+  - [ ] Lifecycle mode in annotation matches documented lifecycle
+  - [ ] Test framework (Spock/JUnit 5) matches documented framework
+  - [ ] All cross-references and links work correctly
+
+### Review Process
+
+Before committing a new example:
+
+1. **Self-review**: Check all items in this checklist
+2. **Test locally**: Run the example and verify output
+3. **Verify documentation**: Ensure main README, individual README, and code all align
+4. **Check cross-references**: Verify all links and references are accurate
+5. **Validate format**: Ensure all files follow project standards (120 chars, spaces not tabs)
 
 ---
 

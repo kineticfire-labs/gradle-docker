@@ -1,3 +1,5 @@
+[← Back to Examples](../README.md)
+
 # Example: Testing with JUnit 5 and METHOD Lifecycle
 
 **Type**: User-Facing Example
@@ -104,6 +106,12 @@ tasks.named('integrationTest') {
 
 ## See Also
 
+**Related Examples:**
 - [Spock METHOD Example](../isolated-tests/README.md) - Same pattern with Spock
 - [CLASS Lifecycle Example](../web-app-junit/README.md) - JUnit 5 with CLASS lifecycle
-- [Main Examples README](../README.md) - All examples
+- [Database Integration Example](../database-app/README.md) - Multi-service with PostgreSQL
+
+**Documentation:**
+- [Main Examples README](../README.md) - All examples and decision guide
+- [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
+- [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details

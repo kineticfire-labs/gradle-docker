@@ -29,11 +29,31 @@ import static io.restassured.RestAssured.given
  *
  * This example demonstrates how to test a Spring Boot REST API using the dockerOrch plugin with CLASS lifecycle.
  *
+ * WHY THIS PATTERN?
+ * ================
+ * - CLASS lifecycle: Containers start ONCE before all tests, stop ONCE after all tests
+ * - Faster execution: Avoids restarting containers for each test method
+ * - Perfect for read-only tests or tests that don't modify shared state
+ * - All tests in this class are independent READ operations (health checks, GET requests)
+ *
+ * WHEN TO USE:
+ * ===========
+ * ✅ Testing REST API endpoints (GET requests)
+ * ✅ Read-only operations
+ * ✅ Performance-critical test suites
+ * ✅ When tests don't modify global state
+ *
+ * WHEN NOT TO USE:
+ * ===============
+ * ❌ Tests that modify database state (use METHOD lifecycle instead)
+ * ❌ Tests that must run in complete isolation
+ * ❌ Stateful workflows where order matters (see StatefulWebAppExampleIT instead)
+ *
  * The @ComposeUp extension automatically handles:
- * - Starting containers with Docker Compose before all tests
- * - Waiting for the app to be healthy
+ * - Starting containers with Docker Compose before all tests (setupSpec)
+ * - Waiting for the app to be healthy (waitForHealthy parameter)
  * - Providing port mapping information via COMPOSE_STATE_FILE
- * - Cleaning up containers after all tests complete
+ * - Cleaning up containers after all tests complete (cleanupSpec)
  *
  * Your tests focus on:
  * - Testing your application's business logic
@@ -44,32 +64,39 @@ import static io.restassured.RestAssured.given
  * Copy and adapt this example for your own projects!
  */
 @ComposeUp(
-    stackName = "webAppTest",
-    composeFile = "src/integrationTest/resources/compose/web-app.yml",
-    lifecycle = LifecycleMode.CLASS,
-    waitForHealthy = ["web-app"],
-    timeoutSeconds = 60,
-    pollSeconds = 2
+    stackName = "webAppTest",                                      // Unique name for this stack
+    composeFile = "src/integrationTest/resources/compose/web-app.yml",  // Path to compose file
+    lifecycle = LifecycleMode.CLASS,                               // Containers start once (faster)
+    waitForHealthy = ["web-app"],                                  // Wait for service to be HEALTHY
+    timeoutSeconds = 60,                                           // Max wait time for healthy status
+    pollSeconds = 2                                                // Check health every 2 seconds
 )
 class WebAppExampleIT extends Specification {
 
+    // @Shared variables persist across test methods (CLASS lifecycle)
     @Shared String baseUrl
 
     def setupSpec() {
-        // Extension provides COMPOSE_STATE_FILE system property
+        // WHY: The @ComposeUp extension provides COMPOSE_STATE_FILE system property
+        // This file contains runtime information about the Docker Compose stack:
+        // - Service names and their container IDs
+        // - Published ports (random host ports mapped to container ports)
+        // - Network details
         def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
         def stateFile = new File(stateFilePath)
         def stateData = new JsonSlurper().parse(stateFile)
 
-        // Extract the host port for the web-app service
-        // The plugin maps container port 8080 to a random host port
+        // WHY: Extract the host port for the web-app service
+        // Docker Compose maps container port 8080 to a RANDOM host port to avoid conflicts
+        // We must read the actual assigned port from the state file
         def port = stateData.services['web-app'].publishedPorts[0].host
 
         baseUrl = "http://localhost:${port}"
 
         println "=== Testing Web App at ${baseUrl} ==="
 
-        // Configure RestAssured base URL
+        // WHY: Configure RestAssured base URL once for all tests
+        // Since this is CLASS lifecycle, all tests share the same baseUrl
         RestAssured.baseURI = baseUrl
     }
 

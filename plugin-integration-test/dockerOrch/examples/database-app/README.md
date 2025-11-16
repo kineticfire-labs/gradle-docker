@@ -1,3 +1,5 @@
+[← Back to Examples](../README.md)
+
 # Example: Database Integration Testing with PostgreSQL
 
 **Type**: User-Facing Example
@@ -158,5 +160,12 @@ dependencies {
 
 ## See Also
 
-- [Main Examples README](../README.md) - Overview of all examples
-- [DockerOrch Plugin Docs](../../../docs/usage/usage-docker-orch.md) - Full plugin reference
+**Related Examples:**
+- [Web App Example](../web-app/README.md) - Basic CLASS lifecycle pattern
+- [Stateful Web App Example](../stateful-web-app/README.md) - Session management workflow
+- [Isolated Tests Example](../isolated-tests/README.md) - METHOD lifecycle with database
+
+**Documentation:**
+- [Main Examples README](../README.md) - All examples and decision guide
+- [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
+- [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details

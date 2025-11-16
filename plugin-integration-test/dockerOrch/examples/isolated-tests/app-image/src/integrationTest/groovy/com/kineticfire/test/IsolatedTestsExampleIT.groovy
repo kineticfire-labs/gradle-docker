@@ -28,6 +28,13 @@ import static io.restassured.RestAssured.given
  *
  * This example demonstrates **when and why to use METHOD lifecycle** for integration testing.
  *
+ * WHY THIS PATTERN?
+ * ================
+ * - METHOD lifecycle: Containers restart for EACH test method
+ * - Complete isolation: Fresh database for every test
+ * - Idempotent tests: Can run in any order without side effects
+ * - Proves isolation: Data does NOT persist between tests
+ *
  * METHOD lifecycle means:
  * - Containers start in setup() before EACH test method
  * - One test method runs
@@ -41,29 +48,34 @@ import static io.restassured.RestAssured.given
  * 4. Test 4: Create user "bob"
  * 5. Test 5: Verify user "bob" does NOT exist (fresh database!)
  *
- * Why METHOD lifecycle is appropriate here:
- * - Each test needs a completely clean database
- * - Tests must be independent and idempotent (can run in any order)
- * - Demonstrates database isolation (no data persists between tests)
- * - Proves containers restart for each test
+ * WHEN TO USE:
+ * ===========
+ * ✅ Tests that modify database state (CRUD operations)
+ * ✅ Tests must be independent and idempotent (can run in any order)
+ * ✅ Proving complete isolation is critical
+ * ✅ Testing stateful operations that modify global state
  *
- * Trade-off: SLOWER than CLASS lifecycle (containers restart for each test) but guarantees isolation.
- *
- * When NOT to use METHOD lifecycle:
- * - When tests build on each other (workflow: register → login → update)
- * - When startup time is expensive and state isolation isn't critical
- * - When testing read-only operations against the same data
+ * WHEN NOT TO USE (use CLASS lifecycle instead):
+ * ===============================================
+ * ❌ When tests build on each other (workflow: register → login → update)
+ * ❌ When startup time is expensive and state isolation isn't critical
+ * ❌ When testing read-only operations against the same data
  * → For these cases, see the stateful-web-app example with CLASS lifecycle
+ *
+ * TRADE-OFF:
+ * =========
+ * - SLOWER: Containers restart for each test (adds startup time)
+ * - SAFER: Guarantees complete isolation (no shared state bugs)
  *
  * Copy and adapt this example for your own isolated testing scenarios!
  */
 @ComposeUp(
-    stackName = "isolatedTestsTest",
-    composeFile = "src/integrationTest/resources/compose/isolated-tests.yml",
-    lifecycle = LifecycleMode.METHOD,
-    waitForHealthy = ["isolated-tests"],
-    timeoutSeconds = 60,
-    pollSeconds = 2
+    stackName = "isolatedTestsTest",                                // Unique name for this stack
+    composeFile = "src/integrationTest/resources/compose/isolated-tests.yml",  // Path to compose file
+    lifecycle = LifecycleMode.METHOD,                               // Containers restart per test (isolation)
+    waitForHealthy = ["isolated-tests"],                            // Wait for service to be HEALTHY
+    timeoutSeconds = 60,                                            // Max wait time for healthy status
+    pollSeconds = 2                                                 // Check health every 2 seconds
 )
 class IsolatedTestsExampleIT extends Specification {
 

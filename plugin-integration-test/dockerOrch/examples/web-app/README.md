@@ -1,3 +1,5 @@
+[← Back to Examples](../README.md)
+
 # Example: Testing a Web Application with Spock and CLASS Lifecycle
 
 **Type**: User-Facing Example
@@ -90,7 +92,13 @@ From `plugin-integration-test/` directory:
 
 ## See Also
 
+**Related Examples:**
 - [JUnit 5 CLASS Example](../web-app-junit/README.md) - Same app with JUnit 5
 - [METHOD Lifecycle Example](../isolated-tests/README.md) - Spock with METHOD lifecycle
 - [Stateful Testing Example](../stateful-web-app/README.md) - Tests that build on each other
-- [Main Examples README](../README.md) - All examples
+- [Database Integration Example](../database-app/README.md) - Multi-service with PostgreSQL
+
+**Documentation:**
+- [Main Examples README](../README.md) - All examples and decision guide
+- [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
+- [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details

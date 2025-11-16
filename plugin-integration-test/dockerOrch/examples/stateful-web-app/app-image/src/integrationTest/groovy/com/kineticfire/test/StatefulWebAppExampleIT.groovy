@@ -25,9 +25,17 @@ import io.restassured.RestAssured
 import static io.restassured.RestAssured.given
 
 /**
- * Example: Testing Stateful Applications with CLASS Lifecycle
+ * Example: Testing Stateful Workflows with CLASS Lifecycle
  *
- * This example demonstrates when and why to use CLASS lifecycle for integration testing.
+ * This example demonstrates **when and why to use CLASS lifecycle with stateful testing patterns**.
+ *
+ * WHY THIS PATTERN?
+ * ================
+ * - CLASS lifecycle: Containers start ONCE, all tests share the same containers
+ * - Stateful testing: Tests intentionally build on each other
+ * - State persistence: sessionId carried from test 2 → tests 3, 4, 5
+ * - Workflow testing: Models real user journeys (register → login → update → logout)
+ * - Fast execution: Containers start once instead of 5 times
  *
  * CLASS lifecycle means:
  * - Containers start ONCE before all tests (via @ComposeUp extension)
@@ -42,32 +50,35 @@ import static io.restassured.RestAssured.given
  * 4. Test 4: Get profile data using the sessionId
  * 5. Test 5: Logout using the sessionId
  *
- * Why CLASS lifecycle is appropriate here:
- * - Tests build on each other (register → login → update → get → logout)
- * - We need to carry state (sessionId) from test 2 to tests 3, 4, and 5
- * - This is MUCH faster than restarting containers for each test
- * - This pattern is common for workflow and integration testing
+ * WHEN TO USE:
+ * ===========
+ * ✅ Testing workflows where steps depend on each other
+ * ✅ Carrying state (sessionId, authToken) between test methods
+ * ✅ Testing session management or multi-step processes
+ * ✅ Performance matters and complete isolation isn't required
+ *
+ * WHEN NOT TO USE (use METHOD lifecycle instead):
+ * ================================================
+ * ❌ When tests must be completely independent and isolated
+ * ❌ When each test requires a clean database or fresh state
+ * ❌ When testing idempotency (tests must run in any order)
+ * → For these cases, see the isolated-tests example with METHOD lifecycle
  *
  * IMPORTANT - Idempotent Test Design:
+ * ===================================
  * - Test 1 accepts both 200 (new user) and 409 (user exists) responses
  * - This makes tests repeatable even when containers persist state from previous runs
  * - This is a best practice for real-world integration testing
  *
- * When NOT to use CLASS lifecycle:
- * - When tests must be completely independent and isolated
- * - When each test requires a clean database or fresh state
- * - When testing idempotency (tests must run in any order)
- * → For these cases, see the isolated-tests example with METHOD lifecycle
- *
  * Copy and adapt this example for your own stateful testing scenarios!
  */
 @ComposeUp(
-    stackName = "statefulWebAppTest",
-    composeFile = "src/integrationTest/resources/compose/stateful-web-app.yml",
-    lifecycle = LifecycleMode.CLASS,
-    waitForHealthy = ["stateful-web-app"],
-    timeoutSeconds = 60,
-    pollSeconds = 2
+    stackName = "statefulWebAppTest",                              // Unique name for this stack
+    composeFile = "src/integrationTest/resources/compose/stateful-web-app.yml",  // Path to compose file
+    lifecycle = LifecycleMode.CLASS,                               // Containers start once (tests share state)
+    waitForHealthy = ["stateful-web-app"],                         // Wait for service to be HEALTHY
+    timeoutSeconds = 60,                                           // Max wait time for healthy status
+    pollSeconds = 2                                                // Check health every 2 seconds
 )
 class StatefulWebAppExampleIT extends Specification {
 

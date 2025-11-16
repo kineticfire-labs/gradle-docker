@@ -1,3 +1,5 @@
+[← Back to Examples](../README.md)
+
 # Example: Testing with JUnit 5 and CLASS Lifecycle
 
 **Type**: User-Facing Example
@@ -94,6 +96,12 @@ docker.compose.project=example-web-app-junit-test
 
 ## See Also
 
+**Related Examples:**
 - [Spock CLASS Example](../web-app/README.md) - Same app with Spock
 - [METHOD Lifecycle Example](../isolated-tests-junit/README.md) - JUnit 5 with METHOD lifecycle
-- [Main Examples README](../README.md) - All examples
+- [Database Integration Example](../database-app/README.md) - Multi-service with PostgreSQL
+
+**Documentation:**
+- [Main Examples README](../README.md) - All examples and decision guide
+- [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
+- [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details
