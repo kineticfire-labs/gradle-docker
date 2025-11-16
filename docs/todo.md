@@ -3,7 +3,6 @@
 ## Re-enable functional tests
 
 - dependencies-toml.md
-   - Priority 4 - 4
    - Priority 5 - 6 (criteria)
 
 ## Clean-up
