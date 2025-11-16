@@ -22,6 +22,7 @@ spock = "2.4-M4-groovy-4.0"
 junit-jupiter = "5.10.1"
 junit-platform = "1.13.4"
 junit4 = "4.13.2"
+byte-buddy = "1.14.11"
 
 # Application dependencies
 guava = "31.1-jre"
@@ -52,6 +53,7 @@ junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher
 junit-platform-engine = { module = "org.junit.platform:junit-platform-engine", version.ref = "junit-platform" }
 junit-vintage-engine = { module = "org.junit.vintage:junit-vintage-engine", version.ref = "junit-platform" }
 junit4 = { module = "junit:junit", version.ref = "junit4" }
+byte-buddy = { module = "net.bytebuddy:byte-buddy", version.ref = "byte-buddy" }
 
 [bundles]
 testing = ["spock-core", "junit-platform-launcher"]
