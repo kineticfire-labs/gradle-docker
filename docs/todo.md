@@ -3,19 +3,15 @@
 ## Re-enable functional tests
 
 - dependencies-toml.md
-   - Priority 1 - 4
+   - Priority 3 - 4
    - Priority 5 - 6 (criteria)
 
 ## Clean-up
 8. put all the dependencies in the toml file
-
-## DX
-1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
-2. Figure out the build dirs under plugin-integration-test/app-image/build/ ... these right?
-
-Setting tags uses different syntax:
-1. the 'tags' in docker build block: Line 101-104: Changed tags = [...] to tags.set([...]) - you must use Gradle's Property API syntax
-2. docker/publish/to block: Line 113: Changed tags = ['latest'] to publishTags = ['latest'] - the publish configuration uses a different property name to avoid conflicts
+9. check documentation for integration tests
+   1. plugin-integration-test/dockerOrch/examples/README.md
+   2. docs/usage/usage-docker.md
+   3. docs/usage/usage-docker-orch.md
 
 
 ## Documentation

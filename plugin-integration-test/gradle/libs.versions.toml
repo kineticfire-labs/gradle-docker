@@ -30,6 +30,7 @@ junit-bom = { module = "org.junit:junit-bom", version.ref = "junit-bom" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit-bom" }
 junit-jupiter-api = { module = "org.junit.jupiter:junit-jupiter-api", version.ref = "junit-bom" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+junit-platform-engine = { module = "org.junit.platform:junit-platform-engine", version.ref = "junit-platform" }
 spock-core = { module = "org.spockframework:spock-core", version.ref = "spock-core" }
 spock-bom = { module = "org.spockframework:spock-bom", version.ref = "spock-bom" }
 spock-junit4 = { module = "org.spockframework:spock-junit4" }
