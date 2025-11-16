@@ -99,6 +99,7 @@ dependencies {
     testRuntimeOnly libs.junit.platform.launcher
 
     // Add REST testing dependencies for examples
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
     integrationTestImplementation libs.rest.assured
     integrationTestImplementation libs.rest.assured.json.path
 }

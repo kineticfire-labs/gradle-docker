@@ -1,420 +1,129 @@
-# Example: Testing Stateful Applications with CLASS Lifecycle
+# Example: Testing Stateful Workflows with CLASS Lifecycle
 
 **Type**: User-Facing Example
-**Lifecycle**: CLASS (setupSpec/cleanupSpec)
+**Test Framework**: Spock
+**Lifecycle**: CLASS (`@ComposeUp` annotation)
 **Use Case**: Session management and stateful workflow testing
 
 ## Purpose
 
-This example demonstrates **when and why to use CLASS lifecycle** for integration testing. It shows:
+Demonstrates **CLASS lifecycle with stateful testing patterns** - tests that intentionally build on each other, carrying state between methods.
 
-- ✅ How tests can build on each other (register → login → update → logout)
-- ✅ How to carry state (sessionId) across test methods
-- ✅ Why CLASS lifecycle is appropriate for workflow testing
-- ✅ How to test session management APIs
-- ✅ When this approach is more efficient than METHOD lifecycle
+**📋 Copy and adapt this for your stateful testing scenarios!**
 
-**📋 Copy and adapt this for your own stateful testing scenarios!**
+## Key Features
 
-## CLASS Lifecycle Explained
-
-**CLASS lifecycle means:**
-- Containers start ONCE in `setupSpec()` before all tests
-- All test methods run against the SAME containers
-- State PERSISTS between test methods
-- Containers stop ONCE in `cleanupSpec()` after all tests
-
-**Why use CLASS lifecycle?**
-- **Efficiency**: Containers start once, not for every test (much faster)
-- **Workflow testing**: Tests build on each other (login depends on register)
-- **Stateful scenarios**: Carry data (sessionId) from one test to the next
-- **Real-world simulation**: Start environment → run test suite → tear down
-
-**When NOT to use CLASS lifecycle:**
-- Tests must be completely independent and isolated
-- Each test requires a clean database or fresh state
-- Testing idempotency (tests must run in any order)
-- → For these cases, see `../isolated-tests/` example with METHOD lifecycle
-
-## Test Workflow
-
-This example tests a session management API with these steps:
-
-1. **Test 1**: Register a new user account
-2. **Test 2**: Login and receive a sessionId
-3. **Test 3**: Update user profile using the sessionId
-4. **Test 4**: Get profile data using the sessionId
-5. **Test 5**: Logout and invalidate the sessionId
-6. **Test 6**: Verify session is invalidated after logout
-
-Each test builds on the previous one - the sessionId from test 2 is used in tests 3, 4, and 5.
-
-## Running Tests
-
-**⚠️ Important**: All commands must be run from `plugin-integration-test/` directory.
-
-### Quick Start
-
-```bash
-# From plugin-integration-test/ directory
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app-image:runIntegrationTest
-```
-
-This runs the complete workflow:
-1. Build app JAR (`bootJar`)
-2. Build Docker image (`dockerBuildStatefulWebApp`)
-3. Start Docker Compose (`composeUpStatefulWebAppTest`)
-4. Wait for container to be HEALTHY
-5. Run integration tests (`integrationTest`)
-6. Stop Docker Compose (`composeDownStatefulWebAppTest`)
-
-### Individual Tasks
-
-```bash
-# Clean build artifacts
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:clean
-
-# Build the Spring Boot app
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app:bootJar
-
-# Build Docker image
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app-image:dockerBuildStatefulWebApp
-
-# Start Docker Compose stack
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app-image:composeUpStatefulWebAppTest
-
-# Run tests (requires stack to be up)
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app-image:integrationTest
-
-# Stop Docker Compose stack
-./gradlew -Pplugin_version=1.0.0-SNAPSHOT \
-  dockerOrch:examples:stateful-web-app:app-image:composeDownStatefulWebAppTest
-```
-
-## Plugin Configuration
-
-### build.gradle (dockerOrch DSL)
-
-```groovy
-dockerOrch {
-    composeStacks {
-        statefulWebAppTest {
-            // Compose file location
-            files.from('src/integrationTest/resources/compose/stateful-web-app.yml')
-
-            // Docker Compose project name (must be unique)
-            projectName = "example-stateful-web-app-test"
-
-            // Wait for app to be healthy before running tests
-            waitForHealthy {
-                waitForServices.set(['stateful-web-app'])
-                timeoutSeconds.set(60)
-                pollSeconds.set(2)
-            }
-        }
-    }
-}
-```
-
-**Key Configuration Points:**
-- `files.from()` - Path to Docker Compose file
-- `projectName` - Unique name for this stack (prevents conflicts)
-- `waitForHealthy` - Block until container health check passes
-- `waitForServices` - List of services to wait for
-- `timeoutSeconds` - Maximum time to wait (60s)
-- `pollSeconds` - How often to check status (2s)
-
-## Test Structure
-
-### Class-Level Variables for State
-
-```groovy
-class StatefulWebAppExampleIT extends Specification {
-
-    static String baseUrl
-
-    // Session state carried across tests
-    static String sessionId
-    static String username = "alice"
-    static String password = "secret123"
-
-    def setupSpec() {
-        // Read state file generated by dockerOrch plugin
-        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
-        def stateFile = new File(stateFilePath)
-        def stateData = new JsonSlurper().parse(stateFile)
-
-        // Extract published port
-        def port = stateData.services['stateful-web-app'].publishedPorts[0].host
-        baseUrl = "http://localhost:${port}"
-
-        // Configure RestAssured
-        RestAssured.baseURI = baseUrl
-    }
-
-    // Tests build on each other...
-}
-```
-
-**Key Points:**
-- `static` variables persist across test methods
-- `sessionId` is saved in test 2 and used in tests 3, 4, and 5
-- This demonstrates why CLASS lifecycle is needed for workflow testing
-
-### Test Examples
-
-#### Test 1: Register User
-
-```groovy
-def "step 1: should register a new user account"() {
-    when: "we register a new user"
-    def response = given()
-        .contentType("application/json")
-        .body("""{"username":"${username}","password":"${password}"}""")
-        .post("/register")
-
-    then: "registration succeeds"
-    response.statusCode() == 200
-    response.jsonPath().getString("status") == "registered"
-}
-```
-
-#### Test 2: Login (Save SessionId)
-
-```groovy
-def "step 2: should login and receive a session ID"() {
-    when: "we login with valid credentials"
-    def response = given()
-        .contentType("application/json")
-        .body("""{"username":"${username}","password":"${password}"}""")
-        .post("/login")
-
-    then: "we receive a session ID"
-    response.statusCode() == 200
-    response.jsonPath().getString("sessionId") != null
-
-    and: "we save the sessionId for subsequent tests"
-    sessionId = response.jsonPath().getString("sessionId")
-}
-```
-
-#### Test 3: Update Profile (Use SessionId)
-
-```groovy
-def "step 3: should update user profile with active session"() {
-    when: "we update profile using the sessionId from login"
-    def response = given()
-        .contentType("application/json")
-        .body("""
-            {
-                "sessionId":"${sessionId}",
-                "email":"alice@example.com",
-                "fullName":"Alice Smith"
-            }
-        """)
-        .put("/profile")
-
-    then: "profile update succeeds"
-    response.statusCode() == 200
-}
-```
-
-## Application Code
-
-### SessionController Endpoints
-
-```java
-@RestController
-public class SessionController {
-
-    private final Map<String, String> users = new ConcurrentHashMap<>();
-    private final Map<String, String> sessions = new ConcurrentHashMap<>();
-    private final Map<String, Map<String, String>> profiles = new ConcurrentHashMap<>();
-
-    @PostMapping("/register")
-    public ResponseEntity<Map<String, String>> register(@RequestBody Map<String, String> payload) {
-        String username = payload.get("username");
-        String password = payload.get("password");
-        users.put(username, password);
-        profiles.put(username, new ConcurrentHashMap<>());
-        return ResponseEntity.ok(Map.of("status", "registered", "username", username));
-    }
-
-    @PostMapping("/login")
-    public ResponseEntity<Map<String, String>> login(@RequestBody Map<String, String> payload) {
-        String username = payload.get("username");
-        String password = payload.get("password");
-        if (!users.get(username).equals(password)) {
-            return ResponseEntity.status(401).body(Map.of("error", "invalid credentials"));
-        }
-        String sessionId = UUID.randomUUID().toString();
-        sessions.put(sessionId, username);
-        return ResponseEntity.ok(Map.of("status", "logged_in", "sessionId", sessionId));
-    }
-
-    @PutMapping("/profile")
-    public ResponseEntity<Map<String, String>> updateProfile(@RequestBody Map<String, String> payload) {
-        String sessionId = payload.get("sessionId");
-        String username = sessions.get(sessionId);
-        if (username == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "invalid session"));
-        }
-        Map<String, String> profile = profiles.get(username);
-        payload.forEach((key, value) -> {
-            if (!key.equals("sessionId")) {
-                profile.put(key, value);
-            }
-        });
-        return ResponseEntity.ok(Map.of("status", "updated", "username", username));
-    }
-
-    @GetMapping("/profile/{sessionId}")
-    public ResponseEntity<Map<String, String>> getProfile(@PathVariable String sessionId) {
-        String username = sessions.get(sessionId);
-        if (username == null) {
-            return ResponseEntity.status(401).body(Map.of("error", "invalid session"));
-        }
-        Map<String, String> profile = new ConcurrentHashMap<>(profiles.get(username));
-        profile.put("username", username);
-        return ResponseEntity.ok(profile);
-    }
-
-    @DeleteMapping("/logout/{sessionId}")
-    public ResponseEntity<Map<String, String>> logout(@PathVariable String sessionId) {
-        String username = sessions.remove(sessionId);
-        if (username == null) {
-            return ResponseEntity.status(404).body(Map.of("error", "session not found"));
-        }
-        return ResponseEntity.ok(Map.of("status", "logged_out", "username", username));
-    }
-}
-```
-
-## Expected Results
-
-All 7 tests should pass:
-- ✅ Register user account
-- ✅ Login and receive sessionId
-- ✅ Update profile using sessionId
-- ✅ Get profile data using sessionId
-- ✅ Logout and invalidate session
-- ✅ Verify session is invalidated
-- ✅ Health check endpoint works
-
-The tests demonstrate:
-- **State persistence** across test methods (sessionId survives)
-- **Workflow dependencies** (login must happen before update)
-- **Efficiency** (containers don't restart between tests)
+- ✅ Spock `@ComposeUp(lifecycle = LifecycleMode.CLASS)` for automatic container management
+- ✅ Tests build on each other (register → login → update → logout)
+- ✅ State (sessionId) carried across test methods
+- ✅ Fast execution - containers start once
+- ✅ Demonstrates workflow testing patterns
 
 ## When to Use This Pattern
 
-**✅ Use CLASS lifecycle when:**
-- Tests represent a workflow (step 1 → step 2 → step 3)
-- You need to carry state between tests (sessionId, userId, orderId)
-- Tests are naturally sequential (create → read → update → delete)
-- Performance matters (starting containers is expensive)
-- Testing real-world user journeys
+Use CLASS lifecycle with stateful testing when:
+- Testing workflows where steps depend on each other
+- Carrying state (like sessionId, authToken) between test methods is desired
+- Testing session management or multi-step processes
+- Performance matters and complete isolation isn't required
 
-**❌ Don't use CLASS lifecycle when:**
-- Tests must be independent and run in any order
-- Each test needs a completely fresh environment
-- Testing idempotency (same test must work multiple times)
-- Database rollback is required between tests
-- → For these cases, use METHOD lifecycle (see `../isolated-tests/`)
-
-## Adapting for Your Project
-
-### 1. Identify Your Workflow
-
-What's your natural test sequence?
-- E-commerce: Browse → Add to cart → Checkout → Confirm order
-- Auth: Register → Login → Access resource → Logout
-- CRUD: Create → Read → Update → Delete
-- Batch: Upload file → Process → Download results
-
-### 2. Update SessionController
-
-Replace SessionController with your business logic:
-- Keep the workflow pattern (test 1 → test 2 → test 3)
-- Use static variables to carry state between tests
-- Ensure tests are ordered correctly (Spock runs alphabetically by default)
-
-### 3. Update Configuration
+## Test Structure
 
 ```groovy
-dockerOrch {
-    composeStacks {
-        myWorkflowTest {
-            files.from('src/integrationTest/resources/compose/my-app.yml')
-            projectName = "my-workflow-test"
-            waitForHealthy {
-                waitForServices.set(['my-service'])
-                timeoutSeconds.set(60)
-            }
-        }
-    }
-}
-```
+@ComposeUp(
+    stackName = "statefulWebAppTest",
+    composeFile = "src/integrationTest/resources/compose/stateful-web-app.yml",
+    lifecycle = LifecycleMode.CLASS,
+    waitForHealthy = ["stateful-web-app"],
+    timeoutSeconds = 60,
+    pollSeconds = 2
+)
+class StatefulWebAppExampleIT extends Specification {
 
-### 4. Write Your Tests
-
-```groovy
-class MyWorkflowIT extends Specification {
-
-    static String baseUrl
-    static String workflowState  // Carry state between tests
+    @Shared String baseUrl
+    static String sessionId  // State carried across tests
+    @Shared String username = "alice"
+    @Shared String password = "secret123"
 
     def setupSpec() {
-        // Read state file and configure RestAssured
-        def stateFile = new File(System.getProperty('COMPOSE_STATE_FILE'))
-        def state = new JsonSlurper().parse(stateFile)
-        def port = state.services['my-service'].publishedPorts[0].host
+        // Extension provides COMPOSE_STATE_FILE system property
+        def stateData = new JsonSlurper().parse(new File(System.getProperty('COMPOSE_STATE_FILE')))
+
+        def port = stateData.services['stateful-web-app'].publishedPorts[0].host
         baseUrl = "http://localhost:${port}"
+
         RestAssured.baseURI = baseUrl
     }
 
-    def "step 1: create resource"() {
-        when:
-        def response = given().post("/resource")
-        then:
-        response.statusCode() == 201
-        workflowState = response.jsonPath().getString("id")
+    def "step 1: should register a new user account"() {
+        when: "we register a new user"
+        def response = given()
+            .contentType("application/json")
+            .body("{\"username\":\"${username}\",\"password\":\"${password}\"}")
+            .post("/api/register")
+
+        then: "registration succeeds (or user already exists)"
+        response.statusCode() in [200, 409]  // Idempotent design
     }
 
-    def "step 2: use resource from step 1"() {
-        when:
-        def response = given().get("/resource/${workflowState}")
-        then:
+    def "step 2: should login and receive a sessionId"() {
+        when: "we login"
+        def response = given()
+            .contentType("application/json")
+            .body("{\"username\":\"${username}\",\"password\":\"${password}\"}")
+            .post("/api/login")
+
+        then: "we get a sessionId"
         response.statusCode() == 200
+        sessionId = response.jsonPath().getString("sessionId")
+        sessionId != null
+    }
+
+    def "step 3: should update profile using sessionId"() {
+        when: "we update profile"
+        given()
+            .header("Session-Id", sessionId)
+            .contentType("application/json")
+            .body('{"email":"alice@example.com"}')
+            .put("/api/profile")
+            .then()
+            .statusCode(200)
+    }
+
+    def "step 4: should logout and invalidate session"() {
+        when: "we logout"
+        given()
+            .header("Session-Id", sessionId)
+            .post("/api/logout")
+            .then()
+            .statusCode(200)
     }
 }
 ```
 
-## Troubleshooting
+## Configuration
 
-**Tests fail because state is missing**:
-- Ensure tests run in order (Spock runs alphabetically)
-- Prefix test names with "step 1:", "step 2:", etc.
-- Check that earlier tests actually saved the state
+```groovy
+dependencies {
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${plugin_version}"
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.groovy.all
+    integrationTestImplementation libs.spock.core
+}
 
-**Container fails health check**:
-- Check health check command: `docker exec <container> curl localhost:8080/health`
-- Increase `start_period` if app needs more initialization time
-- Check application logs: `docker logs <container>`
+tasks.named('integrationTest') {
+    useJUnitPlatform()
+}
+```
 
-**Tests can't connect to app**:
-- Verify state file exists: `build/compose-state/statefulWebAppTest-state.json`
-- Check port mapping in state file
-- Ensure `composeUp` completed before `integrationTest`
+## Running
+
+```bash
+./gradlew :dockerOrch:examples:stateful-web-app:integrationTest
+```
 
 ## See Also
 
-- **METHOD lifecycle example**: `../isolated-tests/README.md` - For isolated, independent tests
-- **Verification tests**: `../../verification/lifecycle-class/README.md` - Plugin mechanics validation
-- **Plugin documentation**: `/docs/usage/usage-docker-orch.md` - Full plugin reference
+- [CLASS Lifecycle Without State](../web-app/README.md) - Tests that don't share state
+- [METHOD Lifecycle Example](../isolated-tests/README.md) - Complete isolation between tests
+- [Main Examples README](../README.md) - All examples

@@ -54,6 +54,22 @@ Examples use **standard testing libraries** that real users would use:
 
 These are the same tools you would use in your own projects.
 
+## Supported Lifecycle Types
+
+The plugin supports two container lifecycle modes for integration testing:
+
+1. **METHOD Lifecycle** - Containers restart for each test method
+   - Complete isolation between tests
+   - Fresh state for every test method
+   - Slower but guarantees independence
+   - Use when: Each test needs clean database/state, tests must run in any order
+
+2. **CLASS Lifecycle** - Containers start once for all tests in a class
+   - State persists between test methods
+   - Faster execution (containers start once)
+   - Tests can share data and build on each other
+   - Use when: Testing workflows, read-only operations, performance matters
+
 ## Lifecycle Patterns
 
 ### CLASS Lifecycle
@@ -140,13 +156,49 @@ These are the same tools you would use in your own projects.
 
 ---
 
-### Stateful Web App (Gradle Tasks + SUITE Lifecycle)
+### Database App (Spock + CLASS + Multi-Service)
+
+**Directory**: `database-app/`
+
+**Use Case**: Database integration testing with PostgreSQL
+
+**Lifecycle**: CLASS (containers shared across all tests)
+
+**Stack**: Spring Boot + JPA + PostgreSQL (multi-service)
+
+**Tests**:
+- Health check endpoint
+- Create user via REST API and verify in database
+- Retrieve user via REST API
+- Update user and verify in database
+- Delete user and verify removed from database
+
+**Test Framework**: Spock with `@ComposeUp(lifecycle = LifecycleMode.CLASS)`
+
+**Key Features**:
+- **Multi-service orchestration** (app + PostgreSQL database)
+- **Dual validation** - tests both REST API responses AND direct database state
+- **Direct database access** with Groovy SQL for verification
+- Demonstrates testing data persistence and CRUD operations
+- Uses `waitForHealthy` for both services
+
+**Key Points**:
+- Uses `@Shared` variables for database connection details
+- Direct JDBC validation using `groovy.sql.Sql`
+- Verifies API behavior matches database state
+- Shows how to test app + database integration
+
+**See**: [database-app/README.md](database-app/README.md)
+
+---
+
+### Stateful Web App (Spock + CLASS with Stateful Testing)
 
 **Directory**: `stateful-web-app/`
 
-**Use Case**: Testing stateful workflows with Gradle tasks (suite lifecycle)
+**Use Case**: Testing stateful workflows where tests build on each other
 
-**Lifecycle**: SUITE (containers run for entire test suite using Gradle tasks)
+**Lifecycle**: CLASS (containers shared across all tests)
 
 **Stack**: Spring Boot + Session management API
 
@@ -158,15 +210,15 @@ These are the same tools you would use in your own projects.
 - Logout and invalidate session
 - Verify session invalidation
 
-**Test Framework**: Spock with Gradle tasks (`composeUp*`/`composeDown*`)
+**Test Framework**: Spock with `@ComposeUp(lifecycle = LifecycleMode.CLASS)`
 
-**Key Feature**: Demonstrates Gradle task approach for suite lifecycle. Tests build on each other, carrying state
-(sessionId) from one test to the next.
+**Key Feature**: Demonstrates CLASS lifecycle with stateful testing patterns. Tests intentionally build on each other,
+carrying state (sessionId) from one test to the next.
 
 **Use When**:
-- You need suite lifecycle (containers run for entire test suite)
-- Manual container management in CI/CD pipelines
-- Custom orchestration logic
+- Testing workflows where steps depend on each other (register → login → update → logout)
+- State persistence between test methods is desired
+- Testing session management or multi-step processes
 
 **See**: [stateful-web-app/README.md](stateful-web-app/README.md)
 
@@ -249,6 +301,7 @@ From `plugin-integration-test/` directory:
 
 # Spock examples
 ./gradlew :dockerOrch:examples:web-app:integrationTest
+./gradlew :dockerOrch:examples:database-app:integrationTest
 ./gradlew :dockerOrch:examples:stateful-web-app:integrationTest
 ./gradlew :dockerOrch:examples:isolated-tests:integrationTest
 

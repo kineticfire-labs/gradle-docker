@@ -98,6 +98,7 @@ dockerOrch {
 
 // Add REST testing dependencies (application-specific - users choose their own testing libraries)
 dependencies {
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
     integrationTestImplementation libs.rest.assured
     integrationTestImplementation libs.rest.assured.json.path
 }
