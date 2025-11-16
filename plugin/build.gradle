@@ -324,6 +324,7 @@ tasks.register('functionalTest', Test) {
     useJUnitPlatform()
 
     dependsOn tasks.pluginUnderTestMetadata
+    shouldRunAfter tasks.test  // Ensure functional tests run after unit tests
 
     // Disable configuration cache for functional tests to work around TestKit service cleanup issues
     // See docs/design-docs/tech-debt/functional-tests-config-cache-disabled.md

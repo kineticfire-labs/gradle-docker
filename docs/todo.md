@@ -2,31 +2,10 @@
 
 ## Re-enable functional tests
 
-- Do we have 100% functional test coverage?
-   - increase-functional-test-coverage.md 
-   - Priority 4 to 6
-
 
 ## Clean-up
-2. why do unit tests take so long to run
-3. document in CLAUDE.md how long it takes unit tests and integration tests to run
-1. remove temp/debug/backup files/dirs
-3. Function tests
-   1. Try to re-enable functional tests?
-   2. Need to add any, even if disabled? 
-4. Look for "todo" and "skip"
-6. symlink .gradlew for plugin-integration-test subprojects
-7. remove "version" in docker compose
-7. Re-organize documents:
-   1. plugin/docs/claude/status... needed?  teh whole folder?
-   2. plugin/docs/{functional-test..., gradle-9...} these are more decisions
-   3. plugin-integration-test/docs ... move to plugin/docs?
-7. Be sure using "docker compose" and not with hyphen "docker-compose"
 8. put all the dependencies in the toml file
-9. "docker ps -a" should leave any containers after integration test code runs
 9. if do `./gradlew build` then functional tests should run
-10. tests that are *.disabled
-11. todo statements in CLAUDE.md
 
 ## DX
 1. All projects/sub-projects should accept a 'version' property for 'gradlew ...', IFF they require it
@@ -35,13 +14,6 @@
 Setting tags uses different syntax:
 1. the 'tags' in docker build block: Line 101-104: Changed tags = [...] to tags.set([...]) - you must use Gradle's Property API syntax
 2. docker/publish/to block: Line 113: Changed tags = ['latest'] to publishTags = ['latest'] - the publish configuration uses a different property name to avoid conflicts
-
-
-## UX / Feature
-1. 'dockerBuild' should assemble src to its own temp folder (added to .gitignore)
-4. docker publish to public registry (e.g., Docker Hub, GitHub Package Registry, etc.)
-5. use TestContainers
-6. might be nice to have a 'pullIfMissing' for 'tag' task
 
 
 ## Documentation
