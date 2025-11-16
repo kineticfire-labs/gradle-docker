@@ -2,8 +2,6 @@
 
 ## Re-enable functional tests
 
-- dependencies-toml.md
-   - Priority 5 - 6 (criteria)
 
 ## Clean-up
 8. put all the dependencies in the toml file
