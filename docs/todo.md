@@ -4,11 +4,16 @@
 
 
 ## Clean-up
-8. put all the dependencies in the toml file
-9. check documentation for integration tests
-   1. plugin-integration-test/dockerOrch/examples/README.md
+
+1. up-to-date with changes to spock annotations?
+   2. plugin-integration-test/dockerOrch/examples/README.md 
+   2. docs/usage/usage-docker-orch.md 
    2. docs/usage/usage-docker.md
-   3. docs/usage/usage-docker-orch.md
+   3. also check the "verification" integration tests
+1. check these are consistent with each other
+    2. plugin-integration-test/dockerOrch/examples/README.md 
+    2. docs/usage/usage-docker-orch.md
+    2. docs/usage/usage-docker.md
 
 
 ## Documentation

@@ -60,20 +60,37 @@ abstract class TestIntegrationExtension {
      * @param lifecycle When to start/stop the stack: "suite", "class", or "method"
      */
     void usesCompose(Test test, String stackName, String lifecycle) {
-        logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'", 
+        logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'",
             test.name, stackName, lifecycle)
-            
+
         // Find the compose stack configuration
         if (!dockerOrchExtension) {
-            throw new IllegalStateException("dockerOrch extension not found. Apply gradle-docker plugin first.")
+            throw new IllegalStateException(
+                "dockerOrch extension not found. Apply gradle-docker plugin first. " +
+                "Ensure 'id \"com.kineticfire.gradle.docker\"' is in plugins block."
+            )
         }
         def dockerOrchExt = dockerOrchExtension
-        
+
         def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
         if (!stackSpec) {
-            throw new IllegalArgumentException("Compose stack '${stackName}' not found in dockerOrch configuration")
+            // Gather available stack names for helpful error message
+            def availableStacks = dockerOrchExt.composeStacks.collect { it.name }.join(', ')
+            if (availableStacks.isEmpty()) {
+                throw new IllegalArgumentException(
+                    "Compose stack '${stackName}' not found in dockerOrch configuration. " +
+                    "No stacks are defined. " +
+                    "Add stack definitions in dockerOrch { composeStacks { ... } } in build.gradle."
+                )
+            } else {
+                throw new IllegalArgumentException(
+                    "Compose stack '${stackName}' not found in dockerOrch configuration. " +
+                    "Available stacks: [${availableStacks}]. " +
+                    "Check dockerOrch { composeStacks { ... } } in build.gradle."
+                )
+            }
         }
-        
+
         // Configure test task based on lifecycle
         switch (lifecycle.toLowerCase()) {
             case 'suite':
@@ -86,7 +103,10 @@ abstract class TestIntegrationExtension {
                 configureMethodLifecycle(test, stackName, stackSpec)
                 break
             default:
-                throw new IllegalArgumentException("Invalid lifecycle '${lifecycle}'. Must be 'suite', 'class', or 'method'")
+                throw new IllegalArgumentException(
+                    "Invalid lifecycle '${lifecycle}'. Must be 'suite', 'class', or 'method'. " +
+                    "Example: usesCompose stack: '${stackName}', lifecycle: 'class'"
+                )
         }
     }
     
@@ -117,28 +137,73 @@ abstract class TestIntegrationExtension {
     }
     
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {
-        // Class lifecycle uses JUnit extension to manage compose per test class
-        // DO NOT add task dependencies - let JUnit extension handle lifecycle
+        // Class lifecycle uses test framework extension to manage compose per test class
+        // DO NOT add task dependencies - let extension handle lifecycle
 
-        // Set system properties for JUnit extension to use
-        test.systemProperty("docker.compose.stack", stackName)
-        test.systemProperty("docker.compose.lifecycle", "class")
-        test.systemProperty("docker.compose.project", projectNameProvider.get())
+        // Set comprehensive system properties from dockerOrch DSL
+        setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
 
-        logger.info("Test '{}' configured for per-class compose lifecycle using JUnit extension", test.name)
-        logger.info("Test class must use @ExtendWith(DockerComposeClassExtension.class)")
+        logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
+        logger.info("Spock: Use @ComposeUp (zero parameters)")
+        logger.info("JUnit 5: Use @ExtendWith(DockerComposeClassExtension.class)")
     }
     
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
-        // Method lifecycle uses JUnit extension to manage compose per test method
-        // DO NOT add task dependencies - let JUnit extension handle lifecycle
+        // Method lifecycle uses test framework extension to manage compose per test method
+        // DO NOT add task dependencies - let extension handle lifecycle
 
-        // Set system properties for JUnit extension to use
+        // Set comprehensive system properties from dockerOrch DSL
+        setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
+
+        logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
+        logger.info("Spock: Use @ComposeUp (zero parameters)")
+        logger.info("JUnit 5: Use @ExtendWith(DockerComposeMethodExtension.class)")
+    }
+
+    /**
+     * Set comprehensive system properties from ComposeStackSpec for test framework extensions to consume
+     * @param test Test task to configure
+     * @param stackName Name of the compose stack
+     * @param stackSpec ComposeStackSpec containing all configuration
+     * @param lifecycle Lifecycle mode ("class" or "method")
+     */
+    private void setComprehensiveSystemProperties(Test test, String stackName, stackSpec, String lifecycle) {
+        // Basic configuration
         test.systemProperty("docker.compose.stack", stackName)
-        test.systemProperty("docker.compose.lifecycle", "method")
+        test.systemProperty("docker.compose.lifecycle", lifecycle)
+        // Set both old and new property names for backward compatibility
         test.systemProperty("docker.compose.project", projectNameProvider.get())
+        test.systemProperty("docker.compose.projectName", stackSpec.projectName.getOrElse(""))
 
-        logger.info("Test '{}' configured for per-method compose lifecycle using JUnit extension", test.name)
-        logger.info("Test class must use @ExtendWith(DockerComposeMethodExtension.class)")
+        // Compose files - serialize as comma-separated paths
+        def filePaths = stackSpec.files.collect { it.absolutePath }.join(',')
+        test.systemProperty("docker.compose.files", filePaths)
+
+        // Wait for healthy settings - check if Property is present
+        def waitForHealthySpec = stackSpec.waitForHealthy.getOrNull()
+        if (waitForHealthySpec) {
+            def services = waitForHealthySpec.waitForServices.getOrElse([]).join(',')
+            test.systemProperty("docker.compose.waitForHealthy.services", services)
+            test.systemProperty("docker.compose.waitForHealthy.timeoutSeconds",
+                waitForHealthySpec.timeoutSeconds.getOrElse(60).toString())
+            test.systemProperty("docker.compose.waitForHealthy.pollSeconds",
+                waitForHealthySpec.pollSeconds.getOrElse(2).toString())
+        }
+
+        // Wait for running settings - check if Property is present
+        def waitForRunningSpec = stackSpec.waitForRunning.getOrNull()
+        if (waitForRunningSpec) {
+            def services = waitForRunningSpec.waitForServices.getOrElse([]).join(',')
+            test.systemProperty("docker.compose.waitForRunning.services", services)
+            test.systemProperty("docker.compose.waitForRunning.timeoutSeconds",
+                waitForRunningSpec.timeoutSeconds.getOrElse(60).toString())
+            test.systemProperty("docker.compose.waitForRunning.pollSeconds",
+                waitForRunningSpec.pollSeconds.getOrElse(2).toString())
+        }
+
+        // State file path
+        test.systemProperty("COMPOSE_STATE_FILE", composeStateFileFor(stackName).get())
+
+        logger.debug("Set system properties for test '{}' from dockerOrch stack '{}'", test.name, stackName)
     }
 }
