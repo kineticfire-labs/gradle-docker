@@ -103,8 +103,21 @@ dependencies {
     integrationTestImplementation libs.rest.assured.json.path
 }
 
-// Customize the convention-created integrationTest task (test-specific system properties)
+// Customize the convention-created integrationTest task
 tasks.named('integrationTest') {
+    // ============================================================================
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration to @ComposeUp annotation
+    // ============================================================================
+    // This sets system properties that @ComposeUp reads automatically:
+    //   - docker.compose.stack (stack name)
+    //   - docker.compose.files (compose file paths)
+    //   - docker.compose.lifecycle (class or method)
+    //   - docker.compose.waitForHealthy.services (services to wait for)
+    //   - docker.compose.waitForHealthy.timeoutSeconds
+    //   - docker.compose.waitForHealthy.pollSeconds
+    //   - docker.compose.project (project name)
+    usesCompose(stack: "webAppTest", lifecycle: "class")
+
     // not needed for normal plugin usage; verification test only
     // Pass state file location to tests (lazy)
     systemProperty 'COMPOSE_STATE_FILE',

@@ -29,12 +29,28 @@ import static io.restassured.RestAssured.given
  *
  * This example demonstrates how to test a Spring Boot REST API using the dockerOrch plugin with CLASS lifecycle.
  *
+ * RECOMMENDED PATTERN:
+ * ===================
+ * ✅ Configure Docker Compose in build.gradle (dockerOrch.composeStacks)
+ * ✅ Use usesCompose() in integrationTest task to pass configuration
+ * ✅ Use zero-parameter @ComposeUp annotation in test class
+ *
  * WHY THIS PATTERN?
  * ================
+ * - Single source of truth: All configuration in build.gradle
+ * - No duplication between annotation and build.gradle
+ * - Easy to share configuration across multiple test classes
+ * - Easy to override via command line or CI/CD
  * - CLASS lifecycle: Containers start ONCE before all tests, stop ONCE after all tests
  * - Faster execution: Avoids restarting containers for each test method
  * - Perfect for read-only tests or tests that don't modify shared state
  * - All tests in this class are independent READ operations (health checks, GET requests)
+ *
+ * CONFIGURATION LOCATION:
+ * ======================
+ * See build.gradle for:
+ *   - dockerOrch.composeStacks { webAppTest { ... } }
+ *   - integrationTest.usesCompose(stack: "webAppTest", lifecycle: "class")
  *
  * WHEN TO USE:
  * ===========
@@ -50,8 +66,9 @@ import static io.restassured.RestAssured.given
  * ❌ Stateful workflows where order matters (see StatefulWebAppExampleIT instead)
  *
  * The @ComposeUp extension automatically handles:
+ * - Reading configuration from system properties set by usesCompose()
  * - Starting containers with Docker Compose before all tests (setupSpec)
- * - Waiting for the app to be healthy (waitForHealthy parameter)
+ * - Waiting for the app to be healthy (configured in build.gradle)
  * - Providing port mapping information via COMPOSE_STATE_FILE
  * - Cleaning up containers after all tests complete (cleanupSpec)
  *
@@ -63,14 +80,7 @@ import static io.restassured.RestAssured.given
  *
  * Copy and adapt this example for your own projects!
  */
-@ComposeUp(
-    stackName = "webAppTest",                                      // Unique name for this stack
-    composeFile = "src/integrationTest/resources/compose/web-app.yml",  // Path to compose file
-    lifecycle = LifecycleMode.CLASS,                               // Containers start once (faster)
-    waitForHealthy = ["web-app"],                                  // Wait for service to be HEALTHY
-    timeoutSeconds = 60,                                           // Max wait time for healthy status
-    pollSeconds = 2                                                // Check health every 2 seconds
-)
+@ComposeUp  // No parameters! All configuration from build.gradle via usesCompose()
 class WebAppExampleIT extends Specification {
 
     // @Shared variables persist across test methods (CLASS lifecycle)

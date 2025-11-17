@@ -34,18 +34,23 @@ import groovy.sql.Sql
  * - Direct database validation with JDBC
  * - CLASS lifecycle for efficient testing
  *
+ * RECOMMENDED PATTERN:
+ * ===================
+ * ✅ Configure Docker Compose in build.gradle (dockerOrch.composeStacks)
+ * ✅ Use usesCompose() in integrationTest task to pass configuration
+ * ✅ Use zero-parameter @ComposeUp annotation in test class
+ *
+ * CONFIGURATION LOCATION:
+ * ======================
+ * See build.gradle for:
+ *   - dockerOrch.composeStacks { databaseAppTest { ... } }
+ *   - integrationTest.usesCompose(stack: "databaseAppTest", lifecycle: "class")
+ *
  * Tests validate both API behavior AND database state to ensure data persistence works correctly.
  *
  * Copy and adapt this example for your own database integration scenarios!
  */
-@ComposeUp(
-    stackName = "databaseAppTest",
-    composeFile = "src/integrationTest/resources/compose/database-app.yml",
-    lifecycle = LifecycleMode.CLASS,
-    waitForHealthy = ["app", "postgres"],
-    timeoutSeconds = 90,
-    pollSeconds = 3
-)
+@ComposeUp  // No parameters! All configuration from build.gradle via usesCompose()
 class DatabaseAppExampleIT extends Specification {
 
     @Shared String baseUrl

@@ -2,9 +2,7 @@
 
 ## Spock annotations
 
-working on Phase 1, Task 1.3.
-
-Next is Phase 2.
+Working Phase 4.  Next: Phase 5.
 
 
 ## Clean-up

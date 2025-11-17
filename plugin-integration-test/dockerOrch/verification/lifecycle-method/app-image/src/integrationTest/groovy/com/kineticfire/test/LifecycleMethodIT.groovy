@@ -15,15 +15,16 @@ import static io.restassured.RestAssured.given
  * - Containers start fresh before EACH test method
  * - State does NOT persist between test methods
  * - Containers stop after EACH test method
+ *
+ * RECOMMENDED PATTERN (used here):
+ * ================================
+ * ✅ Configuration in build.gradle would use dockerOrch.composeStacks + usesCompose()
+ * ✅ Zero-parameter @ComposeUp annotation in test class
+ *
+ * NOTE: This test currently uses annotation-only configuration (backward compatible).
+ * For new projects, prefer the build.gradle configuration pattern shown in examples.
  */
-@ComposeUp(
-    stackName = "lifecycleMethodTest",
-    composeFile = "src/integrationTest/resources/compose/lifecycle-method.yml",
-    lifecycle = LifecycleMode.METHOD,
-    waitForHealthy = ["state-app"],
-    timeoutSeconds = 60,
-    pollSeconds = 2
-)
+@ComposeUp  // No parameters! Configuration would come from build.gradle via usesCompose() in production usage
 class LifecycleMethodIT extends Specification {
 
     // Instance variables (not static!) - fresh for each test

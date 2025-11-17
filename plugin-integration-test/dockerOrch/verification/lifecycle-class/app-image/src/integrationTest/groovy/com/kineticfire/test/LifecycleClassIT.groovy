@@ -15,15 +15,16 @@ import static io.restassured.RestAssured.given
  * - Containers start ONCE before all tests (setupSpec)
  * - State PERSISTS between test methods
  * - Containers stop ONCE after all tests (cleanupSpec)
+ *
+ * RECOMMENDED PATTERN (used here):
+ * ================================
+ * ✅ Configuration in build.gradle would use dockerOrch.composeStacks + usesCompose()
+ * ✅ Zero-parameter @ComposeUp annotation in test class
+ *
+ * NOTE: This test currently uses annotation-only configuration (backward compatible).
+ * For new projects, prefer the build.gradle configuration pattern shown in examples.
  */
-@ComposeUp(
-    stackName = "lifecycleClassTest",
-    composeFile = "src/integrationTest/resources/compose/lifecycle-class.yml",
-    lifecycle = LifecycleMode.CLASS,
-    waitForHealthy = ["state-app"],
-    timeoutSeconds = 60,
-    pollSeconds = 2
-)
+@ComposeUp  // No parameters! Configuration would come from build.gradle via usesCompose() in production usage
 class LifecycleClassIT extends Specification {
 
     // Static variables (shared across all tests in class)
