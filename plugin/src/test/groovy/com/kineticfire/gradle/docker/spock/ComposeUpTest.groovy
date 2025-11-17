@@ -60,24 +60,35 @@ class ComposeUpTest extends Specification {
         extensionAnnotation.value() == DockerComposeSpockExtension
     }
 
-    def "annotation should have required stackName method"() {
+    def "annotation should have stackName method with empty string default"() {
         when:
         def method = ComposeUp.getMethod('stackName')
 
         then:
         method != null
         method.returnType == String
-        method.defaultValue == null  // Required, no default
+        method.defaultValue == ""  // Optional, reads from system property when empty
     }
 
-    def "annotation should have required composeFile method"() {
+    def "annotation should have composeFile method with empty string default"() {
         when:
         def method = ComposeUp.getMethod('composeFile')
 
         then:
         method != null
         method.returnType == String
-        method.defaultValue == null  // Required, no default
+        method.defaultValue == ""  // Optional, reads from system property when empty
+    }
+
+    def "annotation should have composeFiles method with empty array default"() {
+        when:
+        def method = ComposeUp.getMethod('composeFiles')
+
+        then:
+        method != null
+        method.returnType.isArray()
+        method.returnType.componentType == String
+        (method.defaultValue as String[]).length == 0
     }
 
     def "annotation should have lifecycle method with default CLASS"() {
@@ -147,9 +158,10 @@ class ComposeUpTest extends Specification {
         def methods = ComposeUp.declaredMethods.findAll { !it.synthetic }
 
         then:
-        methods.size() == 8
+        methods.size() == 9
         methods.collect { it.name }.sort() == [
             'composeFile',
+            'composeFiles',
             'lifecycle',
             'pollSeconds',
             'projectName',

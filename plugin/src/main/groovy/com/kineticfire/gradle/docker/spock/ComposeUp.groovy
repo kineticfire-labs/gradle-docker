@@ -29,15 +29,34 @@ import java.lang.annotation.Target
  * <p>This annotation enables automatic Docker Compose stack management with configurable
  * lifecycle modes, health waiting, and state file generation.</p>
  *
- * <h3>CLASS Lifecycle Example</h3>
+ * <h3>Recommended Pattern: Configuration in build.gradle</h3>
+ * <p>Define all Docker Compose configuration in build.gradle and use zero-parameter annotation:</p>
+ *
+ * <p><b>build.gradle:</b></p>
  * <pre>
  * {@code
- * @ComposeUp(
- *     stackName = "myApp",
- *     composeFile = "src/integrationTest/resources/compose/app.yml",
- *     lifecycle = LifecycleMode.CLASS,
- *     waitForHealthy = ["web-app"]
- * )
+ * dockerOrch {
+ *     composeStacks {
+ *         myApp {
+ *             files.from('src/integrationTest/resources/compose/app.yml')
+ *             waitForHealthy {
+ *                 waitForServices.set(['web-app'])
+ *                 timeoutSeconds.set(60)
+ *             }
+ *         }
+ *     }
+ * }
+ *
+ * tasks.named('integrationTest') {
+ *     usesCompose stack: "myApp", lifecycle: "class"
+ * }
+ * }
+ * </pre>
+ *
+ * <p><b>Test class:</b></p>
+ * <pre>
+ * {@code
+ * @ComposeUp  // No parameters! All config from build.gradle
  * class MyIntegrationTest extends Specification {
  *     static String baseUrl
  *
@@ -54,28 +73,17 @@ import java.lang.annotation.Target
  * }
  * </pre>
  *
- * <h3>METHOD Lifecycle Example</h3>
+ * <h3>Alternative: Annotation-Only Configuration (Backward Compatible)</h3>
+ * <p>For backward compatibility, you can still specify all parameters in the annotation:</p>
  * <pre>
  * {@code
  * @ComposeUp(
  *     stackName = "myApp",
  *     composeFile = "src/integrationTest/resources/compose/app.yml",
- *     lifecycle = LifecycleMode.METHOD,
+ *     lifecycle = LifecycleMode.CLASS,
  *     waitForHealthy = ["web-app"]
  * )
- * class IsolatedTest extends Specification {
- *     String baseUrl  // Instance variable (NOT static)
- *
- *     def setup() {
- *         def stateFile = new File(System.getProperty('COMPOSE_STATE_FILE'))
- *         def stateData = new JsonSlurper().parse(stateFile)
- *         def port = stateData.services['web-app'].publishedPorts[0].host
- *         baseUrl = "http://localhost:${port}"
- *     }
- *
- *     def "test 1"() { ... }  // Fresh containers
- *     def "test 2"() { ... }  // Fresh containers
- * }
+ * class MyIntegrationTest extends Specification { ... }
  * }
  * </pre>
  *
@@ -116,9 +124,12 @@ import java.lang.annotation.Target
      *   <li>Identify the stack in logs and error messages</li>
      * </ul>
      *
-     * @return the stack name (required)
+     * <p>If empty (default), the stack name will be read from the system property
+     * {@code docker.compose.stack} set by {@code usesCompose} in build.gradle.</p>
+     *
+     * @return the stack name (default: empty = read from system property)
      */
-    String stackName()
+    String stackName() default ""
 
     /**
      * Path to the Docker Compose file relative to the project root.
@@ -129,9 +140,25 @@ import java.lang.annotation.Target
      *   <li>{@code "compose/integration-test.yml"}</li>
      * </ul>
      *
-     * @return the compose file path (required)
+     * <p>If empty (default), the compose file path will be read from the system property
+     * {@code docker.compose.files} set by {@code usesCompose} in build.gradle.</p>
+     *
+     * @return the compose file path (default: empty = read from system property)
      */
-    String composeFile()
+    String composeFile() default ""
+
+    /**
+     * Paths to multiple Docker Compose files relative to the project root.
+     *
+     * <p>Use this when you need to compose multiple files (e.g., base + override).
+     * Files are applied in the order specified.</p>
+     *
+     * <p>If empty (default), the compose file paths will be read from the system property
+     * {@code docker.compose.files} set by {@code usesCompose} in build.gradle.</p>
+     *
+     * @return array of compose file paths (default: empty = read from system property)
+     */
+    String[] composeFiles() default []
 
     /**
      * Lifecycle mode determining when containers start and stop.
@@ -141,6 +168,9 @@ import java.lang.annotation.Target
      *   <li>{@link LifecycleMode#CLASS} - Start once per class (setupSpec/cleanupSpec)</li>
      *   <li>{@link LifecycleMode#METHOD} - Start fresh for each method (setup/cleanup)</li>
      * </ul>
+     *
+     * <p>Can be overridden by system property {@code docker.compose.lifecycle}
+     * set by {@code usesCompose} in build.gradle.</p>
      *
      * @return the lifecycle mode (default: CLASS)
      */
@@ -177,7 +207,10 @@ import java.lang.annotation.Target
      *       retries: 10
      * </pre>
      *
-     * @return array of service names to wait for healthy (default: empty)
+     * <p>If empty (default), the service list will be read from the system property
+     * {@code docker.compose.waitForHealthy.services} set by {@code usesCompose} in build.gradle.</p>
+     *
+     * @return array of service names to wait for healthy (default: empty = read from system property)
      */
     String[] waitForHealthy() default []
 
@@ -188,7 +221,10 @@ import java.lang.annotation.Target
      * is sufficient. The extension will poll until all services are in
      * running state or the timeout is reached.</p>
      *
-     * @return array of service names to wait for running (default: empty)
+     * <p>If empty (default), the service list will be read from the system property
+     * {@code docker.compose.waitForRunning.services} set by {@code usesCompose} in build.gradle.</p>
+     *
+     * @return array of service names to wait for running (default: empty = read from system property)
      */
     String[] waitForRunning() default []
 
@@ -197,6 +233,9 @@ import java.lang.annotation.Target
      *
      * <p>Applies to both {@link #waitForHealthy()} and {@link #waitForRunning()}.
      * If services don't reach the desired state within this timeout, the test fails.</p>
+     *
+     * <p>Can be overridden by system properties {@code docker.compose.waitForHealthy.timeoutSeconds}
+     * or {@code docker.compose.waitForRunning.timeoutSeconds} set by {@code usesCompose} in build.gradle.</p>
      *
      * @return timeout in seconds (default: 60)
      */
@@ -207,6 +246,9 @@ import java.lang.annotation.Target
      *
      * <p>The extension will check service status every {@code pollSeconds} seconds
      * until all services reach the desired state or the timeout is reached.</p>
+     *
+     * <p>Can be overridden by system properties {@code docker.compose.waitForHealthy.pollSeconds}
+     * or {@code docker.compose.waitForRunning.pollSeconds} set by {@code usesCompose} in build.gradle.</p>
      *
      * @return poll interval in seconds (default: 2)
      */
