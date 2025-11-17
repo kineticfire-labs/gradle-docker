@@ -1,6 +1,10 @@
 # todo
 
-## Re-enable functional tests
+## Spock annotations
+
+working on Phase 1, Task 1.3.
+
+Next is Phase 2.
 
 
 ## Clean-up

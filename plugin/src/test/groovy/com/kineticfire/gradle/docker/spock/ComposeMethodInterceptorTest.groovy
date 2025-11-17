@@ -57,7 +57,7 @@ class ComposeMethodInterceptorTest extends Specification {
 
         config = [
             stackName: 'testStack',
-            composeFile: 'compose.yml',
+            composeFiles: ['compose.yml'],
             lifecycle: LifecycleMode.METHOD,
             projectNameBase: 'testProject',
             waitForHealthy: [],

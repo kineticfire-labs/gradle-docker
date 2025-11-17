@@ -205,14 +205,21 @@ class ComposeClassInterceptor implements IMethodInterceptor {
     }
 
     private void startComposeStack(String stackName, String uniqueProjectName) throws Exception {
-        Path composeFile = fileService.resolve(config.composeFile as String).toAbsolutePath()
-        if (!fileService.exists(composeFile)) {
-            throw new IllegalStateException("Compose file not found: ${composeFile}")
+        // Resolve all compose file paths
+        def composeFilePaths = (config.composeFiles as List<String>).collect { filePath ->
+            fileService.resolve(filePath).toAbsolutePath()
+        }
+
+        // Validate all files exist
+        composeFilePaths.each { Path path ->
+            if (!fileService.exists(path)) {
+                throw new IllegalStateException("Compose file not found: ${path}")
+            }
         }
 
         // Create ComposeConfig
         def composeConfig = new ComposeConfig(
-            Collections.singletonList(composeFile),
+            composeFilePaths,
             uniqueProjectName,
             stackName
         )

@@ -106,14 +106,17 @@ class DockerComposeSpockExtension extends AbstractAnnotationDrivenExtension<Comp
      */
     @Override
     void visitSpecAnnotation(ComposeUp annotation, SpecInfo spec) {
-        // Validate annotation
-        validateAnnotation(annotation)
-
-        // Create configuration
+        // Create configuration (reads system properties with annotation fallback)
         def config = createConfiguration(annotation, spec)
 
+        // Validate final merged configuration
+        validateConfiguration(config)
+
+        // Get lifecycle from config (already resolved from system property or annotation)
+        def lifecycle = config.lifecycle
+
         // Register appropriate interceptor based on lifecycle mode
-        if (annotation.lifecycle() == LifecycleMode.CLASS) {
+        if (lifecycle == LifecycleMode.CLASS) {
             def interceptor = new ComposeClassInterceptor(
                 config,
                 composeService,
@@ -139,45 +142,291 @@ class DockerComposeSpockExtension extends AbstractAnnotationDrivenExtension<Comp
     }
 
     /**
-     * Validates the {@link ComposeUp} annotation.
+     * Validates the final merged configuration.
      *
-     * @param annotation the annotation to validate
+     * @param config the configuration map to validate
      * @throws IllegalArgumentException if validation fails
      */
-    private void validateAnnotation(ComposeUp annotation) {
-        if (!annotation.stackName()) {
-            throw new IllegalArgumentException("@ComposeUp stackName cannot be empty")
+    private void validateConfiguration(Map<String, Object> config) {
+        if (!config.stackName) {
+            throw new IllegalArgumentException(
+                "Stack name must be specified either in build.gradle usesCompose() " +
+                "or @ComposeUp annotation stackName parameter"
+            )
         }
-        if (!annotation.composeFile()) {
-            throw new IllegalArgumentException("@ComposeUp composeFile cannot be empty")
+        if (!config.composeFiles || (config.composeFiles as List).isEmpty()) {
+            throw new IllegalArgumentException(
+                "Compose file(s) must be specified either in build.gradle dockerOrch.composeStacks " +
+                "or @ComposeUp annotation composeFile/composeFiles parameter"
+            )
         }
-        if (annotation.timeoutSeconds() <= 0) {
-            throw new IllegalArgumentException("@ComposeUp timeoutSeconds must be positive")
+        if (config.timeoutSeconds <= 0) {
+            throw new IllegalArgumentException("timeoutSeconds must be positive")
         }
-        if (annotation.pollSeconds() <= 0) {
-            throw new IllegalArgumentException("@ComposeUp pollSeconds must be positive")
+        if (config.pollSeconds <= 0) {
+            throw new IllegalArgumentException("pollSeconds must be positive")
         }
     }
 
     /**
-     * Creates configuration from annotation and spec.
+     * Creates configuration by reading system properties first, then annotation as fallback.
+     * Detects conflicts when both sources specify the same parameter.
      *
      * @param annotation the ComposeUp annotation
      * @param spec the specification
      * @return configuration map
+     * @throws IllegalStateException if both system property and annotation specify the same parameter
      */
     private Map<String, Object> createConfiguration(ComposeUp annotation, SpecInfo spec) {
+        // Read stackName (system property or annotation)
+        def stackName = readConfigValue(
+            'docker.compose.stack',
+            annotation.stackName(),
+            'stackName',
+            'Stack name'
+        )
+
+        // Read compose files (system property or annotation)
+        def composeFiles = readComposeFiles(annotation)
+
+        // Read lifecycle mode (system property can override annotation)
+        def lifecycle = readLifecycleMode(annotation)
+
+        // Read projectName (system property or annotation)
+        def projectNameFromSysProp = systemPropertyService.getProperty('docker.compose.projectName', '')
+        def projectNameBase = projectNameFromSysProp ?: (annotation.projectName() ?: stackName)
+
+        // Read wait for healthy services
+        def waitForHealthy = readConfigList(
+            'docker.compose.waitForHealthy.services',
+            annotation.waitForHealthy() as List<String>,
+            'waitForHealthy'
+        )
+
+        // Read wait for running services
+        def waitForRunning = readConfigList(
+            'docker.compose.waitForRunning.services',
+            annotation.waitForRunning() as List<String>,
+            'waitForRunning'
+        )
+
+        // Read timeout seconds (check both specific and general)
+        def timeoutSeconds = readTimeoutSeconds(annotation)
+
+        // Read poll seconds (check both specific and general)
+        def pollSeconds = readPollSeconds(annotation)
+
         return [
-            stackName: annotation.stackName(),
-            composeFile: annotation.composeFile(),
-            lifecycle: annotation.lifecycle(),
-            projectNameBase: annotation.projectName() ?: annotation.stackName(),
-            waitForHealthy: annotation.waitForHealthy() as List<String>,
-            waitForRunning: annotation.waitForRunning() as List<String>,
-            timeoutSeconds: annotation.timeoutSeconds(),
-            pollSeconds: annotation.pollSeconds(),
+            stackName: stackName,
+            composeFiles: composeFiles,
+            lifecycle: lifecycle,
+            projectNameBase: projectNameBase,
+            waitForHealthy: waitForHealthy,
+            waitForRunning: waitForRunning,
+            timeoutSeconds: timeoutSeconds,
+            pollSeconds: pollSeconds,
             className: spec.name ? spec.name.substring(spec.name.lastIndexOf('.') + 1) : 'UnknownSpec'
         ]
+    }
+
+    /**
+     * Reads a configuration value from system property first, then annotation fallback.
+     * Fails if BOTH sources provide non-empty values (conflict detection).
+     *
+     * @param systemPropertyKey the system property key to read
+     * @param annotationValue the value from annotation
+     * @param parameterName the parameter name (for error messages)
+     * @param displayName the human-readable name (for error messages)
+     * @return the resolved value (system property takes precedence if no conflict)
+     * @throws IllegalStateException if both system property and annotation specify non-empty values
+     */
+    private String readConfigValue(String systemPropertyKey, String annotationValue,
+                                   String parameterName, String displayName) {
+        def sysPropValue = systemPropertyService.getProperty(systemPropertyKey, '')
+        def hasSystemProperty = sysPropValue && !sysPropValue.isEmpty()
+        def hasAnnotationValue = annotationValue && !annotationValue.isEmpty()
+
+        // Conflict detection: both sources specify value
+        if (hasSystemProperty && hasAnnotationValue) {
+            throw new IllegalStateException(
+                "Configuration conflict for ${displayName}: " +
+                "specified in BOTH build.gradle (system property '${systemPropertyKey}' = '${sysPropValue}') " +
+                "AND @ComposeUp annotation (${parameterName} = '${annotationValue}'). " +
+                "Remove one to resolve conflict. " +
+                "Recommended: configure in build.gradle only and use @ComposeUp with no parameters."
+            )
+        }
+
+        // Return system property if present, otherwise annotation value
+        return hasSystemProperty ? sysPropValue : annotationValue
+    }
+
+    /**
+     * Reads a list configuration value from system property first, then annotation fallback.
+     * System property format: comma-separated values.
+     *
+     * @param systemPropertyKey the system property key to read
+     * @param annotationValue the list from annotation
+     * @param parameterName the parameter name (for error messages)
+     * @return the resolved list
+     * @throws IllegalStateException if both system property and annotation specify non-empty values
+     */
+    private List<String> readConfigList(String systemPropertyKey, List<String> annotationValue,
+                                        String parameterName) {
+        def sysPropValue = systemPropertyService.getProperty(systemPropertyKey, '')
+        def hasSystemProperty = sysPropValue && !sysPropValue.isEmpty()
+        def hasAnnotationValue = annotationValue && !annotationValue.isEmpty()
+
+        // Conflict detection: both sources specify value
+        if (hasSystemProperty && hasAnnotationValue) {
+            throw new IllegalStateException(
+                "Configuration conflict for ${parameterName}: " +
+                "specified in BOTH build.gradle (system property '${systemPropertyKey}' = '${sysPropValue}') " +
+                "AND @ComposeUp annotation (${parameterName} = ${annotationValue}). " +
+                "Remove one to resolve conflict. " +
+                "Recommended: configure in build.gradle only and use @ComposeUp with no parameters."
+            )
+        }
+
+        // Parse system property as comma-separated list if present
+        if (hasSystemProperty) {
+            return sysPropValue.split(',').collect { it.trim() }.findAll { !it.isEmpty() }
+        }
+
+        return annotationValue ?: []
+    }
+
+    /**
+     * Reads compose files from system property or annotation.
+     * Handles both composeFile (single) and composeFiles (array) annotation parameters.
+     *
+     * @param annotation the ComposeUp annotation
+     * @return list of compose file paths
+     * @throws IllegalStateException if conflicts detected
+     */
+    private List<String> readComposeFiles(ComposeUp annotation) {
+        def sysPropValue = systemPropertyService.getProperty('docker.compose.files', '')
+        def hasSystemProperty = sysPropValue && !sysPropValue.isEmpty()
+
+        // Check annotation values
+        def hasSingleFile = annotation.composeFile() && !annotation.composeFile().isEmpty()
+        def hasMultipleFiles = annotation.composeFiles() && annotation.composeFiles().length > 0
+
+        // Conflict detection: system property vs annotation
+        if (hasSystemProperty && (hasSingleFile || hasMultipleFiles)) {
+            def annotationSource = hasSingleFile ?
+                "composeFile = '${annotation.composeFile()}'" :
+                "composeFiles = ${annotation.composeFiles() as List}"
+            throw new IllegalStateException(
+                "Configuration conflict for compose files: " +
+                "specified in BOTH build.gradle (system property 'docker.compose.files' = '${sysPropValue}') " +
+                "AND @ComposeUp annotation (${annotationSource}). " +
+                "Remove one to resolve conflict. " +
+                "Recommended: configure in build.gradle only and use @ComposeUp with no parameters."
+            )
+        }
+
+        // Parse system property as comma-separated list if present
+        if (hasSystemProperty) {
+            return sysPropValue.split(',').collect { it.trim() }.findAll { !it.isEmpty() }
+        }
+
+        // Use annotation values: prefer composeFiles array, fallback to single composeFile
+        if (hasMultipleFiles) {
+            return annotation.composeFiles() as List<String>
+        }
+        if (hasSingleFile) {
+            return [annotation.composeFile()]
+        }
+
+        return []
+    }
+
+    /**
+     * Reads lifecycle mode from system property or annotation.
+     * System property can override annotation default.
+     *
+     * @param annotation the ComposeUp annotation
+     * @return the lifecycle mode
+     */
+    private LifecycleMode readLifecycleMode(ComposeUp annotation) {
+        def sysPropValue = systemPropertyService.getProperty('docker.compose.lifecycle', '')
+
+        if (sysPropValue && !sysPropValue.isEmpty()) {
+            // Parse system property value
+            switch (sysPropValue.toLowerCase()) {
+                case 'class':
+                    return LifecycleMode.CLASS
+                case 'method':
+                    return LifecycleMode.METHOD
+                default:
+                    throw new IllegalArgumentException(
+                        "Invalid lifecycle mode in system property 'docker.compose.lifecycle': '${sysPropValue}'. " +
+                        "Must be 'class' or 'method'."
+                    )
+            }
+        }
+
+        // Use annotation value
+        return annotation.lifecycle()
+    }
+
+    /**
+     * Reads timeout seconds from system property or annotation.
+     * Checks both specific (waitForHealthy/waitForRunning) and general timeout properties.
+     *
+     * @param annotation the ComposeUp annotation
+     * @return timeout in seconds
+     */
+    private int readTimeoutSeconds(ComposeUp annotation) {
+        // Check for specific timeout property (waitForHealthy or waitForRunning)
+        def healthyTimeout = systemPropertyService.getProperty('docker.compose.waitForHealthy.timeoutSeconds', '')
+        def runningTimeout = systemPropertyService.getProperty('docker.compose.waitForRunning.timeoutSeconds', '')
+
+        // Use the first available timeout (prefer specific over general)
+        def sysPropValue = healthyTimeout ?: runningTimeout
+
+        if (sysPropValue && !sysPropValue.isEmpty()) {
+            try {
+                return Integer.parseInt(sysPropValue)
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    "Invalid timeout value in system property: '${sysPropValue}'. Must be a positive integer."
+                )
+            }
+        }
+
+        // Use annotation value
+        return annotation.timeoutSeconds()
+    }
+
+    /**
+     * Reads poll seconds from system property or annotation.
+     * Checks both specific (waitForHealthy/waitForRunning) and general poll properties.
+     *
+     * @param annotation the ComposeUp annotation
+     * @return poll interval in seconds
+     */
+    private int readPollSeconds(ComposeUp annotation) {
+        // Check for specific poll property (waitForHealthy or waitForRunning)
+        def healthyPoll = systemPropertyService.getProperty('docker.compose.waitForHealthy.pollSeconds', '')
+        def runningPoll = systemPropertyService.getProperty('docker.compose.waitForRunning.pollSeconds', '')
+
+        // Use the first available poll (prefer specific over general)
+        def sysPropValue = healthyPoll ?: runningPoll
+
+        if (sysPropValue && !sysPropValue.isEmpty()) {
+            try {
+                return Integer.parseInt(sysPropValue)
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException(
+                    "Invalid poll value in system property: '${sysPropValue}'. Must be a positive integer."
+                )
+            }
+        }
+
+        // Use annotation value
+        return annotation.pollSeconds()
     }
 
     /**

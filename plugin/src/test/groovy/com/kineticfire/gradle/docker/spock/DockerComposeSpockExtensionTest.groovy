@@ -38,7 +38,10 @@ class DockerComposeSpockExtensionTest extends Specification {
         mockComposeService = Mock(ComposeService)
         mockProcessExecutor = Mock(ProcessExecutor)
         mockFileService = Mock(FileService)
-        mockSystemPropertyService = Mock(SystemPropertyService)
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            // Return empty strings by default (ensures annotation values are used)
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
         mockTimeService = Mock(TimeService)
 
         extension = new DockerComposeSpockExtension(
@@ -70,19 +73,19 @@ class DockerComposeSpockExtensionTest extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains('stackName cannot be empty')
+        e.message.contains('Stack name must be specified')
     }
 
     def "visitSpecAnnotation should validate composeFile is not empty"() {
         given:
-        def annotation = createAnnotation(stackName: 'test', composeFile: '')
+        def annotation = createAnnotation(stackName: 'test', composeFile: '', composeFiles: [] as String[])
 
         when:
         extension.visitSpecAnnotation(annotation, mockSpec)
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains('composeFile cannot be empty')
+        e.message.contains('Compose file(s) must be specified')
     }
 
     def "visitSpecAnnotation should validate timeoutSeconds is positive"() {
@@ -376,6 +379,7 @@ class DockerComposeSpockExtensionTest extends Specification {
         def defaults = [
             stackName: 'defaultStack',
             composeFile: 'compose.yml',
+            composeFiles: [] as String[],
             lifecycle: LifecycleMode.CLASS,
             projectName: '',
             waitForHealthy: [] as String[],
@@ -388,6 +392,7 @@ class DockerComposeSpockExtensionTest extends Specification {
         return Mock(ComposeUp) {
             stackName() >> merged.stackName
             composeFile() >> merged.composeFile
+            composeFiles() >> merged.composeFiles
             lifecycle() >> merged.lifecycle
             projectName() >> merged.projectName
             waitForHealthy() >> merged.waitForHealthy
