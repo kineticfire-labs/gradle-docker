@@ -63,10 +63,31 @@ living documentation and a copy-paste template.
 | Kafka App                | `examples/kafka-app/`              | ⏳ Planned  | TBD          | CLASS     | Event-driven architecture          | Kafka client, TestProducer/Consumer |
 | Batch Job                | `examples/batch-job/`              | ⏳ Planned  | TBD          | CLASS     | Scheduled processing               | Spring Batch, JDBC                  |
 
-**Test Framework Variants:**
-- **Spock** examples use `@ComposeUp` annotation for automatic container lifecycle management
-- **JUnit 5** examples use `@ExtendWith(DockerComposeClassExtension.class)` or `@ExtendWith(DockerComposeMethodExtension.class)`
-- Both frameworks provide the same functionality; choose based on your project's test framework preference
+**Test Framework Variants and Configuration Patterns:**
+
+| Test Type | Framework | Configuration Pattern | Annotation | Notes |
+|-----------|-----------|----------------------|------------|-------|
+| **Examples** | Spock | **Recommended** (build.gradle + `usesCompose()`) | `@ComposeUp` (zero-parameter) | All examples demonstrate this pattern |
+| **Examples** | JUnit 5 | **Recommended** (build.gradle + `usesCompose()`) | `@ExtendWith(DockerComposeClassExtension.class)` (zero-parameter) | Same pattern as Spock examples |
+| **Verification** | Spock | Backward compatible (annotation-only) | `@ComposeUp(stackName=..., composeFiles=..., ...)` | Uses full annotation parameters |
+| **Verification** | JUnit 5 | Manual system properties | `@ExtendWith(...)` + manual systemProperty calls | Verification tests use internal patterns |
+
+**Configuration Pattern Guide:**
+
+1. **Recommended Pattern (All Examples):**
+   - Define stack in `dockerOrch.composeStacks { }` in `build.gradle`
+   - Use `usesCompose(stack: "stackName", lifecycle: "class/method")` in test task
+   - Use zero-parameter annotation in test class
+   - **Benefits:** Single source of truth, no duplication, easy to share across tests
+
+2. **Backward Compatible Pattern (Some Verification Tests):**
+   - Configure all parameters directly in the annotation
+   - No `usesCompose()` needed
+   - **Use when:** Maintaining legacy tests, quick prototyping
+
+**Which pattern should you use?**
+- ✅ **For new projects:** Use the recommended pattern (see examples/)
+- ⚠️ **For plugin verification:** See verification/ tests (not intended for user copying)
 
 ## Task Organization
 

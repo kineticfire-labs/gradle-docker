@@ -7,6 +7,41 @@
 **Lifecycle**: CLASS (`@ComposeUp` annotation)
 **Use Case**: Multi-service integration testing (app + database)
 
+## Configuration Approach
+
+This example uses the **RECOMMENDED pattern** where Docker Compose configuration is defined in `build.gradle` and
+passed to the test via `usesCompose()`, with a zero-parameter `@ComposeUp` annotation in the test class.
+
+**Why this matters for database testing:**
+- **Single source of truth** - Database connection details, wait configurations, and service orchestration are all
+  defined in one place
+- **Easy multi-service coordination** - Configure both app and database services together in `build.gradle`
+- **Reusable across tests** - Multiple test classes can share the same database stack configuration
+- **Environment flexibility** - Easy to swap database versions or configurations via Gradle properties
+
+**Configuration highlights from `build.gradle`:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        databaseAppTest {
+            stackName = 'databaseAppTest'
+            composeFiles = [file('src/integrationTest/resources/compose/database-app.yml')]
+
+            wait {
+                services = ['app', 'postgres']  // Wait for BOTH services
+                timeout = duration(90, 'SECONDS')
+                waitForStatus = 'HEALTHY'
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "databaseAppTest", lifecycle: "class")
+}
+```
+
 ## Purpose
 
 Demonstrates real-world database integration testing with:
@@ -29,14 +64,7 @@ This example is unique because it shows:
 ## Test Structure
 
 ```groovy
-@ComposeUp(
-    stackName = "databaseAppTest",
-    composeFile = "src/integrationTest/resources/compose/database-app.yml",
-    lifecycle = LifecycleMode.CLASS,
-    waitForHealthy = ["app", "postgres"],  // Wait for BOTH services
-    timeoutSeconds = 90,
-    pollSeconds = 3
-)
+@ComposeUp  // No parameters! All configuration from build.gradle via usesCompose()
 class DatabaseAppExampleIT extends Specification {
 
     @Shared String baseUrl

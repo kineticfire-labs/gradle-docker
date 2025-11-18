@@ -37,6 +37,161 @@ Docker Compose container lifecycles during your integration tests.
 - **Log Capture**: Captures container logs on teardown
 - **Clean Teardown**: Ensures containers are always stopped, even on test failures
 
+## Configuration Patterns
+
+### ⭐ Recommended Pattern (Zero-Parameter Annotation)
+
+**The recommended approach** is to configure your Docker Compose stack in `build.gradle` and use zero-parameter test
+annotations. This eliminates duplication and provides a single source of truth.
+
+**3-Step Configuration:**
+1. **Configure stack in `build.gradle`** using `dockerOrch.composeStacks { }`
+2. **Use `usesCompose()`** in your test task to pass configuration via system properties
+3. **Use zero-parameter annotation** in your test class (`@ComposeUp` or `@ExtendWith`)
+
+**Example `build.gradle`:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        webAppTest {
+            projectName = 'example-web-app-test'
+            stackName = 'webAppTest'
+            composeFiles = [file('src/integrationTest/resources/compose/web-app.yml')]
+
+            wait {
+                services = ['web-app']
+                timeout = duration(60, 'SECONDS')
+                waitForStatus = 'HEALTHY'
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    // Pass stack configuration to test via system properties
+    usesCompose(stack: "webAppTest", lifecycle: "class")
+
+    useJUnitPlatform()
+    outputs.cacheIf { false }
+}
+```
+
+**Spock Test Class:**
+
+```groovy
+import com.kineticfire.gradle.docker.spock.ComposeUp
+
+@ComposeUp  // No parameters! All configuration from build.gradle
+class WebAppExampleIT extends Specification {
+    // Tests...
+}
+```
+
+**JUnit 5 Test Class:**
+
+```java
+import com.kineticfire.gradle.docker.junit.DockerComposeClassExtension;
+
+@ExtendWith(DockerComposeClassExtension.class)  // No configuration needed!
+class WebAppJUnit5ClassIT {
+    // Tests...
+}
+```
+
+**System Properties Set by `usesCompose()`:**
+
+When you call `usesCompose(stack: "webAppTest", lifecycle: "class")`, the plugin automatically sets these system
+properties:
+
+| System Property | Value | Description |
+|----------------|-------|-------------|
+| `docker.compose.stack` | `webAppTest` | Stack name from dockerOrch DSL |
+| `docker.compose.files` | `src/integrationTest/resources/compose/web-app.yml` | Compose file path(s) |
+| `docker.compose.lifecycle` | `class` | Lifecycle mode (class or method) |
+| `docker.compose.waitForHealthy.services` | `web-app` | Services to wait for |
+| `docker.compose.waitForHealthy.timeoutSeconds` | `60` | Health check timeout |
+| `docker.compose.waitForHealthy.pollSeconds` | `2` | Poll interval (default) |
+| `docker.compose.project` | `example-web-app-test` | Docker Compose project name |
+
+**Benefits:**
+- ✅ **Single source of truth** - All configuration in `build.gradle`
+- ✅ **No duplication** - Configuration not repeated in annotations
+- ✅ **Easy to share** - Multiple test classes can use same stack
+- ✅ **CLI/CI overrides** - Easy to override via Gradle properties
+- ✅ **Clean test code** - Test classes focus on test logic, not config
+
+### Backward Compatible Pattern (Annotation-Only)
+
+For backward compatibility, you can still configure everything in the annotation without using `build.gradle`:
+
+**Spock:**
+
+```groovy
+@ComposeUp(
+    stackName = "webAppTest",
+    composeFiles = ["src/integrationTest/resources/compose/web-app.yml"],
+    lifecycle = LifecycleMode.CLASS,
+    waitForHealthy = ["web-app"],
+    timeoutSeconds = 60,
+    pollSeconds = 2
+)
+class WebAppIT extends Specification { }
+```
+
+**JUnit 5:**
+
+For JUnit 5, you must set system properties manually in the test task:
+
+```gradle
+tasks.named('integrationTest') {
+    systemProperty 'docker.compose.stack', 'webAppTest'
+    systemProperty 'docker.compose.project', 'example-web-app-test'
+    // Additional configuration in dockerOrch DSL
+}
+```
+
+**When to Use Annotation-Only:**
+- Maintaining legacy tests
+- Quick prototyping
+- Single test class per stack
+
+**Trade-offs:**
+- ⚠️ Duplication between `build.gradle` and annotation
+- ⚠️ Harder to override configuration
+- ⚠️ More verbose test code
+
+### Configuration Conflict Detection
+
+**IMPORTANT:** If both system property AND annotation specify the same parameter, the plugin will **fail fast** with a
+clear error message.
+
+**Example conflict:**
+
+```gradle
+// build.gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "webAppTest", lifecycle: "class")  // Sets docker.compose.stack
+}
+```
+
+```groovy
+// Test class
+@ComposeUp(stackName = "differentStack")  // Conflict! stackName also specified in annotation
+class WebAppIT extends Specification { }
+```
+
+**Error:**
+
+```
+Configuration conflict: stackName specified both in system property (docker.compose.stack=webAppTest)
+and annotation (stackName=differentStack). Use EITHER build.gradle OR annotation, not both.
+```
+
+**Resolution:** Choose ONE approach:
+- **Recommended**: Remove annotation parameters, use `usesCompose()` in build.gradle
+- **Backward compatible**: Remove `usesCompose()`, use full annotation parameters
+
 ## Why Use Test Framework Extensions
 
 ### Advantages Over Gradle Tasks

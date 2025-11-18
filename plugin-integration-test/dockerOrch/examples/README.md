@@ -3,6 +3,74 @@
 These demonstrate how to use the dockerOrch plugin for testing your applications with both **Spock** and **JUnit 5**
 test framework extensions.
 
+## ⭐ Recommended Configuration Pattern
+
+**All examples in this directory use the RECOMMENDED pattern for Docker Compose configuration:**
+
+### 3-Step Approach
+
+1. **Configure stack in `build.gradle`** → Define your Docker Compose stack in the `dockerOrch.composeStacks { }` DSL
+2. **Use `usesCompose()` in test task** → Pass stack configuration to tests via system properties
+3. **Use zero-parameter annotation in test** → `@ComposeUp` (Spock) or `@ExtendWith(Extension.class)` (JUnit 5) with
+   no parameters
+
+### Example Configuration
+
+**build.gradle:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        webAppTest {
+            projectName = 'example-web-app-test'
+            stackName = 'webAppTest'
+            composeFiles = [file('src/integrationTest/resources/compose/web-app.yml')]
+
+            wait {
+                services = ['web-app']
+                timeout = duration(60, 'SECONDS')
+                waitForStatus = 'HEALTHY'
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "webAppTest", lifecycle: "class")
+    useJUnitPlatform()
+    outputs.cacheIf { false }
+}
+```
+
+**Spock Test:**
+
+```groovy
+@ComposeUp  // No parameters! All configuration from build.gradle
+class WebAppExampleIT extends Specification {
+    // Tests...
+}
+```
+
+**JUnit 5 Test:**
+
+```java
+@ExtendWith(DockerComposeClassExtension.class)  // No parameters! Configuration from build.gradle
+class WebAppJUnit5ClassIT {
+    // Tests...
+}
+```
+
+### Benefits of This Pattern
+
+- ✅ **Single source of truth** - All configuration lives in `build.gradle`
+- ✅ **No duplication** - Configuration is not repeated in test annotations
+- ✅ **Easy to share** - Multiple test classes can reference the same stack configuration
+- ✅ **CLI/CI overrides** - Easy to override stack configuration via Gradle properties
+- ✅ **Clean test code** - Test classes focus on test logic, not infrastructure configuration
+
+**Note:** All examples demonstrate this pattern. The `@ComposeUp` and `@ExtendWith` annotations in example tests use
+zero parameters, reading all configuration from the `build.gradle` file via `usesCompose()`.
+
 ## Purpose
 
 Example tests show **real-world usage** of the dockerOrch plugin:
