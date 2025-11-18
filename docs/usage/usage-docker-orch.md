@@ -102,6 +102,56 @@ Each pattern includes:
 
 The Spock extension uses the `@ComposeUp` annotation to manage Docker Compose lifecycles.
 
+#### Configuration Pattern (RECOMMENDED)
+
+**✅ Recommended**: Configure Docker Compose in `build.gradle` and use zero-parameter `@ComposeUp` annotation:
+
+```gradle
+// build.gradle
+dockerOrch {
+    composeStacks {
+        webAppTest {
+            files.from('src/integrationTest/resources/compose/web-app.yml')
+            waitForHealthy {
+                waitForServices.set(['web-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "webAppTest", lifecycle: "class")
+}
+```
+
+```groovy
+// Test class
+@ComposeUp  // No parameters! Configuration from build.gradle via usesCompose()
+class WebAppIT extends Specification {
+    // ...
+}
+```
+
+**Benefits:**
+- Single source of truth in `build.gradle`
+- No duplication between annotation and build script
+- Easy to share configuration across multiple test classes
+- Easy to override via command line or CI/CD
+
+**⚠️ Backward Compatible**: You can still use annotation-only configuration with all parameters:
+
+```groovy
+@ComposeUp(
+    stackName = "webAppTest",
+    composeFile = "src/integrationTest/resources/compose/web-app.yml",
+    lifecycle = LifecycleMode.CLASS,
+    waitForHealthy = ["web-app"]
+)
+class WebAppIT extends Specification { /* ... */ }
+```
+
 #### CLASS Lifecycle with Spock
 
 Containers start once in `setupSpec()` and stop once in `cleanupSpec()`. All test methods share the same containers.
@@ -117,13 +167,12 @@ Containers start once in `setupSpec()` and stop once in `cleanupSpec()`. All tes
 package com.example.integration
 
 import com.kineticfire.gradle.docker.spock.ComposeUp
-import com.kineticfire.gradle.docker.spock.LifecycleMode
 import spock.lang.Specification
 import spock.lang.Shared
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
 
-@ComposeUp(lifecycle = LifecycleMode.CLASS)
+@ComposeUp  // Reads configuration from build.gradle via usesCompose()
 class WebAppIT extends Specification {
 
     @Shared
@@ -181,66 +230,50 @@ dependencies {
     testImplementation 'org.spockframework:spock-core'
 
     // Plugin for @ComposeUp annotation
-    testImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
 
     // REST testing
-    testImplementation 'io.rest-assured:rest-assured:5.3.0'
-    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 
 // Configure dockerOrch DSL
 dockerOrch {
-    stacks {
+    composeStacks {
         webAppTest {
-            projectName = 'web-app-test'
-            stackName = 'webAppTest'
-            composeFiles = [file('src/integrationTest/resources/compose/web-app.yml')]
+            files.from('src/integrationTest/resources/compose/web-app.yml')
+            projectName = "web-app-test"
 
-            wait {
-                services = ['web-app']
-                timeout = duration(30, 'SECONDS')
-                waitForStatus = 'HEALTHY'
-            }
-
-            logs {
-                outputFile = file("${buildDir}/compose-logs/web-app-test.log")
-                tailLines = 1000
+            waitForHealthy {
+                waitForServices.set(['web-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
             }
         }
     }
 }
 
-// Create integration test source set
-sourceSets {
-    integrationTest {
-        groovy.srcDir 'src/integrationTest/groovy'
-        resources.srcDir 'src/integrationTest/resources'
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
+// Plugin automatically creates integrationTest source set when java/groovy plugin is present!
+// Just add integration test dependencies:
+dependencies {
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
 }
 
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-// Register integration test task
-tasks.register('integrationTest', Test) {
-    description = 'Runs CLASS lifecycle integration tests using Spock extension'
-    group = 'verification'
-
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-
-    useJUnitPlatform()
-
-    // Configure system properties for Spock extension
-    systemProperty 'docker.compose.stack', 'webAppTest'
-    systemProperty 'docker.compose.project', 'example-web-app-test'
-
-    // NOTE: No systemProperty for COMPOSE_STATE_FILE needed - extension generates it
-    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
+// Customize the convention-created integrationTest task
+tasks.named('integrationTest') {
+    // ============================================================================
+    // RECOMMENDED: Use usesCompose() to pass configuration to @ComposeUp annotation
+    // ============================================================================
+    // This automatically sets system properties that @ComposeUp reads:
+    //   - docker.compose.stack
+    //   - docker.compose.files
+    //   - docker.compose.lifecycle
+    //   - docker.compose.waitForHealthy.services
+    //   - docker.compose.waitForHealthy.timeoutSeconds
+    //   - docker.compose.waitForHealthy.pollSeconds
+    //   - docker.compose.project
+    usesCompose(stack: "webAppTest", lifecycle: "class")
 
     // Not cacheable - interacts with Docker
     outputs.cacheIf { false }

@@ -102,3 +102,20 @@ From `plugin-integration-test/` directory:
 - [Main Examples README](../README.md) - All examples and decision guide
 - [dockerOrch DSL Usage Guide](../../../../docs/usage/usage-docker-orch.md) - Complete DSL reference
 - [Spock and JUnit Test Extensions](../../../../docs/usage/spock-junit-test-extensions.md) - Extension details
+
+## Configuration Pattern (NEW)
+
+This example demonstrates the **RECOMMENDED pattern** for Docker Compose configuration:
+
+**✅ Recommended**:
+1. Configure stack in `build.gradle` → `dockerOrch.composeStacks { }`
+2. Use `usesCompose(stack: "stackName", lifecycle: "class")` in test task
+3. Use zero-parameter `@ComposeUp` annotation in test class
+
+**Benefits**:
+- Single source of truth in build.gradle
+- No duplication between annotation and build script
+- Easy to share configuration across multiple test classes
+- Easy to override via CLI/CI
+
+See `build.gradle` and `WebAppExampleIT.groovy` for the complete implementation.
