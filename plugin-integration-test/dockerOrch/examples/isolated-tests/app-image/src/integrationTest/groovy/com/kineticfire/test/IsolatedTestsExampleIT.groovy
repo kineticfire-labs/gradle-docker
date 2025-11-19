@@ -17,7 +17,6 @@
 package com.kineticfire.test
 
 import com.kineticfire.gradle.docker.spock.ComposeUp
-import com.kineticfire.gradle.docker.spock.LifecycleMode
 import spock.lang.Specification
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
@@ -67,16 +66,19 @@ import static io.restassured.RestAssured.given
  * - SLOWER: Containers restart for each test (adds startup time)
  * - SAFER: Guarantees complete isolation (no shared state bugs)
  *
+ * CONFIGURATION:
+ * =============
+ * All Docker Compose configuration is in build.gradle (single source of truth):
+ * - Stack name: isolatedTestsTest
+ * - Compose file: src/integrationTest/resources/compose/isolated-tests.yml
+ * - Lifecycle: METHOD (set via usesCompose in build.gradle)
+ * - Wait settings: Wait for 'isolated-tests' service to be HEALTHY
+ *
+ * The @ComposeUp annotation has NO parameters - all config comes from build.gradle!
+ *
  * Copy and adapt this example for your own isolated testing scenarios!
  */
-@ComposeUp(
-    stackName = "isolatedTestsTest",                                // Unique name for this stack
-    composeFile = "src/integrationTest/resources/compose/isolated-tests.yml",  // Path to compose file
-    lifecycle = LifecycleMode.METHOD,                               // Containers restart per test (isolation)
-    waitForHealthy = ["isolated-tests"],                            // Wait for service to be HEALTHY
-    timeoutSeconds = 60,                                            // Max wait time for healthy status
-    pollSeconds = 2                                                 // Check health every 2 seconds
-)
+@ComposeUp  // No parameters! All configuration comes from build.gradle via usesCompose()
 class IsolatedTestsExampleIT extends Specification {
 
     // Instance variables (NOT static!) - fresh for each test
@@ -135,11 +137,13 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 1: Create user "alice"
     def "test 1: should create user alice with fresh database"() {
-        when: "we create user alice"
-        def response = given()
-            .contentType("application/json")
-            .body('{"username":"alice","email":"alice@example.com"}')
-            .post("/users")
+        when: "we create user alice with retry logic"
+        def response = retryRequest({
+            given()
+                .contentType("application/json")
+                .body('{"username":"alice","email":"alice@example.com"}')
+                .post("/users")
+        }, 5, 2000)
 
         then: "user is created successfully"
         response.statusCode() == 200
@@ -154,9 +158,8 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 2: Verify database is fresh (alice should NOT exist)
     def "test 2: should NOT find alice (database is fresh)"() {
-        when: "we try to get user alice"
-        def response = given()
-            .get("/users/alice")
+        when: "we try to get user alice with retry logic"
+        def response = retryRequest({ given().get("/users/alice") }, 5, 2000)
 
         then: "user does NOT exist (database is fresh)"
         response.statusCode() == 404
@@ -166,11 +169,13 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 3: Create user "alice" again (should succeed with fresh database)
     def "test 3: should create user alice again with fresh database"() {
-        when: "we create user alice again"
-        def response = given()
-            .contentType("application/json")
-            .body('{"username":"alice","email":"alice@example.com"}')
-            .post("/users")
+        when: "we create user alice again with retry logic"
+        def response = retryRequest({
+            given()
+                .contentType("application/json")
+                .body('{"username":"alice","email":"alice@example.com"}')
+                .post("/users")
+        }, 5, 2000)
 
         then: "user is created successfully (fresh database!)"
         response.statusCode() == 200
@@ -184,11 +189,13 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 4: Create user "bob"
     def "test 4: should create user bob with fresh database"() {
-        when: "we create user bob"
-        def response = given()
-            .contentType("application/json")
-            .body('{"username":"bob","email":"bob@example.com"}')
-            .post("/users")
+        when: "we create user bob with retry logic"
+        def response = retryRequest({
+            given()
+                .contentType("application/json")
+                .body('{"username":"bob","email":"bob@example.com"}')
+                .post("/users")
+        }, 5, 2000)
 
         then: "user is created successfully"
         response.statusCode() == 200
@@ -203,9 +210,8 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 5: Verify database is fresh (bob should NOT exist)
     def "test 5: should NOT find bob (database is fresh)"() {
-        when: "we try to get user bob"
-        def response = given()
-            .get("/users/bob")
+        when: "we try to get user bob with retry logic"
+        def response = retryRequest({ given().get("/users/bob") }, 5, 2000)
 
         then: "user does NOT exist (database is fresh)"
         response.statusCode() == 404
@@ -215,9 +221,8 @@ class IsolatedTestsExampleIT extends Specification {
 
     // Test 6: Verify no users exist
     def "test 6: should have empty database (no users from previous tests)"() {
-        when: "we get all users"
-        def response = given()
-            .get("/users")
+        when: "we get all users with retry logic"
+        def response = retryRequest({ given().get("/users") }, 5, 2000)
 
         then: "no users exist"
         response.statusCode() == 200
@@ -233,7 +238,7 @@ class IsolatedTestsExampleIT extends Specification {
     def "test 7: should respond to health check endpoint"() {
         when: "we call the /health endpoint with retry logic"
         // Retry logic to handle brief window where container is healthy but app not fully ready
-        def response = retryRequest({ given().get("/health") }, 3, 1000)
+        def response = retryRequest({ given().get("/health") }, 5, 2000)
 
         then: "app is healthy"
         response.statusCode() == 200

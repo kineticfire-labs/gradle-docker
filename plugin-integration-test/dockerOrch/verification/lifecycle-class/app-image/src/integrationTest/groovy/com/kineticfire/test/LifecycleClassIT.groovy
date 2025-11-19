@@ -1,7 +1,6 @@
 package com.kineticfire.test
 
 import com.kineticfire.gradle.docker.spock.ComposeUp
-import com.kineticfire.gradle.docker.spock.LifecycleMode
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
 import spock.lang.Specification
@@ -16,15 +15,17 @@ import static io.restassured.RestAssured.given
  * - State PERSISTS between test methods
  * - Containers stop ONCE after all tests (cleanupSpec)
  *
- * RECOMMENDED PATTERN (used here):
- * ================================
- * ✅ Configuration in build.gradle would use dockerOrch.composeStacks + usesCompose()
- * ✅ Zero-parameter @ComposeUp annotation in test class
+ * CONFIGURATION:
+ * =============
+ * All Docker Compose configuration is in build.gradle (single source of truth):
+ * - Stack name: lifecycleClassTest
+ * - Compose file: src/integrationTest/resources/compose/lifecycle-class.yml
+ * - Lifecycle: CLASS (set via usesCompose in build.gradle)
+ * - Wait settings: Wait for 'state-app' service to be HEALTHY
  *
- * NOTE: This test currently uses annotation-only configuration (backward compatible).
- * For new projects, prefer the build.gradle configuration pattern shown in examples.
+ * The @ComposeUp annotation has NO parameters - all config comes from build.gradle!
  */
-@ComposeUp  // No parameters! Configuration would come from build.gradle via usesCompose() in production usage
+@ComposeUp  // No parameters! All configuration comes from build.gradle via usesCompose()
 class LifecycleClassIT extends Specification {
 
     // Static variables (shared across all tests in class)

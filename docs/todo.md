@@ -2,7 +2,7 @@
 
 ## Spock annotations
 
-Working Phase 4.  Next: Phase 5.
+Working Phase 5.
 
 
 ## Clean-up

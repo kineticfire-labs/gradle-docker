@@ -54,6 +54,22 @@ docker {
     }
 }
 
+// Configure dockerOrch DSL for Docker Compose orchestration
+dockerOrch {
+    composeStacks {
+        databaseAppTest {
+            files.from('src/integrationTest/resources/compose/database-app.yml')
+            projectName = 'example-database-app-test'
+
+            waitForHealthy {
+                waitForServices.set(['app', 'postgres'])
+                timeoutSeconds.set(90)
+                pollSeconds.set(3)
+            }
+        }
+    }
+}
+
 // Plugin automatically creates integrationTest source set
 dependencies {
     testImplementation libs.groovy.all
@@ -70,11 +86,22 @@ dependencies {
 tasks.named('integrationTest') {
     description = 'Runs database integration tests with PostgreSQL'
     group = 'verification'
+
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration
+    usesCompose(stack: "databaseAppTest", lifecycle: "class")
+
+    useJUnitPlatform()
+    outputs.cacheIf { false }
 }
 
 // Ensure Docker image is built before running integration tests
 afterEvaluate {
-    tasks.named('integrationTest') {
+    tasks.named('composeUpDatabaseAppTest') {
         dependsOn tasks.named('dockerBuildDatabaseApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpDatabaseAppTest')
+        finalizedBy tasks.named('composeDownDatabaseAppTest')
     }
 }

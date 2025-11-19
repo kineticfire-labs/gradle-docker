@@ -56,9 +56,21 @@ docker {
     }
 }
 
-// NOTE: dockerOrch DSL is NOT needed for this test.
-// The @ComposeUp annotation on the test class handles all Docker Compose orchestration.
-// This demonstrates how to use the Spock extension for METHOD lifecycle management.
+// Configure dockerOrch DSL for Docker Compose orchestration
+dockerOrch {
+    composeStacks {
+        lifecycleMethodTest {
+            files.from('src/integrationTest/resources/compose/lifecycle-method.yml')
+            projectName = 'verification-lifecycle-method-test'
+
+            waitForHealthy {
+                waitForServices.set(['state-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
 
 // ============================================================================
 // CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
@@ -90,9 +102,11 @@ dependencies {
 tasks.named('integrationTest') {
     description = 'Runs METHOD lifecycle verification tests using @ComposeUp extension'
 
-    // NOTE: No systemProperty settings needed - @ComposeUp extension handles everything
-    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration from dockerOrch DSL
+    // lifecycle = "method" means containers restart for EACH test method (complete isolation)
+    usesCompose(stack: "lifecycleMethodTest", lifecycle: "method")
 
+    useJUnitPlatform()
     outputs.cacheIf { false }
 }
 
