@@ -191,6 +191,8 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -222,6 +224,7 @@ services:
         // Set up the project name first
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -369,6 +372,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -398,6 +402,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -513,6 +518,7 @@ services:
 
     def "startComposeStack handles non-zero exit code"() {
         given:
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         fileService.resolve("src/integrationTest/resources/compose/integration-method.yml") >> tempComposeFile
         fileService.exists(tempComposeFile) >> true
         fileService.resolve(".") >> Paths.get(".")
@@ -557,6 +563,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -593,6 +600,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -632,6 +640,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)
@@ -669,6 +678,7 @@ services:
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> "test-stack"
         systemPropertyService.getProperty("docker.compose.project") >> "test-project"
+        systemPropertyService.getProperty("docker.compose.files") >> "src/integrationTest/resources/compose/integration-method.yml"
         context.getTestClass() >> Optional.of(String.class)
         context.getTestMethod() >> Optional.of(String.class.getDeclaredMethods()[0])
         timeService.now() >> LocalDateTime.of(2023, 1, 1, 12, 30, 45)

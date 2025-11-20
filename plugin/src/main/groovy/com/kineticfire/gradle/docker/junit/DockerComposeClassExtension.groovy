@@ -54,7 +54,7 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     
     private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
     private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
-    private static final String COMPOSE_FILE_PROPERTY = "docker.compose.file";
+    private static final String COMPOSE_FILES_PROPERTY = "docker.compose.files";  // Changed from "file" to "files" (plural) to match usesCompose()
     private static final String COMPOSE_WAIT_SERVICES_PROPERTY = "docker.compose.waitServices";
     private static final String COMPOSE_STATE_FILE_PROPERTY = "COMPOSE_STATE_FILE";
     
@@ -277,22 +277,38 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     
     private void startComposeStack(String stackName, String uniqueProjectName) throws Exception {
         // Use ComposeService to start the stack
-        // Read compose file path from system property, fall back to default for plugin integration tests
-        String composeFilePath = systemPropertyService.getProperty(COMPOSE_FILE_PROPERTY);
-        if (composeFilePath == null || composeFilePath.isEmpty()) {
-            composeFilePath = "src/integrationTest/resources/compose/integration-class.yml";
+        // Read compose file paths from system property (comma-separated list)
+        String composeFilesProperty = systemPropertyService.getProperty(COMPOSE_FILES_PROPERTY);
+        if (composeFilesProperty == null || composeFilesProperty.isEmpty()) {
+            throw new IllegalStateException(
+                "Compose files not configured. " +
+                "Ensure test task is configured with usesCompose and docker.compose.files system property is set."
+            );
         }
 
-        Path composeFile = fileService.resolve(composeFilePath);
-        if (!fileService.exists(composeFile)) {
-            throw new IllegalStateException("Compose file not found: " + composeFile);
+        // Parse comma-separated file paths and convert to Path objects
+        List<Path> composeFiles = Arrays.stream(composeFilesProperty.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .map(fileService::resolve)
+            .collect(java.util.stream.Collectors.toList());
+
+        if (composeFiles.isEmpty()) {
+            throw new IllegalStateException("No valid compose files found in: " + composeFilesProperty);
+        }
+
+        // Verify all compose files exist
+        for (Path composeFile : composeFiles) {
+            if (!fileService.exists(composeFile)) {
+                throw new IllegalStateException("Compose file not found: " + composeFile);
+            }
         }
 
         // Create ComposeConfig
         ComposeConfig config = new ComposeConfig(
-            Collections.singletonList(composeFile),  // composeFiles
-            uniqueProjectName,                       // projectName
-            stackName                                // stackName
+            composeFiles,           // composeFiles (can be multiple)
+            uniqueProjectName,      // projectName
+            stackName               // stackName
         );
 
         // Start the stack and store the state

@@ -102,19 +102,17 @@ dependencies {
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
 }
 
-// Register integration test task
+// Customize the convention-created integrationTest task
+// (Convention provides task registration, we only add test-specific customizations)
 tasks.named('integrationTest') {
     description = 'Runs METHOD lifecycle integration tests using JUnit 5 extension'
-    group = 'verification'
 
-    // Configure system properties for JUnit extension
-    systemProperty 'docker.compose.stack', 'isolatedTestsTest'
-    systemProperty 'docker.compose.project', 'example-isolated-tests-junit-test'
-    systemProperty 'docker.compose.file', file('src/integrationTest/resources/compose/isolated-tests.yml').absolutePath
-    systemProperty 'docker.compose.waitServices', 'isolated-tests'
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration from dockerOrch DSL
+    // lifecycle = "method" means containers restart for EACH test method (complete isolation)
+    usesCompose(stack: "isolatedTestsTest", lifecycle: "method")
 
-    // NOTE: No systemProperty for COMPOSE_STATE_FILE needed - extension generates it
-    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
+    useJUnitPlatform()
+    outputs.cacheIf { false }
 }
 
 // Ensure Docker image is built before running integration tests

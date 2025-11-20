@@ -1,8 +1,7 @@
 # todo
 
 ## Spock annotations
-
-Working Phase 5.
+1. Run Full Test Suite FIRST - CRITICAL
 
 
 ## Clean-up
