@@ -1,11 +1,14 @@
 # todo
 
-## Spock annotations
-Phase 3:
-1. Fix Container Cleanup (CRITICAL) - Investigate why composeDown tasks are UP-TO-DATE
-2. Update 7 Remaining Verification Tests - Apply new pattern (basic, existing-images, logs-capture, mixed-wait, multi-service, wait-healthy, wait-running)
-3. Update Documentation - Usage docs and READMEs
-
+| Task | Priority | Description                                                                                                  |
+  |------|----------|--------------------------------------------------------------------------------------------------------------|
+| 1.1  | Low      | Update AggregateTaskBehaviorFunctionalTest to use .withPluginClasspath() instead of manual classpath parsing |
+| 1.2  | Optional | Add test-retry plugin (only if failures recur)                                                               |
+| 1.3  | Monitor  | Track for recurrence in CI                                                                                   |
+| 2.1  | Medium   | Document JUnit 5 extension coverage gaps                                                                     |
+| 2.2  | Medium   | Document Spock extension coverage gaps                                                                       |
+| 2.3  | Medium   | Update summary statistics (~740 total documented lines)                                                      |
+| 2.4  | Medium   | Add document history entry                                                                                   |
 
 ## Clean-up
 

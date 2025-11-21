@@ -112,6 +112,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyDockerBuildAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -169,6 +170,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyDockerTagAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -232,6 +234,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyDockerSaveAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -264,6 +267,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyDockerPublishAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -330,6 +334,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyDockerImagesAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -399,6 +404,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyComposeUpAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -467,6 +473,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyComposeDownAggregate')
+            .forwardOutput()
             .build()
 
         then:
@@ -504,6 +511,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyEmptyDockerBuild')
+            .forwardOutput()
             .build()
 
         then:
@@ -536,6 +544,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyEmptyDockerImages')
+            .forwardOutput()
             .build()
 
         then:
@@ -570,6 +579,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyEmptyComposeUp')
+            .forwardOutput()
             .build()
 
         then:
@@ -602,6 +612,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
             .withArguments('verifyEmptyComposeDown')
+            .forwardOutput()
             .build()
 
         then:
