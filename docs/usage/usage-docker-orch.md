@@ -96,6 +96,39 @@ Each pattern includes:
 - Log capture
 - State file generation with service info (ports, container IDs, etc.)
 
+## Choosing a Test Framework
+
+Both **Groovy/Spock** and **Java/JUnit 5** are fully supported. Choose based on your team's preferences:
+
+| Feature | Groovy/Spock | Java/JUnit 5 |
+|---------|--------------|--------------|
+| Annotation | `@ComposeUp` | `@ExtendWith(DockerComposeClassExtension.class)` or `@ExtendWith(DockerComposeMethodExtension.class)` |
+| Configuration | `usesCompose(stack: "name", lifecycle: "class")` | `usesCompose(stack: "name", lifecycle: "class")` |
+| Lifecycle support | CLASS, METHOD | CLASS, METHOD |
+| State file access | `System.getProperty('COMPOSE_STATE_FILE')` | `System.getProperty("COMPOSE_STATE_FILE")` |
+| Test syntax | BDD-style (`given/when/then`) | Traditional assertions |
+| Language | Groovy | Java |
+
+**Same build.gradle pattern for both frameworks:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            waitForHealthy {
+                waitForServices.set(['my-service'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")  // Works for both Spock and JUnit 5
+}
+```
+
 ## Test Framework Extensions (Recommended)
 
 ### Spock Extension
@@ -312,18 +345,39 @@ Containers restart fresh for each test method in `setup()` and stop in `cleanup(
 - Tests must be independent and idempotent (can run in any order)
 - Testing stateful operations that modify global state
 
+**Gradle Configuration:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        isolatedTestsTest {
+            files.from('src/integrationTest/resources/compose/isolated-tests.yml')
+            projectName = "isolated-tests-test"
+            waitForHealthy {
+                waitForServices.set(['isolated-tests'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    // lifecycle = "method" means containers restart for EACH test method
+    usesCompose(stack: "isolatedTestsTest", lifecycle: "method")
+}
+```
+
 **Example Test:**
 
 ```groovy
 package com.example.integration
 
 import com.kineticfire.gradle.docker.spock.ComposeUp
-import com.kineticfire.gradle.docker.spock.LifecycleMode
 import spock.lang.Specification
 import groovy.json.JsonSlurper
 import io.restassured.RestAssured
 
-@ComposeUp(lifecycle = LifecycleMode.METHOD)
+@ComposeUp  // No parameters! Configuration from build.gradle via usesCompose()
 class IsolatedTestsIT extends Specification {
 
     String baseUrl  // Instance variable (NOT @Shared) - fresh for each test
@@ -371,30 +425,6 @@ class IsolatedTestsIT extends Specification {
         response.statusCode() == 200
         response.jsonPath().getLong("id") == 1L  // ID is 1 again because database is fresh!
     }
-}
-```
-
-**Gradle Configuration:**
-
-Same as CLASS lifecycle example above, but with different stack name:
-
-```gradle
-dockerOrch {
-    stacks {
-        isolatedTestsTest {
-            projectName = 'isolated-tests-test'
-            stackName = 'isolatedTestsTest'
-            composeFiles = [file('src/integrationTest/resources/compose/isolated-tests.yml')]
-            // ... wait and logs configuration
-        }
-    }
-}
-
-tasks.register('integrationTest', Test) {
-    // ... same configuration as CLASS example
-
-    systemProperty 'docker.compose.stack', 'isolatedTestsTest'
-    systemProperty 'docker.compose.project', 'example-isolated-tests-test'
 }
 ```
 
@@ -488,74 +518,46 @@ repositories {
     mavenCentral()
 }
 
-dependencies {
-    // JUnit 5
-    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.0'
-    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-
-    // Plugin for @ExtendWith annotation access
-    testImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
-
-    // REST testing
-    testImplementation 'io.rest-assured:rest-assured:5.3.0'
-    testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
-}
-
 // Configure dockerOrch DSL
 dockerOrch {
-    stacks {
+    composeStacks {
         webAppTest {
-            projectName = 'web-app-test'
-            stackName = 'webAppTest'
-            composeFiles = [file('src/integrationTest/resources/compose/web-app.yml')]
+            files.from('src/integrationTest/resources/compose/web-app.yml')
+            projectName = "example-web-app-junit-test"
 
-            wait {
-                services = ['web-app']
-                timeout = duration(30, 'SECONDS')
-                waitForStatus = 'HEALTHY'
-            }
-
-            logs {
-                outputFile = file("${buildDir}/compose-logs/web-app-test.log")
-                tailLines = 1000
+            waitForHealthy {
+                waitForServices.set(['web-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
             }
         }
     }
 }
 
-// Create integration test source set
-sourceSets {
-    integrationTest {
-        java.srcDir 'src/integrationTest/java'
-        resources.srcDir 'src/integrationTest/resources'
-        compileClasspath += sourceSets.main.output
-        runtimeClasspath += sourceSets.main.output
-    }
+// Plugin automatically creates integrationTest source set when java/groovy plugin is present!
+// Just add integration test dependencies:
+dependencies {
+    // JUnit 5
+    integrationTestImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+    integrationTestRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // Plugin for @ExtendWith annotation access
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+
+    // REST testing
+    integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
+    integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 
-configurations {
-    integrationTestImplementation.extendsFrom testImplementation
-    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
-}
-
-// Register integration test task
-tasks.register('integrationTest', Test) {
+// Customize the convention-created integrationTest task
+tasks.named('integrationTest') {
     description = 'Runs CLASS lifecycle integration tests using JUnit 5 extension'
-    group = 'verification'
 
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration
+    // This automatically sets system properties that extensions read
+    usesCompose(stack: "webAppTest", lifecycle: "class")
 
     useJUnitPlatform()
-
-    // Configure system properties for JUnit extension
-    systemProperty 'docker.compose.stack', 'webAppTest'
-    systemProperty 'docker.compose.project', 'example-web-app-junit-test'
-
-    // NOTE: No systemProperty for COMPOSE_STATE_FILE needed - extension generates it
-    // NOTE: No dependsOn/finalizedBy needed - extension manages container lifecycle
-
-    // Not cacheable - interacts with Docker
     outputs.cacheIf { false }
 }
 
@@ -657,25 +659,26 @@ class IsolatedTestsJUnit5MethodIT {
 
 **Gradle Configuration:**
 
-Same as CLASS lifecycle example above, but with different stack name and system properties:
+Same pattern as CLASS lifecycle, but with `lifecycle: "method"`:
 
 ```gradle
 dockerOrch {
-    stacks {
+    composeStacks {
         isolatedTestsTest {
-            projectName = 'isolated-tests-test'
-            stackName = 'isolatedTestsTest'
-            composeFiles = [file('src/integrationTest/resources/compose/isolated-tests.yml')]
-            // ... wait and logs configuration
+            files.from('src/integrationTest/resources/compose/isolated-tests.yml')
+            projectName = "example-isolated-tests-junit-test"
+            waitForHealthy {
+                waitForServices.set(['isolated-tests'])
+                timeoutSeconds.set(60)
+            }
         }
     }
 }
 
-tasks.register('integrationTest', Test) {
-    // ... same configuration as CLASS example
-
-    systemProperty 'docker.compose.stack', 'isolatedTestsTest'
-    systemProperty 'docker.compose.project', 'example-isolated-tests-junit-test'
+tasks.named('integrationTest') {
+    // lifecycle = "method" means containers restart for EACH test method
+    usesCompose(stack: "isolatedTestsTest", lifecycle: "method")
+    useJUnitPlatform()
 }
 ```
 
@@ -698,57 +701,38 @@ plugins {
 }
 
 dockerOrch {
-    stacks {
+    composeStacks {
         apiTests {
-            projectName = 'my-app'
-            stackName = 'api-test-stack'
-            composeFiles = [
-                file('src/integrationTest/resources/compose/api-test.yml')
-            ]
-            envFiles = [
-                file('src/integrationTest/resources/compose/.env')
-            ]
+            files.from('src/integrationTest/resources/compose/api-test.yml')
+            envFiles.from('src/integrationTest/resources/compose/.env')
+            projectName = "my-app-api-test"
 
-            wait {
-                services = ['api-server', 'postgres']
-                timeout = duration(60, 'SECONDS')
-                pollInterval = duration(2, 'SECONDS')
-                waitForStatus = 'HEALTHY'  // Options: 'RUNNING', 'HEALTHY'
+            // Wait for services to be healthy before tests run
+            waitForHealthy {
+                waitForServices.set(['api-server', 'postgres'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
             }
 
+            // Capture logs before teardown
             logs {
-                outputFile = file("${buildDir}/compose-logs/api-test-suite.log")
-                services = ['api-server']  // Optional: specific services only
-                tailLines = 1000           // Optional: limit lines (default: all)
-                follow = false             // Optional: follow logs (default: false)
+                tailLines.set(1000)
             }
         }
     }
 }
 
-// Define integration test source set
-sourceSets {
-    integrationTest {
-        java.srcDir 'src/integrationTest/java'
-        resources.srcDir 'src/integrationTest/resources'
-        compileClasspath += sourceSets.main.output + configurations.testRuntimeClasspath
-        runtimeClasspath += output + compileClasspath
+// Plugin automatically creates integrationTest source set when java/groovy plugin is present!
+// Just wire up the compose lifecycle:
+afterEvaluate {
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpApiTests')
+        finalizedBy tasks.named('composeDownApiTests')
+
+        // Pass state file location to tests
+        systemProperty 'COMPOSE_STATE_FILE',
+            layout.buildDirectory.file('compose-state/apiTests-state.json').get().asFile.absolutePath
     }
-}
-
-// Create custom integration test task
-task integrationTest(type: Test) {
-    description = 'Runs integration tests with Docker Compose'
-    group = 'verification'
-    testClassesDirs = sourceSets.integrationTest.output.classesDirs
-    classpath = sourceSets.integrationTest.runtimeClasspath
-
-    // Link to dockerOrch stack
-    usesCompose('apiTests')
-
-    // Tests depend on containers being started
-    dependsOn composeUpApiTests
-    finalizedBy composeDownApiTests
 }
 ```
 
@@ -787,31 +771,36 @@ services:
 
 ```gradle
 dockerOrch {
-    stacks {
+    composeStacks {
         smokeTests {
-            projectName = 'my-app'
-            stackName = 'smoke-stack'
-            composeFiles = [file('src/integrationTest/resources/compose/smoke.yml')]
+            files.from('src/integrationTest/resources/compose/smoke.yml')
+            projectName = "my-app-smoke"
+            waitForHealthy {
+                waitForServices.set(['api-server'])
+            }
         }
 
         performanceTests {
-            projectName = 'my-app'
-            stackName = 'perf-stack'
-            composeFiles = [file('src/integrationTest/resources/compose/performance.yml')]
+            files.from('src/integrationTest/resources/compose/performance.yml')
+            projectName = "my-app-perf"
+            waitForHealthy {
+                waitForServices.set(['api-server'])
+            }
         }
     }
 }
 
-task smokeTest(type: Test) {
-    usesCompose('smokeTests')
-    dependsOn composeUpSmokeTests
-    finalizedBy composeDownSmokeTests
-}
+// Wire up test tasks to compose lifecycle
+afterEvaluate {
+    tasks.register('smokeTest', Test) {
+        dependsOn tasks.named('composeUpSmokeTests')
+        finalizedBy tasks.named('composeDownSmokeTests')
+    }
 
-task performanceTest(type: Test) {
-    usesCompose('performanceTests')
-    dependsOn composeUpPerformanceTests
-    finalizedBy composeDownPerformanceTests
+    tasks.register('performanceTest', Test) {
+        dependsOn tasks.named('composeUpPerformanceTests')
+        finalizedBy tasks.named('composeDownPerformanceTests')
+    }
 }
 ```
 

@@ -8,8 +8,27 @@ only-- there are no unit tests or functional tests.
 | Key     | Value       |
 |---------|-------------|
 | Status  | Implemented |
-| Version | 1.0.0       |
-| Updated | 2025-08-31  |
+| Version | 1.1.0       |
+| Updated | 2025-11-20  |
+
+## Implementation Status
+
+✅ **All phases are now fully implemented:**
+
+- **Phase 1**: Core Compose Operations - COMPLETE
+- **Phase 2**: Health Checking & Testing Integration - COMPLETE
+- **Phase 3**: Advanced Orchestration (CLASS/METHOD lifecycles) - COMPLETE
+
+**Key Features Implemented:**
+- `dockerOrch.composeStacks { }` DSL for defining compose stacks
+- `usesCompose(stack: "name", lifecycle: "class|method")` for passing configuration to test tasks
+- Spock extension (`@ComposeUp`) with zero-parameter annotation support
+- JUnit 5 extensions (`@ExtendWith(DockerComposeClassExtension.class)` and `DockerComposeMethodExtension.class`)
+- Automatic state file generation with service ports and container info
+- Health checking with configurable timeouts
+- Integration test source set convention (automatic setup)
+
+See [usage-docker-orch.md](../../../usage/usage-docker-orch.md) for complete usage documentation.
 
 ## Definition
 
