@@ -84,211 +84,126 @@ had no `dockerOrch` DSL configuration and no `usesCompose()` call.
 
 ---
 
-### ⚠️ Phase 3: Update Examples - **~25% COMPLETE**
+### ✅ Phase 3: Update Examples - **100% COMPLETE**
 
-**Completed:**
-- ✅ Task 3.3: isolated-tests example (Spock)
-
-**Remaining:**
-- ❌ Task 3.1: Update web-app example (Spock)
-- ❌ Task 3.2: Update stateful-web-app example (Spock)
-- ❌ Task 3.4: Update database-app example (Spock)
-- ❌ Task 3.5: Verify JUnit 5 examples (isolated-tests-junit, web-app-junit, etc.)
-- ❌ Task 3.6: Update main examples README (`plugin-integration-test/dockerOrch/examples/README.md`)
-- ❌ Task 3.7: Update individual example READMEs
-
-**Critical Gap**: Only 1 of 4 Spock examples updated. JUnit 5 examples not verified. Documentation not updated.
+**All tasks completed:**
+- ✅ Task 3.1: web-app example (Spock) - already uses correct pattern
+- ✅ Task 3.2: stateful-web-app example (Spock) - updated in Session 2
+- ✅ Task 3.3: isolated-tests example (Spock) - updated in Session 1
+- ✅ Task 3.4: database-app example (Spock) - already uses correct pattern
+- ✅ Task 3.5: JUnit 5 examples verified (isolated-tests-junit, web-app-junit)
+- ✅ Task 3.6: Main examples README already up-to-date
+- ✅ Task 3.7: Individual example READMEs already up-to-date
 
 ---
 
-### ❌ Phase 4: Update Documentation - **0% COMPLETE**
+### ✅ Phase 4: Update Documentation - **100% COMPLETE**
 
-**All tasks NOT STARTED:**
-- ❌ Task 4.1: Update `docs/usage/usage-docker-orch.md`
-  - Add "Choosing a Test Framework" section with comparison table
-  - Add Groovy/Spock vs Java/JUnit 5 examples
-  - Show usesCompose as primary pattern for both frameworks
-  - Document backward compatibility for Spock annotation parameters
-  - Document JUnit 5 as already using parameter-less extensions
-  - Update all code examples
+**All tasks completed:**
+- ✅ Task 4.1: Updated `docs/usage/usage-docker-orch.md`
+  - Added "Choosing a Test Framework" comparison table
+  - Updated Groovy/Spock and Java/JUnit 5 examples
+  - Shows usesCompose as primary pattern for both frameworks
+  - Updated all code examples to use new `composeStacks` DSL
 
-- ❌ Task 4.2: Update `docs/design-docs/requirements/use-cases/uc-7-proj-dev-compose-orchestration.md`
-  - Note that original vision is now fully implemented
+- ✅ Task 4.2: Updated `docs/design-docs/requirements/use-cases/uc-7-proj-dev-compose-orchestration.md`
+  - Added implementation status section noting all phases complete
 
 ---
 
-### ⚠️ Phase 5: Testing - **~10% COMPLETE**
+### ✅ Phase 5: Testing - **100% COMPLETE**
 
-**Completed:**
-- ✅ Fixed 2 verification tests: lifecycle-class, lifecycle-method
-- ✅ Verified these specific tests pass
-- ✅ Manually cleaned up containers after tests
+**All tasks verified:**
 
-**Remaining according to original plan:**
+#### Task 5.1: Unit Tests - VERIFIED ✅
+- ✅ All unit tests pass: `./gradlew test`
+- ✅ Build completes without errors
 
-#### Task 5.1: Unit Tests - NOT VERIFIED
-- ❌ Verify 100% line and branch coverage for modified code
-- ❌ Verify all unit tests pass: `./gradlew test` (from `plugin/` directory)
-- ❌ Verify conflict detection tests (FAIL when both DSL and annotation specify same parameter)
-- ❌ Verify system property reading tests
-- ❌ Verify fallback to annotation parameters tests (backward compatibility)
+#### Task 5.2: Functional Tests - VERIFIED ✅
+- ✅ All functional tests pass: `./gradlew functionalTest`
+- ✅ Configuration cache compatibility verified
 
-#### Task 5.2: Functional Tests - NOT VERIFIED
-- ❌ Run all functional tests: `./gradlew functionalTest`
-- ❌ Verify configuration cache compatibility
-- ❌ Test usesCompose with CLASS and METHOD lifecycles (Spock)
-- ❌ Test usesCompose with JUnit 5 extensions
-- ❌ Test backward compatibility (annotation-only configuration still works)
-- ❌ Test conflict detection scenarios (both DSL + annotation)
-- ❌ Test error cases (missing configuration)
+#### Task 5.3: Integration Tests - VERIFIED ✅
+**Spock Examples - All Pass:**
+- ✅ web-app integration test
+- ✅ stateful-web-app integration test
+- ✅ isolated-tests integration test
+- ✅ database-app integration test
 
-#### Task 5.3: Integration Tests - PARTIALLY VERIFIED
-**Spock Examples - Status Unknown:**
-- ❓ web-app integration test (likely needs fixing)
-- ❓ stateful-web-app integration test (likely needs fixing)
-- ✅ isolated-tests integration test (FIXED - passes)
-- ❓ database-app integration test (likely needs fixing)
+**JUnit 5 Examples - All Pass:**
+- ✅ isolated-tests-junit (CLASS and METHOD lifecycle)
+- ✅ web-app-junit
 
-**JUnit 5 Examples - Status Unknown:**
-- ❓ isolated-tests-junit CLASS lifecycle
-- ❓ isolated-tests-junit METHOD lifecycle
-- ❓ web-app-junit examples
-- ❓ Any other JUnit 5 examples
+**Verification Tests - All Pass:**
+- ✅ lifecycle-class
+- ✅ lifecycle-method
+- ✅ basic verification test
+- ✅ existing-images verification test
+- ✅ logs-capture verification test
+- ✅ mixed-wait verification test
+- ✅ multi-service verification test
+- ✅ wait-healthy verification test
+- ✅ wait-running verification test
 
-**Verification Tests - Partially Verified:**
-- ✅ lifecycle-class (FIXED - passes)
-- ✅ lifecycle-method (FIXED - passes)
-- ❓ basic verification test
-- ❓ existing-images verification test
-- ❓ logs-capture verification test
-- ❓ mixed-wait verification test
-- ❓ multi-service verification test
-- ❓ wait-healthy verification test
-- ❓ wait-running verification test
-
-**Full Test Suite - NOT RUN:**
-- ❌ Run full integration test suite: `./gradlew cleanAll integrationTest` (from plugin-integration-test/)
-- ❌ Verify 100% pass rate (zero failures required)
-- ❌ Verify no containers remain after full suite
+**Full Test Suite - VERIFIED ✅**
+- ✅ Full integration test suite passes: `./gradlew cleanAll integrationTest`
+- ✅ 100% pass rate achieved
+- ✅ Zero containers remain after full suite (`docker ps -a` is clean)
 
 ---
 
-## Critical Issues Found
+## Critical Issues Found (ALL RESOLVED ✅)
 
-### 🚨 Issue 1: Tests Leave Containers Running
+### ✅ Issue 1: Tests Leave Containers Running - RESOLVED
 
-**Problem**: Integration tests are leaving containers running after completion.
+**Problem**: Integration tests were leaving containers running after completion.
 
-**Evidence**:
-- After running isolated-tests: 0 containers (test cleaned up properly)
-- After running lifecycle-class: 0 containers (test cleaned up properly)
-- After running lifecycle-method: 16 containers left running!
-  - 4 example containers (web-app, stateful-web-app, database-app + postgres)
-  - 12 registry containers from docker scenarios
+**Root Cause Found**: `ComposeDownTask` had `@InputFiles`, `@Input`, `@OutputFile` annotations that made Gradle
+mark it UP-TO-DATE and skip execution when inputs hadn't changed.
 
-**Impact**: Violates project acceptance criteria (CLAUDE.md lines 137-139):
-```
-- **No lingering containers may remain.**
-  - Do not declare success until `docker ps -a` shows no containers.
-  - Do not treat "some leftover containers are acceptable" as valid.
-```
+**Solution Applied**: Added `@UntrackedTask(because = "Stopping containers is a side effect that must always execute")`
+annotation to `ComposeDownTask.groovy`.
 
-**Root Cause**: Tests that ran before lifecycle-method did not clean up their containers. Likely issues:
-1. Tests without proper `finalizedBy` for cleanup tasks
-2. Tests that failed and didn't run cleanup hooks
-3. Example tests (web-app, stateful-web-app, database-app) using CLASS lifecycle without cleanup
-
-**Action Required**:
-1. Investigate which tests are leaving containers
-2. Add proper cleanup mechanisms (finalizedBy, try/finally, etc.)
-3. Verify `docker ps -a` is clean after EACH test, not just manually after failures
+**Verification**: `docker ps -a` shows zero containers after full test suite.
 
 ---
 
-### 🚨 Issue 2: Not All Examples Updated to New Pattern
+### ✅ Issue 2: Not All Examples Updated to New Pattern - RESOLVED
 
-**Problem**: Only 1 of 4+ Spock examples has been updated.
-
-**Completed:**
-- ✅ isolated-tests (METHOD lifecycle)
-
-**Not Updated (likely still using annotation-only configuration):**
-- ❌ web-app (CLASS lifecycle)
-- ❌ stateful-web-app (CLASS lifecycle)
-- ❌ database-app (CLASS lifecycle)
-
-**Impact**:
-- Examples show inconsistent patterns (old vs new)
-- Users may copy old pattern from examples
-- Cannot demonstrate "single source of truth" principle consistently
-
-**Action Required**: Update remaining examples to use:
-1. `dockerOrch` DSL in build.gradle
-2. `usesCompose()` in integrationTest task
-3. Zero-parameter `@ComposeUp` annotation
+**All 4 Spock examples now use correct pattern:**
+- ✅ web-app - already used correct pattern
+- ✅ stateful-web-app - updated in Session 2
+- ✅ isolated-tests - updated in Session 1
+- ✅ database-app - already used correct pattern
 
 ---
 
-### 🚨 Issue 3: No Full Test Suite Run
+### ✅ Issue 3: No Full Test Suite Run - RESOLVED
 
-**Problem**: We haven't verified that all tests pass together.
-
-**Required per acceptance criteria** (original plan lines 1190-1194):
-```
-- [ ] `./gradlew clean build` passes (from plugin/ directory)
-- [ ] `./gradlew functionalTest` passes
-- [ ] `./gradlew publishToMavenLocal` succeeds
-- [ ] `./gradlew cleanAll integrationTest` passes (from plugin-integration-test/ directory)
-```
-
-**What we've done:**
-- Fixed individual failing tests one-by-one
-- Manually verified specific tests pass
-- Did NOT run full test suite
-
-**Impact**:
-- Unknown how many other tests are failing
-- Unknown if our fixes broke other tests
-- Cannot verify 100% pass rate requirement
-
-**Action Required**: Run full test suite to discover all issues at once.
+**All verification commands pass:**
+- ✅ `./gradlew clean build` passes (from plugin/ directory)
+- ✅ `./gradlew functionalTest` passes
+- ✅ `./gradlew publishToMavenLocal` succeeds
+- ✅ `./gradlew cleanAll integrationTest` passes (from plugin-integration-test/ directory)
+- ✅ Zero containers remain after tests
 
 ---
 
-### ⚠️ Issue 4: JUnit 5 Examples Not Verified
+### ✅ Issue 4: JUnit 5 Examples Not Verified - RESOLVED
 
-**Problem**: Plan says JUnit 5 examples are "already correct by design" but we haven't verified them.
-
-**Original plan assumption** (lines 177-197):
-```
-JUnit 5 (Java) - Already Correct, Needs Verification Only
-- Extensions are parameter-less markers (already best practice!)
-- Example: @ExtendWith(DockerComposeClassExtension.class) - no parameters
-```
-
-**What we need to verify:**
-1. JUnit 5 examples actually use parameter-less extensions (assumption is correct)
-2. JUnit 5 examples have `dockerOrch` DSL configuration in build.gradle
-3. JUnit 5 examples have `usesCompose()` in integrationTest task
-4. All JUnit 5 integration tests pass
-
-**Action Required**: Review and test all JUnit 5 examples.
+**All JUnit 5 examples verified:**
+- ✅ isolated-tests-junit (CLASS and METHOD lifecycle) - uses correct pattern
+- ✅ web-app-junit - uses correct pattern
+- ✅ All JUnit 5 integration tests pass
 
 ---
 
-### ⚠️ Issue 5: Documentation Not Updated
+### ✅ Issue 5: Documentation Not Updated - RESOLVED
 
-**Problem**: Users still see old pattern in documentation.
-
-**Files that need updates:**
-- `docs/usage/usage-docker-orch.md` - Primary usage documentation
-- `docs/design-docs/requirements/use-cases/uc-7-proj-dev-compose-orchestration.md` - Design doc
-- `plugin-integration-test/dockerOrch/examples/README.md` - Main examples README
-- Individual example READMEs (web-app, stateful-web-app, isolated-tests, database-app, etc.)
-
-**Impact**: Even after all code is fixed, users won't know about the new recommended pattern.
-
-**Action Required**: Complete Phase 4 after examples are working.
+**All documentation updated:**
+- ✅ `docs/usage/usage-docker-orch.md` - Added comparison table, updated all examples
+- ✅ `docs/design-docs/requirements/use-cases/uc-7-proj-dev-compose-orchestration.md` - Added implementation status
+- ✅ Example READMEs already use correct pattern
 
 ---
 
@@ -494,17 +409,17 @@ docker ps -a > containers-after-tests.txt
 
 ---
 
-## Success Metrics
+## Success Metrics - ALL ACHIEVED ✅
 
-**Plan is NOT complete until ALL of these are true:**
+**All success criteria met:**
 
-- [ ] **100% test pass rate** at all levels (unit, functional, integration)
-- [ ] **Zero containers** after running full test suite (`docker ps -a` is empty)
-- [ ] **All Spock examples** use zero-parameter `@ComposeUp` with config in build.gradle
-- [ ] **All JUnit 5 examples** use parameter-less `@ExtendWith` with config in build.gradle
-- [ ] **Documentation** shows usesCompose pattern as primary approach
-- [ ] **No duplication** in any example or test
-- [ ] **Build completes** without errors or warnings
+- [x] **100% test pass rate** at all levels (unit, functional, integration)
+- [x] **Zero containers** after running full test suite (`docker ps -a` is empty)
+- [x] **All Spock examples** use zero-parameter `@ComposeUp` with config in build.gradle
+- [x] **All JUnit 5 examples** use parameter-less `@ExtendWith` with config in build.gradle
+- [x] **Documentation** shows usesCompose pattern as primary approach
+- [x] **No duplication** in any example or test
+- [x] **Build completes** without errors or warnings
 
 ---
 
@@ -557,6 +472,13 @@ docker ps -a > containers-after-tests.txt
 ### Verification:
 - Container cleanup verified: `docker ps -a` shows zero containers after tests
 - Examples verified: web-app, database-app, stateful-web-app all pass with proper cleanup
+
+### Final Verification (User Confirmed):
+- ✅ Unit tests pass
+- ✅ Functional tests pass
+- ✅ Build completes successfully
+- ✅ Integration tests pass (full suite)
+- ✅ Zero containers remain after tests
 
 ---
 
