@@ -1,7 +1,10 @@
 # todo
 
 ## Spock annotations
-1. Run Full Test Suite FIRST - CRITICAL
+Phase 3:
+1. Fix Container Cleanup (CRITICAL) - Investigate why composeDown tasks are UP-TO-DATE
+2. Update 7 Remaining Verification Tests - Apply new pattern (basic, existing-images, logs-capture, mixed-wait, multi-service, wait-healthy, wait-running)
+3. Update Documentation - Usage docs and READMEs
 
 
 ## Clean-up

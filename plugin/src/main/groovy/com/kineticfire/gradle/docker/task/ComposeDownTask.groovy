@@ -30,10 +30,16 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.UntrackedTask
 
 /**
  * Task for stopping Docker Compose stacks
+ *
+ * This task has side effects (stops running containers) and must always execute,
+ * so it is marked as untracked to prevent Gradle from skipping it based on
+ * input/output up-to-date checking.
  */
+@UntrackedTask(because = "Stopping containers is a side effect that must always execute")
 abstract class ComposeDownTask extends DefaultTask {
     
     ComposeDownTask() {
