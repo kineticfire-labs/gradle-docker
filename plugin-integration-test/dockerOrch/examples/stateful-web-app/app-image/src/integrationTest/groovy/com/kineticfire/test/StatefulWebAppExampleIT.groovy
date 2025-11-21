@@ -17,7 +17,6 @@
 package com.kineticfire.test
 
 import com.kineticfire.gradle.docker.spock.ComposeUp
-import com.kineticfire.gradle.docker.spock.LifecycleMode
 import spock.lang.Specification
 import spock.lang.Shared
 import groovy.json.JsonSlurper
@@ -29,8 +28,21 @@ import static io.restassured.RestAssured.given
  *
  * This example demonstrates **when and why to use CLASS lifecycle with stateful testing patterns**.
  *
+ * CONFIGURATION PATTERN (RECOMMENDED):
+ * ====================================
+ * ✅ Configure Docker Compose in build.gradle (dockerOrch.composeStacks)
+ * ✅ Use usesCompose() in integrationTest task to pass configuration
+ * ✅ Use zero-parameter @ComposeUp annotation in test class
+ *
  * WHY THIS PATTERN?
  * ================
+ * - Single source of truth: All compose config in build.gradle
+ * - No duplication: Configuration defined once, used everywhere
+ * - Gradle integration: Full access to Gradle providers and properties
+ * - Maintainability: Change config in one place, all tests updated
+ *
+ * CLASS LIFECYCLE BEHAVIOR:
+ * =========================
  * - CLASS lifecycle: Containers start ONCE, all tests share the same containers
  * - Stateful testing: Tests intentionally build on each other
  * - State persistence: sessionId carried from test 2 → tests 3, 4, 5
@@ -70,16 +82,11 @@ import static io.restassured.RestAssured.given
  * - This makes tests repeatable even when containers persist state from previous runs
  * - This is a best practice for real-world integration testing
  *
+ * The @ComposeUp annotation has NO parameters - all config comes from build.gradle!
+ *
  * Copy and adapt this example for your own stateful testing scenarios!
  */
-@ComposeUp(
-    stackName = "statefulWebAppTest",                              // Unique name for this stack
-    composeFile = "src/integrationTest/resources/compose/stateful-web-app.yml",  // Path to compose file
-    lifecycle = LifecycleMode.CLASS,                               // Containers start once (tests share state)
-    waitForHealthy = ["stateful-web-app"],                         // Wait for service to be HEALTHY
-    timeoutSeconds = 60,                                           // Max wait time for healthy status
-    pollSeconds = 2                                                // Check health every 2 seconds
-)
+@ComposeUp  // No parameters! All configuration comes from build.gradle via usesCompose()
 class StatefulWebAppExampleIT extends Specification {
 
     @Shared String baseUrl

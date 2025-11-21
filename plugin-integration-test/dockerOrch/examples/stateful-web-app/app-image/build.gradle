@@ -109,12 +109,26 @@ tasks.named('integrationTest') {
     description = 'Runs integration tests against Docker Compose stack'
     group = 'verification'
 
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration to @ComposeUp annotation
+    // ============================================================================
+    // This sets system properties that @ComposeUp reads automatically:
+    //   - docker.compose.stack (stack name)
+    //   - docker.compose.lifecycle (class or method)
+    //   - COMPOSE_STATE_FILE (path to state file with service ports)
+    //   - COMPOSE_PROJECT_NAME (for validators, if needed)
+    // ============================================================================
+    usesCompose(stack: "statefulStatefulWebAppTest", lifecycle: "class")
+
+    // not needed for normal plugin usage; verification test only
     // Pass state file location to tests (lazy)
     systemProperty 'COMPOSE_STATE_FILE',
         layout.buildDirectory.file('compose-state/statefulStatefulWebAppTest-state.json').get().asFile.absolutePath
 
     // Pass project name (examples don't typically need validators, but included for completeness)
     systemProperty 'COMPOSE_PROJECT_NAME', "example-stateful-web-app-test"
+
+    useJUnitPlatform()
+    outputs.cacheIf { false }
 }
 
 // Ensure compose up waits for image build
