@@ -144,6 +144,60 @@ Each pattern includes:
 - Log capture
 - State file generation with service info (ports, container IDs, etc.)
 
+## Understanding usesCompose() Configuration
+
+### Why Configure in Task Block?
+
+The `usesCompose()` method is placed in the **task block** rather than the compose stack definition for important
+architectural reasons:
+
+**Separation of Concerns:**
+- **`dockerOrch.composeStacks`** defines **WHAT** the stack is (files, health checks, project name)
+- **`tasks.named('integrationTest')`** defines **HOW** a task uses that stack (lifecycle, dependencies)
+
+**Multiple Tasks Can Use the Same Stack:**
+
+```gradle
+dockerOrch {
+    composeStacks {
+        myApp {  // ONE stack definition
+            files.from('compose.yml')
+        }
+    }
+}
+
+// Multiple tasks using the SAME stack differently
+tasks.named('integrationTest') {
+    usesCompose(stack: "myApp", lifecycle: "class")  // Start once per class
+}
+
+tasks.named('smokeTest') {
+    usesCompose(stack: "myApp", lifecycle: "method")  // Start/stop per method
+}
+
+tasks.named('performanceTest') {
+    usesCompose(stack: "myApp", lifecycle: "manual")  // Manual control
+}
+```
+
+**Task-Specific Behavior:**
+- `usesCompose()` configures the **test task's behavior**, not the stack itself
+- Sets system properties that test framework extensions read
+- Connects a task to a stack (dependency relationship)
+- Allows different lifecycle management per task
+
+**Advanced Scenarios:**
+
+```gradle
+// Task using MULTIPLE stacks
+tasks.named('multiStackTest') {
+    usesCompose(stack: "database", lifecycle: "class")
+    usesCompose(stack: "messaging", lifecycle: "class")
+}
+```
+
+This design provides maximum flexibility while keeping the common case simple.
+
 ## Container Readiness: Waiting for Services
 
 **Key Capability**: The plugin automatically waits for containers to be ready before running tests, preventing flaky
