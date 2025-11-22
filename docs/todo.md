@@ -1,12 +1,5 @@
 # todo
 
-| Task | Priority | Description                                                                                                  |
-  |------|----------|--------------------------------------------------------------------------------------------------------------|
-| 1.2  | Optional | Add test-retry plugin (only if failures recur)                                                               |
-| 1.3  | Monitor  | Track for recurrence in CI                                                                                   |
-
-
-| 2.4  | Medium   | Add document history entry                                                                                   |
 
 ## Clean-up
 
