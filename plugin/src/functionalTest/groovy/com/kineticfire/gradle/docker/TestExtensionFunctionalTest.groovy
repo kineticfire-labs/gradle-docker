@@ -541,4 +541,176 @@ class TestExtensionFunctionalTest extends Specification {
         then:
         result.output.contains('arbitraryStack-state.json')
     }
+
+    def "class lifecycle auto-wires composeUp dependency"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    classAutoWireStack {
+                        files.from('class-auto-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('classAutoTest', Test) {
+                usesCompose stack: 'classAutoWireStack', lifecycle: 'class'
+            }
+
+            task verifyClassAutoDeps {
+                doLast {
+                    def testTask = tasks.getByName('classAutoTest')
+                    def deps = testTask.dependsOn
+                    println "Dependencies: \${deps}"
+                    assert deps.any { it.toString().contains('composeUpClassAutoWireStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('class-auto-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyClassAutoDeps')
+            .build()
+
+        then:
+        result.output.contains('composeUpClassAutoWireStack')
+    }
+
+    def "class lifecycle auto-wires composeDown finalizer"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    classFinStack {
+                        files.from('class-fin-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('classFinTest', Test) {
+                usesCompose stack: 'classFinStack', lifecycle: 'class'
+            }
+
+            task verifyClassFinalizers {
+                doLast {
+                    def testTask = tasks.getByName('classFinTest')
+                    def finalizers = testTask.finalizedBy.getDependencies()
+                    println "Finalizers: \${finalizers}"
+                    assert finalizers.any { it.name.contains('composeDownClassFinStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('class-fin-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyClassFinalizers')
+            .build()
+
+        then:
+        result.output.contains('composeDownClassFinStack')
+    }
+
+    def "method lifecycle auto-wires composeUp dependency"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    methodAutoWireStack {
+                        files.from('method-auto-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('methodAutoTest', Test) {
+                usesCompose stack: 'methodAutoWireStack', lifecycle: 'method'
+            }
+
+            task verifyMethodAutoDeps {
+                doLast {
+                    def testTask = tasks.getByName('methodAutoTest')
+                    def deps = testTask.dependsOn
+                    println "Dependencies: \${deps}"
+                    assert deps.any { it.toString().contains('composeUpMethodAutoWireStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('method-auto-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyMethodAutoDeps')
+            .build()
+
+        then:
+        result.output.contains('composeUpMethodAutoWireStack')
+    }
+
+    def "method lifecycle auto-wires composeDown finalizer"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    methodFinStack {
+                        files.from('method-fin-compose.yml')
+                    }
+                }
+            }
+
+            tasks.register('methodFinTest', Test) {
+                usesCompose stack: 'methodFinStack', lifecycle: 'method'
+            }
+
+            task verifyMethodFinalizers {
+                doLast {
+                    def testTask = tasks.getByName('methodFinTest')
+                    def finalizers = testTask.finalizedBy.getDependencies()
+                    println "Finalizers: \${finalizers}"
+                    assert finalizers.any { it.name.contains('composeDownMethodFinStack') }
+                }
+            }
+        """
+
+        testProjectDir.resolve('method-fin-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyMethodFinalizers')
+            .build()
+
+        then:
+        result.output.contains('composeDownMethodFinStack')
+    }
 }

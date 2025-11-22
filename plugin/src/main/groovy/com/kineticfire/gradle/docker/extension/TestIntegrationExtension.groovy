@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.extension
 
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.logging.Logger
@@ -138,10 +139,12 @@ abstract class TestIntegrationExtension {
     
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {
         // Class lifecycle uses test framework extension to manage compose per test class
-        // DO NOT add task dependencies - let extension handle lifecycle
 
         // Set comprehensive system properties from dockerOrch DSL
         setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
+
+        // Auto-wire task dependencies to ensure compose tasks run
+        autoWireComposeDependencies(test, stackName)
 
         logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
@@ -150,10 +153,12 @@ abstract class TestIntegrationExtension {
     
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
         // Method lifecycle uses test framework extension to manage compose per test method
-        // DO NOT add task dependencies - let extension handle lifecycle
 
         // Set comprehensive system properties from dockerOrch DSL
         setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
+
+        // Auto-wire task dependencies to ensure compose tasks run
+        autoWireComposeDependencies(test, stackName)
 
         logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
@@ -205,5 +210,30 @@ abstract class TestIntegrationExtension {
         test.systemProperty("COMPOSE_STATE_FILE", composeStateFileFor(stackName).get())
 
         logger.debug("Set system properties for test '{}' from dockerOrch stack '{}'", test.name, stackName)
+    }
+
+    /**
+     * Auto-wire test task dependencies on compose lifecycle tasks
+     *
+     * This ensures compose containers are started before the test task runs and
+     * stopped after the test task completes (even on failure).
+     *
+     * @param test Test task to wire dependencies for
+     * @param stackName Name of the compose stack
+     */
+    private void autoWireComposeDependencies(Test test, String stackName) {
+        String capitalizedStackName = stackName.capitalize()
+        String composeUpTaskName = "composeUp${capitalizedStackName}"
+        String composeDownTaskName = "composeDown${capitalizedStackName}"
+
+        // Wire dependencies using task name strings (Gradle will resolve at execution time)
+        // This follows the same pattern as configureSuiteLifecycle()
+        test.dependsOn composeUpTaskName
+        test.finalizedBy composeDownTaskName
+
+        logger.info(
+            "Auto-wired test task '${test.name}': " +
+            "dependsOn ${composeUpTaskName}, finalizedBy ${composeDownTaskName}"
+        )
     }
 }
