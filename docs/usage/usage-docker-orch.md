@@ -198,6 +198,235 @@ tasks.named('multiStackTest') {
 
 This design provides maximum flexibility while keeping the common case simple.
 
+## Understanding Task Dependencies
+
+### Auto-Wiring of Compose Lifecycle Tasks
+
+**New in gradle-docker plugin!** When using `usesCompose()` with **class** or **method** lifecycles, the plugin
+automatically wires test task dependencies to compose lifecycle tasks. You no longer need manual `afterEvaluate` blocks!
+
+**What gets auto-wired:**
+
+```gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "myStack", lifecycle: "class")
+}
+
+// Plugin automatically adds (you don't write this!):
+// integrationTest.dependsOn 'composeUpMyStack'
+// integrationTest.finalizedBy 'composeDownMyStack'
+```
+
+**Lifecycles that auto-wire:**
+- **class** lifecycle: compose up/down dependencies automatically added
+- **method** lifecycle: compose up/down dependencies automatically added
+- **suite** lifecycle: MANUAL wiring required (for backward compatibility)
+
+**Why auto-wire?**
+- Eliminates 3-5 lines of boilerplate per test task
+- Prevents forgetting to wire dependencies
+- Ensures containers always clean up (even on test failure)
+
+### Manual Wiring Still Needed: Image Build Dependencies
+
+**Important:** Auto-wiring handles compose lifecycle (up/down), but you must still wire **image build dependencies**.
+
+**Why?** Docker Compose needs the image to exist before starting containers. The plugin cannot automatically detect
+which images need building because images can come from many sources:
+- Built locally with `docker` DSL
+- Pulled from registries (no build task exists)
+- Built by external tools
+- Already present on the system
+
+**Required manual wiring pattern:**
+
+```gradle
+// Configure compose stack
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('compose.yml')
+        }
+    }
+}
+
+// Configure test task (auto-wires compose up/down)
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")  // Auto-wires composeUp/Down!
+}
+
+// REQUIRED: Ensure image is built before compose up
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerBuildMyApp')  // Your image build task
+    }
+}
+```
+
+### Complete Dependency Chain
+
+With auto-wiring, the complete task dependency graph looks like this:
+
+```
+dockerBuildMyApp          ← (manual) build the image
+    ↓
+composeUpMyTest           ← (auto) starts containers
+    ↓
+integrationTest           ← (auto) runs tests
+    ↓
+composeDownMyTest         ← (auto) stops/removes containers (finalizer)
+```
+
+**Manual wiring:** `composeUpMyTest` depends on `dockerBuildMyApp`
+**Auto-wiring:** `integrationTest` depends on/finalizes `composeUpMyTest`/`composeDownMyTest`
+
+### Decision Guide: When to Wire What
+
+| Image Source | Has docker.images? | Has context? | Wire What | Example |
+|--------------|-------------------|--------------|-----------|---------|
+| Built locally | Yes | Yes | `composeUp*` → `dockerBuild*` | `composeUpMyTest.dependsOn 'dockerBuildMyApp'` |
+| Built + tagged | Yes | Yes | `composeUp*` → `dockerTag*` | `composeUpMyTest.dependsOn 'dockerTagMyApp'` |
+| Pulled from registry | No | No | **Nothing** | Compose pulls automatically |
+| Pre-built image | No | No | **Nothing** | Image already exists |
+
+### Common Patterns
+
+**Pattern 1: Single locally-built image**
+```gradle
+docker {
+    images {
+        myApp {
+            imageName = 'my-app'
+            context.set(file('src/main/docker'))
+        }
+    }
+}
+
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('compose.yml')
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")  // Auto-wires compose up/down
+}
+
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerBuildMyApp')  // Manual: image build
+    }
+}
+```
+
+**Pattern 2: Multiple images (some built, some pulled)**
+```gradle
+docker {
+    images {
+        app {
+            imageName = 'my-app'
+            context.set(file('src/main/docker'))
+        }
+        // postgres and redis will be pulled by compose - no docker.images definition needed
+    }
+}
+
+dockerOrch {
+    composeStacks {
+        fullStack {
+            files.from('compose.yml')  // References my-app, postgres:15, redis:7
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "fullStack", lifecycle: "class")  // Auto-wires compose up/down
+}
+
+afterEvaluate {
+    tasks.named('composeUpFullStack') {
+        dependsOn tasks.named('dockerBuildApp')  // Only wire locally-built images
+        // No dependency for postgres/redis - compose pulls them automatically
+    }
+}
+```
+
+**Pattern 3: Tagged image (tags applied after build)**
+```gradle
+docker {
+    images {
+        myApp {
+            imageName = 'my-app'
+            tags = ['latest', '1.0.0']
+            context.set(file('src/main/docker'))
+        }
+    }
+}
+
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerTagMyApp')  // Tag task (build is implicit dependency)
+    }
+}
+```
+
+### Verification
+
+**Check task dependencies:**
+```bash
+./gradlew integrationTest --dry-run
+```
+
+**Expected output (with auto-wiring):**
+```
+:dockerBuildMyApp       ← Manual dependency
+:composeUpMyTest        ← Auto-wired dependency
+:integrationTest        ← Test task
+:composeDownMyTest      ← Auto-wired finalizer
+```
+
+**Common mistakes:**
+
+❌ **Mistake: Depending on wrong task**
+```gradle
+// WRONG - integrationTest should NOT manually depend on compose tasks
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")
+    dependsOn tasks.named('composeUpMyTest')  // ❌ Auto-wired! Don't add manually
+}
+```
+
+✅ **Correct: Let auto-wiring handle it**
+```gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")  // ✅ That's it!
+}
+```
+
+❌ **Mistake: Forgetting image build dependency**
+```gradle
+// WRONG - compose up needs the image to exist
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")
+}
+// ❌ Missing: composeUpMyTest.dependsOn 'dockerBuildMyApp'
+```
+
+✅ **Correct: Wire image build**
+```gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")
+}
+
+afterEvaluate {
+    tasks.named('composeUpMyTest') {
+        dependsOn tasks.named('dockerBuildMyApp')  // ✅ Image built before compose
+    }
+}
+```
+
 ## Container Readiness: Waiting for Services
 
 **Key Capability**: The plugin automatically waits for containers to be ready before running tests, preventing flaky
@@ -481,15 +710,23 @@ tasks.named('integrationTest') {
     //   - docker.compose.waitForHealthy.timeoutSeconds
     //   - docker.compose.waitForHealthy.pollSeconds
     //   - docker.compose.project
+    // ============================================================================
+    // AUTO-WIRING: usesCompose() automatically wires compose lifecycle tasks!
+    // ============================================================================
+    // For class/method lifecycles, the plugin automatically adds:
+    //   - integrationTest.dependsOn('composeUpWebAppTest')
+    //   - integrationTest.finalizedBy('composeDownWebAppTest')
+    // You don't need to manually wire these dependencies!
     usesCompose(stack: "webAppTest", lifecycle: "class")
 
     // Not cacheable - interacts with Docker
     outputs.cacheIf { false }
 }
 
-// Ensure Docker image is built before running integration tests
+// IMPORTANT: You still need to ensure the image is built before compose up
+// (See "Understanding Task Dependencies" section for details)
 afterEvaluate {
-    tasks.named('integrationTest') {
+    tasks.named('composeUpWebAppTest') {
         dependsOn tasks.named('dockerBuildWebApp')  // Your image build task
     }
 }

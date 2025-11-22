@@ -131,16 +131,11 @@ tasks.named('integrationTest') {
     outputs.cacheIf { false }
 }
 
-// Ensure compose up waits for image build
+// NORMAL PLUGIN USERS NEED: Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
 afterEvaluate {
     tasks.named('composeUpStatefulStatefulWebAppTest') {
         dependsOn tasks.named('dockerBuildStatefulStatefulWebApp')
-    }
-
-    // Ensure integrationTest has full workflow
-    tasks.named('integrationTest') {
-        dependsOn tasks.named('composeUpStatefulStatefulWebAppTest')
-        finalizedBy tasks.named('composeDownStatefulStatefulWebAppTest')
     }
 }
 

@@ -110,9 +110,10 @@ tasks.named('integrationTest') {
     outputs.cacheIf { false }
 }
 
-// Ensure Docker image is built before running integration tests
+// Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
 afterEvaluate {
-    tasks.named('integrationTest') {
+    tasks.named('composeUpLifecycleMethodTest') {
         dependsOn tasks.named('dockerBuildStateApp')
     }
 }

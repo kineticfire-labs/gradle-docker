@@ -128,17 +128,11 @@ tasks.named('integrationTest') {
     systemProperty 'COMPOSE_PROJECT_NAME', "example-web-app-test"
 }
 
-// NORMAL PLUGIN USERS NEED: Orchestrate task dependencies
-// Ensure compose up waits for image build, and integrationTest depends on compose lifecycle
+// NORMAL PLUGIN USERS NEED: Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
 afterEvaluate {
     tasks.named('composeUpWebAppTest') {
         dependsOn tasks.named('dockerBuildWebApp')
-    }
-
-    // Ensure integrationTest has full workflow
-    tasks.named('integrationTest') {
-        dependsOn tasks.named('composeUpWebAppTest')
-        finalizedBy tasks.named('composeDownWebAppTest')
     }
 }
 

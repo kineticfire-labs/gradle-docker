@@ -115,9 +115,10 @@ tasks.named('integrationTest') {
     outputs.cacheIf { false }
 }
 
-// Ensure Docker image is built before running integration tests
+// NORMAL PLUGIN USERS NEED: Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
 afterEvaluate {
-    tasks.named('integrationTest') {
+    tasks.named('composeUpIsolatedTestsTest') {
         dependsOn tasks.named('dockerBuildIsolatedTests')
     }
 }
