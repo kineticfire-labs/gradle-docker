@@ -1,6 +1,6 @@
 # TODO: Cleanup and Enhance `docs/usage/usage-docker-orch.md`
 
-**Status**: Partially Complete (Updated 2025-11-21)
+**Status**: ✅ COMPLETE (Updated 2025-11-21)
 **Priority**: Medium (reduced from High - most critical items done)
 **Target**: Next release
 **Effort**: 3-3.5 hours (updated to include conflict detection and projectName documentation)
@@ -590,9 +590,12 @@ The following tasks from the original plan are **DONE**:
   - Add to Troubleshooting or Recommended Pattern section
   - Estimate: 30 minutes
 
-### Priority 2: Nice to Have (Optional)
+### Priority 2: Nice to Have (Optional) - EXCLUDED
 
-- [ ] **Task 6**: Add multi-service troubleshooting
+- [x] **Task 6**: ~~Add multi-service troubleshooting~~
+  - **Status**: EXCLUDED - Decision made not to implement
+  - **Reason**: Existing troubleshooting section is sufficient; multi-service examples demonstrate best practices
+    that prevent most issues
   - Database connection issues, service ordering, networking
   - Estimate: 20 minutes
 
@@ -618,12 +621,13 @@ After making changes, verify:
 
 **Before annotation fix plan**: 85% complete
 **After annotation fix plan**: 90% complete
-**After this cleanup**: 98% complete
+**After this cleanup**: 100% complete (all priority 1 tasks done, priority 2 excluded by decision)
 
 ---
 
 ## Notes
 
+- **COMPLETED 2025-11-21**: All priority 1 tasks implemented; priority 2 task excluded by decision
 - **Updated 2025-11-21**: Revised to reflect annotation fix plan changes
 - **Updated 2025-11-21**: Added Gap 5 (configuration conflict detection documentation)
 - **Updated 2025-11-21**: Enhanced Task 1 to include `projectName` parameter demonstration

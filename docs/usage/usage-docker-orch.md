@@ -13,6 +13,54 @@ plugins {
 }
 ```
 
+## TL;DR (Quick Start)
+
+**What is dockerOrch?**
+- Tests Docker images using Docker Compose
+- Images can come from: `docker` DSL, registries, or any build tool
+- Automatic container lifecycle management via test framework extensions
+
+**Recommended pattern (3 steps):**
+
+**Step 1: Configure compose stack in build.gradle**
+```gradle
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            waitForHealthy {
+                waitForServices.set(['my-service'])
+                timeoutSeconds.set(60)
+            }
+        }
+    }
+}
+```
+
+**Step 2: Wire test task with usesCompose()**
+```gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "myTest", lifecycle: "class")
+}
+```
+
+**Step 3: Use zero-parameter annotation in test**
+```groovy
+// Spock
+@ComposeUp  // No parameters! Config from build.gradle
+class MyAppIT extends Specification { ... }
+
+// JUnit 5
+@ExtendWith(DockerComposeClassExtension.class)  // Already parameter-less
+class MyAppIT { ... }
+```
+
+**Next steps:**
+- See [Container Readiness: Waiting for Services](#container-readiness-waiting-for-services) for health check
+  configuration
+- See [Test Framework Extensions](#test-framework-extensions-recommended) for detailed usage patterns
+- See [Complete Examples](#complete-examples) for copy-paste examples
+
 ## Recommended Directory Layout
 
 ```
@@ -95,6 +143,79 @@ Each pattern includes:
 - Health/readiness waiting
 - Log capture
 - State file generation with service info (ports, container IDs, etc.)
+
+## Container Readiness: Waiting for Services
+
+**Key Capability**: The plugin automatically waits for containers to be ready before running tests, preventing flaky
+tests caused by containers that aren't fully started.
+
+### Wait Options
+
+#### waitForHealthy (RECOMMENDED)
+
+- **What it means**: Container is running AND health check passed
+- **When to use**: Services that need initialization (databases, web apps, APIs)
+- **Requirement**: Health check must be defined in compose file
+
+```gradle
+dockerOrch {
+    composeStacks {
+        myTest {
+            files.from('compose.yml')
+            waitForHealthy {
+                waitForServices.set(['app', 'postgres'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+```
+
+**Compose file health check:**
+```yaml
+services:
+  app:
+    image: my-app:latest
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+```
+
+#### waitForRunning
+
+- **What it means**: Container process has started (but may not be ready)
+- **When to use**: Simple services without health checks, or when RUNNING is sufficient
+- **Requirement**: None
+
+```gradle
+dockerOrch {
+    composeStacks {
+        simpleTest {
+            files.from('compose.yml')
+            waitForRunning {
+                waitForServices.set(['nginx'])
+                timeoutSeconds.set(30)
+                pollSeconds.set(1)
+            }
+        }
+    }
+}
+```
+
+### Decision Guide
+
+| Factor | waitForRunning | waitForHealthy |
+|--------|----------------|----------------|
+| **Service has health check** | Optional | ✅ Required |
+| **Service needs initialization** | ❌ Not reliable | ✅ Recommended |
+| **Speed** | ⚡ Faster | ⏱️ Waits for health |
+| **Test reliability** | ⚠️ May fail if not ready | ✅ Runs when ready |
+| **Examples** | Static files, proxies | Databases, web apps, APIs |
+
+**Best Practice**: Default to `waitForHealthy` for reliable tests.
 
 ## Choosing a Test Framework
 
@@ -424,6 +545,95 @@ class IsolatedTestsIT extends Specification {
         then:
         response.statusCode() == 200
         response.jsonPath().getLong("id") == 1L  // ID is 1 again because database is fresh!
+    }
+}
+```
+
+#### Multi-Service Stack Example
+
+Testing an app that depends on a database demonstrates orchestrating multiple services and accessing their ports:
+
+**build.gradle:**
+```gradle
+dockerOrch {
+    composeStacks {
+        appWithDbTest {
+            files.from('src/integrationTest/resources/compose/app-with-db.yml')
+
+            // Optional: Override Docker Compose project name
+            // Default: <directory-name>_appWithDbTest
+            // Custom name ensures unique container identification and cleaner docker ps output
+            projectName = "my-app-integration"
+
+            waitForHealthy {
+                waitForServices.set(['app', 'postgres'])  // Wait for BOTH services
+                timeoutSeconds.set(90)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "appWithDbTest", lifecycle: "class")
+}
+```
+
+**Docker Compose file:**
+```yaml
+services:
+  app:
+    image: my-app:latest
+    ports:
+      - "8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: testdb
+      POSTGRES_USER: test
+      POSTGRES_PASSWORD: test
+    ports:
+      - "5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U test -d testdb"]
+      interval: 2s
+      timeout: 1s
+      retries: 5
+```
+
+**Test class accessing both services:**
+```groovy
+@ComposeUp  // No parameters!
+class AppWithDbIT extends Specification {
+    @Shared String baseUrl
+    @Shared String dbUrl
+
+    def setupSpec() {
+        def stateData = new JsonSlurper().parse(new File(System.getProperty('COMPOSE_STATE_FILE')))
+
+        // Get app port
+        def appPort = stateData.services['app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${appPort}"
+
+        // Get database port
+        def dbPort = stateData.services['postgres'].publishedPorts[0].host
+        dbUrl = "jdbc:postgresql://localhost:${dbPort}/testdb"
+    }
+
+    def "should verify data via API and database"() {
+        // Test both API and direct database access
     }
 }
 ```
@@ -999,7 +1209,50 @@ services:
     image: nginx
 ```
 
-#### 7. Configuration Cache Issues
+#### 7. Configuration Conflict Error (Spock Only)
+
+**Symptom:** Test fails during initialization with `IllegalStateException` containing "Configuration conflict"
+
+**Example error:**
+```
+Configuration conflict for 'stackName': Specified in BOTH build.gradle
+(via usesCompose: 'myTest') AND @ComposeUp annotation ('myTest').
+Remove annotation parameter to use build.gradle configuration.
+```
+
+**Cause:** You specified the same parameter in both places:
+- build.gradle via `usesCompose(stack: "myTest", ...)`
+- Test annotation via `@ComposeUp(stackName = "myTest")`
+
+**Why this matters:** The plugin enforces "single source of truth" to prevent configuration duplication and
+maintenance burden. When using `usesCompose()`, ALL configuration must be in build.gradle.
+
+**Fix:** Remove ALL parameters from `@ComposeUp` annotation
+
+❌ **Wrong** (causes conflict):
+```gradle
+// build.gradle
+usesCompose(stack: "myTest", lifecycle: "class")
+
+// Test
+@ComposeUp(stackName = "myTest")  // ❌ Duplicates configuration
+```
+
+✅ **Correct**:
+```gradle
+// build.gradle
+usesCompose(stack: "myTest", lifecycle: "class")
+
+// Test
+@ComposeUp  // ✅ No parameters! All config from build.gradle
+```
+
+**Note:**
+- This only applies to Spock. JUnit 5 extensions are parameter-less by design.
+- For backward compatibility, you CAN use annotation-only configuration (without `usesCompose()`), but mixing both
+  sources is not allowed.
+
+#### 8. Configuration Cache Issues
 
 **Symptom:** Gradle configuration cache warnings or failures
 
@@ -1116,18 +1369,78 @@ Then read the actual port from the state file in your tests.
 See the working examples in this repository:
 
 - **Spock Examples**:
-  - CLASS lifecycle: `plugin-integration-test/dockerOrch/examples/web-app/`
+  - CLASS lifecycle (basic): `plugin-integration-test/dockerOrch/examples/web-app/`
+  - CLASS lifecycle (multi-service): `plugin-integration-test/dockerOrch/examples/database-app/`
+  - CLASS lifecycle (stateful): `plugin-integration-test/dockerOrch/examples/stateful-web-app/`
   - METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests/`
 
 - **JUnit 5 Examples**:
   - CLASS lifecycle: `plugin-integration-test/dockerOrch/examples/web-app-junit/`
   - METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/`
 
-- **Gradle Task Examples**:
-  - Suite lifecycle: `plugin-integration-test/dockerOrch/examples/stateful-web-app/`
-
 For more detailed information on Spock and JUnit 5 extensions, see
 [Spock and JUnit Test Extensions Guide](spock-junit-test-extensions.md).
+
+### Multi-Service Example: Database Integration
+
+The `database-app` example demonstrates:
+- **Two-service orchestration** (Spring Boot app + PostgreSQL database)
+- **Dual validation pattern** - verify API responses AND database state with JDBC
+- **Health checks for multiple services** - wait for both app and database
+- **Port mapping for both services** - extract ports from state file for app and database
+
+**build.gradle configuration:**
+```gradle
+dockerOrch {
+    composeStacks {
+        databaseAppTest {
+            files.from('src/integrationTest/resources/compose/database-app.yml')
+
+            // Optional: Override Docker Compose project name
+            // Default: <directory-name>_databaseAppTest
+            // Custom name ensures unique container identification and cleaner docker ps output
+            projectName = "db-integration-test"
+
+            waitForHealthy {
+                waitForServices.set(['app', 'postgres'])
+                timeoutSeconds.set(90)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+tasks.named('integrationTest') {
+    usesCompose(stack: "databaseAppTest", lifecycle: "class")
+}
+```
+
+**Test class:**
+```groovy
+@ComposeUp  // No parameters! All config from build.gradle
+class DatabaseAppExampleIT extends Specification {
+    @Shared String baseUrl
+    @Shared String dbUrl
+
+    def setupSpec() {
+        def stateData = new JsonSlurper().parse(new File(System.getProperty('COMPOSE_STATE_FILE')))
+
+        // Get app port
+        def appPort = stateData.services['app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${appPort}"
+
+        // Get database port for direct JDBC access
+        def dbPort = stateData.services['postgres'].publishedPorts[0].host
+        dbUrl = "jdbc:postgresql://localhost:${dbPort}/testdb"
+    }
+
+    def "should verify data via API and database"() {
+        // Test both API and direct database access
+    }
+}
+```
+
+See `plugin-integration-test/dockerOrch/examples/database-app/README.md` for complete example.
 
 ## Integration Test Source Set Convention
 
