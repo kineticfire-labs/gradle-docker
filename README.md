@@ -4,7 +4,7 @@
 
 <p></p>
 
-`gradle-docker` is a A Gradle plugin for building and testing Docker-based projects.
+`gradle-docker` is a Gradle plugin for building and testing Docker-based projects.
 
 # License
 The *gradle-docker* project is released under [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0).

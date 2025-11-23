@@ -641,56 +641,15 @@ docker {
 
 ## Provider API Patterns
 
-Common Provider API patterns for configuration cache compatibility:
+For comprehensive Provider API patterns and examples, see [Provider API Patterns](provider-patterns.md).
 
-### Pattern 1: Task Output as Provider
+**Quick patterns:**
+- Task outputs: Use `.flatMap()` and `.map()`
+- Environment variables: `providers.environmentVariable()`
+- File paths: Use `layout.buildDirectory.dir/file()`
+- Never call `.get()` during configuration
 
-```groovy
-// Get JAR file from task output
-def jarFileProvider = project(':app').tasks.named('bootJar').flatMap { it.archiveFile }
-
-// Transform provider value
-def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
-
-// Use in buildArgs
-buildArgs.put('JAR_FILE', jarFileNameProvider)
-```
-
-### Pattern 2: Environment Variables
-
-```groovy
-// Read environment variable as provider
-pullAuth {
-    username.set(providers.environmentVariable("GHCR_USER"))
-    password.set(providers.environmentVariable("GHCR_TOKEN"))
-}
-```
-
-### Pattern 3: Project Properties
-
-```groovy
-// Use project version as provider
-version.set(providers.provider { project.version.toString() })
-
-// Compose providers
-buildArgs.put('APP_VERSION', providers.provider { project.version.toString() })
-```
-
-### Pattern 4: Provider Composition
-
-```groovy
-// Chain multiple transformations
-def jarFileProvider = project(':app').tasks.named('bootJar')
-    .flatMap { it.archiveFile }
-    .map { it.asFile.name }
-
-// Use .get() only at execution time (inside task action or Copy spec)
-from(jarFileProvider) {
-    rename { jarFileProvider.get() }  // OK: executed during Copy task action
-}
-```
-
-**Key rule**: Never call `.get()` during configuration phase (outside of task actions).
+See [Provider API Patterns](provider-patterns.md) for complete examples and anti-patterns.
 
 ## Comprehensive Publishing Examples
 
@@ -1118,6 +1077,381 @@ afterEvaluate {
 6. **Type Safety** - Enum-based compression options prevent typos
 7. **Configuration Cache Ready** - Optimized for Gradle's configuration cache with proper provider usage
 
+## Troubleshooting Guide
+
+### Common Issues and Solutions
+
+#### 1. Build Context Not Found
+
+**Symptom:** `docker build` fails with "unable to locate Dockerfile" or "COPY failed: no source files"
+
+**Possible Causes:**
+- Context task output directory doesn't match expected location
+- Dockerfile not in context directory
+- Context task didn't run or failed silently
+
+**Solutions:**
+```bash
+# Check context directory exists and has Dockerfile
+ls -la build/docker-context/
+
+# Verify contextTask configuration
+./gradlew prepareContext --info
+
+# Check task dependencies
+./gradlew dockerBuild --dry-run
+```
+
+```groovy
+// Verify configuration
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')  // Ensure this contains Dockerfile
+            }
+            // Default: looks for Dockerfile at build/docker-context/Dockerfile
+            // Override if needed:
+            // dockerfileName.set("CustomDockerfile")
+        }
+    }
+}
+```
+
+---
+
+#### 2. Authentication Failed When Publishing
+
+**Symptom:** "authentication required" or "unauthorized: authentication required" when running `dockerPublish*`
+
+**Possible Causes:**
+- Incorrect credentials
+- Registry URL mismatch
+- Token/password expired
+- Environment variables not set
+
+**Solutions:**
+```groovy
+docker {
+    images {
+        myApp {
+            publish {
+                to('registry') {
+                    registry.set("ghcr.io")  // Verify exact registry URL
+
+                    auth {
+                        // Use environment variables for credentials
+                        username.set(providers.environmentVariable("GHCR_USER"))
+                        password.set(providers.environmentVariable("GHCR_TOKEN"))
+                        // serverAddress automatically extracted from registry
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+```bash
+# Verify environment variables are set
+echo $GHCR_USER
+echo $GHCR_TOKEN  # Just check it's set, don't print value
+
+# Test authentication manually
+echo $GHCR_TOKEN | docker login ghcr.io -u $GHCR_USER --password-stdin
+
+# Check registry URL format
+# Include port for non-standard registries: "my-registry.com:5000"
+```
+
+**Common Registry URLs:**
+- Docker Hub: `docker.io` or `registry-1.docker.io`
+- GitHub Container Registry: `ghcr.io`
+- Google Container Registry: `gcr.io`
+- AWS ECR: `<account-id>.dkr.ecr.<region>.amazonaws.com`
+
+---
+
+#### 3. Source Image Not Found (SourceRef Mode)
+
+**Symptom:** Tag/save/publish task fails with "No such image" or "image not found"
+
+**Possible Causes:**
+- Source image doesn't exist locally
+- Image name mismatch
+- Image was removed
+
+**Solutions:**
+```bash
+# List local images
+docker images
+
+# Verify exact image name and tag
+docker images | grep "my-app"
+```
+
+```groovy
+docker {
+    images {
+        myApp {
+            // Verify sourceRef matches actual image name
+            sourceRef.set("my-app:1.0.0")  // Must match exactly
+
+            // If image might not exist locally, enable auto-pull
+            pullIfMissing.set(true)
+
+            // Add authentication if pulling from private registry
+            pullAuth {
+                username.set(providers.environmentVariable("REGISTRY_USER"))
+                password.set(providers.environmentVariable("REGISTRY_TOKEN"))
+            }
+        }
+    }
+}
+```
+
+---
+
+#### 4. Build Args Not Applied
+
+**Symptom:** ARG values not available in Dockerfile, build fails or uses wrong values
+
+**Possible Causes:**
+- Build arg not declared in Dockerfile
+- Provider API not used (eager evaluation)
+- Typo in ARG name
+
+**Solutions:**
+```dockerfile
+# Dockerfile: Declare ARG before use
+ARG JAR_FILE
+ARG BUILD_VERSION=unknown
+
+COPY ${JAR_FILE} /app/app.jar
+```
+
+```groovy
+docker {
+    images {
+        myApp {
+            // Use Provider API for build args
+            buildArgs.put('JAR_FILE', providers.provider {
+                "app-${project.version}.jar"
+            })
+            buildArgs.put('BUILD_VERSION', providers.provider {
+                project.version.toString()
+            })
+        }
+    }
+}
+```
+
+```bash
+# Verify build args in logs
+./gradlew dockerBuild --info | grep "build arg"
+```
+
+---
+
+#### 5. Image Tags Not Created
+
+**Symptom:** Only first tag applied to image, or tags missing
+
+**Possible Causes:**
+- Tags contain registry/namespace (should be tag name only)
+- List not properly set
+- Task didn't run
+
+**Solutions:**
+```groovy
+docker {
+    images {
+        myApp {
+            registry = "ghcr.io"
+            namespace = "myorg"
+            imageName = "my-app"
+
+            // CORRECT: Tag names only
+            tags = ['latest', '1.0.0', 'stable']
+            // or with .set()
+            tags.set(['latest', '1.0.0', 'stable'])
+
+            // WRONG: Don't include registry/namespace in tags
+            // tags = ['ghcr.io/myorg/my-app:latest']  // ❌
+        }
+    }
+}
+```
+
+```bash
+# Verify tags were created
+docker images | grep "my-app"
+
+# Should show:
+# ghcr.io/myorg/my-app   latest   ...
+# ghcr.io/myorg/my-app   1.0.0    ...
+# ghcr.io/myorg/my-app   stable   ...
+```
+
+---
+
+#### 6. Multi-Project JAR Not Found in Context
+
+**Symptom:** Context task fails to copy JAR from another Gradle project
+
+**Possible Causes:**
+- JAR not built before context task runs
+- Wrong project path
+- Task dependency missing
+
+**Solutions:**
+```groovy
+// Get JAR file from app project using Provider API
+def jarFileProvider = project(':app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+docker {
+    images {
+        myApp {
+            contextTask = tasks.register('prepareContext', Copy) {
+                into layout.buildDirectory.dir('docker-context')
+                from('src/main/docker')
+
+                // Copy JAR using provider
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':app').tasks.named('bootJar')
+            }
+
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+    }
+}
+```
+
+```bash
+# Verify project path
+./gradlew projects
+
+# Test JAR build
+./gradlew :app:bootJar
+
+# Verify context has JAR
+./gradlew prepareContext
+ls -la build/docker-context/
+```
+
+---
+
+#### 7. Configuration Cache Violations
+
+**Symptom:** "configuration cache cannot be reused" warnings, or errors about captured state
+
+**Common Violations and Solutions:**
+
+**Violation 1: Capturing Project reference**
+```groovy
+// ❌ BAD
+buildArgs.put('VERSION', project.version.toString())
+
+// ✅ GOOD
+buildArgs.put('VERSION', providers.provider { project.version.toString() })
+```
+
+**Violation 2: Eager file resolution**
+```groovy
+// ❌ BAD
+context.set(file("${project.buildDir}/docker"))
+
+// ✅ GOOD
+context.set(layout.buildDirectory.dir('docker'))
+```
+
+**Violation 3: Reading environment during configuration**
+```groovy
+// ❌ BAD
+def token = System.getenv('TOKEN')
+registry.set("ghcr.io")
+
+// ✅ GOOD
+registry.set(providers.environmentVariable('REGISTRY').orElse("ghcr.io"))
+```
+
+**Violation 4: File I/O during configuration**
+```groovy
+// ❌ BAD
+def version = new File('version.txt').text.trim()
+
+// ✅ GOOD
+def version = providers.fileContents(
+    layout.projectDirectory.file('version.txt')
+).asText.map { it.trim() }
+```
+
+**Debugging Configuration Cache:**
+```bash
+# Enable configuration cache with problems report
+./gradlew dockerBuild --configuration-cache --configuration-cache-problems=warn
+
+# See detailed violations
+./gradlew dockerBuild --configuration-cache --stacktrace
+```
+
+See [Provider API Patterns](provider-patterns.md) for complete patterns and anti-patterns.
+
+---
+
+### Verification Steps
+
+When troubleshooting:
+
+1. **Check task execution order:**
+   ```bash
+   ./gradlew dockerBuild --dry-run
+   ```
+
+2. **Enable detailed logging:**
+   ```bash
+   ./gradlew dockerBuild --info
+   ```
+
+3. **Verify Docker daemon connection:**
+   ```bash
+   docker info
+   docker ps
+   ```
+
+4. **Check image state:**
+   ```bash
+   docker images
+   docker inspect <image-name>
+   ```
+
+5. **Test configuration cache:**
+   ```bash
+   ./gradlew dockerBuild --configuration-cache
+   ./gradlew dockerBuild --configuration-cache  # Should reuse
+   ```
+
+---
+
+### Getting Help
+
+If issues persist:
+1. Check [Provider API Patterns](provider-patterns.md) for configuration examples
+2. Review [Gradle 9/10 Compatibility](gradle-9-and-10-compatibility-practices.md)
+3. Search existing issues at project repository
+4. Create new issue with:
+   - Full error message
+   - Relevant build.gradle configuration
+   - Output of `./gradlew dockerBuild --info --stacktrace`
+   - Docker version: `docker --version`
+   - Gradle version: `./gradlew --version`
+
 # Available Gradle Tasks
 
 ## Complete Operation Aggregate Tasks
@@ -1161,6 +1495,22 @@ such as, in this case, `timeServer`:
 ./gradlew dockerSaveTimeServer
 ./gradlew dockerBuildTimeServer
 ```
+
+## Integration Test Support
+
+The plugin automatically creates the `integrationTest` source set when java or groovy plugin is applied. This allows
+you to add integration test dependencies without boilerplate:
+
+```groovy
+dependencies {
+    integrationTestImplementation 'org.spockframework:spock-core:2.3'
+}
+// Convention provides source set, task, configurations automatically!
+```
+
+**For complete details** on directory structure, task configuration, customization, and migration from manual setup,
+see [Integration Test Source Set Convention](usage-docker-orch.md#integration-test-source-set-convention) in the
+Docker Orchestration guide.
 
 ## Integration Test Best Practices
 

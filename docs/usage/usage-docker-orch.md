@@ -96,7 +96,12 @@ the-application-project/                  # a project that (1) builds an applica
 This plugin is fully compatible with Gradle 9 and 10, including configuration cache support. Follow these patterns for
 best compatibility in [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md).
 
+For Provider API patterns and configuration cache best practices, see [Provider API Patterns](provider-patterns.md).
+
 ## Overview of Docker Compose Orchestration
+
+**Building Docker Images:** This guide focuses on testing images with Docker Compose orchestration. For building,
+tagging, saving, and publishing images, see [Docker DSL Guide](usage-docker.md).
 
 The `dockerOrch` DSL provides two ways to orchestrate Docker Compose in your integration tests:
 
