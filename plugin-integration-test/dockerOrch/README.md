@@ -11,6 +11,14 @@ These integration tests validate the `dockerOrch` plugin functionality by:
 4. **Validating wait mechanisms** - `waitForHealthy` and `waitForRunning` functionality
 5. **Ensuring Gradle 9/10 compatibility** - Build cache, configuration cache, Provider API
 
+**For comprehensive usage documentation**, see:
+- [dockerOrch DSL Usage Guide](../../docs/usage/usage-docker-orch.md) - Complete guide with all examples and patterns
+- [Spock and JUnit Test Extensions Guide](../../docs/usage/spock-junit-test-extensions.md) - Detailed extension
+  documentation
+
+This README focuses on the integration test structure and organization. For complete DSL usage, configuration patterns,
+and detailed examples, refer to the usage guides above.
+
 ## Test Organization
 
 The `dockerOrch/` tests are organized into two distinct categories:
@@ -105,6 +113,135 @@ living documentation and a copy-paste template.
 - `composeDown<StackName>` - Stop and remove Docker Compose stack
 - Each stack defined in `dockerOrch { composeStacks { ... } }` generates these tasks
 
+## Key Plugin Features
+
+### Auto-Wiring of Test Dependencies
+
+When using `usesCompose()` with **class** or **method** lifecycles, the plugin **automatically wires** compose lifecycle
+task dependencies to your test task. You no longer need manual `afterEvaluate` blocks for `composeUp*` / `composeDown*`
+dependencies!
+
+**What gets auto-wired:**
+```gradle
+tasks.named('integrationTest') {
+    usesCompose(stack: "myStack", lifecycle: "class")
+}
+
+// Plugin automatically adds (you don't write this!):
+// integrationTest.dependsOn 'composeUpMyStack'
+// integrationTest.finalizedBy 'composeDownMyStack'
+```
+
+**Manual wiring still required:** You must still wire **image build dependencies** to compose tasks (plugin cannot
+auto-detect image sources).
+
+```gradle
+afterEvaluate {
+    tasks.named('composeUpMyStack') {
+        dependsOn tasks.named('dockerBuildMyApp')  // Required: ensure image exists
+    }
+}
+```
+
+**See:** [Understanding Task Dependencies](../../docs/usage/usage-docker-orch.md#understanding-task-dependencies) for
+complete details and patterns.
+
+---
+
+### Integration Test Source Set Convention
+
+The plugin **automatically creates** the `integrationTest` source set when java or groovy plugin is present. This
+eliminates ~40-50 lines of boilerplate per project!
+
+**Automatic setup includes:**
+- Source directories: `src/integrationTest/java`, `src/integrationTest/groovy`, `src/integrationTest/resources`
+- Configurations: `integrationTestImplementation`, `integrationTestRuntimeOnly`
+- Tasks: `integrationTest`, `processIntegrationTestResources`
+- Classpath: Automatic access to main source set classes
+
+**Minimal configuration example:**
+```gradle
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+// Plugin creates integrationTest source set automatically!
+
+dependencies {
+    integrationTestImplementation 'org.spockframework:spock-core:2.3'
+}
+
+// That's it! Convention provides everything else.
+```
+
+**See:** [Integration Test Source Set Convention](../../docs/usage/usage-docker-orch.md#integration-test-source-set-convention)
+for customization options and migration guide.
+
+---
+
+### Wait Mechanisms
+
+Choose the appropriate wait mechanism for your services:
+
+**waitForHealthy (RECOMMENDED):**
+- Container is RUNNING **AND** health check passed
+- Use for: databases, web apps, APIs (anything needing initialization)
+- Requires: Health check defined in compose file
+
+**waitForRunning:**
+- Container process has started (may not be ready)
+- Use for: simple services without health checks
+- Faster but less reliable
+
+**Decision guide:**
+
+| Factor | waitForRunning | waitForHealthy |
+|--------|----------------|----------------|
+| **Service has health check** | Optional | ✅ Required |
+| **Service needs initialization** | ❌ Not reliable | ✅ Recommended |
+| **Speed** | ⚡ Faster | ⏱️ Waits for health |
+| **Test reliability** | ⚠️ May fail if not ready | ✅ Runs when ready |
+| **Examples** | Static files, proxies | Databases, web apps, APIs |
+
+**See:** [Container Readiness: Waiting for Services](../../docs/usage/usage-docker-orch.md#container-readiness-waiting-for-services)
+for decision guide and examples.
+
+---
+
+### Lifecycle Patterns
+
+**IMPORTANT:** There are only TWO lifecycles:
+
+**CLASS Lifecycle:**
+- Containers start once before all tests in a class
+- All test methods share the same containers
+- State persists between test methods
+- Faster execution (containers start only once)
+- Used by: Test framework extensions AND Gradle tasks
+
+**METHOD Lifecycle:**
+- Containers restart fresh for each test method
+- Complete isolation between tests
+- State does NOT persist between test methods
+- Slower execution (containers restart for each test)
+- Used by: Test framework extensions only
+
+**Orchestration Approaches:**
+
+1. **Test Framework Extensions (RECOMMENDED):** Use Spock or JUnit 5 extensions for automatic lifecycle management
+   - Supports: CLASS and METHOD lifecycles
+   - Configuration: Via `usesCompose()` in build.gradle + zero-parameter annotation
+   - Auto-wiring: Compose up/down dependencies added automatically
+
+2. **Gradle Tasks (ALTERNATIVE):** Use `composeUp*` / `composeDown*` tasks for manual orchestration
+   - Supports: CLASS lifecycle only
+   - Configuration: Manual `dependsOn` / `finalizedBy` in build.gradle
+   - Use cases: CI/CD pipelines, custom orchestration, manual control
+
+**See:** [Lifecycle Patterns](../../docs/usage/usage-docker-orch.md#lifecycle-patterns) for detailed comparison and when
+to use each.
+
 ## Running dockerOrch Tests
 
 **⚠️ All commands must be run from `/plugin-integration-test/` directory.**
@@ -135,6 +272,56 @@ living documentation and a copy-paste template.
 docker ps -a | grep verification
 docker ps -a | grep example
 ```
+
+## Troubleshooting
+
+### Quick Diagnostics
+
+**Containers not starting:**
+1. Check test output for error messages during setup
+2. Verify `usesCompose()` matches stack name in dockerOrch DSL
+3. Ensure compose file exists at expected path
+4. Check Docker daemon is running: `docker info`
+
+**Containers not stopping:**
+1. Extensions automatically clean up - check for test crashes
+2. Manually clean: `docker compose -p <project-name> down -v`
+3. Force remove: `docker ps -aq --filter name=<project-name> | xargs -r docker rm -f`
+
+**Health checks timing out:**
+1. Increase timeout in dockerOrch DSL: `timeoutSeconds.set(120)`
+2. Use `waitForRunning` instead of `waitForHealthy` (faster but less reliable)
+3. Check service logs: `docker compose -p <project-name> logs <service-name>`
+
+**Port conflicts:**
+1. Use dynamic port assignment in compose files: `ports: - "8080"` (not `"9091:8080"`)
+2. Read actual port from state file in tests
+3. Find conflicting containers: `docker ps --filter publish=8080`
+
+**State file not found:**
+1. Ensure extension annotation is present on test class
+2. Verify compose up completed successfully (check test output)
+3. Check dockerOrch DSL configuration matches system properties
+
+**Configuration conflicts (Spock):**
+1. Use EITHER `usesCompose()` in build.gradle OR annotation parameters, not both
+2. Recommended: Remove all annotation parameters, use `usesCompose()` only
+
+---
+
+### Comprehensive Troubleshooting Guide
+
+For complete troubleshooting with detailed solutions, see:
+- [dockerOrch Troubleshooting Guide](../../docs/usage/usage-docker-orch.md#troubleshooting-guide) -
+  Covers 8 common issues including containers not stopping, health check timeouts, port conflicts,
+  configuration conflicts, configuration cache issues, and more
+
+Each issue includes:
+- Symptom description
+- Root cause explanation
+- Step-by-step solutions
+- Verification commands
+- Prevention strategies
 
 ## Validation Infrastructure
 
