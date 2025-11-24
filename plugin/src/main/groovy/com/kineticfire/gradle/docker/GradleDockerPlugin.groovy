@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.model.CompressionType
 import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
 import com.kineticfire.gradle.docker.task.*
@@ -55,6 +56,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project.providers, project.layout)
         def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects)
         dockerOrchExt.configureProjectNames(project.name)
+        def dockerWorkflowsExt = project.extensions.create('dockerWorkflows', DockerWorkflowsExtension, project.objects)
 
         // Register task creation rules
         registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
