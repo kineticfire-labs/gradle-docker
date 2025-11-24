@@ -3,10 +3,6 @@
 
 ## Clean-up
 
-1. check these are consistent with each other
-    2. plugin-integration-test/dockerOrch/examples/README.md 
-    2. docs/usage/usage-docker-orch.md
-    2. docs/usage/usage-docker.md
 
 
 ## Documentation
