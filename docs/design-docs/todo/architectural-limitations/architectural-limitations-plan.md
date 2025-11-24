@@ -12,7 +12,7 @@
 
 ## Step Overview (with Completion Status)
 
-- [ ] **Step 1**: Foundation - Extension Structure
+- [x] **Step 1**: Foundation - Extension Structure ✓ (Completed 2025-01-24)
 - [ ] **Step 2**: DSL Parsing and Configuration
 - [ ] **Step 3**: Build Step Implementation
 - [ ] **Step 4**: Test Step Implementation
@@ -31,7 +31,9 @@
 
 ## Detailed Implementation Steps
 
-### Step 1: Foundation - Extension Structure
+### Step 1: Foundation - Extension Structure ✓ COMPLETED
+
+**Status:** ✓ COMPLETED (2025-01-24)
 
 **Goal:** Create the basic extension structure for `dockerWorkflows` DSL.
 
@@ -39,37 +41,53 @@
 
 **Sub-steps:**
 
-- [ ] **Step 1.1**: Create `DockerWorkflowsExtension.groovy`
+- [x] **Step 1.1**: Create `DockerWorkflowsExtension.groovy`
   - Create extension class with `NamedDomainObjectContainer<PipelineSpec>` for pipelines
   - Add constructor that accepts `ObjectFactory`
   - Add DSL method `void pipelines(Action<NamedDomainObjectContainer<PipelineSpec>> action)`
   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerWorkflowsExtension.groovy`
   - Estimated LOC: 40
+  - **Actual LOC: 56**
 
-- [ ] **Step 1.2**: Create `PipelineSpec.groovy` skeleton
+- [x] **Step 1.2**: Create `PipelineSpec.groovy` skeleton
   - Create basic spec class with name property
   - Add `Property<String> description` field
   - Add empty placeholders for step specs (build, test, onTestSuccess, etc.)
   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/PipelineSpec.groovy`
   - Estimated LOC: 30
+  - **Actual LOC: 49**
 
-- [ ] **Step 1.3**: Write unit tests for extension registration
+- [x] **Step 1.3**: Write unit tests for extension registration
   - Test that extension can be created
   - Test that pipelines container is accessible
   - Test basic DSL parsing (empty pipelines)
   - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerWorkflowsExtensionTest.groovy`
   - Estimated LOC: 80
   - Coverage target: 100%
+  - **Actual LOC: 132**
+  - **Coverage achieved: 100% on workflow package**
 
-- [ ] **Step 1.4**: Write functional test for extension visibility
+- [x] **Step 1.4**: Write functional test for extension visibility
   - Test that `dockerWorkflows` block can be declared in build.gradle
   - Test that empty pipeline definitions are parsed
   - Location: `plugin/src/functionalTest/groovy/DockerWorkflowsExtensionFunctionalTest.groovy`
   - Estimated LOC: 60
+  - **Actual LOC: 165**
+  - **All 4 functional tests passing**
 
-**Deliverable:** `dockerWorkflows { pipelines { myPipeline { } } }` parses without error
+**Deliverable:** ✓ `dockerWorkflows { pipelines { myPipeline { } } }` parses without error
 
-**Estimated Effort:** 1 day
+**Actual Effort:** 1 day (as estimated)
+
+**Test Results:**
+- Unit tests: ✓ ALL PASSED (7 tests, 100% coverage on workflow package)
+- Functional tests: ✓ ALL PASSED (4 tests)
+- Total build: ✓ BUILD SUCCESSFUL (267 tests, 0 failures)
+
+**Notes:**
+- Fixed functional test issue: Updated `.withPluginClasspath()` to use explicit classpath for Gradle 9/10 TestKit compatibility
+- Registered extension in GradleDockerPlugin.groovy at line 59
+- All files follow project coding standards (≤120 chars, ≤500 lines per file)
 
 ---
 
