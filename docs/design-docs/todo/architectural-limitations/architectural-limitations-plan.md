@@ -1,0 +1,978 @@
+# Implementation Plan: dockerWorkflows DSL for Build → Test → Publish Workflow
+
+**Status:** Planning Phase
+**Date:** 2025-01-23
+**Target Version:** 2.0.0
+**Related Documents:**
+- [Architectural Limitations Analysis](architectural-limitations-analysis.md)
+- [Option C: Objective Approach Usage](architectural-limitations-objective-approach-usage.md)
+- [Feasibility Analysis](architectural-limitations-objective-approach-usage-feasibility-analysis.md)
+
+---
+
+## Step Overview (with Completion Status)
+
+- [ ] **Step 1**: Foundation - Extension Structure
+- [ ] **Step 2**: DSL Parsing and Configuration
+- [ ] **Step 3**: Build Step Implementation
+- [ ] **Step 4**: Test Step Implementation
+- [ ] **Step 5**: Conditional Execution Logic
+- [ ] **Step 6**: Tag Operation Implementation
+- [ ] **Step 7**: Save Operation Implementation
+- [ ] **Step 8**: Publish Operation Implementation
+- [ ] **Step 9**: Failure Handling and Cleanup
+- [ ] **Step 10**: Plugin Integration and Task Registration
+- [ ] **Step 11**: Configuration Cache Compatibility
+- [ ] **Step 12**: Integration Testing
+- [ ] **Step 13**: Documentation and Examples
+- [ ] **Step 14**: Migration Guide and Backward Compatibility
+
+---
+
+## Detailed Implementation Steps
+
+### Step 1: Foundation - Extension Structure
+
+**Goal:** Create the basic extension structure for `dockerWorkflows` DSL.
+
+**Context:** This establishes the foundation for the new DSL without implementing any functionality. We create empty extension classes that can be registered with the plugin.
+
+**Sub-steps:**
+
+- [ ] **Step 1.1**: Create `DockerWorkflowsExtension.groovy`
+  - Create extension class with `NamedDomainObjectContainer<PipelineSpec>` for pipelines
+  - Add constructor that accepts `ObjectFactory`
+  - Add DSL method `void pipelines(Action<NamedDomainObjectContainer<PipelineSpec>> action)`
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerWorkflowsExtension.groovy`
+  - Estimated LOC: 40
+
+- [ ] **Step 1.2**: Create `PipelineSpec.groovy` skeleton
+  - Create basic spec class with name property
+  - Add `Property<String> description` field
+  - Add empty placeholders for step specs (build, test, onTestSuccess, etc.)
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/PipelineSpec.groovy`
+  - Estimated LOC: 30
+
+- [ ] **Step 1.3**: Write unit tests for extension registration
+  - Test that extension can be created
+  - Test that pipelines container is accessible
+  - Test basic DSL parsing (empty pipelines)
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerWorkflowsExtensionTest.groovy`
+  - Estimated LOC: 80
+  - Coverage target: 100%
+
+- [ ] **Step 1.4**: Write functional test for extension visibility
+  - Test that `dockerWorkflows` block can be declared in build.gradle
+  - Test that empty pipeline definitions are parsed
+  - Location: `plugin/src/functionalTest/groovy/DockerWorkflowsExtensionFunctionalTest.groovy`
+  - Estimated LOC: 60
+
+**Deliverable:** `dockerWorkflows { pipelines { myPipeline { } } }` parses without error
+
+**Estimated Effort:** 1 day
+
+---
+
+### Step 2: DSL Parsing and Configuration
+
+**Goal:** Implement all spec classes for complete DSL structure.
+
+**Context:** Create the spec classes that represent the DSL configuration. These are data holders that will be populated during Gradle's configuration phase.
+
+**Sub-steps:**
+
+- [ ] **Step 2.1**: Create `BuildStepSpec.groovy`
+  - Add `Property<ImageSpec> image` for reference to docker.images.*
+  - Add `MapProperty<String, String> buildArgs` for build argument overrides
+  - Add `Property<Action<Void>> beforeBuild` and `afterBuild` hooks
+  - Use Provider API throughout
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/BuildStepSpec.groovy`
+  - Estimated LOC: 60
+
+- [ ] **Step 2.2**: Create `TestStepSpec.groovy`
+  - Add `Property<ComposeStackSpec> stack` for reference to dockerOrch.composeStacks.*
+  - Add `Property<Task> testTask` for test task reference
+  - Add `Property<Integer> timeoutMinutes`
+  - Add `Property<Action<Void>> beforeTest` and `Property<Action<TestResult>> afterTest` hooks
+  - Use Provider API throughout
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/TestStepSpec.groovy`
+  - Estimated LOC: 70
+
+- [ ] **Step 2.3**: Create `SuccessStepSpec.groovy`
+  - Add `ListProperty<String> additionalTags`
+  - Add nested `SaveSpec save` (reuse existing SaveSpec)
+  - Add nested `PublishSpec publish` (reuse existing PublishSpec)
+  - Add `Property<Action<Void>> afterSuccess` hook
+  - Use Provider API throughout
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/SuccessStepSpec.groovy`
+  - Estimated LOC: 80
+
+- [ ] **Step 2.4**: Create `FailureStepSpec.groovy`
+  - Add `ListProperty<String> additionalTags` for failure tags
+  - Add `Property<DirectoryProperty> saveFailureLogsDir`
+  - Add `ListProperty<String> includeServices`
+  - Add `Property<Action<Void>> afterFailure` hook
+  - Use Provider API throughout
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/FailureStepSpec.groovy`
+  - Estimated LOC: 60
+
+- [ ] **Step 2.5**: Create `AlwaysStepSpec.groovy`
+  - Add `Property<Boolean> removeTestContainers`
+  - Add `Property<Boolean> keepFailedContainers`
+  - Add `Property<Boolean> cleanupImages`
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/AlwaysStepSpec.groovy`
+  - Estimated LOC: 50
+
+- [ ] **Step 2.6**: Create `TestResult.groovy` data class
+  - Add fields: success, executed, upToDate, skipped, failureCount, totalCount
+  - Add helper methods: isSuccess(), getFailureCount()
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/TestResult.groovy`
+  - Estimated LOC: 40
+
+- [ ] **Step 2.7**: Wire spec classes into `PipelineSpec.groovy`
+  - Add all step spec properties
+  - Add DSL methods for each step: `void build(Action<BuildStepSpec>)`, etc.
+  - Implement proper initialization
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/PipelineSpec.groovy`
+  - Estimated LOC: 100 (total in file)
+
+- [ ] **Step 2.8**: Write unit tests for all spec classes
+  - Test property initialization
+  - Test DSL method invocation
+  - Test nested spec configuration
+  - Test Provider API usage
+  - Locations: `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/workflow/*Test.groovy`
+  - Estimated LOC: 400 (across all test files)
+  - Coverage target: 100%
+
+- [ ] **Step 2.9**: Write functional tests for DSL parsing
+  - Test complete DSL configuration
+  - Test cross-references to docker and dockerOrch DSLs
+  - Test validation (missing required fields)
+  - Location: `plugin/src/functionalTest/groovy/DockerWorkflowsDslParsingFunctionalTest.groovy`
+  - Estimated LOC: 200
+
+**Deliverable:** Complete DSL structure can be configured and validated
+
+**Estimated Effort:** 3 days
+
+---
+
+### Step 3: Build Step Implementation
+
+**Goal:** Implement the build step that invokes existing dockerBuild* tasks.
+
+**Context:** The build step must reference an ImageSpec from the docker DSL and invoke the corresponding dockerBuild task. This establishes the pattern for orchestration.
+
+**Sub-steps:**
+
+- [ ] **Step 3.1**: Create `BuildStepExecutor.groovy`
+  - Add method `void execute(BuildStepSpec buildSpec, PipelineContext context)`
+  - Implement hook execution (beforeBuild)
+  - Implement task lookup: `project.tasks.named("dockerBuild${imageName}")`
+  - Implement task action invocation
+  - Implement hook execution (afterBuild)
+  - Store built image in context
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/BuildStepExecutor.groovy`
+  - Estimated LOC: 120
+
+- [ ] **Step 3.2**: Create `PipelineContext.groovy`
+  - Add field `ImageSpec builtImage`
+  - Add field `TestResult testResult`
+  - Add field `Map<String, Object> metadata` for extensibility
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/PipelineContext.groovy`
+  - Estimated LOC: 40
+
+- [ ] **Step 3.3**: Write unit tests for BuildStepExecutor
+  - Test successful build execution
+  - Test beforeBuild hook execution
+  - Test afterBuild hook execution
+  - Test context population
+  - Test error handling (missing task)
+  - Mock Project and Task
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/BuildStepExecutorTest.groovy`
+  - Estimated LOC: 250
+  - Coverage target: 100%
+
+- [ ] **Step 3.4**: Write functional test for build step
+  - Create test project with docker.images configuration
+  - Create workflow with build step
+  - Verify dockerBuild task is invoked
+  - Location: `plugin/src/functionalTest/groovy/BuildStepExecutionFunctionalTest.groovy`
+  - Estimated LOC: 150
+
+**Deliverable:** `build { image = docker.images.myApp }` successfully invokes dockerBuild task
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 4: Test Step Implementation
+
+**Goal:** Implement the test step that orchestrates composeUp, test execution, and composeDown.
+
+**Context:** The test step must start a compose stack, run the specified test task, capture test results, and ensure cleanup via composeDown.
+
+**Sub-steps:**
+
+- [ ] **Step 4.1**: Create `TestStepExecutor.groovy`
+  - Add method `TestResult execute(TestStepSpec testSpec, PipelineContext context)`
+  - Implement beforeTest hook execution
+  - Implement composeUp task invocation
+  - Implement test task invocation
+  - Implement test result capture
+  - Implement afterTest hook execution
+  - Implement composeDown task invocation (in finally block)
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/TestStepExecutor.groovy`
+  - Estimated LOC: 180
+
+- [ ] **Step 4.2**: Create `TestResultCapture.groovy`
+  - Add method `TestResult captureResult(Task testTask)`
+  - Implement task state inspection (success/failure)
+  - Implement JUnit XML parsing (if available)
+  - Implement fallback to task state
+  - Add support for multiple test result formats (JUnit, TestNG)
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/TestResultCapture.groovy`
+  - Estimated LOC: 150
+
+- [ ] **Step 4.3**: Write unit tests for TestStepExecutor
+  - Test successful test execution
+  - Test failed test execution
+  - Test beforeTest hook execution
+  - Test afterTest hook execution (with TestResult)
+  - Test composeDown is always called (even on failure)
+  - Test timeout handling
+  - Mock Project, Task, and ComposeService
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/TestStepExecutorTest.groovy`
+  - Estimated LOC: 350
+  - Coverage target: 100%
+
+- [ ] **Step 4.4**: Write unit tests for TestResultCapture
+  - Test task state inspection
+  - Test JUnit XML parsing
+  - Test failure count calculation
+  - Test fallback behavior
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/TestResultCaptureTest.groovy`
+  - Estimated LOC: 200
+  - Coverage target: 100%
+
+- [ ] **Step 4.5**: Write functional test for test step
+  - Create test project with dockerOrch.composeStacks configuration
+  - Create workflow with test step
+  - Verify composeUp is invoked
+  - Verify test task is invoked
+  - Verify composeDown is invoked
+  - Test both passing and failing scenarios
+  - Location: `plugin/src/functionalTest/groovy/TestStepExecutionFunctionalTest.groovy`
+  - Estimated LOC: 250
+
+**Deliverable:** `test { stack = dockerOrch.composeStacks.myTest; testTask = tasks.named('integrationTest') }` successfully orchestrates compose lifecycle and captures results
+
+**Estimated Effort:** 3 days
+
+---
+
+### Step 5: Conditional Execution Logic
+
+**Goal:** Implement the core conditional logic that routes to success or failure paths based on test results.
+
+**Context:** This is the critical component that enables build → test → conditional publish. The orchestrator must evaluate test results and execute the appropriate path.
+
+**Sub-steps:**
+
+- [ ] **Step 5.1**: Create `ConditionalExecutor.groovy`
+  - Add method `void executeConditional(TestResult testResult, SuccessStepSpec successSpec, FailureStepSpec failureSpec, PipelineContext context)`
+  - Implement test result evaluation
+  - Route to success path if tests passed
+  - Route to failure path if tests failed
+  - Add detailed logging for debugging
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/ConditionalExecutor.groovy`
+  - Estimated LOC: 80
+
+- [ ] **Step 5.2**: Create `PipelineRunTask.groovy` skeleton
+  - Extend `DefaultTask`
+  - Add `@Internal Property<PipelineSpec> pipelineSpec`
+  - Add `@Input Property<String> pipelineName`
+  - Add injected services (`DockerService`, `ComposeService`)
+  - Create `@TaskAction void runPipeline()` method with basic flow
+  - Implement try/finally for cleanup
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
+  - Estimated LOC: 200
+
+- [ ] **Step 5.3**: Wire executors into PipelineRunTask
+  - Instantiate BuildStepExecutor, TestStepExecutor, ConditionalExecutor
+  - Implement sequential execution: build → test → conditional
+  - Pass PipelineContext between executors
+  - Implement error handling and logging
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
+  - Estimated LOC: 300 (total in file)
+
+- [ ] **Step 5.4**: Write unit tests for ConditionalExecutor
+  - Test success path routing (tests passed)
+  - Test failure path routing (tests failed)
+  - Test edge cases (no success spec, no failure spec)
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/ConditionalExecutorTest.groovy`
+  - Estimated LOC: 150
+  - Coverage target: 100%
+
+- [ ] **Step 5.5**: Write unit tests for PipelineRunTask orchestration
+  - Test build → test → success flow
+  - Test build → test → failure flow
+  - Test build failure (stops before test)
+  - Test cleanup is always called
+  - Mock all executors
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/PipelineRunTaskTest.groovy`
+  - Estimated LOC: 400
+  - Coverage target: 100%
+
+- [ ] **Step 5.6**: Write functional test for conditional execution
+  - Create workflow with success and failure paths
+  - Test with passing tests (verify success path)
+  - Test with failing tests (verify failure path)
+  - Location: `plugin/src/functionalTest/groovy/ConditionalExecutionFunctionalTest.groovy`
+  - Estimated LOC: 200
+
+**Deliverable:** Conditional routing based on test results works correctly
+
+**Estimated Effort:** 3 days
+
+---
+
+### Step 6: Tag Operation Implementation
+
+**Goal:** Implement the ability to apply additional tags after tests pass.
+
+**Context:** Users need to add tags like 'stable' or 'production' only if tests pass. This reuses the existing DockerService but applies tags conditionally.
+
+**Sub-steps:**
+
+- [ ] **Step 6.1**: Create `TagApplicator.groovy`
+  - Add method `void applyTags(ImageSpec image, List<String> additionalTags, DockerService dockerService)`
+  - Build source image reference from ImageSpec
+  - For each tag, build target image reference
+  - Invoke `dockerService.tagImage(source, target)`
+  - Add logging for each tag applied
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/operation/TagApplicator.groovy`
+  - Estimated LOC: 80
+
+- [ ] **Step 6.2**: Create `SuccessStepExecutor.groovy`
+  - Add method `void execute(SuccessStepSpec successSpec, PipelineContext context)`
+  - Apply additional tags if configured (use TagApplicator)
+  - Execute save operation if configured (placeholder for now)
+  - Execute publish operation if configured (placeholder for now)
+  - Execute afterSuccess hook
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutor.groovy`
+  - Estimated LOC: 100
+
+- [ ] **Step 6.3**: Write unit tests for TagApplicator
+  - Test single tag application
+  - Test multiple tag application
+  - Test tag reference construction
+  - Test error handling (tag operation fails)
+  - Mock DockerService
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/operation/TagApplicatorTest.groovy`
+  - Estimated LOC: 200
+  - Coverage target: 100%
+
+- [ ] **Step 6.4**: Write unit tests for SuccessStepExecutor
+  - Test tag application
+  - Test afterSuccess hook execution
+  - Test with no tags configured
+  - Mock TagApplicator and DockerService
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutorTest.groovy`
+  - Estimated LOC: 150
+  - Coverage target: 100%
+
+- [ ] **Step 6.5**: Write functional test for tag operation
+  - Create workflow with additionalTags in onTestSuccess
+  - Run workflow with passing tests
+  - Verify tags were applied using `docker images`
+  - Location: `plugin/src/functionalTest/groovy/TagOperationFunctionalTest.groovy`
+  - Estimated LOC: 120
+
+**Deliverable:** `onTestSuccess { addTags(['stable', 'production']) }` successfully applies tags after tests pass
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 7: Save Operation Implementation
+
+**Goal:** Implement the ability to save images to tar files after tests pass.
+
+**Context:** Reuse the existing SaveSpec and DockerService.saveImage() method, but execute conditionally after tests pass.
+
+**Sub-steps:**
+
+- [ ] **Step 7.1**: Create `SaveOperationExecutor.groovy`
+  - Add method `void execute(SaveSpec saveSpec, ImageSpec image, DockerService dockerService)`
+  - Build image reference from ImageSpec
+  - Get output file from saveSpec
+  - Get compression type from saveSpec
+  - Invoke `dockerService.saveImage(imageRef, outputFile, compression)`
+  - Add logging for save operation
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/operation/SaveOperationExecutor.groovy`
+  - Estimated LOC: 70
+
+- [ ] **Step 7.2**: Wire SaveOperationExecutor into SuccessStepExecutor
+  - Add save operation invocation if `successSpec.save != null`
+  - Pass SaveSpec, ImageSpec, and DockerService
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutor.groovy`
+  - Estimated LOC: 150 (total in file)
+
+- [ ] **Step 7.3**: Write unit tests for SaveOperationExecutor
+  - Test save with GZIP compression
+  - Test save with BZIP2 compression
+  - Test save with no compression
+  - Test output file creation
+  - Test error handling (save operation fails)
+  - Mock DockerService
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/operation/SaveOperationExecutorTest.groovy`
+  - Estimated LOC: 200
+  - Coverage target: 100%
+
+- [ ] **Step 7.4**: Update SuccessStepExecutor unit tests
+  - Test save operation execution
+  - Test with no save configured
+  - Location: Update `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutorTest.groovy`
+  - Estimated LOC: 250 (total in file)
+  - Coverage target: 100%
+
+- [ ] **Step 7.5**: Write functional test for save operation
+  - Create workflow with save in onTestSuccess
+  - Run workflow with passing tests
+  - Verify tar file was created
+  - Verify tar file can be loaded with `docker load`
+  - Location: `plugin/src/functionalTest/groovy/SaveOperationFunctionalTest.groovy`
+  - Estimated LOC: 150
+
+**Deliverable:** `onTestSuccess { save { compression.set(GZIP); outputFile.set(...) } }` successfully saves image after tests pass
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 8: Publish Operation Implementation
+
+**Goal:** Implement the ability to publish images to registries after tests pass.
+
+**Context:** Reuse the existing PublishSpec and DockerService.pushImage() method, but execute conditionally after tests pass. Support multiple publish targets.
+
+**Sub-steps:**
+
+- [ ] **Step 8.1**: Create `PublishOperationExecutor.groovy`
+  - Add method `void execute(PublishSpec publishSpec, ImageSpec image, DockerService dockerService)`
+  - Iterate over publish targets (`publishSpec.to.all { target -> ... }`)
+  - For each target:
+    - Build source image reference
+    - For each publishTag, build target image reference
+    - Tag image for target registry: `dockerService.tagImage(source, target)`
+    - Push image to registry: `dockerService.pushImage(target, auth)`
+  - Add logging for each publish operation
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/operation/PublishOperationExecutor.groovy`
+  - Estimated LOC: 120
+
+- [ ] **Step 8.2**: Wire PublishOperationExecutor into SuccessStepExecutor
+  - Add publish operation invocation if `successSpec.publish != null`
+  - Pass PublishSpec, ImageSpec, and DockerService
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutor.groovy`
+  - Estimated LOC: 180 (total in file)
+
+- [ ] **Step 8.3**: Write unit tests for PublishOperationExecutor
+  - Test single target publish
+  - Test multiple target publish
+  - Test multiple tags per target
+  - Test authentication handling
+  - Test error handling (push fails)
+  - Mock DockerService
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/operation/PublishOperationExecutorTest.groovy`
+  - Estimated LOC: 300
+  - Coverage target: 100%
+
+- [ ] **Step 8.4**: Update SuccessStepExecutor unit tests
+  - Test publish operation execution
+  - Test with no publish configured
+  - Test complete success path (tags + save + publish)
+  - Location: Update `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/SuccessStepExecutorTest.groovy`
+  - Estimated LOC: 400 (total in file)
+  - Coverage target: 100%
+
+- [ ] **Step 8.5**: Write functional test for publish operation
+  - Set up local Docker registry for testing
+  - Create workflow with publish in onTestSuccess
+  - Run workflow with passing tests
+  - Verify image was pushed to registry
+  - Verify image can be pulled from registry
+  - Clean up registry after test
+  - Location: `plugin/src/functionalTest/groovy/PublishOperationFunctionalTest.groovy`
+  - Estimated LOC: 250
+
+**Deliverable:** `onTestSuccess { publish { to('prod') { registry.set('ghcr.io'); ... } } }` successfully publishes image after tests pass
+
+**Estimated Effort:** 3 days
+
+---
+
+### Step 9: Failure Handling and Cleanup
+
+**Goal:** Implement failure path execution and always-run cleanup operations.
+
+**Context:** When tests fail, we need to execute failure-specific operations (save logs, add failure tags) and ensure cleanup always runs.
+
+**Sub-steps:**
+
+- [ ] **Step 9.1**: Create `FailureStepExecutor.groovy`
+  - Add method `void execute(FailureStepSpec failureSpec, PipelineContext context)`
+  - Apply failure tags if configured (reuse TagApplicator)
+  - Save failure logs if configured
+  - Execute afterFailure hook
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/FailureStepExecutor.groovy`
+  - Estimated LOC: 100
+
+- [ ] **Step 9.2**: Create `AlwaysStepExecutor.groovy`
+  - Add method `void execute(AlwaysStepSpec alwaysSpec, PipelineContext context)`
+  - Remove test containers if configured
+  - Clean up images if configured
+  - Handle cleanup errors gracefully (log but don't fail)
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/AlwaysStepExecutor.groovy`
+  - Estimated LOC: 80
+
+- [ ] **Step 9.3**: Wire failure and cleanup into PipelineRunTask
+  - Add failure path execution in else branch
+  - Add cleanup execution in finally block
+  - Ensure cleanup runs even on exceptions
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
+  - Estimated LOC: 350 (total in file)
+
+- [ ] **Step 9.4**: Write unit tests for FailureStepExecutor
+  - Test failure tag application
+  - Test failure log saving
+  - Test afterFailure hook execution
+  - Test with no failure spec configured
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/FailureStepExecutorTest.groovy`
+  - Estimated LOC: 200
+  - Coverage target: 100%
+
+- [ ] **Step 9.5**: Write unit tests for AlwaysStepExecutor
+  - Test container cleanup
+  - Test image cleanup
+  - Test cleanup error handling
+  - Test with no cleanup configured
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/AlwaysStepExecutorTest.groovy`
+  - Estimated LOC: 150
+  - Coverage target: 100%
+
+- [ ] **Step 9.6**: Update PipelineRunTask unit tests
+  - Test complete failure flow (build → test fail → failure operations → cleanup)
+  - Test cleanup runs on success
+  - Test cleanup runs on failure
+  - Test cleanup runs on exception
+  - Location: Update `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/PipelineRunTaskTest.groovy`
+  - Estimated LOC: 600 (total in file)
+  - Coverage target: 100%
+
+- [ ] **Step 9.7**: Write functional tests for failure handling
+  - Create workflow with failing tests
+  - Verify failure path is executed
+  - Verify cleanup runs
+  - Verify no containers remain after test
+  - Location: `plugin/src/functionalTest/groovy/FailureHandlingFunctionalTest.groovy`
+  - Estimated LOC: 200
+
+**Deliverable:** Failure path and cleanup operations work correctly
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 10: Plugin Integration and Task Registration
+
+**Goal:** Register the dockerWorkflows extension and create pipeline tasks.
+
+**Context:** Integrate the workflow extension into GradleDockerPlugin and register tasks for each pipeline.
+
+**Sub-steps:**
+
+- [ ] **Step 10.1**: Register DockerWorkflowsExtension in GradleDockerPlugin
+  - Add extension registration in `apply(Project project)`
+  - Wire to ObjectFactory for proper instantiation
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy`
+  - Estimated LOC: 20 (added)
+
+- [ ] **Step 10.2**: Create task registration method
+  - Add `registerWorkflowTasks(Project, DockerWorkflowsExtension, DockerExtension, DockerOrchExtension)`
+  - Implement pipeline iteration: `workflowExt.pipelines.all { pipelineSpec -> ... }`
+  - Register `runMyPipeline` task for each pipeline
+  - Wire PipelineSpec to task
+  - Wire services (DockerService, ComposeService) to task
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy`
+  - Estimated LOC: 100 (added)
+
+- [ ] **Step 10.3**: Implement cross-DSL reference validation
+  - Validate that BuildStepSpec.image references valid ImageSpec
+  - Validate that TestStepSpec.stack references valid ComposeStackSpec
+  - Validate that TestStepSpec.testTask references valid Test task
+  - Add helpful error messages for invalid references
+  - Location: Create `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidator.groovy`
+  - Estimated LOC: 150
+
+- [ ] **Step 10.4**: Wire validation into task registration
+  - Validate each pipeline during afterEvaluate
+  - Fail fast with clear error messages
+  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy`
+  - Estimated LOC: 150 (total added to plugin)
+
+- [ ] **Step 10.5**: Write unit tests for task registration
+  - Test that tasks are registered for each pipeline
+  - Test task naming convention
+  - Test task configuration
+  - Test service injection
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/GradleDockerPluginWorkflowTest.groovy`
+  - Estimated LOC: 200
+  - Coverage target: 100%
+
+- [ ] **Step 10.6**: Write unit tests for validation
+  - Test valid cross-DSL references
+  - Test invalid image reference
+  - Test invalid stack reference
+  - Test invalid test task reference
+  - Test error messages
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidatorTest.groovy`
+  - Estimated LOC: 250
+  - Coverage target: 100%
+
+- [ ] **Step 10.7**: Write functional test for plugin integration
+  - Test complete plugin with all three DSLs
+  - Test task generation
+  - Test cross-DSL references
+  - Test validation errors
+  - Location: `plugin/src/functionalTest/groovy/PluginIntegrationFunctionalTest.groovy`
+  - Estimated LOC: 300
+
+**Deliverable:** Plugin registers dockerWorkflows extension and creates pipeline tasks
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 11: Configuration Cache Compatibility
+
+**Goal:** Ensure all workflow code is compatible with Gradle 9/10 configuration cache.
+
+**Context:** Configuration cache is a hard requirement. All tasks must be serializable and avoid capturing Project references.
+
+**Sub-steps:**
+
+- [ ] **Step 11.1**: Audit all workflow classes for configuration cache compliance
+  - Check for Project references in @TaskAction methods
+  - Check for Property/Provider usage
+  - Check for serializable fields
+  - Document any violations
+  - Location: Create audit checklist in `docs/design-docs/gradle-9-and-10-compatibility.md`
+  - Estimated LOC: 50 (documentation)
+
+- [ ] **Step 11.2**: Fix configuration cache violations
+  - Replace Project references with injected services
+  - Ensure all configuration uses Provider API
+  - Make all task fields serializable
+  - Location: Update all task and executor classes as needed
+  - Estimated LOC: Variable (refactoring)
+
+- [ ] **Step 11.3**: Add configuration cache tests
+  - Test pipeline execution with config cache enabled
+  - Test cache hit on second run
+  - Test cache invalidation on configuration change
+  - Location: `plugin/src/functionalTest/groovy/ConfigurationCacheFunctionalTest.groovy`
+  - Estimated LOC: 200
+
+- [ ] **Step 11.4**: Run full test suite with configuration cache enabled
+  - Enable config cache in all functional tests
+  - Verify no warnings or errors
+  - Document any limitations
+  - Location: Update `plugin/src/functionalTest/resources/test-project/gradle.properties`
+
+**Deliverable:** All workflow functionality works with configuration cache enabled
+
+**Estimated Effort:** 2 days
+
+---
+
+### Step 12: Integration Testing
+
+**Goal:** Create comprehensive integration tests that exercise complete workflows with real Docker operations.
+
+**Context:** Integration tests use real Docker and Compose, not mocks. These tests validate the entire workflow end-to-end.
+
+**Sub-steps:**
+
+- [ ] **Step 12.1**: Create test application for integration testing
+  - Simple Java application that can be containerized
+  - REST endpoint for health checks
+  - Location: `plugin-integration-test/dockerWorkflows/app/`
+  - Estimated LOC: 100
+
+- [ ] **Step 12.2**: Create Dockerfile for test application
+  - Multi-stage build
+  - Health check configuration
+  - Location: `plugin-integration-test/dockerWorkflows/app/src/main/docker/Dockerfile`
+  - Estimated LOC: 20
+
+- [ ] **Step 12.3**: Create integration test scenario 1: Basic workflow
+  - Build → Test → Publish on success
+  - Create build.gradle with complete workflow configuration
+  - Create integration test that runs workflow
+  - Verify image is built, tested, and published
+  - Verify no containers remain after test
+  - Location: `plugin-integration-test/dockerWorkflows/scenario-1-basic-workflow/`
+  - Estimated LOC: 300
+
+- [ ] **Step 12.4**: Create integration test scenario 2: Failed tests
+  - Build → Test (fail) → Failure operations
+  - Create failing integration test
+  - Verify failure path is executed
+  - Verify publish is skipped
+  - Verify cleanup runs
+  - Location: `plugin-integration-test/dockerWorkflows/scenario-2-failed-tests/`
+  - Estimated LOC: 250
+
+- [ ] **Step 12.5**: Create integration test scenario 3: Multiple pipelines
+  - Dev pipeline (build + test only)
+  - Staging pipeline (build + test + publish to staging)
+  - Production pipeline (build + test + publish to production)
+  - Verify each pipeline works independently
+  - Location: `plugin-integration-test/dockerWorkflows/scenario-3-multiple-pipelines/`
+  - Estimated LOC: 400
+
+- [ ] **Step 12.6**: Create integration test scenario 4: Complex success operations
+  - Build → Test → Tag + Save + Publish
+  - Verify all operations execute
+  - Verify tar file is created
+  - Verify image is published to registry
+  - Verify additional tags are applied
+  - Location: `plugin-integration-test/dockerWorkflows/scenario-4-complex-success/`
+  - Estimated LOC: 350
+
+- [ ] **Step 12.7**: Create integration test scenario 5: Hooks and customization
+  - Test beforeBuild, afterBuild hooks
+  - Test beforeTest, afterTest hooks
+  - Test afterSuccess, afterFailure hooks
+  - Verify hooks are called in correct order
+  - Location: `plugin-integration-test/dockerWorkflows/scenario-5-hooks/`
+  - Estimated LOC: 300
+
+- [ ] **Step 12.8**: Update integration test README
+  - Document all workflow scenarios
+  - Document expected behavior
+  - Document how to run tests
+  - Location: `plugin-integration-test/dockerWorkflows/README.md`
+  - Estimated LOC: 200 (documentation)
+
+**Deliverable:** Complete integration test coverage for all workflow scenarios
+
+**Estimated Effort:** 4 days
+
+---
+
+### Step 13: Documentation and Examples
+
+**Goal:** Create comprehensive documentation and usage examples.
+
+**Context:** Users need clear documentation on how to use the workflow DSL, when to use it vs. direct docker/dockerOrch DSLs, and best practices.
+
+**Sub-steps:**
+
+- [ ] **Step 13.1**: Create usage documentation
+  - Document complete DSL syntax
+  - Document all configuration options
+  - Document hooks and customization
+  - Document error handling
+  - Location: `docs/usage/usage-docker-workflows.md`
+  - Estimated LOC: 800 (documentation)
+
+- [ ] **Step 13.2**: Create basic example
+  - Simple build → test → publish workflow
+  - Minimal configuration
+  - Step-by-step explanation
+  - Location: `docs/examples/workflow-basic.md`
+  - Estimated LOC: 150 (documentation)
+
+- [ ] **Step 13.3**: Create multiple pipelines example
+  - Dev, staging, production pipelines
+  - Different configurations per environment
+  - CI/CD integration example
+  - Location: `docs/examples/workflow-multiple-pipelines.md`
+  - Estimated LOC: 300 (documentation)
+
+- [ ] **Step 13.4**: Create advanced features example
+  - Hooks usage
+  - Failure handling
+  - Cleanup operations
+  - Custom metadata
+  - Location: `docs/examples/workflow-advanced.md`
+  - Estimated LOC: 250 (documentation)
+
+- [ ] **Step 13.5**: Update main README
+  - Add workflow DSL overview
+  - Add quick start example
+  - Link to detailed documentation
+  - Location: `README.md`
+  - Estimated LOC: 100 (documentation)
+
+- [ ] **Step 13.6**: Create decision guide
+  - When to use docker DSL alone
+  - When to use dockerOrch DSL alone
+  - When to use dockerWorkflows DSL
+  - Comparison table
+  - Location: `docs/guides/choosing-the-right-dsl.md`
+  - Estimated LOC: 200 (documentation)
+
+- [ ] **Step 13.7**: Create troubleshooting guide
+  - Common errors and solutions
+  - Debugging tips
+  - FAQ
+  - Location: `docs/guides/troubleshooting-workflows.md`
+  - Estimated LOC: 300 (documentation)
+
+**Deliverable:** Complete, user-friendly documentation
+
+**Estimated Effort:** 3 days
+
+---
+
+### Step 14: Migration Guide and Backward Compatibility
+
+**Goal:** Ensure existing users can adopt workflows smoothly and understand migration path.
+
+**Context:** Workflows are a new feature in 2.0.0. Existing users need guidance on migration and assurance of backward compatibility.
+
+**Sub-steps:**
+
+- [ ] **Step 14.1**: Create migration guide
+  - Document changes from 1.x to 2.x
+  - Show before/after examples
+  - Explain benefits of migration
+  - Provide step-by-step migration instructions
+  - Location: `docs/migration/migrating-to-2.0.md`
+  - Estimated LOC: 400 (documentation)
+
+- [ ] **Step 14.2**: Create backward compatibility tests
+  - Test that 1.x build.gradle files work unchanged
+  - Test that docker and dockerOrch DSLs are unaffected
+  - Test mixing old and new approaches
+  - Location: `plugin/src/functionalTest/groovy/BackwardCompatibilityFunctionalTest.groovy`
+  - Estimated LOC: 200
+
+- [ ] **Step 14.3**: Document deprecation policy
+  - Clarify that docker and dockerOrch DSLs are NOT deprecated
+  - Explain when to use each approach
+  - Document long-term support plan
+  - Location: `docs/deprecation-policy.md`
+  - Estimated LOC: 100 (documentation)
+
+- [ ] **Step 14.4**: Create version comparison table
+  - Feature matrix: 1.x vs 2.x
+  - API comparison
+  - Highlight new features
+  - Location: `docs/version-comparison.md`
+  - Estimated LOC: 150 (documentation)
+
+- [ ] **Step 14.5**: Update CHANGELOG
+  - Document all new features
+  - Document breaking changes (if any)
+  - Document deprecations (if any)
+  - Location: `CHANGELOG.md`
+  - Estimated LOC: 100 (documentation)
+
+**Deliverable:** Clear migration path and backward compatibility assurance
+
+**Estimated Effort:** 2 days
+
+---
+
+## Total Estimated Effort
+
+| Step | Description | Effort |
+|------|-------------|--------|
+| Step 1 | Foundation - Extension Structure | 1 day |
+| Step 2 | DSL Parsing and Configuration | 3 days |
+| Step 3 | Build Step Implementation | 2 days |
+| Step 4 | Test Step Implementation | 3 days |
+| Step 5 | Conditional Execution Logic | 3 days |
+| Step 6 | Tag Operation Implementation | 2 days |
+| Step 7 | Save Operation Implementation | 2 days |
+| Step 8 | Publish Operation Implementation | 3 days |
+| Step 9 | Failure Handling and Cleanup | 2 days |
+| Step 10 | Plugin Integration and Task Registration | 2 days |
+| Step 11 | Configuration Cache Compatibility | 2 days |
+| Step 12 | Integration Testing | 4 days |
+| Step 13 | Documentation and Examples | 3 days |
+| Step 14 | Migration Guide and Backward Compatibility | 2 days |
+| **TOTAL** | | **34 days (6.8 weeks)** |
+
+**Note:** Estimate assumes one experienced developer working full-time. With parallelization or team collaboration, total time could be reduced to 4-5 weeks.
+
+---
+
+## Quality Gates
+
+Each step must meet these criteria before proceeding:
+
+1. **Code Quality**
+   - All code adheres to style guide (max 120 chars, max 500 lines per file)
+   - Cyclomatic complexity ≤ 10
+   - No compiler warnings
+
+2. **Test Coverage**
+   - Unit tests: 100% line and branch coverage
+   - Functional tests: All DSL features covered
+   - Integration tests: All scenarios covered
+
+3. **Documentation**
+   - All public APIs documented
+   - Usage examples provided
+   - Design decisions documented
+
+4. **Validation**
+   - All unit tests pass
+   - All functional tests pass
+   - All integration tests pass
+   - No lingering Docker containers after tests
+   - Configuration cache enabled and working
+
+---
+
+## Risk Mitigation
+
+| Risk | Mitigation |
+|------|------------|
+| Scope creep | Strict adherence to step boundaries; defer enhancements to future versions |
+| Configuration cache issues | Test with config cache from Step 1; fix violations immediately |
+| Integration test failures | Use real Docker operations from the start; validate cleanup in every test |
+| Poor documentation | Write docs alongside code; review examples with users |
+| Backward compatibility breaks | Test 1.x compatibility in Step 14; maintain separate DSLs |
+
+---
+
+## Success Criteria
+
+The implementation is complete when:
+
+- [ ] All steps marked as complete [x]
+- [ ] All unit tests pass (100% coverage)
+- [ ] All functional tests pass
+- [ ] All integration tests pass
+- [ ] No Docker containers remain after tests
+- [ ] Configuration cache works with all workflows
+- [ ] Documentation is complete and clear
+- [ ] Migration guide is available
+- [ ] Example projects demonstrate all features
+
+---
+
+## Next Actions
+
+1. Review this plan with the team
+2. Confirm technical approach (hybrid orchestration)
+3. Confirm estimated effort (6.8 weeks)
+4. Begin Step 1: Foundation - Extension Structure
+5. Update this document as steps are completed (mark with [x])
