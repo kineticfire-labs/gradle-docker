@@ -131,7 +131,8 @@ Use **Gradle tasks** (`composeUp*` / `composeDown*`) for suite-level orchestrati
 - Non-test-framework integrations
 
 **Limitations:**
-- Only supports suite lifecycle (not class or method)
+- Only supports CLASS lifecycle (containers managed by Gradle tasks)
+- For METHOD lifecycle, use test framework extensions
 - Requires explicit `dependsOn` and `finalizedBy` in build.gradle
 - More boilerplate configuration
 
@@ -141,8 +142,6 @@ All orchestration approaches support these lifecycle patterns:
 
 - **CLASS Lifecycle** - Containers start once for all tests in a class (balanced performance and isolation)
 - **METHOD Lifecycle** - Containers restart for each test method (maximum isolation, slower)
-- **SUITE Lifecycle** - Containers start once for entire test suite (fastest, only via Gradle tasks)
-
 Each pattern includes:
 - Automated container startup and shutdown
 - Health/readiness waiting
@@ -1191,11 +1190,11 @@ tasks.named('integrationTest') {
 ## Gradle Tasks (Optional - Suite Lifecycle)
 
 Gradle tasks provide suite-level orchestration using `composeUp*` and `composeDown*` tasks. Use this approach when:
-- You need containers to run for the entire test suite (suite lifecycle only)
+- You need containers to run for the entire test suite (CLASS lifecycle with manual Gradle task orchestration)
 - You're orchestrating containers manually in CI/CD pipelines
 - You need custom orchestration logic outside test frameworks
 
-**Note:** Gradle tasks only support **suite lifecycle**. For CLASS or METHOD lifecycles, use test framework extensions.
+**Note:** Gradle tasks only support **CLASS lifecycle**. For automatic CLASS or METHOD lifecycle management, use test framework extensions.
 
 ### Basic Suite Configuration
 
@@ -1588,7 +1587,7 @@ See [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md) 
 
 - **Test Framework Extensions (Recommended):** For most integration testing scenarios, provides automatic lifecycle
   management
-- **Gradle Tasks:** For suite lifecycle, CI/CD pipelines, or custom orchestration needs
+- **Gradle Tasks:** For CLASS lifecycle, CI/CD pipelines, or custom orchestration needs
 
 ### 3. Optimize Health Checks
 

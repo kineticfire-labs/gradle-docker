@@ -191,7 +191,7 @@ abstract class ComposeUpTask extends DefaultTask {
         def stateData = [
             stackName: stackName,
             projectName: projectName,
-            lifecycle: "suite",
+            lifecycle: "class",
             timestamp: Instant.now().toString(),
             services: composeState.services.collectEntries { serviceName, serviceInfo ->
                 [

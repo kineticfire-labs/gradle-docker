@@ -736,7 +736,7 @@ class ComposeUpTaskTest extends Specification {
         def json = new JsonSlurper().parse(stateFile)
         json.stackName == 'state-stack'
         json.projectName == 'state-project'
-        json.lifecycle == 'suite'
+        json.lifecycle == 'class'
         json.timestamp != null
         // Note: Service details will be tested in integration tests
         json.services != null

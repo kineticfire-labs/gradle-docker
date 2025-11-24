@@ -278,7 +278,7 @@ class ValidationMessagesFunctionalTest extends Specification {
             }
 
             tasks.register('customTest', Test) {
-                usesCompose stack: 'invalidStackName', lifecycle: 'suite'
+                usesCompose stack: 'invalidStackName', lifecycle: 'class'
             }
         """
 

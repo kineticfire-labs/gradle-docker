@@ -891,7 +891,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
             }
 
             test {
-                usesCompose(stack: 'testDb', lifecycle: 'suite')
+                usesCompose(stack: 'testDb', lifecycle: 'class')
             }
         """
 

@@ -149,7 +149,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        testIntegrationExt.usesCompose(testTask, 'testStack', 'suite')
+        testIntegrationExt.usesCompose(testTask, 'testStack', 'class')
 
         then:
         noExceptionThrown()
@@ -226,7 +226,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        extension.usesCompose(testTask, 'testStack', 'suite')
+        extension.usesCompose(testTask, 'testStack', 'class')
 
         then:
         def ex = thrown(IllegalStateException)
@@ -244,7 +244,7 @@ class TestIntegrationExtensionTest extends Specification {
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
 
         when:
-        testIntegrationExt.usesCompose(testTask, 'nonExistentStack', 'suite')
+        testIntegrationExt.usesCompose(testTask, 'nonExistentStack', 'class')
 
         then:
         def ex = thrown(IllegalArgumentException)
@@ -278,7 +278,7 @@ class TestIntegrationExtensionTest extends Specification {
         then:
         def ex = thrown(IllegalArgumentException)
         ex.message.contains("Invalid lifecycle")
-        ex.message.contains("Must be 'suite', 'class', or 'method'")
+        ex.message.contains("Must be 'class' or 'method'")
     }
 
     @Unroll
@@ -310,6 +310,6 @@ class TestIntegrationExtensionTest extends Specification {
         noExceptionThrown()
 
         where:
-        lifecycle << ['SUITE', 'Suite', 'CLASS', 'Class', 'METHOD', 'Method']
+        lifecycle << ['CLASS', 'Class', 'CLASS', 'Class', 'METHOD', 'Method']
     }
 }

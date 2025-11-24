@@ -58,7 +58,7 @@ abstract class TestIntegrationExtension {
      * Configure a test task to use Docker Compose stack with specified lifecycle
      * @param test Test task to configure
      * @param stackName Name of the compose stack to use
-     * @param lifecycle When to start/stop the stack: "suite", "class", or "method"
+     * @param lifecycle When to start/stop the stack: "class" or "method"
      */
     void usesCompose(Test test, String stackName, String lifecycle) {
         logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'",
@@ -94,9 +94,6 @@ abstract class TestIntegrationExtension {
 
         // Configure test task based on lifecycle
         switch (lifecycle.toLowerCase()) {
-            case 'suite':
-                configureSuiteLifecycle(test, stackName, stackSpec)
-                break
             case 'class':
                 configureClassLifecycle(test, stackName, stackSpec)
                 break
@@ -105,7 +102,7 @@ abstract class TestIntegrationExtension {
                 break
             default:
                 throw new IllegalArgumentException(
-                    "Invalid lifecycle '${lifecycle}'. Must be 'suite', 'class', or 'method'. " +
+                    "Invalid lifecycle '${lifecycle}'. Must be 'class' or 'method'. " +
                     "Example: usesCompose stack: '${stackName}', lifecycle: 'class'"
                 )
         }
@@ -122,19 +119,6 @@ abstract class TestIntegrationExtension {
         return stateDirProvider.map { dir ->
             dir.asFile.toPath().resolve("${stackName}-state.json").toString()
         }
-    }
-    
-    private void configureSuiteLifecycle(Test test, String stackName, stackSpec) {
-        def upTaskName = "composeUp${stackName.capitalize()}"
-        def downTaskName = "composeDown${stackName.capitalize()}"
-        
-        // Add dependency on compose tasks - this is sufficient for suite lifecycle
-        // The compose tasks will handle the actual Docker Compose operations
-        test.dependsOn upTaskName
-        test.finalizedBy downTaskName
-        
-        // Note: Removed doFirst/doLast logging to avoid configuration cache issues
-        // The compose tasks themselves handle logging of start/stop operations
     }
     
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {

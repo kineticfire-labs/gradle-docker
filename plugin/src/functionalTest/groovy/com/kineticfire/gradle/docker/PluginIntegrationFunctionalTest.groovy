@@ -98,7 +98,7 @@ class PluginIntegrationFunctionalTest extends Specification {
             }
 
             tasks.register('myCustomTest', Test) {
-                usesCompose stack: 'testStack', lifecycle: 'suite'
+                usesCompose stack: 'testStack', lifecycle: 'class'
             }
 
             task verifyUsesCompose {

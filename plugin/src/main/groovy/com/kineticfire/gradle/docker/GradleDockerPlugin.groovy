@@ -798,7 +798,7 @@ class GradleDockerPlugin implements Plugin<Project> {
             // Add usesCompose method
             test.ext.usesCompose = { Map args ->
                 def stackName = args.stack
-                def lifecycle = args.lifecycle ?: 'suite'
+                def lifecycle = args.lifecycle ?: 'class'
                 testIntegration.usesCompose(test, stackName, lifecycle)
             }
             

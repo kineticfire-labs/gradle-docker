@@ -1,7 +1,7 @@
 # Verification Test: Log Capture Functionality
 
 **Type**: Plugin Mechanics Validation
-**Lifecycle**: SUITE (composeUp before tests, composeDown after tests)
+**Lifecycle**: CLASS (composeUp before tests, composeDown after tests, managed by Gradle tasks)
 **Purpose**: Validates plugin's log capture capabilities with different configurations
 
 ## What This Test Validates
@@ -377,7 +377,8 @@ This test uses SUITE lifecycle (composeUp before tests, composeDown after tests)
 dockerOrch {
     composeStacks {
         myTest {
-            lifecycle = 'SUITE'
+            // Lifecycle managed by Gradle tasks (CLASS lifecycle via composeUp/composeDown dependencies)
+            // No lifecycle parameter needed in dockerOrch DSL when using Gradle task orchestration
 
             logs {
                 outputFile = layout.buildDirectory.file('compose-logs/test.log')

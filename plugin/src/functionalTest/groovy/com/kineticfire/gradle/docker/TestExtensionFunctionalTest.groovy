@@ -61,7 +61,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
             
             tasks.register('smokeTest', Test) {
-                usesCompose stack: 'testStack', lifecycle: 'suite'
+                usesCompose stack: 'testStack', lifecycle: 'class'
             }
             
             task verifyExtension {
@@ -204,7 +204,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
 
             tasks.register('suiteTest', Test) {
-                usesCompose stack: 'suiteStack', lifecycle: 'suite'
+                usesCompose stack: 'suiteStack', lifecycle: 'class'
             }
 
             task verifySuiteLifecycle {
@@ -291,7 +291,7 @@ class TestExtensionFunctionalTest extends Specification {
 
             // Custom test task type
             tasks.register('customTestTask', Test) {
-                usesCompose stack: 'customStack', lifecycle: 'suite'
+                usesCompose stack: 'customStack', lifecycle: 'class'
             }
 
             task verifyCustomTask {
@@ -334,7 +334,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
 
             tasks.register('depTest', Test) {
-                usesCompose stack: 'depStack', lifecycle: 'suite'
+                usesCompose stack: 'depStack', lifecycle: 'class'
             }
 
             task verifyDependencies {
@@ -377,7 +377,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
 
             tasks.register('finTest', Test) {
-                usesCompose stack: 'finStack', lifecycle: 'suite'
+                usesCompose stack: 'finStack', lifecycle: 'class'
             }
 
             task verifyFinalizers {
@@ -420,7 +420,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
 
             tasks.register('propTest', Test) {
-                usesCompose stack: 'propStack', lifecycle: 'suite'
+                usesCompose stack: 'propStack', lifecycle: 'class'
             }
 
             task verifyTaskConfig {
@@ -497,7 +497,7 @@ class TestExtensionFunctionalTest extends Specification {
             }
 
             tasks.register('notFoundTest', Test) {
-                usesCompose stack: 'nonExistentStack', lifecycle: 'suite'
+                usesCompose stack: 'nonExistentStack', lifecycle: 'class'
             }
         """
 

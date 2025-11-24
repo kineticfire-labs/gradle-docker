@@ -204,7 +204,7 @@ and annotation (stackName=differentStack). Use EITHER build.gradle OR annotation
 - ✅ Better isolation and predictability
 
 **Gradle Tasks (OPTIONAL):**
-- ⚠️ Only supports suite lifecycle
+- ⚠️ Only supports CLASS lifecycle (manual task orchestration, not automatic extension-based)
 - ⚠️ Requires manual `dependsOn`/`finalizedBy` configuration
 - ⚠️ More boilerplate
 - ✅ Good for CI/CD pipelines or custom orchestration
