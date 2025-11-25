@@ -6,6 +6,8 @@ with Gradle 9 and 10 (especially the configuration build cache) per @docs/design
 
 ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 
+./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
+
 
 ## wait for logs
 
