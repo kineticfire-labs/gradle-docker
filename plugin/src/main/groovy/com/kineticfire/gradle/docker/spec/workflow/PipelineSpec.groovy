@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec.workflow
 
+import org.gradle.api.Action
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 
@@ -38,6 +39,12 @@ abstract class PipelineSpec {
         this.objectFactory = objectFactory
 
         description.convention("")
+
+        build.convention(objectFactory.newInstance(BuildStepSpec, objectFactory))
+        test.convention(objectFactory.newInstance(TestStepSpec, objectFactory))
+        onTestSuccess.convention(objectFactory.newInstance(SuccessStepSpec, objectFactory))
+        onTestFailure.convention(objectFactory.newInstance(FailureStepSpec, objectFactory))
+        always.convention(objectFactory.newInstance(AlwaysStepSpec, objectFactory))
     }
 
     String getName() {
@@ -45,4 +52,46 @@ abstract class PipelineSpec {
     }
 
     abstract Property<String> getDescription()
+
+    abstract Property<BuildStepSpec> getBuild()
+
+    abstract Property<TestStepSpec> getTest()
+
+    abstract Property<SuccessStepSpec> getOnTestSuccess()
+
+    abstract Property<SuccessStepSpec> getOnSuccess()
+
+    abstract Property<FailureStepSpec> getOnTestFailure()
+
+    abstract Property<FailureStepSpec> getOnFailure()
+
+    abstract Property<AlwaysStepSpec> getAlways()
+
+    void build(Action<BuildStepSpec> action) {
+        action.execute(build.get())
+    }
+
+    void test(Action<TestStepSpec> action) {
+        action.execute(test.get())
+    }
+
+    void onTestSuccess(Action<SuccessStepSpec> action) {
+        action.execute(onTestSuccess.get())
+    }
+
+    void onSuccess(Action<SuccessStepSpec> action) {
+        action.execute(onSuccess.get())
+    }
+
+    void onTestFailure(Action<FailureStepSpec> action) {
+        action.execute(onTestFailure.get())
+    }
+
+    void onFailure(Action<FailureStepSpec> action) {
+        action.execute(onFailure.get())
+    }
+
+    void always(Action<AlwaysStepSpec> action) {
+        action.execute(always.get())
+    }
 }
