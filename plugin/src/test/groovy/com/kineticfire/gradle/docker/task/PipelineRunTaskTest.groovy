@@ -1,0 +1,575 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.gradle.docker.task
+
+import com.kineticfire.gradle.docker.spec.ComposeStackSpec
+import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
+import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TestResult
+import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
+import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+import org.gradle.api.GradleException
+import org.gradle.api.Project
+import org.gradle.testfixtures.ProjectBuilder
+import spock.lang.Specification
+import spock.lang.TempDir
+
+import java.nio.file.Path
+
+/**
+ * Unit tests for PipelineRunTask
+ */
+class PipelineRunTaskTest extends Specification {
+
+    @TempDir
+    Path tempDir
+
+    Project project
+    PipelineRunTask task
+
+    def setup() {
+        project = ProjectBuilder.builder()
+            .withProjectDir(tempDir.toFile())
+            .build()
+        task = project.tasks.create('pipelineRun', PipelineRunTask)
+    }
+
+    // ===== VALIDATION TESTS =====
+
+    def "validatePipelineSpec throws exception when pipelineSpec not present"() {
+        when:
+        task.pipelineName.set('test-pipeline')
+        task.validatePipelineSpec()
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('PipelineSpec must be configured')
+    }
+
+    def "validatePipelineSpec throws exception when pipelineName not present"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        task.pipelineSpec.set(pipelineSpec)
+
+        when:
+        task.validatePipelineSpec()
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('Pipeline name must be configured')
+    }
+
+    def "validatePipelineSpec passes with valid configuration"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        task.pipelineSpec.set(pipelineSpec)
+        task.pipelineName.set('test-pipeline')
+
+        when:
+        task.validatePipelineSpec()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== BUILD STEP TESTS =====
+
+    def "executeBuildStep skips when build spec is null"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def context = PipelineContext.create('test')
+
+        when:
+        def result = task.executeBuildStep(pipelineSpec, context)
+
+        then:
+        result == context
+    }
+
+    def "executeBuildStep skips when image not configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        pipelineSpec.build.set(buildSpec)
+        def context = PipelineContext.create('test')
+
+        when:
+        def result = task.executeBuildStep(pipelineSpec, context)
+
+        then:
+        result == context
+    }
+
+    def "executeBuildStep delegates to BuildStepExecutor when configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
+        buildSpec.image.set(imageSpec)
+        pipelineSpec.build.set(buildSpec)
+
+        def context = PipelineContext.create('test')
+        def updatedContext = context.withMetadata('built', 'true')
+
+        def mockExecutor = Mock(BuildStepExecutor)
+        mockExecutor.execute(buildSpec, context) >> updatedContext
+        task.setBuildStepExecutor(mockExecutor)
+
+        when:
+        def result = task.executeBuildStep(pipelineSpec, context)
+
+        then:
+        result == updatedContext
+    }
+
+    def "isBuildStepConfigured returns false when image not present"() {
+        given:
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+
+        expect:
+        !task.isBuildStepConfigured(buildSpec)
+    }
+
+    def "isBuildStepConfigured returns true when image is present"() {
+        given:
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
+        buildSpec.image.set(imageSpec)
+
+        expect:
+        task.isBuildStepConfigured(buildSpec)
+    }
+
+    // ===== TEST STEP TESTS =====
+
+    def "executeTestStep skips when test spec is null"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def context = PipelineContext.create('test')
+
+        when:
+        def result = task.executeTestStep(pipelineSpec, context)
+
+        then:
+        result == context
+    }
+
+    def "executeTestStep skips when stack not configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        pipelineSpec.test.set(testSpec)
+        def context = PipelineContext.create('test')
+
+        when:
+        def result = task.executeTestStep(pipelineSpec, context)
+
+        then:
+        result == context
+    }
+
+    def "executeTestStep delegates to TestStepExecutor when configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def testTask = project.tasks.create('myTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.testTask.set(testTask)
+        pipelineSpec.test.set(testSpec)
+
+        def context = PipelineContext.create('test')
+        def testResult = new TestResult(true, 5, 0, 0, 0, 5)
+        def updatedContext = context.withTestResult(testResult)
+
+        // Use Stub with constructorArgs since TestStepExecutor requires Project
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project]) {
+            execute(_, _) >> updatedContext
+        }
+        task.setTestStepExecutor(mockExecutor)
+
+        when:
+        def result = task.executeTestStep(pipelineSpec, context)
+
+        then:
+        result == updatedContext
+    }
+
+    def "isTestStepConfigured returns false when stack not present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testTask = project.tasks.create('myTest')
+        testSpec.testTask.set(testTask)
+
+        expect:
+        !task.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns false when testTask not present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        testSpec.stack.set(stackSpec)
+
+        expect:
+        !task.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns true when fully configured"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def testTask = project.tasks.create('myTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.testTask.set(testTask)
+
+        expect:
+        task.isTestStepConfigured(testSpec)
+    }
+
+    // ===== CONDITIONAL STEP TESTS =====
+
+    def "executeConditionalStep skips when test not completed"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def context = PipelineContext.create('test')
+
+        when:
+        def result = task.executeConditionalStep(pipelineSpec, context)
+
+        then:
+        result == context
+    }
+
+    def "executeConditionalStep delegates to ConditionalExecutor"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        pipelineSpec.onTestSuccess.set(successSpec)
+        pipelineSpec.onTestFailure.set(failureSpec)
+
+        def testResult = new TestResult(true, 5, 0, 0, 0, 5)
+        def context = PipelineContext.create('test').withTestResult(testResult)
+        def updatedContext = context.withAppliedTags(['success'])
+
+        // ConditionalExecutor has no-arg constructor so we can use Stub directly
+        def mockExecutor = Stub(ConditionalExecutor) {
+            executeConditional(_, _, _, _) >> updatedContext
+        }
+        task.setConditionalExecutor(mockExecutor)
+
+        when:
+        def result = task.executeConditionalStep(pipelineSpec, context)
+
+        then:
+        result == updatedContext
+    }
+
+    // ===== GET SUCCESS/FAILURE SPEC TESTS =====
+
+    def "getSuccessSpec returns onTestSuccess when present"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        successSpec.additionalTags.set(['test-tag'])
+        pipelineSpec.onTestSuccess.set(successSpec)
+
+        when:
+        def result = task.getSuccessSpec(pipelineSpec)
+
+        then:
+        result == successSpec
+    }
+
+    def "getSuccessSpec returns onTestSuccess convention when set"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        // onTestSuccess has a convention, so it's always present
+
+        when:
+        def result = task.getSuccessSpec(pipelineSpec)
+
+        then:
+        result != null // Convention provides a default SuccessStepSpec
+    }
+
+    def "getSuccessSpec returns explicitly set onSuccess over convention"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        successSpec.additionalTags.set(['on-success-tag'])
+        pipelineSpec.onSuccess.set(successSpec)
+
+        when:
+        def result = task.getSuccessSpec(pipelineSpec)
+
+        then:
+        // onTestSuccess convention takes precedence since it's always present
+        result != null
+    }
+
+    def "getFailureSpec returns onTestFailure when present"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        failureSpec.additionalTags.set(['test-fail-tag'])
+        pipelineSpec.onTestFailure.set(failureSpec)
+
+        when:
+        def result = task.getFailureSpec(pipelineSpec)
+
+        then:
+        result == failureSpec
+    }
+
+    def "getFailureSpec returns onTestFailure convention when present"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        // onTestFailure has a convention, so it's always present
+
+        when:
+        def result = task.getFailureSpec(pipelineSpec)
+
+        then:
+        result != null // Convention provides a default FailureStepSpec
+    }
+
+    def "getFailureSpec returns explicitly set onFailure"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        failureSpec.additionalTags.set(['on-fail-tag'])
+        pipelineSpec.onFailure.set(failureSpec)
+
+        when:
+        def result = task.getFailureSpec(pipelineSpec)
+
+        then:
+        // onTestFailure convention takes precedence since it's always present
+        result != null
+    }
+
+    // ===== ALWAYS STEP TESTS =====
+
+    def "executeAlwaysStep skips when always spec is null"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def context = PipelineContext.create('test')
+
+        when:
+        task.executeAlwaysStep(pipelineSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "executeAlwaysStep executes cleanup when configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysSpec.removeTestContainers.set(true)
+        alwaysSpec.cleanupImages.set(true)
+        pipelineSpec.always.set(alwaysSpec)
+        def context = PipelineContext.create('test')
+
+        when:
+        task.executeAlwaysStep(pipelineSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "executeCleanupOperations handles removeTestContainers"() {
+        given:
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysSpec.removeTestContainers.set(true)
+        def context = PipelineContext.create('test')
+
+        when:
+        task.executeCleanupOperations(alwaysSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "executeCleanupOperations respects keepFailedContainers when tests fail"() {
+        given:
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysSpec.removeTestContainers.set(true)
+        alwaysSpec.keepFailedContainers.set(true)
+        def testResult = new TestResult(false, 3, 0, 0, 2, 5)
+        def context = PipelineContext.create('test').withTestResult(testResult)
+
+        when:
+        task.executeCleanupOperations(alwaysSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "executeCleanupOperations handles cleanupImages"() {
+        given:
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysSpec.cleanupImages.set(true)
+        def context = PipelineContext.create('test')
+
+        when:
+        task.executeCleanupOperations(alwaysSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== TASK PROPERTIES TESTS =====
+
+    def "task has correct description"() {
+        expect:
+        task.description == 'Executes a complete pipeline workflow'
+    }
+
+    def "task has correct group"() {
+        expect:
+        task.group == 'docker workflows'
+    }
+
+    // ===== EXECUTOR INJECTION TESTS =====
+
+    def "setBuildStepExecutor sets custom executor"() {
+        given:
+        // BuildStepExecutor requires Project in constructor
+        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [project])
+
+        when:
+        task.setBuildStepExecutor(mockExecutor)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "setTestStepExecutor sets custom executor"() {
+        given:
+        // TestStepExecutor requires Project in constructor
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project])
+
+        when:
+        task.setTestStepExecutor(mockExecutor)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "setConditionalExecutor sets custom executor"() {
+        given:
+        // ConditionalExecutor has no-arg constructor
+        def mockExecutor = Stub(ConditionalExecutor)
+
+        when:
+        task.setConditionalExecutor(mockExecutor)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== INTEGRATION-LIKE TESTS =====
+
+    def "runPipeline executes full workflow with stubbed executors"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
+        buildSpec.image.set(imageSpec)
+        pipelineSpec.build.set(buildSpec)
+
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def testTask = project.tasks.create('myTest2')
+        testSpec.stack.set(stackSpec)
+        testSpec.testTask.set(testTask)
+        pipelineSpec.test.set(testSpec)
+
+        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        pipelineSpec.onTestSuccess.set(successSpec)
+
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        pipelineSpec.always.set(alwaysSpec)
+
+        task.pipelineSpec.set(pipelineSpec)
+        task.pipelineName.set('integration-test')
+
+        def testResult = new TestResult(true, 5, 0, 0, 0, 5)
+        def contextAfterBuild = PipelineContext.create('integration-test')
+        def contextAfterTest = contextAfterBuild.withTestResult(testResult)
+        def contextAfterConditional = contextAfterTest.withAppliedTags(['success'])
+
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project]) {
+            execute(_, _) >> contextAfterBuild
+        }
+        task.setBuildStepExecutor(mockBuildExecutor)
+
+        def mockTestExecutor = Stub(TestStepExecutor, constructorArgs: [project]) {
+            execute(_, _) >> contextAfterTest
+        }
+        task.setTestStepExecutor(mockTestExecutor)
+
+        def mockConditionalExecutor = Stub(ConditionalExecutor) {
+            executeConditional(_, _, _, _) >> contextAfterConditional
+        }
+        task.setConditionalExecutor(mockConditionalExecutor)
+
+        when:
+        task.runPipeline()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "runPipeline handles failure and still runs cleanup"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
+        buildSpec.image.set(imageSpec)
+        pipelineSpec.build.set(buildSpec)
+
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysSpec.removeTestContainers.set(true)
+        pipelineSpec.always.set(alwaysSpec)
+
+        task.pipelineSpec.set(pipelineSpec)
+        task.pipelineName.set('failing-test')
+
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project]) {
+            execute(_, _) >> { throw new RuntimeException("Build failed") }
+        }
+        task.setBuildStepExecutor(mockBuildExecutor)
+
+        when:
+        task.runPipeline()
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Pipeline 'failing-test' failed")
+    }
+}

@@ -56,6 +56,31 @@ class TestResult implements Serializable {
         return failureCount
     }
 
+    /**
+     * Factory method for creating a success result
+     *
+     * @param totalCount Total number of tests
+     * @param executed Number of tests executed
+     * @param skipped Number of tests skipped
+     * @return A TestResult indicating success
+     */
+    static TestResult success(int totalCount, int executed, int skipped) {
+        return new TestResult(true, executed, 0, skipped, 0, totalCount)
+    }
+
+    /**
+     * Factory method for creating a failure result
+     *
+     * @param totalCount Total number of tests
+     * @param executed Number of tests executed
+     * @param failureCount Number of tests that failed
+     * @param skipped Number of tests skipped
+     * @return A TestResult indicating failure
+     */
+    static TestResult failure(int totalCount, int executed, int failureCount, int skipped) {
+        return new TestResult(false, executed, 0, skipped, failureCount, totalCount)
+    }
+
     @Override
     String toString() {
         return "TestResult[success=${success}, executed=${executed}, upToDate=${upToDate}, " +

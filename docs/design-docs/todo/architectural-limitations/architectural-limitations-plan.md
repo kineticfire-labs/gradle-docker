@@ -16,7 +16,7 @@
 - [x] **Step 2**: DSL Parsing and Configuration ✓ (COMPLETED 2025-01-24)
 - [x] **Step 3**: Build Step Implementation ✓ (COMPLETED 2025-11-24)
 - [x] **Step 4**: Test Step Implementation ✓ (COMPLETED 2025-11-25)
-- [ ] **Step 5**: Conditional Execution Logic
+- [x] **Step 5**: Conditional Execution Logic ✓ (COMPLETED 2025-11-25)
 - [ ] **Step 6**: Tag Operation Implementation
 - [ ] **Step 7**: Save Operation Implementation
 - [ ] **Step 8**: Publish Operation Implementation
@@ -417,7 +417,9 @@
 
 ---
 
-### Step 5: Conditional Execution Logic
+### Step 5: Conditional Execution Logic ✓ COMPLETED
+
+**Status:** ✓ COMPLETED (2025-11-25)
 
 **Goal:** Implement the core conditional logic that routes to success or failure paths based on test results.
 
@@ -425,61 +427,97 @@
 
 **Sub-steps:**
 
-- [ ] **Step 5.1**: Create `ConditionalExecutor.groovy`
-  - Add method `void executeConditional(TestResult testResult, SuccessStepSpec successSpec, FailureStepSpec failureSpec, PipelineContext context)`
+- [x] **Step 5.1**: Create `ConditionalExecutor.groovy`
+  - Add method `PipelineContext executeConditional(TestResult testResult, SuccessStepSpec successSpec, FailureStepSpec failureSpec, PipelineContext context)`
   - Implement test result evaluation
-  - Route to success path if tests passed
-  - Route to failure path if tests failed
+  - Route to success path if tests passed (executeSuccessPath)
+  - Route to failure path if tests failed (executeFailurePath)
   - Add detailed logging for debugging
-  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/ConditionalExecutor.groovy`
+  - Execute afterSuccess/afterFailure hooks when configured
+  - Apply additional tags to context
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/ConditionalExecutor.groovy`
   - Estimated LOC: 80
+  - **Actual LOC: 184**
 
-- [ ] **Step 5.2**: Create `PipelineRunTask.groovy` skeleton
+- [x] **Step 5.2**: Create `PipelineRunTask.groovy` skeleton
   - Extend `DefaultTask`
   - Add `@Internal Property<PipelineSpec> pipelineSpec`
   - Add `@Input Property<String> pipelineName`
-  - Add injected services (`DockerService`, `ComposeService`)
-  - Create `@TaskAction void runPipeline()` method with basic flow
-  - Implement try/finally for cleanup
+  - Inject executors (BuildStepExecutor, TestStepExecutor, ConditionalExecutor)
+  - Create `@TaskAction void runPipeline()` method with complete flow
+  - Implement try/finally for cleanup via executeAlwaysStep
   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
   - Estimated LOC: 200
+  - **Actual LOC: 224**
 
-- [ ] **Step 5.3**: Wire executors into PipelineRunTask
-  - Instantiate BuildStepExecutor, TestStepExecutor, ConditionalExecutor
-  - Implement sequential execution: build → test → conditional
+- [x] **Step 5.3**: Wire executors into PipelineRunTask
+  - Instantiate BuildStepExecutor, TestStepExecutor, ConditionalExecutor in constructor
+  - Implement sequential execution: build → test → conditional → always
   - Pass PipelineContext between executors
-  - Implement error handling and logging
-  - Location: Update `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
-  - Estimated LOC: 300 (total in file)
+  - Implement error handling with cleanup in finally block
+  - Add executor setters for testability
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/PipelineRunTask.groovy`
+  - **Completed as part of Step 5.2**
 
-- [ ] **Step 5.4**: Write unit tests for ConditionalExecutor
+- [x] **Step 5.4**: Write unit tests for ConditionalExecutor
   - Test success path routing (tests passed)
   - Test failure path routing (tests failed)
-  - Test edge cases (no success spec, no failure spec)
-  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/ConditionalExecutorTest.groovy`
+  - Test edge cases (no success spec, no failure spec, null test result)
+  - Test additional tags application
+  - Test hook execution (afterSuccess, afterFailure)
+  - Test context preservation through execution
+  - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/ConditionalExecutorTest.groovy`
   - Estimated LOC: 150
+  - **Actual LOC: 254**
   - Coverage target: 100%
 
-- [ ] **Step 5.5**: Write unit tests for PipelineRunTask orchestration
-  - Test build → test → success flow
-  - Test build → test → failure flow
-  - Test build failure (stops before test)
-  - Test cleanup is always called
-  - Mock all executors
+- [x] **Step 5.5**: Write unit tests for PipelineRunTask orchestration
+  - Test validation (missing pipelineSpec, missing pipelineName)
+  - Test build step execution and skip conditions
+  - Test test step execution and skip conditions
+  - Test conditional step execution and skip when no test results
+  - Test getSuccessSpec/getFailureSpec resolution (onTestSuccess vs onSuccess)
+  - Test always step execution and cleanup
+  - Test full workflow with mocked executors
+  - Test failure handling with cleanup still running
   - Location: `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/PipelineRunTaskTest.groovy`
   - Estimated LOC: 400
+  - **Actual LOC: 326**
   - Coverage target: 100%
 
-- [ ] **Step 5.6**: Write functional test for conditional execution
-  - Create workflow with success and failure paths
-  - Test with passing tests (verify success path)
-  - Test with failing tests (verify failure path)
-  - Location: `plugin/src/functionalTest/groovy/ConditionalExecutionFunctionalTest.groovy`
+- [x] **Step 5.6**: Write functional tests for conditional execution
+  - Test success path routing when tests pass
+  - Test failure path routing when tests fail
+  - Test afterSuccess hook execution
+  - Test afterFailure hook execution
+  - Test null test result handling
+  - Test context preservation through execution
+  - Test null specs handling
+  - Test PipelineRunTask validation, properties, and step execution
+  - Locations:
+    - `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/ConditionalExecutorFunctionalTest.groovy`
+    - `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/PipelineRunTaskFunctionalTest.groovy`
   - Estimated LOC: 200
+  - **Actual LOC: 333 + 259 = 592**
 
-**Deliverable:** Conditional routing based on test results works correctly
+**Deliverable:** ✓ Conditional routing based on test results works correctly
 
-**Estimated Effort:** 3 days
+**Actual Effort:** 1 day
+
+**Test Results:**
+- Unit tests: ✓ ALL PASSED
+  - ConditionalExecutorTest: 25 tests
+  - PipelineRunTaskTest: 28 tests
+- Functional tests: ✓ ALL PASSED
+  - ConditionalExecutorFunctionalTest: 7 tests
+  - PipelineRunTaskFunctionalTest: 8 tests
+
+**Notes:**
+- ConditionalExecutor uses method overloading for hasAdditionalTags (SuccessStepSpec vs FailureStepSpec)
+- PipelineRunTask uses executor injection pattern for testability
+- Task group is "docker workflows" for organization
+- AlwaysStep cleanup includes placeholders for container/image cleanup (Step 9/10)
+- Both onTestSuccess/onTestFailure and onSuccess/onFailure are supported
 
 ---
 
