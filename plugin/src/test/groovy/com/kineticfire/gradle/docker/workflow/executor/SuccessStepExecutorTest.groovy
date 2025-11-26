@@ -18,8 +18,10 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.spec.SaveSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.TagOperationExecutor
 import org.gradle.api.Action
 import org.gradle.api.GradleException
@@ -37,6 +39,7 @@ class SuccessStepExecutorTest extends Specification {
     Project project
     SuccessStepExecutor executor
     TagOperationExecutor tagOperationExecutor
+    SaveOperationExecutor saveOperationExecutor
     DockerService dockerService
     SuccessStepSpec successSpec
     PipelineContext context
@@ -45,7 +48,8 @@ class SuccessStepExecutorTest extends Specification {
     def setup() {
         project = ProjectBuilder.builder().build()
         tagOperationExecutor = Mock(TagOperationExecutor)
-        executor = new SuccessStepExecutor(tagOperationExecutor)
+        saveOperationExecutor = Mock(SaveOperationExecutor)
+        executor = new SuccessStepExecutor(tagOperationExecutor, saveOperationExecutor)
         dockerService = Mock(DockerService)
         executor.setDockerService(dockerService)
 
@@ -66,7 +70,7 @@ class SuccessStepExecutorTest extends Specification {
 
     // ===== CONSTRUCTOR TESTS =====
 
-    def "default constructor creates TagOperationExecutor"() {
+    def "default constructor creates TagOperationExecutor and SaveOperationExecutor"() {
         when:
         def exec = new SuccessStepExecutor()
 
@@ -80,6 +84,18 @@ class SuccessStepExecutorTest extends Specification {
 
         when:
         def exec = new SuccessStepExecutor(mockTagExecutor)
+
+        then:
+        exec != null
+    }
+
+    def "constructor accepts TagOperationExecutor and SaveOperationExecutor"() {
+        given:
+        def mockTagExecutor = Mock(TagOperationExecutor)
+        def mockSaveExecutor = Mock(SaveOperationExecutor)
+
+        when:
+        def exec = new SuccessStepExecutor(mockTagExecutor, mockSaveExecutor)
 
         then:
         exec != null
@@ -217,21 +233,45 @@ class SuccessStepExecutorTest extends Specification {
 
     // ===== EXECUTE SAVE OPERATION TESTS =====
 
-    def "executeSaveOperation handles null save spec"() {
+    def "executeSaveOperation does nothing when save not configured"() {
         when:
         executor.executeSaveOperation(successSpec, context)
 
         then:
         noExceptionThrown()
+        0 * saveOperationExecutor.execute(_, _, _)
     }
 
-    def "executeSaveOperation logs when save is configured"() {
+    def "executeSaveOperation calls SaveOperationExecutor when configured"() {
         given:
-        def saveSpec = project.objects.newInstance(
-            com.kineticfire.gradle.docker.spec.SaveSpec,
-            project.objects,
-            project.layout
-        )
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects, project.layout)
+        successSpec.save.set(saveSpec)
+
+        when:
+        executor.executeSaveOperation(successSpec, context)
+
+        then:
+        1 * saveOperationExecutor.execute(saveSpec, imageSpec, dockerService)
+    }
+
+    def "executeSaveOperation throws when no built image"() {
+        given:
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects, project.layout)
+        successSpec.save.set(saveSpec)
+        def noImageContext = PipelineContext.create('test')
+
+        when:
+        executor.executeSaveOperation(successSpec, noImageContext)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('no built image')
+    }
+
+    def "executeSaveOperation works without dockerService"() {
+        given:
+        executor.setDockerService(null)
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects, project.layout)
         successSpec.save.set(saveSpec)
 
         when:
@@ -239,6 +279,23 @@ class SuccessStepExecutorTest extends Specification {
 
         then:
         noExceptionThrown()
+        0 * saveOperationExecutor.execute(_, _, _)
+    }
+
+    // ===== HAS SAVE CONFIGURED TESTS =====
+
+    def "hasSaveConfigured returns false when save not set"() {
+        expect:
+        !executor.hasSaveConfigured(successSpec)
+    }
+
+    def "hasSaveConfigured returns true when save is set"() {
+        given:
+        def saveSpec = project.objects.newInstance(SaveSpec, project.objects, project.layout)
+        successSpec.save.set(saveSpec)
+
+        expect:
+        executor.hasSaveConfigured(successSpec)
     }
 
     // ===== EXECUTE PUBLISH OPERATION TESTS =====

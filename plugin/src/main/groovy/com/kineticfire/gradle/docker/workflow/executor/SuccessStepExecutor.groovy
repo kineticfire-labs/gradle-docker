@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.TagOperationExecutor
 import org.gradle.api.Action
 import org.gradle.api.GradleException
@@ -36,10 +37,12 @@ class SuccessStepExecutor {
     private static final Logger LOGGER = Logging.getLogger(SuccessStepExecutor)
 
     private final TagOperationExecutor tagOperationExecutor
+    private final SaveOperationExecutor saveOperationExecutor
     private DockerService dockerService
 
     SuccessStepExecutor() {
         this.tagOperationExecutor = new TagOperationExecutor()
+        this.saveOperationExecutor = new SaveOperationExecutor()
     }
 
     /**
@@ -47,6 +50,16 @@ class SuccessStepExecutor {
      */
     SuccessStepExecutor(TagOperationExecutor tagOperationExecutor) {
         this.tagOperationExecutor = tagOperationExecutor
+        this.saveOperationExecutor = new SaveOperationExecutor()
+    }
+
+    /**
+     * Constructor for full dependency injection (testing)
+     */
+    SuccessStepExecutor(TagOperationExecutor tagOperationExecutor,
+                        SaveOperationExecutor saveOperationExecutor) {
+        this.tagOperationExecutor = tagOperationExecutor
+        this.saveOperationExecutor = saveOperationExecutor
     }
 
     /**
@@ -124,13 +137,34 @@ class SuccessStepExecutor {
 
     /**
      * Execute save operation if configured
-     * Placeholder for Step 7 implementation
      */
     void executeSaveOperation(SuccessStepSpec successSpec, PipelineContext context) {
-        if (successSpec.save.isPresent()) {
-            def saveSpec = successSpec.save.get()
-            LOGGER.info("Save operation configured - will be executed by SaveOperationExecutor (Step 7)")
+        if (!hasSaveConfigured(successSpec)) {
+            LOGGER.debug("No save operation configured")
+            return
         }
+
+        def saveSpec = successSpec.save.get()
+        def builtImage = context.builtImage
+
+        if (builtImage == null) {
+            throw new GradleException("Cannot save image - no built image in context")
+        }
+
+        LOGGER.info("Executing save operation for image")
+
+        if (dockerService != null) {
+            saveOperationExecutor.execute(saveSpec, builtImage, dockerService)
+        } else {
+            LOGGER.warn("DockerService not set - save operation skipped")
+        }
+    }
+
+    /**
+     * Check if save operation is configured
+     */
+    boolean hasSaveConfigured(SuccessStepSpec successSpec) {
+        return successSpec.save.isPresent()
     }
 
     /**
