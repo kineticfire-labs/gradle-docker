@@ -18,9 +18,11 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.spec.PublishSpec
 import com.kineticfire.gradle.docker.spec.SaveSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.operation.PublishOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.TagOperationExecutor
 import org.gradle.api.Action
@@ -40,6 +42,7 @@ class SuccessStepExecutorTest extends Specification {
     SuccessStepExecutor executor
     TagOperationExecutor tagOperationExecutor
     SaveOperationExecutor saveOperationExecutor
+    PublishOperationExecutor publishOperationExecutor
     DockerService dockerService
     SuccessStepSpec successSpec
     PipelineContext context
@@ -49,7 +52,8 @@ class SuccessStepExecutorTest extends Specification {
         project = ProjectBuilder.builder().build()
         tagOperationExecutor = Mock(TagOperationExecutor)
         saveOperationExecutor = Mock(SaveOperationExecutor)
-        executor = new SuccessStepExecutor(tagOperationExecutor, saveOperationExecutor)
+        publishOperationExecutor = Mock(PublishOperationExecutor)
+        executor = new SuccessStepExecutor(tagOperationExecutor, saveOperationExecutor, publishOperationExecutor)
         dockerService = Mock(DockerService)
         executor.setDockerService(dockerService)
 
@@ -70,7 +74,7 @@ class SuccessStepExecutorTest extends Specification {
 
     // ===== CONSTRUCTOR TESTS =====
 
-    def "default constructor creates TagOperationExecutor and SaveOperationExecutor"() {
+    def "default constructor creates all operation executors"() {
         when:
         def exec = new SuccessStepExecutor()
 
@@ -96,6 +100,19 @@ class SuccessStepExecutorTest extends Specification {
 
         when:
         def exec = new SuccessStepExecutor(mockTagExecutor, mockSaveExecutor)
+
+        then:
+        exec != null
+    }
+
+    def "constructor accepts all three operation executors"() {
+        given:
+        def mockTagExecutor = Mock(TagOperationExecutor)
+        def mockSaveExecutor = Mock(SaveOperationExecutor)
+        def mockPublishExecutor = Mock(PublishOperationExecutor)
+
+        when:
+        def exec = new SuccessStepExecutor(mockTagExecutor, mockSaveExecutor, mockPublishExecutor)
 
         then:
         exec != null
@@ -300,20 +317,45 @@ class SuccessStepExecutorTest extends Specification {
 
     // ===== EXECUTE PUBLISH OPERATION TESTS =====
 
-    def "executePublishOperation handles null publish spec"() {
+    def "executePublishOperation does nothing when publish not configured"() {
         when:
         executor.executePublishOperation(successSpec, context)
 
         then:
         noExceptionThrown()
+        0 * publishOperationExecutor.execute(_, _, _)
     }
 
-    def "executePublishOperation logs when publish is configured"() {
+    def "executePublishOperation calls PublishOperationExecutor when configured"() {
         given:
-        def publishSpec = project.objects.newInstance(
-            com.kineticfire.gradle.docker.spec.PublishSpec,
-            project.objects
-        )
+        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        successSpec.publish.set(publishSpec)
+
+        when:
+        executor.executePublishOperation(successSpec, context)
+
+        then:
+        1 * publishOperationExecutor.execute(publishSpec, imageSpec, dockerService)
+    }
+
+    def "executePublishOperation throws when no built image"() {
+        given:
+        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        successSpec.publish.set(publishSpec)
+        def noImageContext = PipelineContext.create('test')
+
+        when:
+        executor.executePublishOperation(successSpec, noImageContext)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('no built image')
+    }
+
+    def "executePublishOperation works without dockerService"() {
+        given:
+        executor.setDockerService(null)
+        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
         successSpec.publish.set(publishSpec)
 
         when:
@@ -321,6 +363,23 @@ class SuccessStepExecutorTest extends Specification {
 
         then:
         noExceptionThrown()
+        0 * publishOperationExecutor.execute(_, _, _)
+    }
+
+    // ===== HAS PUBLISH CONFIGURED TESTS =====
+
+    def "hasPublishConfigured returns false when publish not set"() {
+        expect:
+        !executor.hasPublishConfigured(successSpec)
+    }
+
+    def "hasPublishConfigured returns true when publish is set"() {
+        given:
+        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        successSpec.publish.set(publishSpec)
+
+        expect:
+        executor.hasPublishConfigured(successSpec)
     }
 
     // ===== EXECUTE AFTER SUCCESS HOOK TESTS =====

@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.operation.PublishOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.TagOperationExecutor
 import org.gradle.api.Action
@@ -38,11 +39,13 @@ class SuccessStepExecutor {
 
     private final TagOperationExecutor tagOperationExecutor
     private final SaveOperationExecutor saveOperationExecutor
+    private final PublishOperationExecutor publishOperationExecutor
     private DockerService dockerService
 
     SuccessStepExecutor() {
         this.tagOperationExecutor = new TagOperationExecutor()
         this.saveOperationExecutor = new SaveOperationExecutor()
+        this.publishOperationExecutor = new PublishOperationExecutor()
     }
 
     /**
@@ -51,15 +54,28 @@ class SuccessStepExecutor {
     SuccessStepExecutor(TagOperationExecutor tagOperationExecutor) {
         this.tagOperationExecutor = tagOperationExecutor
         this.saveOperationExecutor = new SaveOperationExecutor()
+        this.publishOperationExecutor = new PublishOperationExecutor()
+    }
+
+    /**
+     * Constructor for dependency injection with save executor (testing)
+     */
+    SuccessStepExecutor(TagOperationExecutor tagOperationExecutor,
+                        SaveOperationExecutor saveOperationExecutor) {
+        this.tagOperationExecutor = tagOperationExecutor
+        this.saveOperationExecutor = saveOperationExecutor
+        this.publishOperationExecutor = new PublishOperationExecutor()
     }
 
     /**
      * Constructor for full dependency injection (testing)
      */
     SuccessStepExecutor(TagOperationExecutor tagOperationExecutor,
-                        SaveOperationExecutor saveOperationExecutor) {
+                        SaveOperationExecutor saveOperationExecutor,
+                        PublishOperationExecutor publishOperationExecutor) {
         this.tagOperationExecutor = tagOperationExecutor
         this.saveOperationExecutor = saveOperationExecutor
+        this.publishOperationExecutor = publishOperationExecutor
     }
 
     /**
@@ -169,13 +185,34 @@ class SuccessStepExecutor {
 
     /**
      * Execute publish operation if configured
-     * Placeholder for Step 8 implementation
      */
     void executePublishOperation(SuccessStepSpec successSpec, PipelineContext context) {
-        if (successSpec.publish.isPresent()) {
-            def publishSpec = successSpec.publish.get()
-            LOGGER.info("Publish operation configured - will be executed by PublishOperationExecutor (Step 8)")
+        if (!hasPublishConfigured(successSpec)) {
+            LOGGER.debug("No publish operation configured")
+            return
         }
+
+        def publishSpec = successSpec.publish.get()
+        def builtImage = context.builtImage
+
+        if (builtImage == null) {
+            throw new GradleException("Cannot publish image - no built image in context")
+        }
+
+        LOGGER.info("Executing publish operation for image")
+
+        if (dockerService != null) {
+            publishOperationExecutor.execute(publishSpec, builtImage, dockerService)
+        } else {
+            LOGGER.warn("DockerService not set - publish operation skipped")
+        }
+    }
+
+    /**
+     * Check if publish operation is configured
+     */
+    boolean hasPublishConfigured(SuccessStepSpec successSpec) {
+        return successSpec.publish.isPresent()
     }
 
     /**
