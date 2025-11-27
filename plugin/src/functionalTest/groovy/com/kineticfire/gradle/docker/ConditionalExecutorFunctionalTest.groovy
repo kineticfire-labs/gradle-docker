@@ -67,21 +67,22 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     // Create passing test result
                     def testResult = TestResult.success(10, 10, 0)
 
-                    // Create success spec with tags
+                    // Create success spec with hook (no tags - tags require built image)
                     def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-                    successSpec.additionalTags.set(['latest', 'stable'])
+                    def successHookCalled = false
+                    successSpec.afterSuccess.set({ successHookCalled = true } as Action<Void>)
 
-                    // Create failure spec (should not be used)
+                    // Create failure spec with hook (should not be called)
                     def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
-                    failureSpec.additionalTags.set(['failed'])
+                    def failureHookCalled = false
+                    failureSpec.afterFailure.set({ failureHookCalled = true } as Action<Void>)
 
                     // Execute conditional
                     def result = executor.executeConditional(testResult, successSpec, failureSpec, context)
 
-                    // Verify success path was taken
-                    assert result.appliedTags.contains('latest')
-                    assert result.appliedTags.contains('stable')
-                    assert !result.appliedTags.contains('failed')
+                    // Verify success path was taken (hook called, failure hook not called)
+                    assert successHookCalled : "Success hook should have been called"
+                    assert !failureHookCalled : "Failure hook should NOT have been called"
 
                     println "SUCCESS_PATH_VERIFIED"
                 }
@@ -113,6 +114,7 @@ class ConditionalExecutorFunctionalTest extends Specification {
             import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
             import com.kineticfire.gradle.docker.workflow.TestResult
+            import org.gradle.api.Action
 
             task verifyFailurePath {
                 doLast {
@@ -122,21 +124,22 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     // Create failing test result
                     def testResult = TestResult.failure(10, 8, 2, 0)
 
-                    // Create success spec (should not be used)
+                    // Create success spec with hook (should not be called)
                     def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-                    successSpec.additionalTags.set(['latest'])
+                    def successHookCalled = false
+                    successSpec.afterSuccess.set({ successHookCalled = true } as Action<Void>)
 
-                    // Create failure spec with tags
+                    // Create failure spec with hook (should be called)
                     def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
-                    failureSpec.additionalTags.set(['broken', 'needs-fix'])
+                    def failureHookCalled = false
+                    failureSpec.afterFailure.set({ failureHookCalled = true } as Action<Void>)
 
                     // Execute conditional
                     def result = executor.executeConditional(testResult, successSpec, failureSpec, context)
 
-                    // Verify failure path was taken
-                    assert result.appliedTags.contains('broken')
-                    assert result.appliedTags.contains('needs-fix')
-                    assert !result.appliedTags.contains('latest')
+                    // Verify failure path was taken (failure hook called, success hook not)
+                    assert failureHookCalled : "Failure hook should have been called"
+                    assert !successHookCalled : "Success hook should NOT have been called"
 
                     println "FAILURE_PATH_VERIFIED"
                 }
@@ -298,6 +301,7 @@ class ConditionalExecutorFunctionalTest extends Specification {
             import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
             import com.kineticfire.gradle.docker.workflow.TestResult
+            import org.gradle.api.Action
 
             task verifyContextPreservation {
                 doLast {
@@ -311,7 +315,8 @@ class ConditionalExecutorFunctionalTest extends Specification {
 
                     def testResult = TestResult.success(20, 20, 0)
                     def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-                    successSpec.additionalTags.set(['release'])
+                    // Use hook instead of tags (tags require built image)
+                    successSpec.afterSuccess.set({ } as Action<Void>)
 
                     def result = executor.executeConditional(testResult, successSpec, null, context)
 
@@ -320,7 +325,6 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     assert result.getMetadataValue('version') == '1.0.0'
                     assert result.getMetadataValue('environment') == 'production'
                     assert result.getMetadataValue('build-number') == '42'
-                    assert result.appliedTags.contains('release')
 
                     println "CONTEXT_PRESERVATION_VERIFIED"
                 }

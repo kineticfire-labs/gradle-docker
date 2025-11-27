@@ -26,6 +26,7 @@ import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TestResult
+import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
 import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
@@ -394,49 +395,66 @@ class PipelineRunTaskTest extends Specification {
         pipelineSpec.always.set(alwaysSpec)
         def context = PipelineContext.create('test')
 
+        def mockAlwaysExecutor = Mock(AlwaysStepExecutor)
+        task.setAlwaysStepExecutor(mockAlwaysExecutor)
+
         when:
         task.executeAlwaysStep(pipelineSpec, context)
 
         then:
-        noExceptionThrown()
+        1 * mockAlwaysExecutor.execute(alwaysSpec, context, false) >> context
     }
 
-    def "executeCleanupOperations handles removeTestContainers"() {
+    def "executeAlwaysStep delegates to AlwaysStepExecutor with testsPassed true when tests pass"() {
         given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
         def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
-        alwaysSpec.removeTestContainers.set(true)
-        def context = PipelineContext.create('test')
+        pipelineSpec.always.set(alwaysSpec)
+        def testResult = new TestResult(true, 5, 0, 0, 0, 5)
+        def context = PipelineContext.create('test').withTestResult(testResult)
+
+        def mockAlwaysExecutor = Mock(AlwaysStepExecutor)
+        task.setAlwaysStepExecutor(mockAlwaysExecutor)
 
         when:
-        task.executeCleanupOperations(alwaysSpec, context)
+        task.executeAlwaysStep(pipelineSpec, context)
 
         then:
-        noExceptionThrown()
+        1 * mockAlwaysExecutor.execute(alwaysSpec, context, true) >> context
     }
 
-    def "executeCleanupOperations respects keepFailedContainers when tests fail"() {
+    def "executeAlwaysStep delegates to AlwaysStepExecutor with testsPassed false when tests fail"() {
         given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
         def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
-        alwaysSpec.removeTestContainers.set(true)
-        alwaysSpec.keepFailedContainers.set(true)
+        pipelineSpec.always.set(alwaysSpec)
         def testResult = new TestResult(false, 3, 0, 0, 2, 5)
         def context = PipelineContext.create('test').withTestResult(testResult)
 
+        def mockAlwaysExecutor = Mock(AlwaysStepExecutor)
+        task.setAlwaysStepExecutor(mockAlwaysExecutor)
+
         when:
-        task.executeCleanupOperations(alwaysSpec, context)
+        task.executeAlwaysStep(pipelineSpec, context)
 
         then:
-        noExceptionThrown()
+        1 * mockAlwaysExecutor.execute(alwaysSpec, context, false) >> context
     }
 
-    def "executeCleanupOperations handles cleanupImages"() {
+    def "executeAlwaysStep handles executor exception gracefully"() {
         given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
         def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
-        alwaysSpec.cleanupImages.set(true)
+        pipelineSpec.always.set(alwaysSpec)
         def context = PipelineContext.create('test')
 
+        def mockAlwaysExecutor = Mock(AlwaysStepExecutor) {
+            execute(_, _, _) >> { throw new RuntimeException('Cleanup failed') }
+        }
+        task.setAlwaysStepExecutor(mockAlwaysExecutor)
+
         when:
-        task.executeCleanupOperations(alwaysSpec, context)
+        task.executeAlwaysStep(pipelineSpec, context)
 
         then:
         noExceptionThrown()
@@ -492,6 +510,18 @@ class PipelineRunTaskTest extends Specification {
         noExceptionThrown()
     }
 
+    def "setAlwaysStepExecutor sets custom executor"() {
+        given:
+        // AlwaysStepExecutor has no-arg constructor
+        def mockExecutor = Stub(AlwaysStepExecutor)
+
+        when:
+        task.setAlwaysStepExecutor(mockExecutor)
+
+        then:
+        noExceptionThrown()
+    }
+
     // ===== INTEGRATION-LIKE TESTS =====
 
     def "runPipeline executes full workflow with stubbed executors"() {
@@ -537,6 +567,11 @@ class PipelineRunTaskTest extends Specification {
             executeConditional(_, _, _, _) >> contextAfterConditional
         }
         task.setConditionalExecutor(mockConditionalExecutor)
+
+        def mockAlwaysExecutor = Stub(AlwaysStepExecutor) {
+            execute(_, _, _) >> contextAfterConditional
+        }
+        task.setAlwaysStepExecutor(mockAlwaysExecutor)
 
         when:
         task.runPipeline()

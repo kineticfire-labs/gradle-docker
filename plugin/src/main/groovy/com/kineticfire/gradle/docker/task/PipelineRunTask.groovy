@@ -16,13 +16,13 @@
 
 package com.kineticfire.gradle.docker.task
 
-import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
 import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
@@ -48,6 +48,7 @@ abstract class PipelineRunTask extends DefaultTask {
     private BuildStepExecutor buildStepExecutor
     private TestStepExecutor testStepExecutor
     private ConditionalExecutor conditionalExecutor
+    private AlwaysStepExecutor alwaysStepExecutor
 
     PipelineRunTask() {
         description = 'Executes a complete pipeline workflow'
@@ -56,6 +57,7 @@ abstract class PipelineRunTask extends DefaultTask {
         buildStepExecutor = new BuildStepExecutor(project)
         testStepExecutor = new TestStepExecutor(project)
         conditionalExecutor = new ConditionalExecutor()
+        alwaysStepExecutor = new AlwaysStepExecutor()
     }
 
     @Internal
@@ -77,6 +79,10 @@ abstract class PipelineRunTask extends DefaultTask {
 
     void setConditionalExecutor(ConditionalExecutor executor) {
         this.conditionalExecutor = executor
+    }
+
+    void setAlwaysStepExecutor(AlwaysStepExecutor executor) {
+        this.alwaysStepExecutor = executor
     }
 
     @TaskAction
@@ -216,33 +222,11 @@ abstract class PipelineRunTask extends DefaultTask {
         }
 
         LOGGER.lifecycle("Executing always (cleanup) step")
+        def testsPassed = context.testCompleted && context.isTestSuccessful()
         try {
-            executeCleanupOperations(alwaysSpec, context)
+            alwaysStepExecutor.execute(alwaysSpec, context, testsPassed)
         } catch (Exception e) {
             LOGGER.error("Cleanup failed: {} - resources may not be fully cleaned up", e.message)
-        }
-    }
-
-    /**
-     * Execute cleanup operations based on always spec configuration
-     */
-    void executeCleanupOperations(AlwaysStepSpec alwaysSpec, PipelineContext context) {
-        def removeContainers = alwaysSpec.removeTestContainers.getOrElse(true)
-        def keepFailed = alwaysSpec.keepFailedContainers.getOrElse(false)
-        def cleanupImages = alwaysSpec.cleanupImages.getOrElse(false)
-
-        def testFailed = context.testCompleted && !context.isTestSuccessful()
-
-        if (removeContainers) {
-            if (keepFailed && testFailed) {
-                LOGGER.info("Keeping failed containers for debugging")
-            } else {
-                LOGGER.info("Container cleanup would run here (placeholder for Step 9)")
-            }
-        }
-
-        if (cleanupImages) {
-            LOGGER.info("Image cleanup would run here (placeholder for Step 10)")
         }
     }
 }

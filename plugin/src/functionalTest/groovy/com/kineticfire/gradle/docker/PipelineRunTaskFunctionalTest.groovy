@@ -401,6 +401,310 @@ class PipelineRunTaskFunctionalTest extends Specification {
         result.task(':verifyGetFailureSpec').outcome == TaskOutcome.SUCCESS
     }
 
+    def "PipelineRunTask delegates always step to AlwaysStepExecutor"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.task.PipelineRunTask
+            import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
+            import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+            import com.kineticfire.gradle.docker.workflow.PipelineContext
+            import com.kineticfire.gradle.docker.workflow.TestResult
+            import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
+
+            task verifyAlwaysExecutorDelegation {
+                doLast {
+                    def pipelineTask = tasks.create('testPipeline', PipelineRunTask)
+                    def pipelineSpec = project.objects.newInstance(
+                        PipelineSpec,
+                        'test',
+                        project.objects
+                    )
+
+                    // Configure always step
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    alwaysSpec.removeTestContainers.set(true)
+                    pipelineSpec.always.set(alwaysSpec)
+
+                    // Create context with passed tests
+                    def testResult = new TestResult(true, 5, 0, 0, 0, 5)
+                    def context = PipelineContext.create('test').withTestResult(testResult)
+
+                    // Create mock executor to verify delegation
+                    def executorCalled = false
+                    def receivedTestsPassed = null
+                    def mockExecutor = [
+                        execute: { spec, ctx, testsPassed ->
+                            executorCalled = true
+                            receivedTestsPassed = testsPassed
+                            return ctx
+                        }
+                    ] as AlwaysStepExecutor
+
+                    pipelineTask.setAlwaysStepExecutor(mockExecutor)
+                    pipelineTask.executeAlwaysStep(pipelineSpec, context)
+
+                    assert executorCalled : 'AlwaysStepExecutor.execute should have been called'
+                    assert receivedTestsPassed == true : 'testsPassed should be true for passed tests'
+
+                    println "ALWAYS_EXECUTOR_DELEGATION_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyAlwaysExecutorDelegation')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('ALWAYS_EXECUTOR_DELEGATION_VERIFIED')
+        result.task(':verifyAlwaysExecutorDelegation').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "PipelineRunTask passes testsPassed false when tests fail"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.task.PipelineRunTask
+            import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
+            import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+            import com.kineticfire.gradle.docker.workflow.PipelineContext
+            import com.kineticfire.gradle.docker.workflow.TestResult
+            import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
+
+            task verifyTestsFailedPropagation {
+                doLast {
+                    def pipelineTask = tasks.create('testPipeline', PipelineRunTask)
+                    def pipelineSpec = project.objects.newInstance(
+                        PipelineSpec,
+                        'test',
+                        project.objects
+                    )
+
+                    // Configure always step
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    pipelineSpec.always.set(alwaysSpec)
+
+                    // Create context with FAILED tests
+                    def testResult = new TestResult(false, 3, 0, 0, 2, 5)
+                    def context = PipelineContext.create('test').withTestResult(testResult)
+
+                    // Create mock executor to capture testsPassed value
+                    def receivedTestsPassed = null
+                    def mockExecutor = [
+                        execute: { spec, ctx, testsPassed ->
+                            receivedTestsPassed = testsPassed
+                            return ctx
+                        }
+                    ] as AlwaysStepExecutor
+
+                    pipelineTask.setAlwaysStepExecutor(mockExecutor)
+                    pipelineTask.executeAlwaysStep(pipelineSpec, context)
+
+                    assert receivedTestsPassed == false : 'testsPassed should be false for failed tests'
+
+                    println "TESTS_FAILED_PROPAGATION_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyTestsFailedPropagation')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('TESTS_FAILED_PROPAGATION_VERIFIED')
+        result.task(':verifyTestsFailedPropagation').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "PipelineRunTask handles AlwaysStepExecutor exception gracefully"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.task.PipelineRunTask
+            import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
+            import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+            import com.kineticfire.gradle.docker.workflow.PipelineContext
+            import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
+
+            task verifyGracefulExceptionHandling {
+                doLast {
+                    def pipelineTask = tasks.create('testPipeline', PipelineRunTask)
+                    def pipelineSpec = project.objects.newInstance(
+                        PipelineSpec,
+                        'test',
+                        project.objects
+                    )
+
+                    // Configure always step
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    pipelineSpec.always.set(alwaysSpec)
+
+                    def context = PipelineContext.create('test')
+
+                    // Create mock executor that throws exception
+                    def mockExecutor = [
+                        execute: { spec, ctx, testsPassed ->
+                            throw new RuntimeException('Cleanup failed!')
+                        }
+                    ] as AlwaysStepExecutor
+
+                    pipelineTask.setAlwaysStepExecutor(mockExecutor)
+
+                    // Should NOT throw - exception is caught and logged
+                    pipelineTask.executeAlwaysStep(pipelineSpec, context)
+
+                    println "GRACEFUL_EXCEPTION_HANDLING_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyGracefulExceptionHandling')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('GRACEFUL_EXCEPTION_HANDLING_VERIFIED')
+        result.task(':verifyGracefulExceptionHandling').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "FailureStepSpec can configure additional tags"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
+
+            task verifyFailureSpecTags {
+                doLast {
+                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+
+                    // Should have empty tags by default
+                    assert failureSpec.additionalTags.get().isEmpty()
+
+                    // Configure tags
+                    failureSpec.additionalTags.set(['failed', 'debug', 'broken'])
+
+                    assert failureSpec.additionalTags.get().size() == 3
+                    assert failureSpec.additionalTags.get().containsAll(['failed', 'debug', 'broken'])
+
+                    println "FAILURE_SPEC_TAGS_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyFailureSpecTags')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('FAILURE_SPEC_TAGS_VERIFIED')
+        result.task(':verifyFailureSpecTags').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "AlwaysStepSpec has correct default values"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+
+            task verifyAlwaysSpecDefaults {
+                doLast {
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+
+                    // Verify default values
+                    assert alwaysSpec.removeTestContainers.get() == true : 'removeTestContainers should default to true'
+                    assert alwaysSpec.keepFailedContainers.get() == false : 'keepFailedContainers should default to false'
+                    assert alwaysSpec.cleanupImages.get() == false : 'cleanupImages should default to false'
+
+                    println "ALWAYS_SPEC_DEFAULTS_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyAlwaysSpecDefaults')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('ALWAYS_SPEC_DEFAULTS_VERIFIED')
+        result.task(':verifyAlwaysSpecDefaults').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "AlwaysStepSpec can be configured for debugging"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
+
+            task verifyAlwaysSpecDebugging {
+                doLast {
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+
+                    // Configure for debugging (keep containers on failure)
+                    alwaysSpec.removeTestContainers.set(true)
+                    alwaysSpec.keepFailedContainers.set(true)
+                    alwaysSpec.cleanupImages.set(false)
+
+                    assert alwaysSpec.removeTestContainers.get() == true
+                    assert alwaysSpec.keepFailedContainers.get() == true
+                    assert alwaysSpec.cleanupImages.get() == false
+
+                    println "ALWAYS_SPEC_DEBUGGING_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyAlwaysSpecDebugging')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('ALWAYS_SPEC_DEBUGGING_VERIFIED')
+        result.task(':verifyAlwaysSpecDebugging').outcome == TaskOutcome.SUCCESS
+    }
+
     private List<File> getPluginClasspath() {
         return System.getProperty("java.class.path")
             .split(File.pathSeparator)

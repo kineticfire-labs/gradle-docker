@@ -16,11 +16,12 @@
 
 package com.kineticfire.gradle.docker.workflow.executor
 
+import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TestResult
-import org.gradle.api.Action
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 
@@ -33,6 +34,44 @@ import org.gradle.api.logging.Logging
 class ConditionalExecutor {
 
     private static final Logger LOGGER = Logging.getLogger(ConditionalExecutor)
+
+    private final SuccessStepExecutor successStepExecutor
+    private final FailureStepExecutor failureStepExecutor
+
+    ConditionalExecutor() {
+        this.successStepExecutor = new SuccessStepExecutor()
+        this.failureStepExecutor = new FailureStepExecutor()
+    }
+
+    /**
+     * Constructor for dependency injection (testing)
+     */
+    ConditionalExecutor(SuccessStepExecutor successStepExecutor, FailureStepExecutor failureStepExecutor) {
+        this.successStepExecutor = successStepExecutor
+        this.failureStepExecutor = failureStepExecutor
+    }
+
+    /**
+     * Set the DockerService for both success and failure executors
+     */
+    void setDockerService(DockerService dockerService) {
+        successStepExecutor.setDockerService(dockerService)
+        failureStepExecutor.setDockerService(dockerService)
+    }
+
+    /**
+     * Set the ComposeService for failure executor (log capture)
+     */
+    void setComposeService(ComposeService composeService) {
+        failureStepExecutor.setComposeService(composeService)
+    }
+
+    /**
+     * Set the Compose project name for failure executor
+     */
+    void setComposeProjectName(String projectName) {
+        failureStepExecutor.setComposeProjectName(projectName)
+    }
 
     /**
      * Execute conditional logic based on test results
@@ -74,35 +113,7 @@ class ConditionalExecutor {
      * @return Updated pipeline context
      */
     PipelineContext executeSuccessPath(SuccessStepSpec successSpec, PipelineContext context) {
-        if (successSpec == null) {
-            LOGGER.info("No success spec configured - skipping success operations")
-            return context
-        }
-
-        LOGGER.info("Executing success path operations")
-
-        // Apply additional tags if configured
-        if (hasAdditionalTags(successSpec)) {
-            def tags = successSpec.additionalTags.get()
-            LOGGER.info("Applying additional tags: {}", tags)
-            context = context.withAppliedTags(tags)
-        }
-
-        // Save operation placeholder (to be implemented in Step 7)
-        if (successSpec.save.isPresent()) {
-            LOGGER.info("Save operation configured - will be executed by SaveOperationExecutor")
-        }
-
-        // Publish operation placeholder (to be implemented in Step 8)
-        if (successSpec.publish.isPresent()) {
-            LOGGER.info("Publish operation configured - will be executed by PublishOperationExecutor")
-        }
-
-        // Execute afterSuccess hook if configured
-        executeAfterSuccessHook(successSpec)
-
-        LOGGER.lifecycle("Success path completed")
-        return context
+        return successStepExecutor.execute(successSpec, context)
     }
 
     /**
@@ -113,72 +124,7 @@ class ConditionalExecutor {
      * @return Updated pipeline context
      */
     PipelineContext executeFailurePath(FailureStepSpec failureSpec, PipelineContext context) {
-        if (failureSpec == null) {
-            LOGGER.info("No failure spec configured - skipping failure operations")
-            return context
-        }
-
-        LOGGER.info("Executing failure path operations")
-
-        // Apply failure tags if configured
-        if (hasAdditionalTags(failureSpec)) {
-            def tags = failureSpec.additionalTags.get()
-            LOGGER.info("Applying failure tags: {}", tags)
-            context = context.withAppliedTags(tags)
-        }
-
-        // Save failure logs placeholder (to be implemented in Step 9)
-        if (failureSpec.saveFailureLogsDir.isPresent()) {
-            LOGGER.info("Failure logs directory configured: {}",
-                failureSpec.saveFailureLogsDir.get().asFile.absolutePath)
-        }
-
-        // Execute afterFailure hook if configured
-        executeAfterFailureHook(failureSpec)
-
-        LOGGER.lifecycle("Failure path completed")
-        return context
+        return failureStepExecutor.execute(failureSpec, context)
     }
 
-    /**
-     * Check if success spec has additional tags configured
-     */
-    boolean hasAdditionalTags(SuccessStepSpec successSpec) {
-        return successSpec.additionalTags.isPresent() && !successSpec.additionalTags.get().isEmpty()
-    }
-
-    /**
-     * Check if failure spec has additional tags configured
-     */
-    boolean hasAdditionalTags(FailureStepSpec failureSpec) {
-        return failureSpec.additionalTags.isPresent() && !failureSpec.additionalTags.get().isEmpty()
-    }
-
-    /**
-     * Execute the afterSuccess hook if configured
-     */
-    void executeAfterSuccessHook(SuccessStepSpec successSpec) {
-        if (successSpec.afterSuccess.isPresent()) {
-            LOGGER.info("Executing afterSuccess hook")
-            executeHook(successSpec.afterSuccess.get())
-        }
-    }
-
-    /**
-     * Execute the afterFailure hook if configured
-     */
-    void executeAfterFailureHook(FailureStepSpec failureSpec) {
-        if (failureSpec.afterFailure.isPresent()) {
-            LOGGER.info("Executing afterFailure hook")
-            executeHook(failureSpec.afterFailure.get())
-        }
-    }
-
-    /**
-     * Execute a hook action
-     * Separated for testability
-     */
-    void executeHook(Action<Void> hook) {
-        hook.execute(null)
-    }
 }
