@@ -19,34 +19,51 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
+import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import com.kineticfire.gradle.docker.workflow.TestResult
 import com.kineticfire.gradle.docker.workflow.TestResultCapture
 import org.gradle.api.Action
 import org.gradle.api.GradleException
-import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
+import org.gradle.api.tasks.TaskContainer
 
 /**
  * Executor for the test step in a pipeline workflow
  *
  * Orchestrates: composeUp → test task execution → result capture → composeDown (in finally block)
  * Updates the PipelineContext with test results.
+ *
+ * Configuration cache compatible - uses TaskLookup abstraction instead of Project reference.
  */
 class TestStepExecutor {
 
     private static final Logger LOGGER = Logging.getLogger(TestStepExecutor)
 
-    private final Project project
+    private final TaskLookup taskLookup
     private final TestResultCapture resultCapture
 
-    TestStepExecutor(Project project) {
-        this(project, new TestResultCapture())
+    /**
+     * Create executor with TaskContainer (configuration cache compatible)
+     */
+    TestStepExecutor(TaskContainer tasks) {
+        this(TaskLookupFactory.from(tasks), new TestResultCapture())
     }
 
-    TestStepExecutor(Project project, TestResultCapture resultCapture) {
-        this.project = project
+    /**
+     * Create executor with TaskContainer and custom result capture
+     */
+    TestStepExecutor(TaskContainer tasks, TestResultCapture resultCapture) {
+        this(TaskLookupFactory.from(tasks), resultCapture)
+    }
+
+    /**
+     * Create executor with TaskLookup abstraction
+     */
+    TestStepExecutor(TaskLookup taskLookup, TestResultCapture resultCapture) {
+        this.taskLookup = taskLookup
         this.resultCapture = resultCapture
     }
 
@@ -197,7 +214,7 @@ class TestStepExecutor {
      * Separated for testability
      */
     Task lookupTask(String taskName) {
-        return project.tasks.findByName(taskName)
+        return taskLookup.findByName(taskName)
     }
 
     /**

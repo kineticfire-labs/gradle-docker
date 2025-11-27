@@ -19,27 +19,41 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
+import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import org.gradle.api.Action
 import org.gradle.api.GradleException
-import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
+import org.gradle.api.tasks.TaskContainer
 
 /**
  * Executor for the build step in a pipeline workflow
  *
  * Orchestrates the execution of beforeBuild hooks, docker build task invocation,
  * and afterBuild hooks. Updates the PipelineContext with the built image.
+ *
+ * Configuration cache compatible - uses TaskLookup abstraction instead of Project reference.
  */
 class BuildStepExecutor {
 
     private static final Logger LOGGER = Logging.getLogger(BuildStepExecutor)
 
-    private final Project project
+    private final TaskLookup taskLookup
 
-    BuildStepExecutor(Project project) {
-        this.project = project
+    /**
+     * Create executor with TaskContainer (configuration cache compatible)
+     */
+    BuildStepExecutor(TaskContainer tasks) {
+        this(TaskLookupFactory.from(tasks))
+    }
+
+    /**
+     * Create executor with TaskLookup abstraction
+     */
+    BuildStepExecutor(TaskLookup taskLookup) {
+        this.taskLookup = taskLookup
     }
 
     /**
@@ -123,7 +137,7 @@ class BuildStepExecutor {
      * Separated for testability
      */
     Task lookupTask(String taskName) {
-        return project.tasks.findByName(taskName)
+        return taskLookup.findByName(taskName)
     }
 
     /**

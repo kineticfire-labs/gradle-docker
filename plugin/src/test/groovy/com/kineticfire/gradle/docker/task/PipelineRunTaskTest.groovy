@@ -133,7 +133,7 @@ class PipelineRunTaskTest extends Specification {
         def context = PipelineContext.create('test')
         def updatedContext = context.withMetadata('built', 'true')
 
-        def mockExecutor = Mock(BuildStepExecutor)
+        def mockExecutor = Mock(BuildStepExecutor, constructorArgs: [project.tasks])
         mockExecutor.execute(buildSpec, context) >> updatedContext
         task.setBuildStepExecutor(mockExecutor)
 
@@ -204,8 +204,8 @@ class PipelineRunTaskTest extends Specification {
         def testResult = new TestResult(true, 5, 0, 0, 0, 5)
         def updatedContext = context.withTestResult(testResult)
 
-        // Use Stub with constructorArgs since TestStepExecutor requires Project
-        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project]) {
+        // Use Stub with constructorArgs since TestStepExecutor requires TaskContainer
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks]) {
             execute(_, _) >> updatedContext
         }
         task.setTestStepExecutor(mockExecutor)
@@ -476,8 +476,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "setBuildStepExecutor sets custom executor"() {
         given:
-        // BuildStepExecutor requires Project in constructor
-        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [project])
+        // BuildStepExecutor requires TaskContainer in constructor
+        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks])
 
         when:
         task.setBuildStepExecutor(mockExecutor)
@@ -488,8 +488,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "setTestStepExecutor sets custom executor"() {
         given:
-        // TestStepExecutor requires Project in constructor
-        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project])
+        // TestStepExecutor requires TaskContainer in constructor
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks])
 
         when:
         task.setTestStepExecutor(mockExecutor)
@@ -553,12 +553,12 @@ class PipelineRunTaskTest extends Specification {
         def contextAfterTest = contextAfterBuild.withTestResult(testResult)
         def contextAfterConditional = contextAfterTest.withAppliedTags(['success'])
 
-        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project]) {
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks]) {
             execute(_, _) >> contextAfterBuild
         }
         task.setBuildStepExecutor(mockBuildExecutor)
 
-        def mockTestExecutor = Stub(TestStepExecutor, constructorArgs: [project]) {
+        def mockTestExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks]) {
             execute(_, _) >> contextAfterTest
         }
         task.setTestStepExecutor(mockTestExecutor)
@@ -595,7 +595,7 @@ class PipelineRunTaskTest extends Specification {
         task.pipelineSpec.set(pipelineSpec)
         task.pipelineName.set('failing-test')
 
-        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project]) {
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks]) {
             execute(_, _) >> { throw new RuntimeException("Build failed") }
         }
         task.setBuildStepExecutor(mockBuildExecutor)

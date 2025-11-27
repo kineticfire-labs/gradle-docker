@@ -56,7 +56,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyTaskNames {
                 doLast {
-                    def executor = new BuildStepExecutor(project)
+                    def executor = new BuildStepExecutor(project.tasks)
 
                     assert executor.computeBuildTaskName('myApp') == 'dockerBuildMyApp'
                     assert executor.computeBuildTaskName('testImage') == 'dockerBuildTestImage'
@@ -93,7 +93,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyValidation {
                 doLast {
-                    def executor = new BuildStepExecutor(project)
+                    def executor = new BuildStepExecutor(project.tasks)
 
                     // Test null spec
                     try {
@@ -152,7 +152,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyHooks {
                 doLast {
-                    def executor = new BuildStepExecutor(project)
+                    def executor = new BuildStepExecutor(project.tasks)
 
                     // Create ImageSpec
                     def imageSpec = project.objects.newInstance(
@@ -219,7 +219,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyContextUpdate {
                 doLast {
-                    def executor = new BuildStepExecutor(project)
+                    def executor = new BuildStepExecutor(project.tasks)
 
                     def imageSpec = project.objects.newInstance(
                         ImageSpec,
@@ -281,7 +281,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyMissingTaskFailure {
                 doLast {
-                    def executor = new BuildStepExecutor(project)
+                    def executor = new BuildStepExecutor(project.tasks)
 
                     def imageSpec = project.objects.newInstance(
                         ImageSpec,

@@ -867,6 +867,120 @@ class ConfigurationCacheFunctionalTest extends Specification {
         result2.output.contains('Reusing configuration cache')
     }
 
+// ==================== Workflow Configuration ====================
+
+    def "dockerWorkflows DSL configuration is cached correctly"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    myApp {
+                        imageName.set('my-app')
+                        tags.set(['v1.0', 'latest'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    release {
+                        description.set('Release pipeline')
+                    }
+                }
+            }
+        """
+
+        when: "first build stores configuration cache"
+        def result1 = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help', '--configuration-cache')
+            .build()
+
+        and: "second build reuses cached configuration"
+        def result2 = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help', '--configuration-cache')
+            .build()
+
+        then: "first build creates cache entry"
+        result1.output.contains('Configuration cache entry stored')
+
+        and: "second build reuses cache"
+        result2.output.contains('Reusing configuration cache')
+    }
+
+    def "workflow with multiple pipelines is cached correctly"() {
+        given:
+        def composeFile = testProjectDir.resolve('docker-compose.yml').toFile()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            docker {
+                images {
+                    backend {
+                        imageName.set('backend')
+                        tags.set(['v1'])
+                        context.set(file('.'))
+                    }
+                }
+            }
+
+            dockerOrch {
+                composeStacks {
+                    integrationTest {
+                        composeFiles('docker-compose.yml')
+                    }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    ci {
+                        description.set('CI pipeline')
+                    }
+                    release {
+                        description.set('Release pipeline')
+                    }
+                }
+            }
+        """
+
+        when:
+        def result1 = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help', '--configuration-cache')
+            .build()
+
+        def result2 = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('help', '--configuration-cache')
+            .build()
+
+        then:
+        result1.output.contains('Configuration cache entry stored')
+
+        result2.output.contains('Reusing configuration cache')
+    }
+
     def "test integration extension configuration works with cache"() {
         given:
         def composeFile = testProjectDir.resolve('docker-compose.yml').toFile()

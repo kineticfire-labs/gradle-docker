@@ -54,8 +54,9 @@ abstract class PipelineRunTask extends DefaultTask {
         description = 'Executes a complete pipeline workflow'
         group = 'docker workflows'
 
-        buildStepExecutor = new BuildStepExecutor(project)
-        testStepExecutor = new TestStepExecutor(project)
+        // Use TaskContainer instead of Project for configuration cache compatibility
+        buildStepExecutor = new BuildStepExecutor(project.tasks)
+        testStepExecutor = new TestStepExecutor(project.tasks)
         conditionalExecutor = new ConditionalExecutor()
         alwaysStepExecutor = new AlwaysStepExecutor()
     }

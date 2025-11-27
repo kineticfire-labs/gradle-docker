@@ -56,7 +56,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyTaskNames {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     assert executor.computeComposeUpTaskName('myStack') == 'composeUpMyStack'
                     assert executor.computeComposeUpTaskName('testStack') == 'composeUpTestStack'
@@ -98,7 +98,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyValidation {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     // Test null spec
                     try {
@@ -186,7 +186,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyHooks {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     // Create ComposeStackSpec
                     def stackSpec = project.objects.newInstance(
@@ -269,7 +269,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyContextUpdate {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,
@@ -336,7 +336,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyMissingTaskFailure {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,
@@ -412,7 +412,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyComposeDownOnFailure {
                 doLast {
-                    def executor = new TestStepExecutor(project)
+                    def executor = new TestStepExecutor(project.tasks)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,

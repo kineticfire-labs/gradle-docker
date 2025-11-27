@@ -19,6 +19,8 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
+import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import com.kineticfire.gradle.docker.workflow.TestResult
 import com.kineticfire.gradle.docker.workflow.TestResultCapture
 import org.gradle.api.Action
@@ -43,7 +45,7 @@ class TestStepExecutorTest extends Specification {
     def setup() {
         project = ProjectBuilder.builder().build()
         mockResultCapture = Mock(TestResultCapture)
-        executor = new TestStepExecutor(project, mockResultCapture)
+        executor = new TestStepExecutor(project.tasks, mockResultCapture)
 
         stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
 
@@ -56,17 +58,25 @@ class TestStepExecutorTest extends Specification {
 
     // ===== CONSTRUCTOR TESTS =====
 
-    def "constructor accepts project"() {
+    def "constructor accepts TaskContainer"() {
         when:
-        def exec = new TestStepExecutor(project)
+        def exec = new TestStepExecutor(project.tasks)
 
         then:
         exec != null
     }
 
-    def "constructor accepts project and resultCapture"() {
+    def "constructor accepts TaskContainer and resultCapture"() {
         when:
-        def exec = new TestStepExecutor(project, mockResultCapture)
+        def exec = new TestStepExecutor(project.tasks, mockResultCapture)
+
+        then:
+        exec != null
+    }
+
+    def "constructor accepts TaskLookup and resultCapture"() {
+        when:
+        def exec = new TestStepExecutor(TaskLookupFactory.from(project.tasks), mockResultCapture)
 
         then:
         exec != null

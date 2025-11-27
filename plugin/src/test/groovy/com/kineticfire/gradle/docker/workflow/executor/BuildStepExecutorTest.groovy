@@ -19,6 +19,8 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
+import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Project
@@ -38,7 +40,7 @@ class BuildStepExecutorTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        executor = new BuildStepExecutor(project)
+        executor = new BuildStepExecutor(project.tasks)
 
         imageSpec = project.objects.newInstance(
             ImageSpec,
@@ -54,9 +56,17 @@ class BuildStepExecutorTest extends Specification {
 
     // ===== CONSTRUCTOR TESTS =====
 
-    def "constructor accepts project"() {
+    def "constructor accepts TaskContainer"() {
         when:
-        def exec = new BuildStepExecutor(project)
+        def exec = new BuildStepExecutor(project.tasks)
+
+        then:
+        exec != null
+    }
+
+    def "constructor accepts TaskLookup"() {
+        when:
+        def exec = new BuildStepExecutor(TaskLookupFactory.from(project.tasks))
 
         then:
         exec != null
