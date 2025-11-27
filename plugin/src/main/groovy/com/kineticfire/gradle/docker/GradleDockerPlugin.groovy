@@ -24,6 +24,7 @@ import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
 import com.kineticfire.gradle.docker.task.*
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.workflow.validation.PipelineValidator
 import org.gradle.api.tasks.Copy
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.GradleException
@@ -61,8 +62,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Register task creation rules
         registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
 
+        // Register workflow pipeline tasks
+        registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerOrchExt, dockerService, composeService)
+
         // Configure validation and dependency resolution
-        configureAfterEvaluation(project, dockerExt, dockerOrchExt)
+        configureAfterEvaluation(project, dockerExt, dockerOrchExt, dockerWorkflowsExt)
         
         // Setup cleanup hooks
         configureCleanupHooks(project, dockerService, composeService)
@@ -280,8 +284,62 @@ class GradleDockerPlugin implements Plugin<Project> {
             }
         }
     }
-    
-    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+
+    /**
+     * Register workflow pipeline tasks
+     *
+     * Creates a PipelineRunTask for each defined pipeline in dockerWorkflows.pipelines.
+     * Tasks are named 'run{PipelineName}' (e.g., 'runCiPipeline').
+     */
+    private void registerWorkflowTasks(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
+                                       DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                       Provider<DockerService> dockerService, Provider<ComposeService> composeService) {
+        // Register an aggregate task for running all pipelines
+        project.tasks.register('runPipelines') {
+            group = 'docker workflows'
+            description = 'Run all configured pipelines'
+        }
+
+        // Register tasks for each pipeline after evaluation (when pipelines are fully configured)
+        project.afterEvaluate {
+            dockerWorkflowsExt.pipelines.all { pipelineSpec ->
+                def pipelineName = pipelineSpec.name
+                def capitalizedName = pipelineName.capitalize()
+                def taskName = "run${capitalizedName}"
+
+                project.tasks.register(taskName, PipelineRunTask) { task ->
+                    configurePipelineRunTask(task, pipelineSpec, dockerService, composeService)
+                }
+
+                // Add to aggregate task
+                project.tasks.named('runPipelines').configure { aggregateTask ->
+                    aggregateTask.dependsOn(taskName)
+                }
+
+                project.logger.info("Registered pipeline task: {} for pipeline: {}", taskName, pipelineName)
+            }
+        }
+    }
+
+    /**
+     * Configure a PipelineRunTask with the pipeline spec and services
+     */
+    private void configurePipelineRunTask(PipelineRunTask task, pipelineSpec,
+                                          Provider<DockerService> dockerService,
+                                          Provider<ComposeService> composeService) {
+        task.description = "Run pipeline: ${pipelineSpec.name}"
+
+        // Configure pipeline spec and name
+        task.pipelineSpec.set(pipelineSpec)
+        task.pipelineName.set(pipelineSpec.name)
+
+        // Note: Services are injected into executors at execution time
+        // The PipelineRunTask creates executors in its constructor, which then
+        // use the project to look up tasks and execute them
+    }
+
+    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                           DockerWorkflowsExtension dockerWorkflowsExt) {
         // GRADLE 9/10 COMPATIBILITY NOTE: afterEvaluate usage
         //
         // This plugin uses afterEvaluate for validation and task dependency configuration.
@@ -310,6 +368,9 @@ class GradleDockerPlugin implements Plugin<Project> {
                 dockerExt.validate()
                 dockerOrchExt.validate()
 
+                // Validate pipeline configurations (cross-DSL references)
+                validatePipelines(project, dockerWorkflowsExt, dockerExt, dockerOrchExt)
+
                 // Configure task dependencies
                 configureTaskDependencies(project, dockerExt, dockerOrchExt)
 
@@ -319,6 +380,22 @@ class GradleDockerPlugin implements Plugin<Project> {
                 throw new GradleException("gradle-docker plugin configuration failed: ${e.message}", e)
             }
         }
+    }
+
+    /**
+     * Validate all pipeline specifications
+     */
+    private void validatePipelines(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
+                                   DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+        if (dockerWorkflowsExt.pipelines.isEmpty()) {
+            project.logger.debug("No pipelines configured - skipping workflow validation")
+            return
+        }
+
+        def validator = new PipelineValidator(project, dockerExt, dockerOrchExt)
+        validator.validateAll(dockerWorkflowsExt.pipelines)
+        project.logger.info("Pipeline validation completed: {} pipeline(s) validated",
+            dockerWorkflowsExt.pipelines.size())
     }
     
     private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {

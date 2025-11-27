@@ -1,0 +1,419 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.gradle.docker.workflow.validation
+
+import com.kineticfire.gradle.docker.extension.DockerExtension
+import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.spec.ComposeStackSpec
+import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
+import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import org.gradle.api.GradleException
+import org.gradle.api.Project
+import org.gradle.api.Task
+import org.gradle.testfixtures.ProjectBuilder
+import spock.lang.Specification
+import spock.lang.TempDir
+
+import java.nio.file.Path
+
+/**
+ * Unit tests for PipelineValidator
+ */
+class PipelineValidatorTest extends Specification {
+
+    @TempDir
+    Path tempDir
+
+    Project project
+    DockerExtension dockerExtension
+    DockerOrchExtension dockerOrchExtension
+    PipelineValidator validator
+
+    def setup() {
+        project = ProjectBuilder.builder()
+            .withProjectDir(tempDir.toFile())
+            .build()
+        dockerExtension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout)
+        dockerOrchExtension = project.objects.newInstance(DockerOrchExtension, project.objects)
+        validator = new PipelineValidator(project, dockerExtension, dockerOrchExtension)
+    }
+
+    // ===== CONSTRUCTOR TESTS =====
+
+    def "constructor accepts all parameters"() {
+        when:
+        def v = new PipelineValidator(project, dockerExtension, dockerOrchExtension)
+
+        then:
+        v != null
+    }
+
+    // ===== VALIDATE TESTS =====
+
+    def "validate passes for empty pipeline"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'empty', project.objects)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when pipeline has no build step configured"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild', project.objects)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when pipeline has build step with valid image reference"() {
+        given:
+        def imageSpec = createImageSpec('myImage')
+        dockerExtension.images.add(imageSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'validBuild', project.objects)
+        pipelineSpec.build.get().image.set(imageSpec)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate fails when pipeline references non-existent image"() {
+        given:
+        def imageSpec = createImageSpec('missingImage')
+        // NOT adding to dockerExtension.images
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badImage', project.objects)
+        pipelineSpec.build.get().image.set(imageSpec)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("references image 'missingImage'")
+        e.message.contains("no such image is defined")
+    }
+
+    def "validate error message includes available images"() {
+        given:
+        def existingImage = createImageSpec('existingImage')
+        dockerExtension.images.add(existingImage)
+
+        def missingImage = createImageSpec('missingImage')
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badRef', project.objects)
+        pipelineSpec.build.get().image.set(missingImage)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("existingImage")
+    }
+
+    // ===== VALIDATE BUILD STEP TESTS =====
+
+    def "validateBuildStep passes when build spec is null"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild', project.objects)
+
+        when:
+        validator.validateBuildStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateBuildStep passes when build spec has no image"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noImage', project.objects)
+        // build spec exists but has no image set
+
+        when:
+        validator.validateBuildStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "isBuildStepConfigured returns false when image not present"() {
+        given:
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+
+        expect:
+        !validator.isBuildStepConfigured(buildSpec)
+    }
+
+    def "isBuildStepConfigured returns true when image present"() {
+        given:
+        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def imageSpec = createImageSpec('testImage')
+        buildSpec.image.set(imageSpec)
+
+        expect:
+        validator.isBuildStepConfigured(buildSpec)
+    }
+
+    // ===== VALIDATE IMAGE REFERENCE TESTS =====
+
+    def "validateImageReference passes for existing image"() {
+        given:
+        def imageSpec = createImageSpec('validImage')
+        dockerExtension.images.add(imageSpec)
+
+        when:
+        validator.validateImageReference('testPipeline', 'validImage')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateImageReference fails for missing image"() {
+        when:
+        validator.validateImageReference('testPipeline', 'nonExistent')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("nonExistent")
+        e.message.contains("testPipeline")
+    }
+
+    def "validateImageReference fails when docker extension is null"() {
+        given:
+        def validatorWithNull = new PipelineValidator(project, null, dockerOrchExtension)
+
+        when:
+        validatorWithNull.validateImageReference('testPipeline', 'anyImage')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("docker extension is not available")
+    }
+
+    // ===== VALIDATE TEST STEP TESTS =====
+
+    def "validateTestStep passes when test spec is null"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noTest', project.objects)
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestStep passes when test spec has no stack or testTask"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'emptyTest', project.objects)
+        // test spec exists but has no stack or testTask set
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "isTestStepConfigured returns false when neither stack nor testTask present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+
+        expect:
+        !validator.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns true when stack present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        testSpec.stack.set(stackSpec)
+
+        expect:
+        validator.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns true when testTask present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def task = project.tasks.register('myTest').get()
+        testSpec.testTask.set(task)
+
+        expect:
+        validator.isTestStepConfigured(testSpec)
+    }
+
+    // ===== VALIDATE STACK REFERENCE TESTS =====
+
+    def "validateStackReference passes when stack not configured"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateStackReference passes for existing stack"() {
+        given:
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'validStack', project.objects)
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        testSpec.stack.set(stackSpec)
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateStackReference fails for missing stack"() {
+        given:
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'missingStack', project.objects)
+        // NOT adding to dockerOrchExtension.composeStacks
+
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        testSpec.stack.set(stackSpec)
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("missingStack")
+        e.message.contains("testPipeline")
+    }
+
+    def "validateStackReference fails when dockerOrch extension is null"() {
+        given:
+        def validatorWithNull = new PipelineValidator(project, dockerExtension, null)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'anyStack', project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        testSpec.stack.set(stackSpec)
+
+        when:
+        validatorWithNull.validateStackReference('testPipeline', testSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("dockerOrch extension is not available")
+    }
+
+    // ===== VALIDATE TEST TASK REFERENCE TESTS =====
+
+    def "validateTestTaskReference passes when testTask not configured"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+
+        when:
+        validator.validateTestTaskReference(pipelineName: 'testPipeline', testSpec: testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestTaskReference passes for existing task"() {
+        given:
+        def task = project.tasks.register('existingTask').get()
+        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        testSpec.testTask.set(task)
+
+        when:
+        validator.validateTestTaskReference(pipelineName: 'testPipeline', testSpec: testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== VALIDATE ALL TESTS =====
+
+    def "validateAll passes for empty collection"() {
+        when:
+        validator.validateAll([])
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateAll passes for multiple valid pipelines"() {
+        given:
+        def image1 = createImageSpec('image1')
+        def image2 = createImageSpec('image2')
+        dockerExtension.images.add(image1)
+        dockerExtension.images.add(image2)
+
+        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1', project.objects)
+        pipeline1.build.get().image.set(image1)
+
+        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2', project.objects)
+        pipeline2.build.get().image.set(image2)
+
+        when:
+        validator.validateAll([pipeline1, pipeline2])
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateAll collects all errors"() {
+        given:
+        def missing1 = createImageSpec('missing1')
+        def missing2 = createImageSpec('missing2')
+
+        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1', project.objects)
+        pipeline1.build.get().image.set(missing1)
+
+        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2', project.objects)
+        pipeline2.build.get().image.set(missing2)
+
+        when:
+        validator.validateAll([pipeline1, pipeline2])
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("missing1")
+        e.message.contains("missing2")
+    }
+
+    // ===== HELPER METHODS =====
+
+    private ImageSpec createImageSpec(String name) {
+        return project.objects.newInstance(
+            ImageSpec,
+            name,
+            project.objects,
+            project.providers,
+            project.layout
+        )
+    }
+}
