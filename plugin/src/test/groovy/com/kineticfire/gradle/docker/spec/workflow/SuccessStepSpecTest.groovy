@@ -32,7 +32,7 @@ class SuccessStepSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        successStepSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        successStepSpec = project.objects.newInstance(SuccessStepSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -75,7 +75,7 @@ class SuccessStepSpecTest extends Specification {
 
     def "save property works correctly"() {
         given:
-        def saveSpec = project.objects.newInstance(SaveSpec, project.objects)
+        def saveSpec = project.objects.newInstance(SaveSpec)
 
         when:
         successStepSpec.save.set(saveSpec)
@@ -87,7 +87,7 @@ class SuccessStepSpecTest extends Specification {
 
     def "publish property works correctly"() {
         given:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
 
         when:
         successStepSpec.publish.set(publishSpec)
@@ -121,8 +121,8 @@ class SuccessStepSpecTest extends Specification {
     def "complete configuration with all properties"() {
         given:
         def tags = ['latest', 'v1.0', 'stable']
-        def saveSpec = project.objects.newInstance(SaveSpec, project.objects)
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def saveSpec = project.objects.newInstance(SaveSpec)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         def hookCalled = false
         def hook = { hookCalled = true } as Action<Void>
 
@@ -199,7 +199,7 @@ class SuccessStepSpecTest extends Specification {
 
     def "save and publish can be configured independently"() {
         given:
-        def saveSpec = project.objects.newInstance(SaveSpec, project.objects)
+        def saveSpec = project.objects.newInstance(SaveSpec)
 
         when:
         successStepSpec.save.set(saveSpec)
@@ -209,7 +209,7 @@ class SuccessStepSpecTest extends Specification {
         !successStepSpec.publish.present
 
         when:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         successStepSpec.publish.set(publishSpec)
 
         then:

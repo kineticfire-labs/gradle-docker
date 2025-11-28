@@ -2,7 +2,7 @@ import com.kineticfire.gradle.docker.spec.*
 import org.gradle.testfixtures.ProjectBuilder
 
 def project = ProjectBuilder.builder().build()
-def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+def publishSpec = project.objects.newInstance(PublishSpec)
 
 // Test direct target creation
 def target = project.objects.newInstance(PublishTarget, "test", project.objects)

@@ -89,7 +89,7 @@ class DockerPublishTaskComprehensiveTest extends DockerTaskTestBase {
         task.imageName.set("app")
         task.tags.set(["test"])
         
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         // No targets added
         task.publishSpec.set(publishSpec)
         

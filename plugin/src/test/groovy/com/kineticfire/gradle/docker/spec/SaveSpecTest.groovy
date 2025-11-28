@@ -30,7 +30,7 @@ class SaveSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        saveSpec = project.objects.newInstance(SaveSpec, project.objects)
+        saveSpec = project.objects.newInstance(SaveSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

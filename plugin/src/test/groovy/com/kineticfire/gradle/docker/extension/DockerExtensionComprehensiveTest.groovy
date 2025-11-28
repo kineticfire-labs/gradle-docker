@@ -427,7 +427,7 @@ class DockerExtensionComprehensiveTest extends Specification {
 
     def "validatePublishConfiguration requires at least one target"() {
         given:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         // No targets added
 
         when:
@@ -517,7 +517,7 @@ class DockerExtensionComprehensiveTest extends Specification {
         saveSpec.outputFile.set(project.layout.buildDirectory.file("image.tar.gz"))
         imageSpec.save.set(saveSpec)
         
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         def target = project.objects.newInstance(PublishTarget, "dockerhub", project.objects)
         target.publishTags(["1.0.0", "latest"])
         publishSpec.to.add(target)

@@ -68,12 +68,12 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     def testResult = TestResult.success(10, 10, 0)
 
                     // Create success spec with hook (no tags - tags require built image)
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
                     def successHookCalled = false
                     successSpec.afterSuccess.set({ successHookCalled = true } as Action<Void>)
 
                     // Create failure spec with hook (should not be called)
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
                     def failureHookCalled = false
                     failureSpec.afterFailure.set({ failureHookCalled = true } as Action<Void>)
 
@@ -125,12 +125,12 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     def testResult = TestResult.failure(10, 8, 2, 0)
 
                     // Create success spec with hook (should not be called)
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
                     def successHookCalled = false
                     successSpec.afterSuccess.set({ successHookCalled = true } as Action<Void>)
 
                     // Create failure spec with hook (should be called)
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
                     def failureHookCalled = false
                     failureSpec.afterFailure.set({ failureHookCalled = true } as Action<Void>)
 
@@ -178,7 +178,7 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     def context = PipelineContext.create('test-pipeline')
                     def testResult = TestResult.success(5, 5, 0)
 
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
                     successSpec.afterSuccess.set({
                         println "AFTER_SUCCESS_HOOK_EXECUTED"
                     } as Action<Void>)
@@ -220,7 +220,7 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     def context = PipelineContext.create('test-pipeline')
                     def testResult = TestResult.failure(5, 3, 2, 0)
 
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
                     failureSpec.afterFailure.set({
                         println "AFTER_FAILURE_HOOK_EXECUTED"
                     } as Action<Void>)
@@ -261,8 +261,8 @@ class ConditionalExecutorFunctionalTest extends Specification {
                     def context = PipelineContext.create('test-pipeline')
                         .withMetadata('key', 'value')
 
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
 
                     // Execute with null test result
                     def result = executor.executeConditional(null, successSpec, failureSpec, context)
@@ -314,7 +314,7 @@ class ConditionalExecutorFunctionalTest extends Specification {
                         .withMetadata('build-number', '42')
 
                     def testResult = TestResult.success(20, 20, 0)
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
                     // Use hook instead of tags (tags require built image)
                     successSpec.afterSuccess.set({ } as Action<Void>)
 

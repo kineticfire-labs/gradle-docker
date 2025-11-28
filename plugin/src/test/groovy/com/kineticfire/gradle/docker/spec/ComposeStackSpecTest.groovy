@@ -30,7 +30,7 @@ class ComposeStackSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        composeStack = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        composeStack = project.objects.newInstance(ComposeStackSpec, 'testStack')
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -43,8 +43,8 @@ class ComposeStackSpecTest extends Specification {
 
     def "constructor with different names"() {
         given:
-        def stack1 = project.objects.newInstance(ComposeStackSpec, 'web', project.objects)
-        def stack2 = project.objects.newInstance(ComposeStackSpec, 'database', project.objects)
+        def stack1 = project.objects.newInstance(ComposeStackSpec, 'web')
+        def stack2 = project.objects.newInstance(ComposeStackSpec, 'database')
 
         expect:
         stack1.name == 'web'

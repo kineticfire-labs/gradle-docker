@@ -50,7 +50,7 @@ class PipelineValidatorTest extends Specification {
             .withProjectDir(tempDir.toFile())
             .build()
         dockerExtension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout)
-        dockerOrchExtension = project.objects.newInstance(DockerOrchExtension, project.objects)
+        dockerOrchExtension = project.objects.newInstance(DockerOrchExtension)
         validator = new PipelineValidator(project, dockerExtension, dockerOrchExtension)
     }
 
@@ -68,7 +68,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validate passes for empty pipeline"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'empty', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'empty')
 
         when:
         validator.validate(pipelineSpec)
@@ -79,7 +79,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validate passes when pipeline has no build step configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild')
 
         when:
         validator.validate(pipelineSpec)
@@ -93,7 +93,7 @@ class PipelineValidatorTest extends Specification {
         def imageSpec = createImageSpec('myImage')
         dockerExtension.images.add(imageSpec)
 
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'validBuild', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'validBuild')
         pipelineSpec.build.get().image.set(imageSpec)
 
         when:
@@ -108,7 +108,7 @@ class PipelineValidatorTest extends Specification {
         def imageSpec = createImageSpec('missingImage')
         // NOT adding to dockerExtension.images
 
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badImage', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badImage')
         pipelineSpec.build.get().image.set(imageSpec)
 
         when:
@@ -126,7 +126,7 @@ class PipelineValidatorTest extends Specification {
         dockerExtension.images.add(existingImage)
 
         def missingImage = createImageSpec('missingImage')
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badRef', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badRef')
         pipelineSpec.build.get().image.set(missingImage)
 
         when:
@@ -141,7 +141,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateBuildStep passes when build spec is null"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noBuild')
 
         when:
         validator.validateBuildStep(pipelineSpec)
@@ -152,7 +152,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateBuildStep passes when build spec has no image"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noImage', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noImage')
         // build spec exists but has no image set
 
         when:
@@ -164,7 +164,7 @@ class PipelineValidatorTest extends Specification {
 
     def "isBuildStepConfigured returns false when image not present"() {
         given:
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
 
         expect:
         !validator.isBuildStepConfigured(buildSpec)
@@ -172,7 +172,7 @@ class PipelineValidatorTest extends Specification {
 
     def "isBuildStepConfigured returns true when image present"() {
         given:
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         def imageSpec = createImageSpec('testImage')
         buildSpec.image.set(imageSpec)
 
@@ -220,7 +220,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateTestStep passes when test spec is null"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noTest', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'noTest')
 
         when:
         validator.validateTestStep(pipelineSpec)
@@ -229,10 +229,10 @@ class PipelineValidatorTest extends Specification {
         noExceptionThrown()
     }
 
-    def "validateTestStep passes when test spec has no stack or testTask"() {
+    def "validateTestStep passes when test spec has no stack or testTaskName"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'emptyTest', project.objects)
-        // test spec exists but has no stack or testTask set
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'emptyTest')
+        // test spec exists but has no stack or testTaskName set
 
         when:
         validator.validateTestStep(pipelineSpec)
@@ -241,9 +241,9 @@ class PipelineValidatorTest extends Specification {
         noExceptionThrown()
     }
 
-    def "isTestStepConfigured returns false when neither stack nor testTask present"() {
+    def "isTestStepConfigured returns false when neither stack nor testTaskName present"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
 
         expect:
         !validator.isTestStepConfigured(testSpec)
@@ -251,19 +251,18 @@ class PipelineValidatorTest extends Specification {
 
     def "isTestStepConfigured returns true when stack present"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
         testSpec.stack.set(stackSpec)
 
         expect:
         validator.isTestStepConfigured(testSpec)
     }
 
-    def "isTestStepConfigured returns true when testTask present"() {
+    def "isTestStepConfigured returns true when testTaskName present"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def task = project.tasks.register('myTest').get()
-        testSpec.testTask.set(task)
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.testTaskName.set('myTest')
 
         expect:
         validator.isTestStepConfigured(testSpec)
@@ -273,7 +272,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateStackReference passes when stack not configured"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
 
         when:
         validator.validateStackReference('testPipeline', testSpec)
@@ -284,10 +283,10 @@ class PipelineValidatorTest extends Specification {
 
     def "validateStackReference passes for existing stack"() {
         given:
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'validStack', project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'validStack')
         dockerOrchExtension.composeStacks.add(stackSpec)
 
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.stack.set(stackSpec)
 
         when:
@@ -299,10 +298,10 @@ class PipelineValidatorTest extends Specification {
 
     def "validateStackReference fails for missing stack"() {
         given:
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'missingStack', project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'missingStack')
         // NOT adding to dockerOrchExtension.composeStacks
 
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.stack.set(stackSpec)
 
         when:
@@ -317,8 +316,8 @@ class PipelineValidatorTest extends Specification {
     def "validateStackReference fails when dockerOrch extension is null"() {
         given:
         def validatorWithNull = new PipelineValidator(project, dockerExtension, null)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'anyStack', project.objects)
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'anyStack')
+        def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.stack.set(stackSpec)
 
         when:
@@ -331,9 +330,9 @@ class PipelineValidatorTest extends Specification {
 
     // ===== VALIDATE TEST TASK REFERENCE TESTS =====
 
-    def "validateTestTaskReference passes when testTask not configured"() {
+    def "validateTestTaskReference passes when testTaskName not configured"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
 
         when:
         validator.validateTestTaskReference(pipelineName: 'testPipeline', testSpec: testSpec)
@@ -344,9 +343,9 @@ class PipelineValidatorTest extends Specification {
 
     def "validateTestTaskReference passes for existing task"() {
         given:
-        def task = project.tasks.register('existingTask').get()
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        testSpec.testTask.set(task)
+        project.tasks.register('existingTask').get()
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.testTaskName.set('existingTask')
 
         when:
         validator.validateTestTaskReference(pipelineName: 'testPipeline', testSpec: testSpec)
@@ -372,10 +371,10 @@ class PipelineValidatorTest extends Specification {
         dockerExtension.images.add(image1)
         dockerExtension.images.add(image2)
 
-        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1', project.objects)
+        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1')
         pipeline1.build.get().image.set(image1)
 
-        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2', project.objects)
+        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2')
         pipeline2.build.get().image.set(image2)
 
         when:
@@ -390,10 +389,10 @@ class PipelineValidatorTest extends Specification {
         def missing1 = createImageSpec('missing1')
         def missing2 = createImageSpec('missing2')
 
-        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1', project.objects)
+        def pipeline1 = project.objects.newInstance(PipelineSpec, 'pipeline1')
         pipeline1.build.get().image.set(missing1)
 
-        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2', project.objects)
+        def pipeline2 = project.objects.newInstance(PipelineSpec, 'pipeline2')
         pipeline2.build.get().image.set(missing2)
 
         when:

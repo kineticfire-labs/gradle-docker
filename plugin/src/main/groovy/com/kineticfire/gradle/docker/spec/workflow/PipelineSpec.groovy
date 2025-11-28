@@ -40,11 +40,11 @@ abstract class PipelineSpec {
 
         description.convention("")
 
-        build.convention(objectFactory.newInstance(BuildStepSpec, objectFactory))
-        test.convention(objectFactory.newInstance(TestStepSpec, objectFactory))
-        onTestSuccess.convention(objectFactory.newInstance(SuccessStepSpec, objectFactory))
-        onTestFailure.convention(objectFactory.newInstance(FailureStepSpec, objectFactory))
-        always.convention(objectFactory.newInstance(AlwaysStepSpec, objectFactory))
+        build.convention(objectFactory.newInstance(BuildStepSpec))
+        test.convention(objectFactory.newInstance(TestStepSpec))
+        onTestSuccess.convention(objectFactory.newInstance(SuccessStepSpec))
+        onTestFailure.convention(objectFactory.newInstance(FailureStepSpec))
+        always.convention(objectFactory.newInstance(AlwaysStepSpec))
     }
 
     String getName() {

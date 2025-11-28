@@ -218,7 +218,7 @@ class PublishOperationFunctionalTest extends Specification {
                     )
                     imageSpec.tags.set(['1.0.0'])
 
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
                     publishSpec.publishTags.set(['spec-tag'])
 
                     // Target with its own tags - should use target tags
@@ -303,7 +303,7 @@ class PublishOperationFunctionalTest extends Specification {
             task verifyNullImageSpec {
                 doLast {
                     def executor = new PublishOperationExecutor()
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
 
                     try {
                         executor.execute(publishSpec, null, null)
@@ -401,7 +401,7 @@ class PublishOperationFunctionalTest extends Specification {
 
                     // Spec with publish configured
                     def withPublishSpec = project.objects.newInstance(SuccessStepSpec)
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
                     withPublishSpec.publish.set(publishSpec)
                     assert executor.hasPublishConfigured(withPublishSpec) : "Spec with publish should return true"
 
@@ -441,7 +441,7 @@ class PublishOperationFunctionalTest extends Specification {
                     def executor = new SuccessStepExecutor()
 
                     def spec = project.objects.newInstance(SuccessStepSpec)
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
                     spec.publish.set(publishSpec)
 
                     def context = PipelineContext.create('testPipeline')
@@ -482,7 +482,7 @@ class PublishOperationFunctionalTest extends Specification {
 
             task verifyMultipleTargets {
                 doLast {
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
 
                     publishSpec.to('staging') {
                         registry.set('staging.registry.io')
@@ -530,7 +530,7 @@ class PublishOperationFunctionalTest extends Specification {
 
             task verifyAuthentication {
                 doLast {
-                    def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+                    def publishSpec = project.objects.newInstance(PublishSpec)
 
                     publishSpec.to('prod') {
                         registry.set('ghcr.io')

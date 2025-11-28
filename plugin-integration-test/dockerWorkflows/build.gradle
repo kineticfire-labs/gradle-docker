@@ -1,0 +1,80 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Tests Aggregator
+ *
+ * Coordinates all dockerWorkflows integration test scenarios.
+ * These tests verify the new dockerWorkflows DSL that orchestrates
+ * build → test → conditional operations pipelines.
+ */
+
+plugins {
+    id 'base'
+}
+
+// ========================================
+// Task: integrationTest
+// Run all dockerWorkflows integration tests
+// ========================================
+tasks.register('integrationTest') {
+    group = 'verification'
+    description = 'Run all dockerWorkflows integration tests'
+
+    // Scenario 1: Basic workflow (build → test → success tag)
+    dependsOn ':dockerWorkflows:scenario-1-basic:app-image:integrationTest'
+
+    doLast {
+        logger.lifecycle("✅ All dockerWorkflows tests complete")
+    }
+}
+
+// ========================================
+// Task: clean
+// Clean all dockerWorkflows tests
+// ========================================
+tasks.named('clean') {
+    dependsOn ':dockerWorkflows:scenario-1-basic:app-image:clean'
+}
+
+// ========================================
+// Task: cleanDockerImages
+// Clean Docker images created by workflows
+// ========================================
+tasks.register('cleanDockerImages', Exec) {
+    group = 'verification'
+    description = 'Remove Docker images created by workflow tests'
+
+    // Use shell to run multiple docker rmi commands, ignoring failures
+    commandLine 'sh', '-c', '''
+        docker rmi workflow-scenario1-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario1-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario1-app:tested 2>/dev/null || true
+        echo "Cleaned up workflow test images"
+    '''
+}
+
+// ========================================
+// Task: cleanAll
+// Complete cleanup
+// ========================================
+tasks.register('cleanAll') {
+    group = 'build'
+    description = 'Clean everything including Docker images'
+
+    dependsOn 'clean'
+    dependsOn 'cleanDockerImages'
+}

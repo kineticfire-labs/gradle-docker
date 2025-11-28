@@ -55,8 +55,8 @@ class ConditionalExecutorTest extends Specification {
     def "executeConditional returns context unchanged when testResult is null"() {
         given:
         def context = PipelineContext.create('test')
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeConditional(null, successSpec, failureSpec, context)
@@ -70,8 +70,8 @@ class ConditionalExecutorTest extends Specification {
         def context = PipelineContext.create('test')
         def expectedContext = context.withAppliedTag('success-tag')
         def testResult = TestResult.success(10, 10, 0)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeConditional(testResult, successSpec, failureSpec, context)
@@ -87,8 +87,8 @@ class ConditionalExecutorTest extends Specification {
         def context = PipelineContext.create('test')
         def expectedContext = context.withAppliedTag('failure-tag')
         def testResult = TestResult.failure(10, 8, 2, 0)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeConditional(testResult, successSpec, failureSpec, context)
@@ -117,7 +117,7 @@ class ConditionalExecutorTest extends Specification {
         given:
         def context = PipelineContext.create('test')
         def expectedContext = context.withAppliedTags(['latest', 'stable', 'v1.0'])
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
 
         when:
         def result = executor.executeSuccessPath(successSpec, context)
@@ -130,7 +130,7 @@ class ConditionalExecutorTest extends Specification {
     def "executeSuccessPath returns empty tags when executor returns empty context"() {
         given:
         def context = PipelineContext.create('test')
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
 
         when:
         def result = executor.executeSuccessPath(successSpec, context)
@@ -143,7 +143,7 @@ class ConditionalExecutorTest extends Specification {
     def "executeSuccessPath delegates hook execution to executor"() {
         given:
         def context = PipelineContext.create('test')
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
         successSpec.afterSuccess.set({ } as Action<Void>)
 
         when:
@@ -171,7 +171,7 @@ class ConditionalExecutorTest extends Specification {
         given:
         def context = PipelineContext.create('test')
         def expectedContext = context.withAppliedTags(['failed', 'broken'])
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeFailurePath(failureSpec, context)
@@ -184,7 +184,7 @@ class ConditionalExecutorTest extends Specification {
     def "executeFailurePath returns empty tags when executor returns empty context"() {
         given:
         def context = PipelineContext.create('test')
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeFailurePath(failureSpec, context)
@@ -197,7 +197,7 @@ class ConditionalExecutorTest extends Specification {
     def "executeFailurePath delegates hook execution to executor"() {
         given:
         def context = PipelineContext.create('test')
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
         failureSpec.afterFailure.set({ } as Action<Void>)
 
         when:
@@ -210,7 +210,7 @@ class ConditionalExecutorTest extends Specification {
     def "executeFailurePath handles saveFailureLogsDir via executor"() {
         given:
         def context = PipelineContext.create('test')
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
         def logsDir = tempDir.resolve('failure-logs').toFile()
         logsDir.mkdirs()
         failureSpec.saveFailureLogsDir.set(logsDir)
@@ -232,7 +232,7 @@ class ConditionalExecutorTest extends Specification {
             .withMetadata('environment', 'ci')
         def expectedContext = context.withAppliedTag('release')
         def testResult = TestResult.success(5, 5, 0)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
 
         when:
         def result = executor.executeConditional(testResult, successSpec, null, context)
@@ -251,7 +251,7 @@ class ConditionalExecutorTest extends Specification {
             .withMetadata('build-id', '12345')
         def expectedContext = context.withAppliedTag('failed-build')
         def testResult = TestResult.failure(10, 8, 2, 0)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
 
         when:
         def result = executor.executeConditional(testResult, null, failureSpec, context)

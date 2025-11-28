@@ -19,7 +19,6 @@ package com.kineticfire.gradle.docker.spec.workflow
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.workflow.TestResult
 import org.gradle.api.Action
-import org.gradle.api.Task
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -33,7 +32,7 @@ class TestStepSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        testStepSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        testStepSpec = project.objects.newInstance(TestStepSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -49,7 +48,7 @@ class TestStepSpecTest extends Specification {
 
     def "stack property works correctly"() {
         given:
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
 
         when:
         testStepSpec.stack.set(stackSpec)
@@ -59,16 +58,13 @@ class TestStepSpecTest extends Specification {
         testStepSpec.stack.get() == stackSpec
     }
 
-    def "testTask property works correctly"() {
-        given:
-        def testTask = project.tasks.create('integrationTest')
-
+    def "testTaskName property works correctly"() {
         when:
-        testStepSpec.testTask.set(testTask)
+        testStepSpec.testTaskName.set('integrationTest')
 
         then:
-        testStepSpec.testTask.present
-        testStepSpec.testTask.get() == testTask
+        testStepSpec.testTaskName.present
+        testStepSpec.testTaskName.get() == 'integrationTest'
     }
 
     def "timeoutMinutes property works correctly"() {
@@ -130,8 +126,7 @@ class TestStepSpecTest extends Specification {
 
     def "complete configuration with all properties"() {
         given:
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'myStack', project.objects)
-        def testTask = project.tasks.create('myTest')
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'myStack')
         def beforeHookCalled = false
         def afterHookCalled = false
         TestResult capturedResult = null
@@ -143,14 +138,14 @@ class TestStepSpecTest extends Specification {
 
         when:
         testStepSpec.stack.set(stackSpec)
-        testStepSpec.testTask.set(testTask)
+        testStepSpec.testTaskName.set('myTest')
         testStepSpec.timeoutMinutes.set(60)
         testStepSpec.beforeTest.set(beforeHook)
         testStepSpec.afterTest.set(afterHook)
 
         then:
         testStepSpec.stack.get() == stackSpec
-        testStepSpec.testTask.get() == testTask
+        testStepSpec.testTaskName.get() == 'myTest'
         testStepSpec.timeoutMinutes.get() == 60
         testStepSpec.beforeTest.present
         testStepSpec.afterTest.present
@@ -170,29 +165,27 @@ class TestStepSpecTest extends Specification {
 
     def "properties can be updated after initial configuration"() {
         given:
-        def initialStack = project.objects.newInstance(ComposeStackSpec, 'initial', project.objects)
-        def updatedStack = project.objects.newInstance(ComposeStackSpec, 'updated', project.objects)
-        def initialTask = project.tasks.create('initialTest')
-        def updatedTask = project.tasks.create('updatedTest')
+        def initialStack = project.objects.newInstance(ComposeStackSpec, 'initial')
+        def updatedStack = project.objects.newInstance(ComposeStackSpec, 'updated')
 
         when:
         testStepSpec.stack.set(initialStack)
-        testStepSpec.testTask.set(initialTask)
+        testStepSpec.testTaskName.set('initialTest')
         testStepSpec.timeoutMinutes.set(20)
 
         then:
         testStepSpec.stack.get() == initialStack
-        testStepSpec.testTask.get() == initialTask
+        testStepSpec.testTaskName.get() == 'initialTest'
         testStepSpec.timeoutMinutes.get() == 20
 
         when:
         testStepSpec.stack.set(updatedStack)
-        testStepSpec.testTask.set(updatedTask)
+        testStepSpec.testTaskName.set('updatedTest')
         testStepSpec.timeoutMinutes.set(90)
 
         then:
         testStepSpec.stack.get() == updatedStack
-        testStepSpec.testTask.get() == updatedTask
+        testStepSpec.testTaskName.get() == 'updatedTest'
         testStepSpec.timeoutMinutes.get() == 90
     }
 
@@ -228,8 +221,8 @@ class TestStepSpecTest extends Specification {
 
     def "stack property can reference different ComposeStackSpec instances"() {
         given:
-        def stack1 = project.objects.newInstance(ComposeStackSpec, 'stack1', project.objects)
-        def stack2 = project.objects.newInstance(ComposeStackSpec, 'stack2', project.objects)
+        def stack1 = project.objects.newInstance(ComposeStackSpec, 'stack1')
+        def stack2 = project.objects.newInstance(ComposeStackSpec, 'stack2')
 
         expect:
         [stack1, stack2].each { stack ->
@@ -238,15 +231,11 @@ class TestStepSpecTest extends Specification {
         }
     }
 
-    def "testTask property can reference different task instances"() {
-        given:
-        def task1 = project.tasks.create('test1')
-        def task2 = project.tasks.create('test2')
-
+    def "testTaskName property can be set to different values"() {
         expect:
-        [task1, task2].each { task ->
-            testStepSpec.testTask.set(task)
-            assert testStepSpec.testTask.get() == task
+        ['test1', 'test2', 'integrationTest'].each { taskName ->
+            testStepSpec.testTaskName.set(taskName)
+            assert testStepSpec.testTaskName.get() == taskName
         }
     }
 

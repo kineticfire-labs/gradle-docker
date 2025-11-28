@@ -30,7 +30,7 @@ class FailureStepSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        failureStepSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        failureStepSpec = project.objects.newInstance(FailureStepSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

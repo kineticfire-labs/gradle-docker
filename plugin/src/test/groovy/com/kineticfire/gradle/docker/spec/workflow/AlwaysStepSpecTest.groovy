@@ -29,7 +29,7 @@ class AlwaysStepSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        alwaysStepSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        alwaysStepSpec = project.objects.newInstance(AlwaysStepSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

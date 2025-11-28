@@ -162,7 +162,7 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Manually create extensions without applying the full plugin
         def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
-        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
+        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension)
         testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
         // Create compose stack
@@ -193,7 +193,7 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Manually create extensions without applying the full plugin
         def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
-        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension, project.objects)
+        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension)
         testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
 
         // Create compose stack

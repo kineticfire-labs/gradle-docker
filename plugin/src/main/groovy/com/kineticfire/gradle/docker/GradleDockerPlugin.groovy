@@ -26,6 +26,7 @@ import com.kineticfire.gradle.docker.task.*
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.workflow.validation.PipelineValidator
 import org.gradle.api.tasks.Copy
+import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.GradleException
 import org.gradle.api.Plugin
@@ -308,7 +309,7 @@ class GradleDockerPlugin implements Plugin<Project> {
                 def taskName = "run${capitalizedName}"
 
                 project.tasks.register(taskName, PipelineRunTask) { task ->
-                    configurePipelineRunTask(task, pipelineSpec, dockerService, composeService)
+                    configurePipelineRunTask(task, pipelineSpec, dockerService, composeService, project.tasks)
                 }
 
                 // Add to aggregate task
@@ -326,16 +327,18 @@ class GradleDockerPlugin implements Plugin<Project> {
      */
     private void configurePipelineRunTask(PipelineRunTask task, pipelineSpec,
                                           Provider<DockerService> dockerService,
-                                          Provider<ComposeService> composeService) {
+                                          Provider<ComposeService> composeService,
+                                          TaskContainer taskContainer) {
         task.description = "Run pipeline: ${pipelineSpec.name}"
 
         // Configure pipeline spec and name
         task.pipelineSpec.set(pipelineSpec)
         task.pipelineName.set(pipelineSpec.name)
 
-        // Note: Services are injected into executors at execution time
-        // The PipelineRunTask creates executors in its constructor, which then
-        // use the project to look up tasks and execute them
+        // Set the TaskContainer at configuration time for configuration cache compatibility
+        // This allows the task to look up other tasks during execution without
+        // accessing project.tasks (which is not allowed with configuration cache)
+        task.setTaskContainer(taskContainer)
     }
 
     private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,

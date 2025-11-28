@@ -30,7 +30,7 @@ class PublishSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        publishSpec = project.objects.newInstance(PublishSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====

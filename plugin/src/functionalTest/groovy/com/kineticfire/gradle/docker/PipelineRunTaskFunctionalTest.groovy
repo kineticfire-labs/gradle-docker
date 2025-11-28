@@ -278,7 +278,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure always step
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
                     alwaysSpec.removeTestContainers.set(true)
                     alwaysSpec.cleanupImages.set(true)
                     pipelineSpec.always.set(alwaysSpec)
@@ -327,7 +327,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure onTestSuccess
-                    def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+                    def successSpec = project.objects.newInstance(SuccessStepSpec)
                     successSpec.additionalTags.set(['test-tag'])
                     pipelineSpec.onTestSuccess.set(successSpec)
 
@@ -375,7 +375,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure onTestFailure
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
                     failureSpec.additionalTags.set(['failure-tag'])
                     pipelineSpec.onTestFailure.set(failureSpec)
 
@@ -426,7 +426,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure always step
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
                     alwaysSpec.removeTestContainers.set(true)
                     pipelineSpec.always.set(alwaysSpec)
 
@@ -493,7 +493,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure always step
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
                     pipelineSpec.always.set(alwaysSpec)
 
                     // Create context with FAILED tests
@@ -555,7 +555,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
                     )
 
                     // Configure always step
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
                     pipelineSpec.always.set(alwaysSpec)
 
                     def context = PipelineContext.create('test')
@@ -601,7 +601,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
 
             task verifyFailureSpecTags {
                 doLast {
-                    def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+                    def failureSpec = project.objects.newInstance(FailureStepSpec)
 
                     // Should have empty tags by default
                     assert failureSpec.additionalTags.get().isEmpty()
@@ -641,7 +641,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
 
             task verifyAlwaysSpecDefaults {
                 doLast {
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
 
                     // Verify default values
                     assert alwaysSpec.removeTestContainers.get() == true : 'removeTestContainers should default to true'
@@ -677,7 +677,7 @@ class PipelineRunTaskFunctionalTest extends Specification {
 
             task verifyAlwaysSpecDebugging {
                 doLast {
-                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+                    def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
 
                     // Configure for debugging (keep containers on failure)
                     alwaysSpec.removeTestContainers.set(true)

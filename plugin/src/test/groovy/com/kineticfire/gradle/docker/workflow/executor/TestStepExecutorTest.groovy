@@ -47,13 +47,13 @@ class TestStepExecutorTest extends Specification {
         mockResultCapture = Mock(TestResultCapture)
         executor = new TestStepExecutor(project.tasks, mockResultCapture)
 
-        stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
 
         testStepSpec = project.objects.newInstance(TestStepSpec)
         testStepSpec.stack.set(stackSpec)
 
         testTask = project.tasks.create('integrationTest')
-        testStepSpec.testTask.set(testTask)
+        testStepSpec.testTaskName.set('integrationTest')
     }
 
     // ===== CONSTRUCTOR TESTS =====
@@ -96,7 +96,7 @@ class TestStepExecutorTest extends Specification {
     def "validateTestSpec throws exception when stack is not set"() {
         given:
         def spec = project.objects.newInstance(TestStepSpec)
-        spec.testTask.set(testTask)
+        spec.testTaskName.set('integrationTest')
 
         when:
         executor.validateTestSpec(spec)
@@ -106,7 +106,7 @@ class TestStepExecutorTest extends Specification {
         e.message.contains('stack must be configured')
     }
 
-    def "validateTestSpec throws exception when testTask is not set"() {
+    def "validateTestSpec throws exception when testTaskName is not set"() {
         given:
         def spec = project.objects.newInstance(TestStepSpec)
         spec.stack.set(stackSpec)
@@ -116,10 +116,10 @@ class TestStepExecutorTest extends Specification {
 
         then:
         def e = thrown(GradleException)
-        e.message.contains('testTask must be configured')
+        e.message.contains('testTaskName must be configured')
     }
 
-    def "validateTestSpec passes when stack and testTask are set"() {
+    def "validateTestSpec passes when stack and testTaskName are set"() {
         when:
         executor.validateTestSpec(testStepSpec)
 
@@ -594,7 +594,7 @@ class TestStepExecutorTest extends Specification {
         def stSpec = project.objects.newInstance(ComposeStackSpec, stackName, project.objects)
         def tSpec = project.objects.newInstance(TestStepSpec)
         tSpec.stack.set(stSpec)
-        tSpec.testTask.set(testTask)
+        tSpec.testTaskName.set('integrationTest')
 
         project.tasks.create("composeUp${stackName.capitalize()}")
         project.tasks.create("composeDown${stackName.capitalize()}")

@@ -328,7 +328,7 @@ class SuccessStepExecutorTest extends Specification {
 
     def "executePublishOperation calls PublishOperationExecutor when configured"() {
         given:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         successSpec.publish.set(publishSpec)
 
         when:
@@ -340,7 +340,7 @@ class SuccessStepExecutorTest extends Specification {
 
     def "executePublishOperation throws when no built image"() {
         given:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         successSpec.publish.set(publishSpec)
         def noImageContext = PipelineContext.create('test')
 
@@ -355,7 +355,7 @@ class SuccessStepExecutorTest extends Specification {
     def "executePublishOperation works without dockerService"() {
         given:
         executor.setDockerService(null)
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         successSpec.publish.set(publishSpec)
 
         when:
@@ -375,7 +375,7 @@ class SuccessStepExecutorTest extends Specification {
 
     def "hasPublishConfigured returns true when publish is set"() {
         given:
-        def publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(PublishSpec)
         successSpec.publish.set(publishSpec)
 
         expect:

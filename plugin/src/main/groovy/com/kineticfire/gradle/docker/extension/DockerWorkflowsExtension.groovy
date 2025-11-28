@@ -38,7 +38,7 @@ abstract class DockerWorkflowsExtension {
     DockerWorkflowsExtension(ObjectFactory objectFactory) {
         this.objectFactory = objectFactory
         this.pipelines = objectFactory.domainObjectContainer(PipelineSpec) { name ->
-            def pipelineSpec = objectFactory.newInstance(PipelineSpec, name, objectFactory)
+            def pipelineSpec = objectFactory.newInstance(PipelineSpec, name)
             return pipelineSpec
         }
     }

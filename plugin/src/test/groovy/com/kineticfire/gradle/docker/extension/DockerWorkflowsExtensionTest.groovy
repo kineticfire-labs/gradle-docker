@@ -31,7 +31,7 @@ class DockerWorkflowsExtensionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        extension = project.objects.newInstance(DockerWorkflowsExtension, project.objects)
+        extension = project.objects.newInstance(DockerWorkflowsExtension)
     }
 
     def "extension can be created"() {

@@ -232,14 +232,14 @@ abstract class ImageSpec {
     }
     
     void publish(@DelegatesTo(PublishSpec) Closure closure) {
-        def publishSpec = objectFactory.newInstance(PublishSpec, objectFactory)
+        def publishSpec = objectFactory.newInstance(PublishSpec)
         closure.delegate = publishSpec
         closure.call()
         publish.set(publishSpec)
     }
-    
+
     void publish(Action<PublishSpec> action) {
-        def publishSpec = objectFactory.newInstance(PublishSpec, objectFactory)
+        def publishSpec = objectFactory.newInstance(PublishSpec)
         action.execute(publishSpec)
         publish.set(publishSpec)
     }

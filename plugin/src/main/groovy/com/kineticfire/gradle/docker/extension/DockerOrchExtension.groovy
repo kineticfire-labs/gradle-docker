@@ -37,7 +37,7 @@ abstract class DockerOrchExtension {
     DockerOrchExtension(ObjectFactory objectFactory) {
         this.objectFactory = objectFactory
         this.composeStacks = objectFactory.domainObjectContainer(ComposeStackSpec) { name ->
-            def stackSpec = objectFactory.newInstance(ComposeStackSpec, name, objectFactory)
+            def stackSpec = objectFactory.newInstance(ComposeStackSpec, name)
             // projectName will be set by the plugin during task configuration
             // Note: waitForHealthy and waitForRunning default configurations are handled by WaitSpec defaults
             return stackSpec

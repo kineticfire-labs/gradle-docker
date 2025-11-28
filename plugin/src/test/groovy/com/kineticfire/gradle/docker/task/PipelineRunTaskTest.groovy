@@ -70,7 +70,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "validatePipelineSpec throws exception when pipelineName not present"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         task.pipelineSpec.set(pipelineSpec)
 
         when:
@@ -83,7 +83,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "validatePipelineSpec passes with valid configuration"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         task.pipelineSpec.set(pipelineSpec)
         task.pipelineName.set('test-pipeline')
 
@@ -98,7 +98,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeBuildStep skips when build spec is null"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         def context = PipelineContext.create('test')
 
         when:
@@ -110,8 +110,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeBuildStep skips when image not configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         pipelineSpec.build.set(buildSpec)
         def context = PipelineContext.create('test')
 
@@ -124,8 +124,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeBuildStep delegates to BuildStepExecutor when configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
         buildSpec.image.set(imageSpec)
         pipelineSpec.build.set(buildSpec)
@@ -146,7 +146,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "isBuildStepConfigured returns false when image not present"() {
         given:
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
 
         expect:
         !task.isBuildStepConfigured(buildSpec)
@@ -154,7 +154,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "isBuildStepConfigured returns true when image is present"() {
         given:
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
         buildSpec.image.set(imageSpec)
 
@@ -166,7 +166,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeTestStep skips when test spec is null"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         def context = PipelineContext.create('test')
 
         when:
@@ -178,8 +178,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeTestStep skips when stack not configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def testSpec = project.objects.newInstance(TestStepSpec)
         pipelineSpec.test.set(testSpec)
         def context = PipelineContext.create('test')
 
@@ -192,12 +192,12 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeTestStep delegates to TestStepExecutor when configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
-        def testTask = project.tasks.create('myTest')
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        project.tasks.create('myTest')
         testSpec.stack.set(stackSpec)
-        testSpec.testTask.set(testTask)
+        testSpec.testTaskName.set('myTest')
         pipelineSpec.test.set(testSpec)
 
         def context = PipelineContext.create('test')
@@ -219,18 +219,17 @@ class PipelineRunTaskTest extends Specification {
 
     def "isTestStepConfigured returns false when stack not present"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def testTask = project.tasks.create('myTest')
-        testSpec.testTask.set(testTask)
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.testTaskName.set('myTest')
 
         expect:
         !task.isTestStepConfigured(testSpec)
     }
 
-    def "isTestStepConfigured returns false when testTask not present"() {
+    def "isTestStepConfigured returns false when testTaskName not present"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
         testSpec.stack.set(stackSpec)
 
         expect:
@@ -239,11 +238,10 @@ class PipelineRunTaskTest extends Specification {
 
     def "isTestStepConfigured returns true when fully configured"() {
         given:
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
-        def testTask = project.tasks.create('myTest')
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
         testSpec.stack.set(stackSpec)
-        testSpec.testTask.set(testTask)
+        testSpec.testTaskName.set('myTest')
 
         expect:
         task.isTestStepConfigured(testSpec)
@@ -253,7 +251,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeConditionalStep skips when test not completed"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         def context = PipelineContext.create('test')
 
         when:
@@ -265,9 +263,9 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeConditionalStep delegates to ConditionalExecutor"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
         pipelineSpec.onTestSuccess.set(successSpec)
         pipelineSpec.onTestFailure.set(failureSpec)
 
@@ -292,8 +290,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "getSuccessSpec returns onTestSuccess when present"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
         successSpec.additionalTags.set(['test-tag'])
         pipelineSpec.onTestSuccess.set(successSpec)
 
@@ -306,7 +304,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "getSuccessSpec returns onTestSuccess convention when set"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         // onTestSuccess has a convention, so it's always present
 
         when:
@@ -318,8 +316,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "getSuccessSpec returns explicitly set onSuccess over convention"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
         successSpec.additionalTags.set(['on-success-tag'])
         pipelineSpec.onSuccess.set(successSpec)
 
@@ -333,8 +331,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "getFailureSpec returns onTestFailure when present"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
         failureSpec.additionalTags.set(['test-fail-tag'])
         pipelineSpec.onTestFailure.set(failureSpec)
 
@@ -347,7 +345,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "getFailureSpec returns onTestFailure convention when present"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         // onTestFailure has a convention, so it's always present
 
         when:
@@ -359,8 +357,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "getFailureSpec returns explicitly set onFailure"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def failureSpec = project.objects.newInstance(FailureStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def failureSpec = project.objects.newInstance(FailureStepSpec)
         failureSpec.additionalTags.set(['on-fail-tag'])
         pipelineSpec.onFailure.set(failureSpec)
 
@@ -376,7 +374,7 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeAlwaysStep skips when always spec is null"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
         def context = PipelineContext.create('test')
 
         when:
@@ -388,8 +386,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeAlwaysStep executes cleanup when configured"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         alwaysSpec.removeTestContainers.set(true)
         alwaysSpec.cleanupImages.set(true)
         pipelineSpec.always.set(alwaysSpec)
@@ -407,8 +405,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeAlwaysStep delegates to AlwaysStepExecutor with testsPassed true when tests pass"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         pipelineSpec.always.set(alwaysSpec)
         def testResult = new TestResult(true, 5, 0, 0, 0, 5)
         def context = PipelineContext.create('test').withTestResult(testResult)
@@ -425,8 +423,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeAlwaysStep delegates to AlwaysStepExecutor with testsPassed false when tests fail"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         pipelineSpec.always.set(alwaysSpec)
         def testResult = new TestResult(false, 3, 0, 0, 2, 5)
         def context = PipelineContext.create('test').withTestResult(testResult)
@@ -443,8 +441,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "executeAlwaysStep handles executor exception gracefully"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         pipelineSpec.always.set(alwaysSpec)
         def context = PipelineContext.create('test')
 
@@ -526,23 +524,23 @@ class PipelineRunTaskTest extends Specification {
 
     def "runPipeline executes full workflow with stubbed executors"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
         buildSpec.image.set(imageSpec)
         pipelineSpec.build.set(buildSpec)
 
-        def testSpec = project.objects.newInstance(TestStepSpec, project.objects)
-        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack', project.objects)
-        def testTask = project.tasks.create('myTest2')
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        project.tasks.create('myTest2')
         testSpec.stack.set(stackSpec)
-        testSpec.testTask.set(testTask)
+        testSpec.testTaskName.set('myTest2')
         pipelineSpec.test.set(testSpec)
 
-        def successSpec = project.objects.newInstance(SuccessStepSpec, project.objects)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
         pipelineSpec.onTestSuccess.set(successSpec)
 
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         pipelineSpec.always.set(alwaysSpec)
 
         task.pipelineSpec.set(pipelineSpec)
@@ -582,13 +580,13 @@ class PipelineRunTaskTest extends Specification {
 
     def "runPipeline handles failure and still runs cleanup"() {
         given:
-        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test', project.objects)
-        def buildSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'test')
+        def buildSpec = project.objects.newInstance(BuildStepSpec)
         def imageSpec = project.objects.newInstance(ImageSpec, 'myImage', project.objects)
         buildSpec.image.set(imageSpec)
         pipelineSpec.build.set(buildSpec)
 
-        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec, project.objects)
+        def alwaysSpec = project.objects.newInstance(AlwaysStepSpec)
         alwaysSpec.removeTestContainers.set(true)
         pipelineSpec.always.set(alwaysSpec)
 

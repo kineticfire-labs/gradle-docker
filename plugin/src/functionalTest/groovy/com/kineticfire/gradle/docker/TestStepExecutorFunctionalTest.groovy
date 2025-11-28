@@ -110,7 +110,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
                     // Test spec without stack
                     def specNoStack = project.objects.newInstance(TestStepSpec)
-                    specNoStack.testTask.set(tasks.create('dummyTest'))
+                    specNoStack.testTaskName.set('dummyTest')
                     try {
                         executor.validateTestSpec(specNoStack)
                         throw new AssertionError('Should have thrown exception for missing stack')
@@ -118,7 +118,7 @@ class TestStepExecutorFunctionalTest extends Specification {
                         assert e.message.contains('stack must be configured')
                     }
 
-                    // Test spec without testTask
+                    // Test spec without testTaskName
                     def specNoTask = project.objects.newInstance(TestStepSpec)
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,
@@ -128,9 +128,9 @@ class TestStepExecutorFunctionalTest extends Specification {
                     specNoTask.stack.set(stackSpec)
                     try {
                         executor.validateTestSpec(specNoTask)
-                        throw new AssertionError('Should have thrown exception for missing testTask')
+                        throw new AssertionError('Should have thrown exception for missing testTaskName')
                     } catch (GradleException e) {
-                        assert e.message.contains('testTask must be configured')
+                        assert e.message.contains('testTaskName must be configured')
                     }
 
                     println "Validation verified successfully!"
@@ -198,7 +198,7 @@ class TestStepExecutorFunctionalTest extends Specification {
                     // Create TestStepSpec with hooks - must cast closures to Action
                     def testSpec = project.objects.newInstance(TestStepSpec)
                     testSpec.stack.set(stackSpec)
-                    testSpec.testTask.set(tasks.named('myTestTask').get())
+                    testSpec.testTaskName.set('myTestTask')
                     testSpec.beforeTest.set({ println "BEFORE_TEST_HOOK" } as Action<Void>)
                     testSpec.afterTest.set({ TestResult r ->
                         println "AFTER_TEST_HOOK: success=\${r.success}"
@@ -279,7 +279,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
                     def testSpec = project.objects.newInstance(TestStepSpec)
                     testSpec.stack.set(stackSpec)
-                    testSpec.testTask.set(tasks.named('runTests').get())
+                    testSpec.testTaskName.set('runTests')
 
                     def context = PipelineContext.create('productionPipeline')
                         .withMetadata('environment', 'production')
@@ -346,7 +346,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
                     def testSpec = project.objects.newInstance(TestStepSpec)
                     testSpec.stack.set(stackSpec)
-                    testSpec.testTask.set(tasks.named('dummyTest').get())
+                    testSpec.testTaskName.set('dummyTest')
 
                     def context = PipelineContext.create('test')
 
@@ -422,7 +422,7 @@ class TestStepExecutorFunctionalTest extends Specification {
 
                     def testSpec = project.objects.newInstance(TestStepSpec)
                     testSpec.stack.set(stackSpec)
-                    testSpec.testTask.set(tasks.named('failingTest').get())
+                    testSpec.testTaskName.set('failingTest')
 
                     def context = PipelineContext.create('test')
 

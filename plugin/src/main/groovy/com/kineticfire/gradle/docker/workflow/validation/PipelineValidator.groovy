@@ -137,7 +137,7 @@ class PipelineValidator {
      * Check if the test step has required configuration
      */
     boolean isTestStepConfigured(TestStepSpec testSpec) {
-        return testSpec.stack.isPresent() || testSpec.testTask.isPresent()
+        return testSpec.stack.isPresent() || testSpec.testTaskName.isPresent()
     }
 
     /**
@@ -180,12 +180,11 @@ class PipelineValidator {
         def pipelineName = args.pipelineName
         def testSpec = args.testSpec
 
-        if (!testSpec.testTask.isPresent()) {
+        if (!testSpec.testTaskName.isPresent()) {
             return
         }
 
-        def testTask = testSpec.testTask.get()
-        def taskName = testTask.name
+        def taskName = testSpec.testTaskName.get()
 
         // Verify the task exists in the project
         def foundTask = project.tasks.findByName(taskName)

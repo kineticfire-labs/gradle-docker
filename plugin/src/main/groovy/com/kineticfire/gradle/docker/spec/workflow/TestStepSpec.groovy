@@ -19,7 +19,6 @@ package com.kineticfire.gradle.docker.spec.workflow
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.workflow.TestResult
 import org.gradle.api.Action
-import org.gradle.api.Task
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 
@@ -29,6 +28,9 @@ import javax.inject.Inject
  * Specification for the test step in a pipeline workflow
  *
  * Defines which Compose stack to start and which test task to run.
+ *
+ * Configuration cache compatibility: Stores task name (String) instead of Task reference
+ * because Task objects cannot be serialized. The actual Task is looked up at execution time.
  */
 abstract class TestStepSpec {
 
@@ -47,9 +49,12 @@ abstract class TestStepSpec {
     abstract Property<ComposeStackSpec> getStack()
 
     /**
-     * The test task to execute (e.g., tasks.named('integrationTest'))
+     * The name of the test task to execute (e.g., 'integrationTest')
+     *
+     * Configuration cache compatible: stores task name, not Task reference.
+     * The actual Task is looked up at execution time.
      */
-    abstract Property<Task> getTestTask()
+    abstract Property<String> getTestTaskName()
 
     /**
      * Timeout in minutes for the test execution

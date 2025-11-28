@@ -125,7 +125,7 @@ abstract class DockerTaskTestBase extends Specification {
     }
 
     protected Object createPublishSpec() {
-        def publishSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.PublishSpec, project.objects)
+        def publishSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.PublishSpec)
         def target = project.objects.newInstance(com.kineticfire.gradle.docker.spec.PublishTarget, "default", project.objects)
         target.publishTags.set(["docker.io/test/app:latest"])
         def auth = project.objects.newInstance(AuthSpec)

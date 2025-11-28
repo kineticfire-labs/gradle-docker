@@ -54,7 +54,7 @@ class PublishOperationExecutorTest extends Specification {
         imageSpec.imageName.set('myapp')
         imageSpec.tags.set(['1.0.0'])
 
-        publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        publishSpec = project.objects.newInstance(PublishSpec)
 
         dockerService = Mock(DockerService)
     }

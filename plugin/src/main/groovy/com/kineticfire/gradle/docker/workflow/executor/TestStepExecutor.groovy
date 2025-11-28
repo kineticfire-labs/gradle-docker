@@ -79,9 +79,15 @@ class TestStepExecutor {
         validateTestSpec(testSpec)
 
         def stackSpec = testSpec.stack.get()
-        def testTask = testSpec.testTask.get()
+        def testTaskName = testSpec.testTaskName.get()
         def stackName = stackSpec.name
-        LOGGER.lifecycle("Executing test step for stack: {} with test task: {}", stackName, testTask.name)
+        LOGGER.lifecycle("Executing test step for stack: {} with test task: {}", stackName, testTaskName)
+
+        // Look up the test task at execution time
+        def testTask = lookupTask(testTaskName)
+        if (testTask == null) {
+            throw new GradleException("Test task '${testTaskName}' not found.")
+        }
 
         TestResult testResult = null
         Exception testException = null
@@ -131,8 +137,8 @@ class TestStepExecutor {
         if (!testSpec.stack.isPresent()) {
             throw new GradleException("TestStepSpec.stack must be configured")
         }
-        if (!testSpec.testTask.isPresent()) {
-            throw new GradleException("TestStepSpec.testTask must be configured")
+        if (!testSpec.testTaskName.isPresent()) {
+            throw new GradleException("TestStepSpec.testTaskName must be configured")
         }
     }
 

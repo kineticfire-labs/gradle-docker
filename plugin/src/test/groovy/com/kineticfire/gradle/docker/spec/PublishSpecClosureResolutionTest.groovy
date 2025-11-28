@@ -30,7 +30,7 @@ class PublishSpecClosureResolutionTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        publishSpec = project.objects.newInstance(PublishSpec, project.objects)
+        publishSpec = project.objects.newInstance(PublishSpec)
     }
 
     def "to(String, Closure) with registry configuration works"() {

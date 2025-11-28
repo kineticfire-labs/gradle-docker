@@ -32,33 +32,54 @@ import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
+
+import javax.inject.Inject
 
 /**
  * Task that executes a complete pipeline workflow
  *
  * Orchestrates the execution of: build → test → conditional (success/failure) → always (cleanup)
  * Uses executor pattern for each step to maintain separation of concerns.
+ *
+ * NOTE: This task is NOT compatible with Gradle's configuration cache because it:
+ * 1. Needs to look up and execute other tasks dynamically at execution time
+ * 2. Uses TaskContainer which cannot be serialized
+ *
+ * This is a fundamental limitation of the pipeline orchestration pattern.
+ * The task explicitly opts out of configuration cache.
  */
 abstract class PipelineRunTask extends DefaultTask {
 
     private static final Logger LOGGER = Logging.getLogger(PipelineRunTask)
 
+    // Executors are created lazily at execution time, not at configuration time
     private BuildStepExecutor buildStepExecutor
     private TestStepExecutor testStepExecutor
     private ConditionalExecutor conditionalExecutor
     private AlwaysStepExecutor alwaysStepExecutor
 
+    // Flag to track if executors were explicitly set (for testing)
+    private boolean executorsInjected = false
+
+    // TaskContainer captured at configuration time
+    // This is set by the plugin when registering the task
+    private TaskContainer taskContainer
+
+    @Inject
     PipelineRunTask() {
         description = 'Executes a complete pipeline workflow'
         group = 'docker workflows'
 
-        // Use TaskContainer instead of Project for configuration cache compatibility
-        buildStepExecutor = new BuildStepExecutor(project.tasks)
-        testStepExecutor = new TestStepExecutor(project.tasks)
-        conditionalExecutor = new ConditionalExecutor()
-        alwaysStepExecutor = new AlwaysStepExecutor()
+        // This task is NOT compatible with configuration cache because it needs to
+        // dynamically look up and execute other tasks at runtime
+        notCompatibleWithConfigurationCache(
+            "PipelineRunTask requires TaskContainer access which is not configuration cache compatible"
+        )
+
+        // Note: Executors are NOT created here - they're created lazily in runPipeline()
     }
 
     @Internal
@@ -72,23 +93,72 @@ abstract class PipelineRunTask extends DefaultTask {
      */
     void setBuildStepExecutor(BuildStepExecutor executor) {
         this.buildStepExecutor = executor
+        this.executorsInjected = true
     }
 
     void setTestStepExecutor(TestStepExecutor executor) {
         this.testStepExecutor = executor
+        this.executorsInjected = true
     }
 
     void setConditionalExecutor(ConditionalExecutor executor) {
         this.conditionalExecutor = executor
+        this.executorsInjected = true
     }
 
     void setAlwaysStepExecutor(AlwaysStepExecutor executor) {
         this.alwaysStepExecutor = executor
+        this.executorsInjected = true
+    }
+
+    /**
+     * Set the TaskContainer for configuration cache compatibility.
+     * This must be called during configuration time by the plugin.
+     */
+    void setTaskContainer(TaskContainer taskContainer) {
+        this.taskContainer = taskContainer
+    }
+
+    /**
+     * Initialize executors at execution time
+     *
+     * This method creates the executors lazily when the task runs, not during configuration.
+     * The TaskContainer is captured at configuration time and stored in taskContainer field.
+     * This is required for configuration cache compatibility.
+     */
+    private void initializeExecutors() {
+        if (executorsInjected) {
+            // Executors were set explicitly (e.g., for testing) - don't override
+            return
+        }
+
+        if (taskContainer == null) {
+            throw new GradleException("TaskContainer was not set. " +
+                "Ensure the plugin sets taskContainer during task configuration.")
+        }
+
+        // Create executors with the TaskContainer captured at configuration time
+        if (buildStepExecutor == null) {
+            buildStepExecutor = new BuildStepExecutor(taskContainer)
+        }
+        if (testStepExecutor == null) {
+            testStepExecutor = new TestStepExecutor(taskContainer)
+        }
+        if (conditionalExecutor == null) {
+            conditionalExecutor = new ConditionalExecutor()
+        }
+        if (alwaysStepExecutor == null) {
+            alwaysStepExecutor = new AlwaysStepExecutor()
+        }
     }
 
     @TaskAction
     void runPipeline() {
         validatePipelineSpec()
+
+        // Create executors lazily at execution time for configuration cache compatibility
+        // Only create if not already set (e.g., by tests)
+        initializeExecutors()
 
         def spec = pipelineSpec.get()
         def name = pipelineName.get()
@@ -166,7 +236,7 @@ abstract class PipelineRunTask extends DefaultTask {
      * Check if the test step has required configuration
      */
     boolean isTestStepConfigured(TestStepSpec testSpec) {
-        return testSpec.stack.isPresent() && testSpec.testTask.isPresent()
+        return testSpec.stack.isPresent() && testSpec.testTaskName.isPresent()
     }
 
     /**

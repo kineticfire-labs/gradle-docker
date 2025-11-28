@@ -120,7 +120,7 @@ class DockerTestDataFactory {
     }
     
     static PublishSpec createPublishSpec(Project project) {
-        def spec = project.objects.newInstance(PublishSpec, project.objects)
+        def spec = project.objects.newInstance(PublishSpec)
         
         def target = project.objects.newInstance(PublishTarget, "dockerhub", project.objects)
         target.registry.set("docker.io")

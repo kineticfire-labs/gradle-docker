@@ -34,13 +34,14 @@ version = '1.0.0'
 // Aggregate task to run all integration tests
 //   - Probably want to run 'cleanAll' before invoking this task
 tasks.register('integrationTest') {
-    description = 'Run all integration tests (Docker and DockerOrch)'
+    description = 'Run all integration tests (Docker, DockerOrch, and DockerWorkflows)'
     group = 'verification'
 
     // Ensure app is built first, then run all integration test categories
     dependsOn ':app:build'
     dependsOn ':docker:integrationTest'
     dependsOn ':dockerOrch:integrationTest'
+    dependsOn ':dockerWorkflows:integrationTest'
 }
 
 // Task to run only docker integration tests
@@ -61,6 +62,15 @@ tasks.register('dockerOrchIntegrationTest') {
     dependsOn ':dockerOrch:integrationTest'
 }
 
+// Task to run only dockerWorkflows integration tests
+tasks.register('dockerWorkflowsIntegrationTest') {
+    description = 'Run dockerWorkflows integration tests only'
+    group = 'verification'
+
+    dependsOn ':app:build'
+    dependsOn ':dockerWorkflows:integrationTest'
+}
+
 // Aggregate cleanup task
 tasks.register('cleanAll') {
     description = 'Clean all integration test projects'
@@ -69,6 +79,7 @@ tasks.register('cleanAll') {
     dependsOn ':app:clean'
     dependsOn ':docker:cleanAll'
     dependsOn ':dockerOrch:clean'
+    dependsOn ':dockerWorkflows:cleanAll'
 }
 
 // Docker container verification task

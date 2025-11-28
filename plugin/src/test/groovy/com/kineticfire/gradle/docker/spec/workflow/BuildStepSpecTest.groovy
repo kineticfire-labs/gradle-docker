@@ -31,7 +31,7 @@ class BuildStepSpecTest extends Specification {
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        buildStepSpec = project.objects.newInstance(BuildStepSpec, project.objects)
+        buildStepSpec = project.objects.newInstance(BuildStepSpec)
     }
 
     // ===== CONSTRUCTOR TESTS =====
