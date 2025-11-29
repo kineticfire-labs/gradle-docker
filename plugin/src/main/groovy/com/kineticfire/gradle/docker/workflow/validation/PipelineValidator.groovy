@@ -135,21 +135,54 @@ class PipelineValidator {
 
     /**
      * Check if the test step has required configuration
+     *
+     * When delegateStackManagement is true, only testTaskName is required.
+     * When delegateStackManagement is false (default), both stack and testTaskName are required.
      */
     boolean isTestStepConfigured(TestStepSpec testSpec) {
-        return testSpec.stack.isPresent() || testSpec.testTaskName.isPresent()
+        def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
+
+        if (delegateStackManagement) {
+            // When delegating, only testTaskName is required
+            return testSpec.testTaskName.isPresent()
+        } else {
+            // When managing lifecycle, both stack and testTaskName are required
+            return testSpec.stack.isPresent() || testSpec.testTaskName.isPresent()
+        }
     }
 
     /**
      * Validate that the referenced compose stack exists in dockerOrch.composeStacks
+     *
+     * When delegateStackManagement is true and stack is also set, logs a warning since
+     * the stack property will be ignored (lifecycle managed by testIntegration).
      */
     void validateStackReference(String pipelineName, TestStepSpec testSpec) {
+        def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
+
         if (!testSpec.stack.isPresent()) {
+            // No stack configured - valid when delegateStackManagement is true
+            if (!delegateStackManagement) {
+                // Stack required when not delegating - but this check is handled in isTestStepConfigured
+                return
+            }
             return
         }
 
         def stackSpec = testSpec.stack.get()
         def stackName = stackSpec.name
+
+        // Warn if delegateStackManagement is true but stack is also set
+        if (delegateStackManagement) {
+            LOGGER.warn(
+                "Pipeline '{}' has delegateStackManagement=true but also sets stack='{}'. " +
+                "The stack property will be ignored since testIntegration manages the compose lifecycle. " +
+                "Consider removing the stack configuration to avoid confusion.",
+                pipelineName, stackName
+            )
+            // Don't validate stack reference since it won't be used
+            return
+        }
 
         if (dockerOrchExtension == null) {
             throw new GradleException(

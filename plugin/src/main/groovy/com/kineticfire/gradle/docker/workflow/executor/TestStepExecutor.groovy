@@ -78,10 +78,17 @@ class TestStepExecutor {
     PipelineContext execute(TestStepSpec testSpec, PipelineContext context) {
         validateTestSpec(testSpec)
 
-        def stackSpec = testSpec.stack.get()
+        def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
         def testTaskName = testSpec.testTaskName.get()
-        def stackName = stackSpec.name
-        LOGGER.lifecycle("Executing test step for stack: {} with test task: {}", stackName, testTaskName)
+
+        // Get stack name only when we manage lifecycle (stack is optional when delegating)
+        def stackName = delegateStackManagement ? null : testSpec.stack.get().name
+
+        if (delegateStackManagement) {
+            LOGGER.lifecycle("Executing test step with delegated stack management, test task: {}", testTaskName)
+        } else {
+            LOGGER.lifecycle("Executing test step for stack: {} with test task: {}", stackName, testTaskName)
+        }
 
         // Look up the test task at execution time
         def testTask = lookupTask(testTaskName)
@@ -96,9 +103,13 @@ class TestStepExecutor {
             // Execute beforeTest hook if configured
             executeBeforeTestHook(testSpec)
 
-            // Execute compose up
-            def composeUpTaskName = computeComposeUpTaskName(stackName)
-            executeComposeUpTask(composeUpTaskName)
+            // Execute compose up only when we manage lifecycle (not when delegating)
+            if (!delegateStackManagement) {
+                def composeUpTaskName = computeComposeUpTaskName(stackName)
+                executeComposeUpTask(composeUpTaskName)
+            } else {
+                LOGGER.info("Skipping composeUp - stack management delegated to testIntegration")
+            }
 
             // Execute test task
             try {
@@ -110,9 +121,13 @@ class TestStepExecutor {
                 testResult = resultCapture.captureFailure(testTask, e)
             }
         } finally {
-            // Always execute compose down
-            def composeDownTaskName = computeComposeDownTaskName(stackName)
-            executeComposeDownTask(composeDownTaskName)
+            // Execute compose down only when we manage lifecycle (not when delegating)
+            if (!delegateStackManagement) {
+                def composeDownTaskName = computeComposeDownTaskName(stackName)
+                executeComposeDownTask(composeDownTaskName)
+            } else {
+                LOGGER.info("Skipping composeDown - stack management delegated to testIntegration")
+            }
         }
 
         // Execute afterTest hook if configured (receives TestResult)
@@ -129,16 +144,23 @@ class TestStepExecutor {
 
     /**
      * Validate the test step specification
+     *
+     * When delegateStackManagement is true, stack is optional (lifecycle managed by testIntegration).
+     * When delegateStackManagement is false (default), stack is required.
      */
     void validateTestSpec(TestStepSpec testSpec) {
         if (testSpec == null) {
             throw new GradleException("TestStepSpec cannot be null")
         }
-        if (!testSpec.stack.isPresent()) {
-            throw new GradleException("TestStepSpec.stack must be configured")
-        }
         if (!testSpec.testTaskName.isPresent()) {
             throw new GradleException("TestStepSpec.testTaskName must be configured")
+        }
+
+        def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
+
+        // Stack is required only when we manage lifecycle (delegateStackManagement = false)
+        if (!delegateStackManagement && !testSpec.stack.isPresent()) {
+            throw new GradleException("TestStepSpec.stack must be configured when delegateStackManagement is false")
         }
     }
 

@@ -93,17 +93,18 @@ class TestStepExecutorTest extends Specification {
         e.message.contains('cannot be null')
     }
 
-    def "validateTestSpec throws exception when stack is not set"() {
+    def "validateTestSpec throws exception when stack is not set and delegateStackManagement is false"() {
         given:
         def spec = project.objects.newInstance(TestStepSpec)
         spec.testTaskName.set('integrationTest')
+        // delegateStackManagement defaults to false
 
         when:
         executor.validateTestSpec(spec)
 
         then:
         def e = thrown(GradleException)
-        e.message.contains('stack must be configured')
+        e.message.contains('stack must be configured when delegateStackManagement is false')
     }
 
     def "validateTestSpec throws exception when testTaskName is not set"() {
@@ -122,6 +123,33 @@ class TestStepExecutorTest extends Specification {
     def "validateTestSpec passes when stack and testTaskName are set"() {
         when:
         executor.validateTestSpec(testStepSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestSpec passes when delegateStackManagement is true and stack is not set"() {
+        given:
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+
+        when:
+        executor.validateTestSpec(spec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestSpec passes when delegateStackManagement is true and testTaskName is set"() {
+        given:
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+        // stack is not set - this is valid when delegating
+
+        when:
+        executor.validateTestSpec(spec)
 
         then:
         noExceptionThrown()
@@ -610,5 +638,204 @@ class TestStepExecutorTest extends Specification {
 
         where:
         stackName << ['app', 'myService', 'webApi']
+    }
+
+    // ===== DELEGATE STACK MANAGEMENT TESTS =====
+
+    def "execute skips composeUp when delegateStackManagement is true"() {
+        given:
+        def composeUpCalled = false
+        project.tasks.create('composeUpTestStack') {
+            doLast { composeUpCalled = true }
+        }
+        project.tasks.create('composeDownTestStack')
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+        // stack is not set - valid when delegating
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        !composeUpCalled
+    }
+
+    def "execute skips composeDown when delegateStackManagement is true"() {
+        given:
+        def composeDownCalled = false
+        project.tasks.create('composeUpTestStack')
+        project.tasks.create('composeDownTestStack') {
+            doLast { composeDownCalled = true }
+        }
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        !composeDownCalled
+    }
+
+    def "execute still runs composeUp when delegateStackManagement is false"() {
+        given:
+        def composeUpCalled = false
+        project.tasks.create('composeUpTestStack') {
+            doLast { composeUpCalled = true }
+        }
+        project.tasks.create('composeDownTestStack')
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(testStepSpec, context)
+
+        then:
+        composeUpCalled
+    }
+
+    def "execute still runs composeDown when delegateStackManagement is false"() {
+        given:
+        def composeDownCalled = false
+        project.tasks.create('composeUpTestStack')
+        project.tasks.create('composeDownTestStack') {
+            doLast { composeDownCalled = true }
+        }
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(testStepSpec, context)
+
+        then:
+        composeDownCalled
+    }
+
+    def "execute still runs beforeTest hook when delegateStackManagement is true"() {
+        given:
+        def hookExecuted = false
+        def beforeHook = { hookExecuted = true } as Action<Void>
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+        spec.beforeTest.set(beforeHook)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        hookExecuted
+    }
+
+    def "execute still runs afterTest hook when delegateStackManagement is true"() {
+        given:
+        TestResult receivedResult = null
+        def afterHook = { TestResult r -> receivedResult = r } as Action<TestResult>
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+        spec.afterTest.set(afterHook)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        receivedResult == expectedResult
+    }
+
+    def "execute still captures test result when delegateStackManagement is true"() {
+        given:
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 5, 0, 0, 0, 5)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        def result = executor.execute(spec, context)
+
+        then:
+        result.testResult == expectedResult
+        result.testCompleted
+    }
+
+    def "execute still throws on test failure when delegateStackManagement is true"() {
+        given:
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+
+        testTask.doLast { throw new RuntimeException('Test failed') }
+        def context = PipelineContext.create('test')
+        def failureResult = new TestResult(false, 0, 0, 0, 1, 1)
+        mockResultCapture.captureFailure(testTask, _ as Exception) >> failureResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains('Test execution failed')
+    }
+
+    def "execute runs hooks and test task without compose when delegateStackManagement is true"() {
+        given:
+        def executionOrder = []
+
+        def beforeHook = { executionOrder << 'before' } as Action<Void>
+        def afterHook = { TestResult r -> executionOrder << 'after' } as Action<TestResult>
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.delegateStackManagement.set(true)
+        spec.beforeTest.set(beforeHook)
+        spec.afterTest.set(afterHook)
+
+        // Create compose tasks but they should NOT be called
+        project.tasks.create('composeUpTestStack') {
+            doLast { executionOrder << 'composeUp' }
+        }
+        project.tasks.create('composeDownTestStack') {
+            doLast { executionOrder << 'composeDown' }
+        }
+        testTask.doLast { executionOrder << 'test' }
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        executionOrder == ['before', 'test', 'after']
     }
 }

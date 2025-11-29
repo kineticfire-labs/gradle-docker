@@ -41,6 +41,7 @@ abstract class TestStepSpec {
         this.objectFactory = objectFactory
 
         timeoutMinutes.convention(30)
+        delegateStackManagement.convention(false)
     }
 
     /**
@@ -70,4 +71,21 @@ abstract class TestStepSpec {
      * Hook executed after the test step completes (receives TestResult)
      */
     abstract Property<Action<TestResult>> getAfterTest()
+
+    /**
+     * When true, the pipeline delegates compose stack lifecycle management to testIntegration extension.
+     * The pipeline will NOT execute composeUp/composeDown - instead relying on the test task's
+     * dependsOn and finalizedBy relationships configured by testIntegration.usesCompose().
+     *
+     * When false (default), the pipeline manages compose lifecycle directly by executing
+     * composeUp before tests and composeDown after tests.
+     *
+     * Use this when you need per-class or per-method container lifecycle control:
+     * - Configure testIntegration.usesCompose(testTask, 'stackName', 'class') or 'method'
+     * - Set delegateStackManagement = true in the pipeline test step
+     * - The stack property becomes optional when delegateStackManagement is true
+     *
+     * Default: false (pipeline manages compose lifecycle)
+     */
+    abstract Property<Boolean> getDelegateStackManagement()
 }

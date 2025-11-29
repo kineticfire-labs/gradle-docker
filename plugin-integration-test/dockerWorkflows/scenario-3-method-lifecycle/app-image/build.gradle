@@ -1,0 +1,230 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 3 - Delegated Method Lifecycle
+ *
+ * This scenario demonstrates using dockerWorkflows with delegateStackManagement=true
+ * combined with testIntegration's 'method' lifecycle mode. The key pattern here is:
+ *
+ * 1. testIntegration.usesCompose() manages the compose lifecycle (per-method)
+ * 2. dockerWorkflows pipeline uses delegateStackManagement=true to skip its own compose calls
+ * 3. The pipeline still orchestrates build → test → conditional tag operations
+ *
+ * With 'method' lifecycle:
+ * - Containers are restarted for EACH test method
+ * - Each test gets a completely fresh, isolated container
+ * - State does not persist between test methods
+ *
+ * This is useful for tests that require complete isolation, such as:
+ * - Tests that modify database state
+ * - Tests that need predictable initial conditions
+ * - Mutation testing scenarios
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9202 (workflow scenario 3)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        // The image name must be unique across integration tests
+        methodApp {
+            imageName = 'workflow-scenario3-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareMethodAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for method lifecycle test app'
+                into layout.buildDirectory.dir('docker-context/methodApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        methodTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario3-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// TEST INTEGRATION DSL: Configure lifecycle
+// =============================================================================
+// For delegateStackManagement, the Gradle tasks (composeUp/composeDown) manage
+// the compose lifecycle at test task level (class lifecycle).
+// True per-method lifecycle requires the @ComposeUp Spock annotation.
+afterEvaluate {
+    testIntegration {
+        usesCompose(integrationTest, 'methodTest', 'class')
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with delegated stack management
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        // Pipeline using delegated stack management for method lifecycle
+        methodPipeline {
+            description = 'Pipeline with delegated method lifecycle - fresh containers per test'
+
+            // Build step: build the methodApp image
+            build {
+                image = docker.images.methodApp
+            }
+
+            // Test step: delegate compose lifecycle to testIntegration
+            test {
+                testTaskName = 'integrationTest'
+                // KEY: This tells the pipeline NOT to manage compose up/down
+                // The testIntegration extension handles per-method lifecycle instead
+                delegateStackManagement = true
+            }
+
+            // On test success: add 'tested' tag to the image
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+// Plugin automatically creates integrationTest source set when composeStacks configured
+
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+afterEvaluate {
+    tasks.named('integrationTest') {
+        // Pass compose state info to tests
+        systemProperty 'COMPOSE_STATE_FILE',
+            layout.buildDirectory.file('compose-state/methodTest-state.json').get().asFile.absolutePath
+        systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario3-test"
+        systemProperty 'IMAGE_NAME', 'workflow-scenario3-app'
+    }
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Ensure image is built before compose up (testIntegration will handle compose lifecycle)
+afterEvaluate {
+    tasks.named('composeUpMethodTest') {
+        dependsOn tasks.named('dockerBuildMethodApp')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('runMethodIntegrationTest') {
+    description = 'Run the method lifecycle pipeline and verify results'
+    group = 'verification'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Run the pipeline
+    dependsOn tasks.named('runMethodPipeline')
+
+    doLast {
+        // Verify the 'tested' tag was applied
+        def result = exec {
+            commandLine 'docker', 'images', '-q', 'workflow-scenario3-app:tested'
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        def imageId = result.standardOutput.toString().trim()
+        if (imageId.isEmpty()) {
+            throw new GradleException("Expected image 'workflow-scenario3-app:tested' not found! " +
+                "The onTestSuccess additionalTags may not have been applied.")
+        }
+        logger.lifecycle("SUCCESS: Image 'workflow-scenario3-app:tested' found with ID: ${imageId}")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupMethodWorkflow') {
+    description = 'Clean up Docker resources from method workflow test'
+    group = 'verification'
+
+    doLast {
+        // Remove test containers
+        exec {
+            commandLine 'docker', 'compose', '-p', 'workflow-scenario3-test', 'down', '-v'
+            ignoreExitValue = true
+        }
+
+        // Remove test images
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "workflow-scenario3-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+    }
+}

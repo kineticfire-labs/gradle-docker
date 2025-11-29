@@ -42,6 +42,8 @@ class TestStepSpecTest extends Specification {
         testStepSpec != null
         testStepSpec.timeoutMinutes.present
         testStepSpec.timeoutMinutes.get() == 30
+        testStepSpec.delegateStackManagement.present
+        testStepSpec.delegateStackManagement.get() == false
     }
 
     // ===== PROPERTY TESTS =====
@@ -80,6 +82,50 @@ class TestStepSpecTest extends Specification {
         expect:
         testStepSpec.timeoutMinutes.present
         testStepSpec.timeoutMinutes.get() == 30
+    }
+
+    def "delegateStackManagement has default value of false"() {
+        expect:
+        testStepSpec.delegateStackManagement.present
+        testStepSpec.delegateStackManagement.get() == false
+    }
+
+    def "delegateStackManagement property can be set to true"() {
+        when:
+        testStepSpec.delegateStackManagement.set(true)
+
+        then:
+        testStepSpec.delegateStackManagement.present
+        testStepSpec.delegateStackManagement.get() == true
+    }
+
+    def "delegateStackManagement property can be set to false explicitly"() {
+        when:
+        testStepSpec.delegateStackManagement.set(false)
+
+        then:
+        testStepSpec.delegateStackManagement.present
+        testStepSpec.delegateStackManagement.get() == false
+    }
+
+    def "delegateStackManagement property can be updated after initial configuration"() {
+        when:
+        testStepSpec.delegateStackManagement.set(true)
+
+        then:
+        testStepSpec.delegateStackManagement.get() == true
+
+        when:
+        testStepSpec.delegateStackManagement.set(false)
+
+        then:
+        testStepSpec.delegateStackManagement.get() == false
+
+        when:
+        testStepSpec.delegateStackManagement.set(true)
+
+        then:
+        testStepSpec.delegateStackManagement.get() == true
     }
 
     def "beforeTest hook property works correctly"() {

@@ -1,0 +1,223 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 2 - Delegated Class Lifecycle
+ *
+ * This scenario demonstrates using dockerWorkflows with delegateStackManagement=true
+ * combined with testIntegration's 'class' lifecycle mode. The key pattern here is:
+ *
+ * 1. testIntegration.usesCompose() manages the compose lifecycle (per-class)
+ * 2. dockerWorkflows pipeline uses delegateStackManagement=true to skip its own compose calls
+ * 3. The pipeline still orchestrates build → test → conditional tag operations
+ *
+ * This allows users to leverage testIntegration's fine-grained lifecycle control
+ * (class or method) while still benefiting from dockerWorkflows' CI/CD pipeline
+ * orchestration (conditional tagging on test success).
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9201 (workflow scenario 2)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        // The image name must be unique across integration tests
+        delegatedApp {
+            imageName = 'workflow-scenario2-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareDelegatedAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for delegated lifecycle test app'
+                into layout.buildDirectory.dir('docker-context/delegatedApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        delegatedTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario2-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// TEST INTEGRATION DSL: Configure per-class lifecycle
+// =============================================================================
+// This is the key configuration - testIntegration manages the compose lifecycle
+// with 'class' mode: containers start before the test class and stop after.
+afterEvaluate {
+    testIntegration {
+        usesCompose(integrationTest, 'delegatedTest', 'class')
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with delegated stack management
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        // Pipeline using delegated stack management for class lifecycle
+        delegatedPipeline {
+            description = 'Pipeline with delegated class lifecycle - testIntegration manages compose'
+
+            // Build step: build the delegatedApp image
+            build {
+                image = docker.images.delegatedApp
+            }
+
+            // Test step: delegate compose lifecycle to testIntegration
+            test {
+                testTaskName = 'integrationTest'
+                // KEY: This tells the pipeline NOT to manage compose up/down
+                // The testIntegration extension handles lifecycle instead
+                delegateStackManagement = true
+            }
+
+            // On test success: add 'tested' tag to the image
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+// Plugin automatically creates integrationTest source set when composeStacks configured
+
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+afterEvaluate {
+    tasks.named('integrationTest') {
+        // Pass compose state info to tests
+        systemProperty 'COMPOSE_STATE_FILE',
+            layout.buildDirectory.file('compose-state/delegatedTest-state.json').get().asFile.absolutePath
+        systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario2-test"
+        systemProperty 'IMAGE_NAME', 'workflow-scenario2-app'
+    }
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Ensure image is built before compose up (testIntegration will handle compose lifecycle)
+afterEvaluate {
+    tasks.named('composeUpDelegatedTest') {
+        dependsOn tasks.named('dockerBuildDelegatedApp')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('runDelegatedIntegrationTest') {
+    description = 'Run the delegated lifecycle pipeline and verify results'
+    group = 'verification'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Run the pipeline
+    dependsOn tasks.named('runDelegatedPipeline')
+
+    doLast {
+        // Verify the 'tested' tag was applied
+        def result = exec {
+            commandLine 'docker', 'images', '-q', 'workflow-scenario2-app:tested'
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        def imageId = result.standardOutput.toString().trim()
+        if (imageId.isEmpty()) {
+            throw new GradleException("Expected image 'workflow-scenario2-app:tested' not found! " +
+                "The onTestSuccess additionalTags may not have been applied.")
+        }
+        logger.lifecycle("SUCCESS: Image 'workflow-scenario2-app:tested' found with ID: ${imageId}")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupDelegatedWorkflow') {
+    description = 'Clean up Docker resources from delegated workflow test'
+    group = 'verification'
+
+    doLast {
+        // Remove test containers
+        exec {
+            commandLine 'docker', 'compose', '-p', 'workflow-scenario2-test', 'down', '-v'
+            ignoreExitValue = true
+        }
+
+        // Remove test images
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "workflow-scenario2-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+    }
+}

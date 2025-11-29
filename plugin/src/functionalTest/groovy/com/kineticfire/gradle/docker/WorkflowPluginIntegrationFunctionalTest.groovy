@@ -384,6 +384,226 @@ services:
         result.output.contains('runDeployPipeline')
     }
 
+    // ===== DELEGATE STACK MANAGEMENT TESTS =====
+
+    def "test step delegateStackManagement defaults to false"() {
+        given:
+        // Create a compose file
+        def composeFile = testProjectDir.resolve('compose.yml').toFile()
+        composeFile << """
+services:
+  app:
+    image: alpine:latest
+"""
+
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    testStack {
+                        files.from('compose.yml')
+                    }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    myPipeline {
+                        test {
+                            stack.set(dockerOrch.composeStacks.testStack)
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def pipeline = dockerWorkflows.pipelines.findByName('myPipeline')
+                    def testStep = pipeline.test.get()
+                    assert testStep.delegateStackManagement.get() == false : "delegateStackManagement should default to false"
+                    println "DELEGATE_DEFAULT_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyDefault')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('DELEGATE_DEFAULT_VERIFIED')
+        result.task(':verifyDefault').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "test step delegateStackManagement can be set to true"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    delegatedPipeline {
+                        test {
+                            delegateStackManagement.set(true)
+                        }
+                    }
+                }
+            }
+
+            task verifyDelegateTrue {
+                doLast {
+                    def pipeline = dockerWorkflows.pipelines.findByName('delegatedPipeline')
+                    def testStep = pipeline.test.get()
+                    assert testStep.delegateStackManagement.get() == true : "delegateStackManagement should be true"
+                    println "DELEGATE_TRUE_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyDelegateTrue')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('DELEGATE_TRUE_VERIFIED')
+        result.task(':verifyDelegateTrue').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "test step stack is optional when delegateStackManagement is true"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            // Create a dummy test task for validation
+            task myIntegrationTest {
+                doLast { println 'Integration test executed' }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    delegatedPipeline {
+                        test {
+                            delegateStackManagement.set(true)
+                            testTaskName.set('myIntegrationTest')
+                            // Note: stack is not set - should be valid when delegateStackManagement is true
+                        }
+                    }
+                }
+            }
+
+            task verifyNoStack {
+                doLast {
+                    def pipeline = dockerWorkflows.pipelines.findByName('delegatedPipeline')
+                    def testStep = pipeline.test.get()
+                    assert testStep.delegateStackManagement.get() == true : "delegateStackManagement should be true"
+                    assert !testStep.stack.isPresent() : "stack should not be set"
+                    assert testStep.testTaskName.get() == 'myIntegrationTest' : "testTaskName should be set"
+                    println "NO_STACK_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyNoStack')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('NO_STACK_VERIFIED')
+        result.task(':verifyNoStack').outcome == TaskOutcome.SUCCESS
+    }
+
+    def "complete DSL with delegateStackManagement and testIntegration pattern"() {
+        given:
+        // Create a compose file
+        def composeFile = testProjectDir.resolve('compose.yml').toFile()
+        composeFile << """
+services:
+  app:
+    image: alpine:latest
+"""
+
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    appStack {
+                        files.from('compose.yml')
+                    }
+                }
+            }
+
+            // Plugin auto-creates 'integrationTest' task, so we configure it
+            // instead of creating a new one
+            afterEvaluate {
+                tasks.named('integrationTest') {
+                    doLast { println 'Integration test executed' }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    ciPipeline {
+                        description.set('CI Pipeline with delegated lifecycle')
+                        test {
+                            delegateStackManagement.set(true)
+                            testTaskName.set('integrationTest')
+                            // stack is optional when delegating
+                            timeoutMinutes.set(60)
+                        }
+                    }
+                }
+            }
+
+            task verifyDelegatedDsl {
+                doLast {
+                    def pipeline = dockerWorkflows.pipelines.findByName('ciPipeline')
+                    def testStep = pipeline.test.get()
+
+                    assert pipeline.description.get() == 'CI Pipeline with delegated lifecycle'
+                    assert testStep.delegateStackManagement.get() == true
+                    assert testStep.testTaskName.get() == 'integrationTest'
+                    assert testStep.timeoutMinutes.get() == 60
+
+                    println "DELEGATED_DSL_VERIFIED"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withArguments('verifyDelegatedDsl')
+            .withPluginClasspath(getPluginClasspath())
+            .build()
+
+        then:
+        result.output.contains('DELEGATED_DSL_VERIFIED')
+        result.task(':verifyDelegatedDsl').outcome == TaskOutcome.SUCCESS
+    }
+
     // ===== EMPTY PIPELINES TEST =====
 
     def "plugin works with no pipelines configured"() {
