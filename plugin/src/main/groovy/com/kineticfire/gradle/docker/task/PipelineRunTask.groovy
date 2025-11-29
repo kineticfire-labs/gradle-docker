@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
@@ -29,6 +30,7 @@ import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.provider.Property
+import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
@@ -67,6 +69,9 @@ abstract class PipelineRunTask extends DefaultTask {
     // TaskContainer captured at configuration time
     // This is set by the plugin when registering the task
     private TaskContainer taskContainer
+
+    // DockerService provider for tagging operations (set at configuration time)
+    private Provider<DockerService> dockerServiceProvider
 
     @Inject
     PipelineRunTask() {
@@ -120,6 +125,14 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
+     * Set the DockerService provider for tagging operations.
+     * This must be called during configuration time by the plugin.
+     */
+    void setDockerServiceProvider(Provider<DockerService> dockerServiceProvider) {
+        this.dockerServiceProvider = dockerServiceProvider
+    }
+
+    /**
      * Initialize executors at execution time
      *
      * This method creates the executors lazily when the task runs, not during configuration.
@@ -146,6 +159,10 @@ abstract class PipelineRunTask extends DefaultTask {
         }
         if (conditionalExecutor == null) {
             conditionalExecutor = new ConditionalExecutor()
+            // Inject DockerService if available for tagging operations
+            if (dockerServiceProvider != null) {
+                conditionalExecutor.setDockerService(dockerServiceProvider.get())
+            }
         }
         if (alwaysStepExecutor == null) {
             alwaysStepExecutor = new AlwaysStepExecutor()

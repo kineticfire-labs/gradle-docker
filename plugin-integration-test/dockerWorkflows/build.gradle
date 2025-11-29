@@ -45,6 +45,10 @@ tasks.register('integrationTest') {
     // the integration tests intentionally fail. The wrapper task validates failure behavior.
     dependsOn ':dockerWorkflows:scenario-3-failed-tests:app-image:verifyFailedPipeline'
 
+    // Scenario 4: Multiple pipelines (dev, staging, prod)
+    // Note: Uses verifyMultiplePipelines which runs all three pipelines and validates tags
+    dependsOn ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:verifyMultiplePipelines'
+
     // Note: scenario-3-method-lifecycle was removed as redundant.
     // Method lifecycle cannot be achieved with dockerWorkflows due to Gradle task architecture.
     // See docs/design-docs/todo/workflow-cannot-method-lifecycle.md for details.
@@ -63,6 +67,7 @@ tasks.named('clean') {
     dependsOn ':dockerWorkflows:scenario-1-basic:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-2-delegated-lifecycle:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-3-failed-tests:app-image:clean'
+    dependsOn ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:clean'
 }
 
 // ========================================
@@ -85,6 +90,11 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi workflow-scenario3-app:1.0.0 2>/dev/null || true
         docker rmi workflow-scenario3-app:tested 2>/dev/null || true
         docker rmi workflow-scenario3-app:verified 2>/dev/null || true
+        docker rmi workflow-scenario4-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario4-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario4-app:staging 2>/dev/null || true
+        docker rmi workflow-scenario4-app:prod 2>/dev/null || true
+        docker rmi workflow-scenario4-app:release 2>/dev/null || true
         echo "Cleaned up workflow test images"
     '''
 }

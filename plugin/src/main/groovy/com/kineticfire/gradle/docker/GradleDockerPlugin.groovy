@@ -339,6 +339,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // This allows the task to look up other tasks during execution without
         // accessing project.tasks (which is not allowed with configuration cache)
         task.setTaskContainer(taskContainer)
+
+        // Set the DockerService provider for tagging operations in onTestSuccess
+        task.setDockerServiceProvider(dockerService)
     }
 
     private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,

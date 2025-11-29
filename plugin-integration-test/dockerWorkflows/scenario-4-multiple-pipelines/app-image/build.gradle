@@ -1,0 +1,376 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 4 - Multiple Pipelines
+ *
+ * This scenario demonstrates running multiple independent pipelines for the same image.
+ * A common use case is having different pipelines for different environments:
+ *
+ * 1. Dev Pipeline: build + test only (no additional tags on success)
+ * 2. Staging Pipeline: build + test + 'staging' tag on success
+ * 3. Production Pipeline: build + test + 'prod' and 'release' tags on success
+ *
+ * Key behaviors verified:
+ * - Each pipeline can be run independently
+ * - Each pipeline applies its own set of tags on test success
+ * - Pipelines can share the same Docker image definition
+ * - Pipelines can share the same compose stack definition
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9203 (workflow scenario 4)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        multiPipelineApp {
+            imageName = 'workflow-scenario4-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareMultiPipelineAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for multi-pipeline scenario app'
+                into layout.buildDirectory.dir('docker-context/multiPipelineApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        multiPipelineTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario4-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define multiple pipelines for different environments
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        /**
+         * Dev Pipeline: Build and test only
+         *
+         * Use case: Quick validation during development. No additional tags applied,
+         * just verify the image builds and passes tests.
+         */
+        devPipeline {
+            description = 'Development pipeline - build and test only'
+
+            build {
+                image = docker.images.multiPipelineApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.multiPipelineTest
+                testTaskName = 'integrationTest'
+            }
+
+            // No onTestSuccess - dev pipeline just verifies it works
+        }
+
+        /**
+         * Staging Pipeline: Build, test, and tag for staging environment
+         *
+         * Use case: Prepare image for staging deployment. On successful tests,
+         * applies 'staging' tag to indicate readiness for staging environment.
+         */
+        stagingPipeline {
+            description = 'Staging pipeline - build, test, and tag for staging'
+
+            build {
+                image = docker.images.multiPipelineApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.multiPipelineTest
+                testTaskName = 'integrationTest'
+            }
+
+            onTestSuccess {
+                additionalTags = ['staging']
+            }
+        }
+
+        /**
+         * Production Pipeline: Build, test, and tag for production release
+         *
+         * Use case: Prepare image for production deployment. On successful tests,
+         * applies 'prod' and 'release' tags to indicate production readiness.
+         */
+        prodPipeline {
+            description = 'Production pipeline - build, test, and tag for release'
+
+            build {
+                image = docker.images.multiPipelineApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.multiPipelineTest
+                testTaskName = 'integrationTest'
+            }
+
+            onTestSuccess {
+                additionalTags = ['prod', 'release']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/multiPipelineTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario4-test"
+    systemProperty 'IMAGE_NAME', 'workflow-scenario4-app'
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+afterEvaluate {
+    tasks.named('composeUpMultiPipelineTest') {
+        dependsOn tasks.named('dockerBuildMultiPipelineApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpMultiPipelineTest')
+        finalizedBy tasks.named('composeDownMultiPipelineTest')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run all pipelines and verify behavior
+// =============================================================================
+/**
+ * This task runs all three pipelines sequentially and verifies:
+ * 1. Dev pipeline succeeds (no additional tags applied)
+ * 2. Staging pipeline succeeds ('staging' tag applied)
+ * 3. Production pipeline succeeds ('prod' and 'release' tags applied)
+ *
+ * Uses a shell script for configuration cache compatibility.
+ */
+tasks.register('verifyMultiplePipelines', Exec) {
+    description = 'Run all pipelines and verify each applies correct tags'
+    group = 'verification'
+
+    dependsOn project(':app').tasks.named('jar')
+
+    def pluginVersion = providers.gradleProperty('plugin_version').getOrElse('1.0.0')
+
+    commandLine 'sh', '-c', """
+        set -e
+
+        echo "============================================================"
+        echo "Scenario 4: Multiple Pipelines Verification"
+        echo "============================================================"
+
+        cleanup_images() {
+            echo "Cleaning up images..."
+            docker rmi workflow-scenario4-app:latest 2>/dev/null || true
+            docker rmi workflow-scenario4-app:1.0.0 2>/dev/null || true
+            docker rmi workflow-scenario4-app:staging 2>/dev/null || true
+            docker rmi workflow-scenario4-app:prod 2>/dev/null || true
+            docker rmi workflow-scenario4-app:release 2>/dev/null || true
+        }
+
+        # Clean up any existing images first
+        cleanup_images
+
+        echo ""
+        echo "=========================================="
+        echo "SETUP: Build Docker image first"
+        echo "=========================================="
+
+        # Build the image first (pipelines need the context to exist)
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-4-multiple-pipelines:app-image:dockerBuildMultiPipelineApp 2>&1
+
+        echo "Docker image built successfully"
+
+        # Compile integration test classes (needed before running pipelines)
+        echo ""
+        echo "Compiling integration test classes..."
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-4-multiple-pipelines:app-image:compileIntegrationTestGroovy 2>&1
+
+        # Clean up the image so we can verify each pipeline builds it
+        cleanup_images
+
+        echo ""
+        echo "=========================================="
+        echo "TEST 1: Dev Pipeline (build + test only)"
+        echo "=========================================="
+
+        # Run dev pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline 2>&1
+
+        # Verify base image exists
+        BASE_IMAGE=\$(docker images -q workflow-scenario4-app:latest 2>/dev/null || echo "")
+        if [ -z "\$BASE_IMAGE" ]; then
+            echo "ERROR: Base image 'workflow-scenario4-app:latest' not found after dev pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: Base image exists after dev pipeline"
+
+        # Verify NO staging/prod tags were applied (dev pipeline has no onTestSuccess)
+        STAGING_TAG=\$(docker images -q workflow-scenario4-app:staging 2>/dev/null || echo "")
+        if [ -n "\$STAGING_TAG" ]; then
+            echo "ERROR: 'staging' tag should not exist after dev pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: No 'staging' tag after dev pipeline (expected)"
+
+        PROD_TAG=\$(docker images -q workflow-scenario4-app:prod 2>/dev/null || echo "")
+        if [ -n "\$PROD_TAG" ]; then
+            echo "ERROR: 'prod' tag should not exist after dev pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: No 'prod' tag after dev pipeline (expected)"
+
+        echo ""
+        echo "=========================================="
+        echo "TEST 2: Staging Pipeline (adds 'staging' tag)"
+        echo "=========================================="
+
+        # Run staging pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline 2>&1
+
+        # Verify staging tag was applied
+        STAGING_TAG=\$(docker images -q workflow-scenario4-app:staging 2>/dev/null || echo "")
+        if [ -z "\$STAGING_TAG" ]; then
+            echo "ERROR: 'staging' tag was not applied after staging pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: 'staging' tag exists after staging pipeline"
+
+        echo ""
+        echo "=========================================="
+        echo "TEST 3: Production Pipeline (adds 'prod' and 'release' tags)"
+        echo "=========================================="
+
+        # Run production pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline 2>&1
+
+        # Verify prod tag was applied
+        PROD_TAG=\$(docker images -q workflow-scenario4-app:prod 2>/dev/null || echo "")
+        if [ -z "\$PROD_TAG" ]; then
+            echo "ERROR: 'prod' tag was not applied after production pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: 'prod' tag exists after production pipeline"
+
+        # Verify release tag was applied
+        RELEASE_TAG=\$(docker images -q workflow-scenario4-app:release 2>/dev/null || echo "")
+        if [ -z "\$RELEASE_TAG" ]; then
+            echo "ERROR: 'release' tag was not applied after production pipeline!"
+            exit 1
+        fi
+        echo "VERIFIED: 'release' tag exists after production pipeline"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: No lingering containers"
+        echo "=========================================="
+
+        CONTAINERS=\$(docker ps -a --filter 'name=workflow-scenario4' -q 2>/dev/null || echo "")
+        if [ -n "\$CONTAINERS" ]; then
+            echo "ERROR: Containers still exist: \$CONTAINERS"
+            exit 1
+        fi
+        echo "VERIFIED: No lingering containers"
+
+        echo ""
+        echo "============================================================"
+        echo "SUCCESS: All multiple pipeline verifications passed!"
+        echo "- Dev pipeline: build + test completed successfully (no tags)"
+        echo "- Staging pipeline: 'staging' tag successfully applied"
+        echo "- Production pipeline: 'prod' and 'release' tags successfully applied"
+        echo "- All cleanups successful (no lingering containers)"
+        echo "============================================================"
+    """
+}
+
+// Cleanup task
+tasks.register('cleanupMultiplePipelines', Exec) {
+    description = 'Clean up Docker resources from multiple pipelines test'
+    group = 'verification'
+
+    commandLine 'sh', '-c', '''
+        docker compose -p workflow-scenario4-test down -v 2>/dev/null || true
+        docker rmi workflow-scenario4-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario4-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario4-app:staging 2>/dev/null || true
+        docker rmi workflow-scenario4-app:prod 2>/dev/null || true
+        docker rmi workflow-scenario4-app:release 2>/dev/null || true
+        echo "Cleaned up workflow-scenario4 resources"
+    '''
+}

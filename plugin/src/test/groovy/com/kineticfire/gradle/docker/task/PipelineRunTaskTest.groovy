@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.task
 
+import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.AlwaysStepSpec
@@ -32,6 +33,7 @@ import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
 import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.provider.Provider
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -515,6 +517,20 @@ class PipelineRunTaskTest extends Specification {
 
         when:
         task.setAlwaysStepExecutor(mockExecutor)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "setDockerServiceProvider sets custom provider"() {
+        given:
+        def mockDockerService = Stub(DockerService)
+        def mockProvider = Stub(Provider) {
+            get() >> mockDockerService
+        }
+
+        when:
+        task.setDockerServiceProvider(mockProvider)
 
         then:
         noExceptionThrown()
