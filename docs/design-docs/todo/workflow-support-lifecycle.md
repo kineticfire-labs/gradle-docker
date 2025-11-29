@@ -80,7 +80,7 @@ dockerWorkflows {
 - [x] **Step 12.D.4**: Unit Tests for Spec and Executor Changes
 - [x] **Step 12.D.5**: Functional Tests for DSL Configuration
 - [x] **Step 12.D.6**: Integration Test Scenario - Delegated Class Lifecycle
-- [x] **Step 12.D.7**: Integration Test Scenario - Delegated Method Lifecycle (now tests class lifecycle)
+- [x] **Step 12.D.7**: Integration Test Scenario - Delegated Method Lifecycle (REMOVED - see notes below)
 - [x] **Step 12.D.8**: Documentation Updates
 - [x] **Step 12.D.9**: Verification and Quality Gates
 
@@ -449,35 +449,17 @@ tasks.register('runDelegatedIntegrationTest') {
 
 ### Step 12.D.7: Integration Test Scenario - Delegated Method Lifecycle
 
-**Goal:** Demonstrate using `dockerWorkflows` pipeline with per-method lifecycle.
+**Status:** REMOVED
 
-**Directory:** `plugin-integration-test/dockerWorkflows/scenario-3-method-lifecycle/`
+**Original Goal:** Demonstrate using `dockerWorkflows` pipeline with per-method lifecycle.
 
-**Key difference from scenario-2:**
-```groovy
-// Configure testIntegration for METHOD lifecycle
-testIntegration {
-    usesCompose(integrationTest, 'methodTest', 'method')
-}
-```
+**Removal Reason:** Scenario-3 was removed during the Part 2 implementation because:
+1. Method lifecycle cannot be achieved with `dockerWorkflows` (Gradle tasks run once per build)
+2. The scenario was misleadingly named but actually tested class lifecycle
+3. It was functionally identical to scenario-2
 
-**Integration test class:**
-```groovy
-class MethodLifecycleTest extends Specification {
-
-    def "first test method gets fresh container"() {
-        // Verify container is running
-        // Record container ID
-    }
-
-    def "second test method gets new container instance (method lifecycle)"() {
-        // Verify DIFFERENT container ID than first test
-        // Container was restarted between methods
-    }
-}
-```
-
-**Estimated LOC:** 200
+**Alternative:** For method lifecycle, use `@ComposeUp` Spock annotation directly without a pipeline.
+See [Why dockerWorkflows Cannot Support Method Lifecycle](workflow-cannot-method-lifecycle.md).
 
 ---
 
@@ -487,7 +469,7 @@ class MethodLifecycleTest extends Specification {
 
 **File:** `plugin-integration-test/dockerWorkflows/build.gradle`
 
-**Changes:**
+**Changes (updated after scenario-3 removal):**
 ```groovy
 tasks.register('integrationTest') {
     group = 'verification'
@@ -496,21 +478,21 @@ tasks.register('integrationTest') {
     // Scenario 1: Basic workflow (build → test → success tag)
     dependsOn ':dockerWorkflows:scenario-1-basic:app-image:integrationTest'
 
-    // Scenario 2: Delegated class lifecycle
+    // Scenario 2: Delegated class lifecycle (testIntegration manages compose per-class)
     dependsOn ':dockerWorkflows:scenario-2-delegated-lifecycle:app-image:integrationTest'
 
-    // Scenario 3: Delegated method lifecycle
-    dependsOn ':dockerWorkflows:scenario-3-method-lifecycle:app-image:integrationTest'
+    // Note: scenario-3-method-lifecycle was removed as redundant.
+    // Method lifecycle cannot be achieved with dockerWorkflows due to Gradle task architecture.
+    // For method lifecycle, use @ComposeUp annotation directly without a pipeline.
 
     doLast {
-        logger.lifecycle("✅ All dockerWorkflows tests complete")
+        logger.lifecycle("All dockerWorkflows tests complete")
     }
 }
 
 tasks.named('clean') {
     dependsOn ':dockerWorkflows:scenario-1-basic:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-2-delegated-lifecycle:app-image:clean'
-    dependsOn ':dockerWorkflows:scenario-3-method-lifecycle:app-image:clean'
 }
 
 tasks.register('cleanDockerImages', Exec) {
@@ -524,9 +506,6 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi workflow-scenario2-app:latest 2>/dev/null || true
         docker rmi workflow-scenario2-app:1.0.0 2>/dev/null || true
         docker rmi workflow-scenario2-app:tested 2>/dev/null || true
-        docker rmi workflow-scenario3-app:latest 2>/dev/null || true
-        docker rmi workflow-scenario3-app:1.0.0 2>/dev/null || true
-        docker rmi workflow-scenario3-app:tested 2>/dev/null || true
         echo "Cleaned up workflow test images"
     '''
 }
@@ -726,8 +705,7 @@ The implementation is complete when:
 - [x] Unit tests achieve 100% coverage on new code
 - [x] Functional tests verify DSL parsing and task creation
 - [x] Integration test scenario-2 (class lifecycle) passes
-- [x] Integration test scenario-3 (class lifecycle) passes - Note: Method lifecycle requires `@ComposeUp` Spock
-      annotation; Gradle task dependencies only provide class lifecycle
+- [x] Scenario-3 removed (was redundant and misleadingly named; see Part 2 implementation notes)
 - [x] No Docker containers remain after integration tests
 - [x] Configuration cache works with delegated lifecycle scenarios
 - [x] Documentation is updated
@@ -750,12 +728,23 @@ class - this causes port conflicts because both mechanisms try to start the same
 - Use `testIntegration.usesCompose(task, stack, 'class')` for class lifecycle via Gradle tasks
 - Use `@ComposeUp` Spock annotation directly (without `testIntegration.usesCompose()`) for method lifecycle
 
-### Scenario-3 Adjustment
+### Scenario-3 Removed
 
-Scenario-3 was originally designed to test method lifecycle but was adjusted to test class lifecycle instead,
-demonstrating that the `delegateStackManagement` feature works correctly with `testIntegration.usesCompose()`.
-Both scenario-2 and scenario-3 now demonstrate the same lifecycle pattern (class) but serve as independent
-verification of the feature.
+Scenario-3 (`scenario-3-method-lifecycle`) was originally designed to test method lifecycle but was ultimately
+**removed entirely** during the Part 2 follow-up implementation. The removal was necessary because:
+
+1. **Misleading Name**: The scenario was named "method-lifecycle" but actually tested class lifecycle
+2. **Redundancy**: It was functionally identical to scenario-2 (`scenario-2-delegated-lifecycle`)
+3. **Architectural Limitation**: True method lifecycle cannot be achieved with `dockerWorkflows` due to Gradle's
+   task architecture (tasks run once per build, not per test method)
+
+**For method lifecycle**, users should use the `@ComposeUp` Spock annotation directly without a `dockerWorkflows`
+pipeline. See [Why dockerWorkflows Cannot Support Method Lifecycle](workflow-cannot-method-lifecycle.md) for
+the full technical explanation.
+
+The remaining integration tests (scenario-1 and scenario-2) provide sufficient coverage:
+- **Scenario-1**: Basic pipeline with suite lifecycle (containers up for entire test task)
+- **Scenario-2**: Delegated class lifecycle via `testIntegration.usesCompose()`
 
 ---
 

@@ -268,6 +268,38 @@ class PipelineValidatorTest extends Specification {
         validator.isTestStepConfigured(testSpec)
     }
 
+    def "isTestStepConfigured returns true when delegateStackManagement true and testTaskName present"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        testSpec.testTaskName.set('integrationTest')
+
+        expect:
+        validator.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns false when delegateStackManagement true and no testTaskName"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        // No testTaskName set
+
+        expect:
+        !validator.isTestStepConfigured(testSpec)
+    }
+
+    def "isTestStepConfigured returns false when delegateStackManagement true with only stack"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        testSpec.stack.set(stackSpec)
+        // No testTaskName set - this is insufficient when delegating
+
+        expect:
+        !validator.isTestStepConfigured(testSpec)
+    }
+
     // ===== VALIDATE STACK REFERENCE TESTS =====
 
     def "validateStackReference passes when stack not configured"() {
@@ -326,6 +358,55 @@ class PipelineValidatorTest extends Specification {
         then:
         def e = thrown(GradleException)
         e.message.contains("dockerOrch extension is not available")
+    }
+
+    def "validateStackReference passes when delegateStackManagement true and no stack"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        testSpec.testTaskName.set('integrationTest')
+        // No stack - this is valid when delegating
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateStackReference passes when delegateStackManagement true and stack is set"() {
+        given:
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'ignoredStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        testSpec.stack.set(stackSpec)
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        // Passes but logs a warning - we cannot easily capture log output in unit tests
+        // The important thing is it doesn't throw an exception
+        noExceptionThrown()
+    }
+
+    def "validateStackReference skips stack validation when delegateStackManagement true"() {
+        given:
+        // Stack exists but is NOT added to dockerOrchExtension - normally this would fail
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'nonExistentStack')
+
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.delegateStackManagement.set(true)
+        testSpec.stack.set(stackSpec)
+
+        when:
+        validator.validateStackReference('testPipeline', testSpec)
+
+        then:
+        // When delegating, stack reference is not validated (only warning is logged)
+        noExceptionThrown()
     }
 
     // ===== VALIDATE TEST TASK REFERENCE TESTS =====
