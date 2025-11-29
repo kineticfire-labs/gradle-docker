@@ -1,0 +1,285 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 3 - Failed Tests
+ *
+ * This scenario demonstrates the failure path when integration tests fail.
+ * The key behaviors verified:
+ *
+ * 1. Pipeline runs build step normally
+ * 2. Pipeline runs test step (tests intentionally fail)
+ * 3. onTestSuccess is NOT executed (no 'tested' tag applied)
+ * 4. Cleanup still runs (composeDown executed)
+ * 5. No containers remain after test
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9202 (workflow scenario 3)
+ *
+ * IMPORTANT: This scenario's integration tests are designed to FAIL.
+ * The wrapper verification task expects failure and validates behavior.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        failedTestApp {
+            imageName = 'workflow-scenario3-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareFailedTestAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for failed test scenario app'
+                into layout.buildDirectory.dir('docker-context/failedTestApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        failedTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario3-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        // Pipeline where tests will fail - onTestSuccess should NOT execute
+        failingPipeline {
+            description = 'Pipeline with failing tests - verifies failure path'
+
+            build {
+                image = docker.images.failedTestApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.failedTest
+                testTaskName = 'integrationTest'
+            }
+
+            // This should NOT be executed because tests fail
+            onTestSuccess {
+                additionalTags = ['tested', 'verified']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task - these tests are designed to FAIL
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/failedTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario3-test"
+    systemProperty 'IMAGE_NAME', 'workflow-scenario3-app'
+
+    // Allow the test to fail without stopping the build
+    ignoreFailures = true
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+afterEvaluate {
+    tasks.named('composeUpFailedTest') {
+        dependsOn tasks.named('dockerBuildFailedTestApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpFailedTest')
+        finalizedBy tasks.named('composeDownFailedTest')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the pipeline and verify failure behavior
+// =============================================================================
+/**
+ * This task runs the pipeline and verifies:
+ * 1. The pipeline task fails (because tests fail)
+ * 2. The 'tested' tag was NOT applied (onTestSuccess skipped)
+ * 3. No containers remain (cleanup ran)
+ *
+ * Uses a shell script for configuration cache compatibility.
+ */
+tasks.register('verifyFailedPipeline', Exec) {
+    description = 'Run the failing pipeline and verify failure path behavior'
+    group = 'verification'
+
+    dependsOn project(':app').tasks.named('jar')
+
+    // Use sh to run verification script
+    def pluginVersion = providers.gradleProperty('plugin_version').getOrElse('1.0.0')
+
+    commandLine 'sh', '-c', """
+        set -e
+
+        echo "=========================================="
+        echo "Step 0: Build the Docker image first"
+        echo "=========================================="
+
+        # Build the image first (runFailingPipeline needs the context to exist)
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-3-failed-tests:app-image:dockerBuildFailedTestApp 2>&1
+
+        echo "=========================================="
+        echo "Step 1: Run the pipeline (expecting failure)"
+        echo "=========================================="
+
+        # Run the pipeline and capture exit code
+        set +e
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline 2>&1
+        PIPELINE_EXIT_CODE=\$?
+        set -e
+
+        # Verify the pipeline failed
+        if [ \$PIPELINE_EXIT_CODE -eq 0 ]; then
+            echo "ERROR: Pipeline should have failed but succeeded!"
+            exit 1
+        fi
+        echo "VERIFIED: Pipeline failed as expected (exit code: \$PIPELINE_EXIT_CODE)"
+
+        echo ""
+        echo "=========================================="
+        echo "Step 2: Verify 'tested' tag was NOT applied"
+        echo "=========================================="
+
+        # Check if 'tested' tag exists (it should NOT)
+        TESTED_IMAGE=\$(docker images -q workflow-scenario3-app:tested 2>/dev/null || echo "")
+        if [ -n "\$TESTED_IMAGE" ]; then
+            echo "ERROR: Image 'workflow-scenario3-app:tested' exists!"
+            echo "onTestSuccess should NOT have executed when tests fail."
+            exit 1
+        fi
+        echo "VERIFIED: Image 'workflow-scenario3-app:tested' does NOT exist (onTestSuccess skipped)"
+
+        # Check if 'verified' tag exists (it should NOT)
+        VERIFIED_IMAGE=\$(docker images -q workflow-scenario3-app:verified 2>/dev/null || echo "")
+        if [ -n "\$VERIFIED_IMAGE" ]; then
+            echo "ERROR: Image 'workflow-scenario3-app:verified' exists!"
+            echo "onTestSuccess should NOT have executed when tests fail."
+            exit 1
+        fi
+        echo "VERIFIED: Image 'workflow-scenario3-app:verified' does NOT exist"
+
+        echo ""
+        echo "=========================================="
+        echo "Step 3: Verify no containers remain"
+        echo "=========================================="
+
+        # Check for lingering containers
+        CONTAINERS=\$(docker ps -a --filter 'name=workflow-scenario3' -q 2>/dev/null || echo "")
+        if [ -n "\$CONTAINERS" ]; then
+            echo "ERROR: Containers still exist: \$CONTAINERS"
+            echo "Cleanup should have run!"
+            exit 1
+        fi
+        echo "VERIFIED: No containers remain (cleanup successful)"
+
+        echo ""
+        echo "=========================================="
+        echo "Step 4: Verify base image was built"
+        echo "=========================================="
+
+        # Check if base image exists
+        BASE_IMAGE=\$(docker images -q workflow-scenario3-app:latest 2>/dev/null || echo "")
+        if [ -z "\$BASE_IMAGE" ]; then
+            echo "ERROR: Base image 'workflow-scenario3-app:latest' not found!"
+            echo "Build step should have completed."
+            exit 1
+        fi
+        echo "VERIFIED: Base image 'workflow-scenario3-app:latest' exists (build succeeded)"
+
+        echo ""
+        echo "============================================================"
+        echo "SUCCESS: All failure path verifications passed!"
+        echo "- Pipeline failed as expected"
+        echo "- onTestSuccess was NOT executed (no 'tested' or 'verified' tags)"
+        echo "- Cleanup ran successfully (no lingering containers)"
+        echo "- Build step completed before failure"
+        echo "============================================================"
+    """
+}
+
+// Cleanup task
+tasks.register('cleanupFailedWorkflow', Exec) {
+    description = 'Clean up Docker resources from failed workflow test'
+    group = 'verification'
+
+    commandLine 'sh', '-c', '''
+        docker compose -p workflow-scenario3-test down -v 2>/dev/null || true
+        docker rmi workflow-scenario3-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario3-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario3-app:tested 2>/dev/null || true
+        docker rmi workflow-scenario3-app:verified 2>/dev/null || true
+        echo "Cleaned up workflow-scenario3 resources"
+    '''
+}

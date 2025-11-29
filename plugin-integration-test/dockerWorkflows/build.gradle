@@ -40,6 +40,11 @@ tasks.register('integrationTest') {
     // Scenario 2: Delegated class lifecycle (testIntegration manages compose per-class)
     dependsOn ':dockerWorkflows:scenario-2-delegated-lifecycle:app-image:integrationTest'
 
+    // Scenario 3: Failed tests (verify failure path behavior)
+    // Note: This scenario uses verifyFailedPipeline instead of integrationTest because
+    // the integration tests intentionally fail. The wrapper task validates failure behavior.
+    dependsOn ':dockerWorkflows:scenario-3-failed-tests:app-image:verifyFailedPipeline'
+
     // Note: scenario-3-method-lifecycle was removed as redundant.
     // Method lifecycle cannot be achieved with dockerWorkflows due to Gradle task architecture.
     // See docs/design-docs/todo/workflow-cannot-method-lifecycle.md for details.
@@ -57,6 +62,7 @@ tasks.register('integrationTest') {
 tasks.named('clean') {
     dependsOn ':dockerWorkflows:scenario-1-basic:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-2-delegated-lifecycle:app-image:clean'
+    dependsOn ':dockerWorkflows:scenario-3-failed-tests:app-image:clean'
 }
 
 // ========================================
@@ -75,6 +81,10 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi workflow-scenario2-app:latest 2>/dev/null || true
         docker rmi workflow-scenario2-app:1.0.0 2>/dev/null || true
         docker rmi workflow-scenario2-app:tested 2>/dev/null || true
+        docker rmi workflow-scenario3-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario3-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario3-app:tested 2>/dev/null || true
+        docker rmi workflow-scenario3-app:verified 2>/dev/null || true
         echo "Cleaned up workflow test images"
     '''
 }
