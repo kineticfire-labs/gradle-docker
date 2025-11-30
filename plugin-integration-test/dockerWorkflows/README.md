@@ -20,6 +20,7 @@ The `dockerWorkflows` DSL provides a high-level orchestration layer that combine
 | 4 | `scenario-4-multiple-pipelines` | Multiple pipelines (dev, staging, prod) with different tags | `verifyMultiplePipelines` |
 | 5 | `scenario-5-complex-success` | Complex success operations (multiple tags) | `verifyComplexSuccess` |
 | 6 | `scenario-6-hooks` | All hook types (beforeBuild, afterBuild, beforeTest, afterTest, afterSuccess) | `verifyHooks` |
+| 7 | `scenario-7-save-publish` | Save and publish DSL operations (save image to tar.gz) | `verifySavePublish` |
 
 ## Port Allocations
 
@@ -33,6 +34,7 @@ Each scenario uses a dedicated port to avoid conflicts when running tests in par
 | scenario-4-multiple-pipelines | 9203 |
 | scenario-5-complex-success | 9204 |
 | scenario-6-hooks | 9205 |
+| scenario-7-save-publish | 9206 |
 
 ## Running the Tests
 
@@ -60,6 +62,9 @@ cd plugin-integration-test
 
 # Scenario 6: Hooks verification
 ./gradlew -Pplugin_version=1.0.0 :dockerWorkflows:scenario-6-hooks:app-image:verifyHooks
+
+# Scenario 7: Save/Publish verification
+./gradlew -Pplugin_version=1.0.0 :dockerWorkflows:scenario-7-save-publish:app-image:verifySavePublish
 ```
 
 ### Cleanup Docker Resources
@@ -148,6 +153,53 @@ Hooks create marker files in `build/hook-markers/` directory:
 - `afterTest.marker` (includes TestResult info)
 - `afterSuccess.marker`
 
+### Scenario 7: Save and Publish Operations
+
+Demonstrates the `save { }` and `publish { }` DSL blocks in `onTestSuccess`:
+- Build the Docker image
+- Run integration tests against containerized app
+- On success: Apply 'tested' tag and save image to compressed tar file
+
+**DSL Example:**
+```groovy
+dockerWorkflows {
+    pipelines {
+        savePublishPipeline {
+            build {
+                image = docker.images.myApp
+            }
+            test {
+                stack = dockerOrch.composeStacks.myTest
+                testTaskName = 'integrationTest'
+            }
+            onTestSuccess {
+                additionalTags = ['tested']
+
+                // Save to compressed tar file
+                save {
+                    outputFile.set(file('build/images/my-image.tar.gz'))
+                    compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+                }
+
+                // Publish to registry (optional)
+                publish {
+                    publishTags.set(['tested', 'release'])
+                    to('staging') {
+                        registry.set('registry.example.com')
+                        namespace.set('myproject')
+                    }
+                }
+            }
+        }
+    }
+}
+```
+
+**Key Verification:**
+- Image saved to specified output file with GZIP compression
+- Saved file is a valid gzip archive
+- 'tested' tag applied to image
+
 ## Project Structure
 
 ```
@@ -170,7 +222,9 @@ dockerWorkflows/
 │   └── ...
 ├── scenario-5-complex-success/
 │   └── ...
-└── scenario-6-hooks/
+├── scenario-6-hooks/
+│   └── ...
+└── scenario-7-save-publish/
     └── ...
 ```
 
@@ -183,6 +237,7 @@ Each scenario uses a unique image name pattern:
 - `workflow-scenario4-app`
 - `workflow-scenario5-app`
 - `workflow-scenario6-app`
+- `workflow-scenario7-app`
 
 ## Expected Behavior
 

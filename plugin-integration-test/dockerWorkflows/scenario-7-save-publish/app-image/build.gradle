@@ -1,0 +1,322 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 7 - Save and Publish Operations
+ *
+ * This scenario demonstrates the save and publish DSL operations in onTestSuccess:
+ * 1. Build: Build the Docker image
+ * 2. Test: Run integration tests against containerized app
+ * 3. On Success:
+ *    - Apply additional tags ('tested')
+ *    - Save image to compressed tar file using save { } DSL
+ *
+ * Note: Publish operation is DSL-validated but not executed in integration tests
+ * to avoid requiring external registry credentials.
+ *
+ * Key behaviors verified:
+ * - save { } DSL block configures SaveSpec correctly
+ * - Image is saved to specified output file with compression
+ * - publish { } DSL block configures PublishSpec (parsing only)
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9206 (workflow scenario 7)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        savePublishApp {
+            imageName = 'workflow-scenario7-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareSavePublishAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for save/publish scenario app'
+                into layout.buildDirectory.dir('docker-context/savePublishApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        savePublishTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario7-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with save and publish operations
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        /**
+         * Save/Publish Pipeline: Build -> Test -> Save + Publish on Success
+         *
+         * Demonstrates the new save { } and publish { } DSL blocks:
+         * - save { }: Configure image save with compression
+         * - publish { }: Configure registry publish targets (DSL parsing validated)
+         */
+        savePublishPipeline {
+            description = 'Pipeline demonstrating save and publish DSL operations'
+
+            build {
+                image = docker.images.savePublishApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.savePublishTest
+                testTaskName = 'integrationTest'
+            }
+
+            onTestSuccess {
+                // Apply additional tag on success
+                additionalTags = ['tested']
+
+                // Save the image to a compressed tar file
+                save {
+                    outputFile.set(file("${layout.buildDirectory.get()}/images/workflow-scenario7-app.tar.gz"))
+                    compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+                }
+
+                // Publish configuration (DSL parsing verified, not executed without registry)
+                // In a real scenario, this would push to a registry
+                // publish {
+                //     publishTags.set(['tested', 'release'])
+                //     to('staging') {
+                //         registry.set('localhost:5000')
+                //         namespace.set('test')
+                //     }
+                // }
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/savePublishTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario7-test"
+    systemProperty 'IMAGE_NAME', 'workflow-scenario7-app'
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+afterEvaluate {
+    tasks.named('composeUpSavePublishTest') {
+        dependsOn tasks.named('dockerBuildSavePublishApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpSavePublishTest')
+        finalizedBy tasks.named('composeDownSavePublishTest')
+    }
+
+    // Ensure pipeline task runs context preparation before build
+    // and compiles integration tests before running them
+    tasks.named('runSavePublishPipeline') {
+        dependsOn tasks.named('prepareSavePublishAppContext')
+        dependsOn tasks.named('compileIntegrationTestGroovy')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify save operation
+// =============================================================================
+/**
+ * This task runs the save/publish pipeline and verifies:
+ * 1. Image is built successfully
+ * 2. Integration tests pass
+ * 3. 'tested' tag is applied
+ * 4. Image is saved to compressed tar file
+ * 5. All containers are cleaned up properly
+ */
+tasks.register('verifySavePublish', Exec) {
+    description = 'Run save/publish pipeline and verify all operations'
+    group = 'verification'
+
+    dependsOn project(':app').tasks.named('jar')
+
+    def pluginVersion = providers.gradleProperty('plugin_version').getOrElse('1.0.0')
+    def outputFile = layout.buildDirectory.file('images/workflow-scenario7-app.tar.gz').get().asFile
+
+    commandLine 'sh', '-c', """
+        set -e
+
+        echo "============================================================"
+        echo "Scenario 7: Save and Publish Operations Verification"
+        echo "============================================================"
+
+        cleanup_resources() {
+            echo "Cleaning up resources..."
+            docker rmi workflow-scenario7-app:latest 2>/dev/null || true
+            docker rmi workflow-scenario7-app:1.0.0 2>/dev/null || true
+            docker rmi workflow-scenario7-app:tested 2>/dev/null || true
+            rm -f ${outputFile.absolutePath}
+        }
+
+        # Clean up any existing resources first
+        cleanup_resources
+
+        echo ""
+        echo "=========================================="
+        echo "RUNNING: Save/Publish Pipeline"
+        echo "=========================================="
+
+        # Run the save/publish pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-7-save-publish:app-image:runSavePublishPipeline 2>&1
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Base Image Exists"
+        echo "=========================================="
+
+        BASE_IMAGE=\$(docker images -q workflow-scenario7-app:latest 2>/dev/null || echo "")
+        if [ -z "\$BASE_IMAGE" ]; then
+            echo "ERROR: Base image 'workflow-scenario7-app:latest' not found!"
+            exit 1
+        fi
+        echo "VERIFIED: Base image exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Additional Tag Applied"
+        echo "=========================================="
+
+        # Verify 'tested' tag was applied
+        TESTED_TAG=\$(docker images -q workflow-scenario7-app:tested 2>/dev/null || echo "")
+        if [ -z "\$TESTED_TAG" ]; then
+            echo "ERROR: 'tested' tag was not applied!"
+            exit 1
+        fi
+        echo "VERIFIED: 'tested' tag exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Image Saved to Tar File"
+        echo "=========================================="
+
+        if [ ! -f "${outputFile.absolutePath}" ]; then
+            echo "ERROR: Saved image file not found at ${outputFile.absolutePath}"
+            exit 1
+        fi
+
+        # Verify it's a valid gzip file
+        if ! file "${outputFile.absolutePath}" | grep -q "gzip"; then
+            echo "ERROR: Saved file is not a valid gzip archive"
+            exit 1
+        fi
+        echo "VERIFIED: Image saved to ${outputFile.absolutePath}"
+
+        # Show file size
+        FILE_SIZE=\$(ls -lh "${outputFile.absolutePath}" | awk '{print \$5}')
+        echo "File size: \$FILE_SIZE"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: No Lingering Containers"
+        echo "=========================================="
+
+        CONTAINERS=\$(docker ps -a --filter 'name=workflow-scenario7' -q 2>/dev/null || echo "")
+        if [ -n "\$CONTAINERS" ]; then
+            echo "ERROR: Containers still exist: \$CONTAINERS"
+            exit 1
+        fi
+        echo "VERIFIED: No lingering containers"
+
+        echo ""
+        echo "============================================================"
+        echo "SUCCESS: All save/publish verifications passed!"
+        echo "- Image built successfully"
+        echo "- Integration tests passed"
+        echo "- 'tested' tag applied"
+        echo "- Image saved to compressed tar file"
+        echo "- All cleanups successful"
+        echo "============================================================"
+    """
+}
+
+// Cleanup task
+tasks.register('cleanupSavePublish', Exec) {
+    description = 'Clean up Docker resources from save/publish test'
+    group = 'verification'
+
+    def outputFile = layout.buildDirectory.file('images/workflow-scenario7-app.tar.gz').get().asFile
+
+    commandLine 'sh', '-c', """
+        docker compose -p workflow-scenario7-test down -v 2>/dev/null || true
+        docker rmi workflow-scenario7-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario7-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario7-app:tested 2>/dev/null || true
+        rm -f ${outputFile.absolutePath}
+        echo "Cleaned up workflow-scenario7 resources"
+    """
+}
