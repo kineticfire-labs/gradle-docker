@@ -3,10 +3,16 @@
 
 ## Clean-up
 
+architectural-limitations-plan.md
 Done:
-12.4
-12.5
+12.4d
+12.5d
+12.6
 
+Todo:
+12.8
+13: docs
+Step 14: Migration Guide and Backward Compatibility
 
 ## Documentation
 

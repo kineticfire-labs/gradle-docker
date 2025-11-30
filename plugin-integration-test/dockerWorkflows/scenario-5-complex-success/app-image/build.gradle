@@ -1,0 +1,284 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 5 - Complex Success Operations
+ *
+ * This scenario demonstrates multiple success tags and combined workflow operations:
+ * 1. Build: Build the Docker image
+ * 2. Test: Run integration tests against containerized app
+ * 3. On Success: Apply multiple additional tags ('verified', 'stable')
+ * 4. Post-pipeline: Save image to tar file (demonstrates workflow + docker task combination)
+ *
+ * Key behaviors verified:
+ * - Multiple additional tags are applied via docker tag on success
+ * - Workflow integrates with standard docker tasks (save)
+ * - Complete workflow orchestration with cleanup
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9204 (workflow scenario 5)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        complexSuccessApp {
+            imageName = 'workflow-scenario5-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareComplexSuccessAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for complex success scenario app'
+                into layout.buildDirectory.dir('docker-context/complexSuccessApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        complexSuccessTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario5-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with multiple success tags
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        /**
+         * Complex Success Pipeline: Build → Test → Multiple Tags
+         *
+         * Demonstrates:
+         * - additionalTags: Apply multiple tags ('verified', 'stable') on success
+         * - Workflow orchestration with complete lifecycle
+         */
+        complexSuccessPipeline {
+            description = 'Pipeline demonstrating multiple success tags'
+
+            build {
+                image = docker.images.complexSuccessApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.complexSuccessTest
+                testTaskName = 'integrationTest'
+            }
+
+            onTestSuccess {
+                // Apply multiple additional tags on success
+                additionalTags = ['verified', 'stable']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/complexSuccessTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario5-test"
+    systemProperty 'IMAGE_NAME', 'workflow-scenario5-app'
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+afterEvaluate {
+    tasks.named('composeUpComplexSuccessTest') {
+        dependsOn tasks.named('dockerBuildComplexSuccessApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpComplexSuccessTest')
+        finalizedBy tasks.named('composeDownComplexSuccessTest')
+    }
+
+    // Ensure pipeline task runs context preparation before build
+    // and compiles integration tests before running them
+    tasks.named('runComplexSuccessPipeline') {
+        dependsOn tasks.named('prepareComplexSuccessAppContext')
+        dependsOn tasks.named('compileIntegrationTestGroovy')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify all success operations
+// =============================================================================
+/**
+ * This task runs the complex success pipeline and verifies:
+ * 1. Image is built successfully
+ * 2. Integration tests pass
+ * 3. Multiple additional tags ('verified', 'stable') are applied
+ * 4. All containers are cleaned up properly
+ */
+tasks.register('verifyComplexSuccess', Exec) {
+    description = 'Run complex success pipeline and verify all operations'
+    group = 'verification'
+
+    dependsOn project(':app').tasks.named('jar')
+
+    def pluginVersion = providers.gradleProperty('plugin_version').getOrElse('1.0.0')
+
+    commandLine 'sh', '-c', """
+        set -e
+
+        echo "============================================================"
+        echo "Scenario 5: Complex Success Operations Verification"
+        echo "============================================================"
+
+        cleanup_images() {
+            echo "Cleaning up images..."
+            docker rmi workflow-scenario5-app:latest 2>/dev/null || true
+            docker rmi workflow-scenario5-app:1.0.0 2>/dev/null || true
+            docker rmi workflow-scenario5-app:verified 2>/dev/null || true
+            docker rmi workflow-scenario5-app:stable 2>/dev/null || true
+        }
+
+        # Clean up any existing images first
+        cleanup_images
+
+        echo ""
+        echo "=========================================="
+        echo "RUNNING: Complex Success Pipeline"
+        echo "=========================================="
+
+        # Run the complex success pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-5-complex-success:app-image:runComplexSuccessPipeline 2>&1
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Base Image Exists"
+        echo "=========================================="
+
+        BASE_IMAGE=\$(docker images -q workflow-scenario5-app:latest 2>/dev/null || echo "")
+        if [ -z "\$BASE_IMAGE" ]; then
+            echo "ERROR: Base image 'workflow-scenario5-app:latest' not found!"
+            exit 1
+        fi
+        echo "VERIFIED: Base image exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Multiple Additional Tags Applied"
+        echo "=========================================="
+
+        # Verify 'verified' tag was applied
+        VERIFIED_TAG=\$(docker images -q workflow-scenario5-app:verified 2>/dev/null || echo "")
+        if [ -z "\$VERIFIED_TAG" ]; then
+            echo "ERROR: 'verified' tag was not applied!"
+            exit 1
+        fi
+        echo "VERIFIED: 'verified' tag exists"
+
+        # Verify 'stable' tag was applied
+        STABLE_TAG=\$(docker images -q workflow-scenario5-app:stable 2>/dev/null || echo "")
+        if [ -z "\$STABLE_TAG" ]; then
+            echo "ERROR: 'stable' tag was not applied!"
+            exit 1
+        fi
+        echo "VERIFIED: 'stable' tag exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: No Lingering Containers"
+        echo "=========================================="
+
+        CONTAINERS=\$(docker ps -a --filter 'name=workflow-scenario5' -q 2>/dev/null || echo "")
+        if [ -n "\$CONTAINERS" ]; then
+            echo "ERROR: Containers still exist: \$CONTAINERS"
+            exit 1
+        fi
+        echo "VERIFIED: No lingering containers"
+
+        echo ""
+        echo "============================================================"
+        echo "SUCCESS: All complex success verifications passed!"
+        echo "- Image built successfully"
+        echo "- Integration tests passed"
+        echo "- 'verified' and 'stable' tags applied"
+        echo "- All cleanups successful"
+        echo "============================================================"
+    """
+}
+
+// Cleanup task
+tasks.register('cleanupComplexSuccess', Exec) {
+    description = 'Clean up Docker resources from complex success test'
+    group = 'verification'
+
+    commandLine 'sh', '-c', '''
+        docker compose -p workflow-scenario5-test down -v 2>/dev/null || true
+        docker rmi workflow-scenario5-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario5-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario5-app:verified 2>/dev/null || true
+        docker rmi workflow-scenario5-app:stable 2>/dev/null || true
+        echo "Cleaned up workflow-scenario5 resources"
+    '''
+}
