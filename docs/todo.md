@@ -7,7 +7,8 @@ architectural-limitations-plan.md
 Done:
 12.4d
 12.5d
-12.6
+12.6d
+12.7
 
 Todo:
 12.8

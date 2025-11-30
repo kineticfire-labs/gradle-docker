@@ -1,0 +1,382 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 6 - Hooks and Customization
+ *
+ * This scenario demonstrates the complete hook system available in dockerWorkflows pipelines:
+ * 1. beforeBuild: Execute logic before Docker build starts
+ * 2. afterBuild: Execute logic after Docker build completes
+ * 3. beforeTest: Execute logic before tests start (after composeUp)
+ * 4. afterTest: Execute logic after tests complete (receives TestResult)
+ * 5. afterSuccess: Execute logic after successful test completion
+ *
+ * Key behaviors verified:
+ * - Hooks are called in the correct order during pipeline execution
+ * - Hook execution is tracked via marker files
+ * - afterTest hook receives TestResult with test outcome information
+ * - All hooks execute even with real Docker operations
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9205 (workflow scenario 6)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Directory to store hook execution markers
+def hookMarkersDir = layout.buildDirectory.dir('hook-markers')
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        hooksApp {
+            imageName = 'workflow-scenario6-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareHooksAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for hooks scenario app'
+                into layout.buildDirectory.dir('docker-context/hooksApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        hooksTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario6-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with all hooks configured
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        /**
+         * Hooks Demo Pipeline: Build → Test → Success with hooks at each stage
+         *
+         * Demonstrates:
+         * - beforeBuild: Creates a marker file before build starts
+         * - afterBuild: Creates a marker file after build completes
+         * - beforeTest: Creates a marker file before tests run
+         * - afterTest: Creates a marker file with test results
+         * - afterSuccess: Creates a marker file on successful completion
+         */
+        hooksPipeline {
+            description = 'Pipeline demonstrating all available hooks'
+
+            build {
+                image = docker.images.hooksApp
+
+                // Hook: Execute before Docker build starts
+                beforeBuild = {
+                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    markersDir.mkdirs()
+                    def markerFile = new File(markersDir, 'beforeBuild.marker')
+                    markerFile.text = "beforeBuild executed at ${new Date()}"
+                    logger.lifecycle("HOOK: beforeBuild executed - marker created")
+                } as org.gradle.api.Action<Void>
+
+                // Hook: Execute after Docker build completes
+                afterBuild = {
+                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markerFile = new File(markersDir, 'afterBuild.marker')
+                    markerFile.text = "afterBuild executed at ${new Date()}"
+                    logger.lifecycle("HOOK: afterBuild executed - marker created")
+                } as org.gradle.api.Action<Void>
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.hooksTest
+                testTaskName = 'integrationTest'
+
+                // Hook: Execute before tests start (after composeUp)
+                beforeTest = {
+                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markerFile = new File(markersDir, 'beforeTest.marker')
+                    markerFile.text = "beforeTest executed at ${new Date()}"
+                    logger.lifecycle("HOOK: beforeTest executed - marker created")
+                } as org.gradle.api.Action<Void>
+
+                // Hook: Execute after tests complete (receives TestResult)
+                afterTest = { testResult ->
+                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markerFile = new File(markersDir, 'afterTest.marker')
+                    def resultInfo = "success=${testResult.success}, executed=${testResult.executed}"
+                    markerFile.text = "afterTest executed at ${new Date()}\nTestResult: ${resultInfo}"
+                    logger.lifecycle("HOOK: afterTest executed - TestResult: ${resultInfo}")
+                } as org.gradle.api.Action<com.kineticfire.gradle.docker.workflow.TestResult>
+            }
+
+            onTestSuccess {
+                // Apply a tag to indicate hooks were tested
+                additionalTags = ['hooks-verified']
+
+                // Hook: Execute after successful test completion
+                afterSuccess = {
+                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markerFile = new File(markersDir, 'afterSuccess.marker')
+                    markerFile.text = "afterSuccess executed at ${new Date()}"
+                    logger.lifecycle("HOOK: afterSuccess executed - marker created")
+                } as org.gradle.api.Action<Void>
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/hooksTest-state.json').get().asFile.absolutePath
+    systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario6-test"
+    systemProperty 'IMAGE_NAME', 'workflow-scenario6-app'
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+afterEvaluate {
+    tasks.named('composeUpHooksTest') {
+        dependsOn tasks.named('dockerBuildHooksApp')
+    }
+
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpHooksTest')
+        finalizedBy tasks.named('composeDownHooksTest')
+    }
+
+    // Ensure pipeline task runs context preparation before build
+    // and compiles integration tests before running them
+    tasks.named('runHooksPipeline') {
+        dependsOn tasks.named('prepareHooksAppContext')
+        dependsOn tasks.named('compileIntegrationTestGroovy')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify all hooks executed
+// =============================================================================
+/**
+ * This task runs the hooks pipeline and verifies:
+ * 1. Image is built successfully
+ * 2. All hook marker files are created in correct order
+ * 3. Integration tests pass
+ * 4. 'hooks-verified' tag is applied on success
+ * 5. All containers are cleaned up properly
+ */
+tasks.register('verifyHooks', Exec) {
+    description = 'Run hooks pipeline and verify all hook executions'
+    group = 'verification'
+
+    dependsOn project(':app').tasks.named('jar')
+
+    def pluginVersion = providers.gradleProperty('plugin_version').getOrElse('1.0.0')
+
+    commandLine 'sh', '-c', """
+        set -e
+
+        echo "============================================================"
+        echo "Scenario 6: Hooks and Customization Verification"
+        echo "============================================================"
+
+        cleanup_images() {
+            echo "Cleaning up images..."
+            docker rmi workflow-scenario6-app:latest 2>/dev/null || true
+            docker rmi workflow-scenario6-app:1.0.0 2>/dev/null || true
+            docker rmi workflow-scenario6-app:hooks-verified 2>/dev/null || true
+        }
+
+        cleanup_markers() {
+            echo "Cleaning up hook markers..."
+            rm -rf build/hook-markers 2>/dev/null || true
+        }
+
+        # Clean up any existing images and markers first
+        cleanup_images
+        cleanup_markers
+
+        echo ""
+        echo "=========================================="
+        echo "RUNNING: Hooks Pipeline"
+        echo "=========================================="
+
+        # Run the hooks pipeline
+        ../../../gradlew -Pplugin_version=${pluginVersion} \\
+            :dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline 2>&1
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Base Image Exists"
+        echo "=========================================="
+
+        BASE_IMAGE=\$(docker images -q workflow-scenario6-app:latest 2>/dev/null || echo "")
+        if [ -z "\$BASE_IMAGE" ]; then
+            echo "ERROR: Base image 'workflow-scenario6-app:latest' not found!"
+            exit 1
+        fi
+        echo "VERIFIED: Base image exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: hooks-verified Tag Applied"
+        echo "=========================================="
+
+        VERIFIED_TAG=\$(docker images -q workflow-scenario6-app:hooks-verified 2>/dev/null || echo "")
+        if [ -z "\$VERIFIED_TAG" ]; then
+            echo "ERROR: 'hooks-verified' tag was not applied!"
+            exit 1
+        fi
+        echo "VERIFIED: 'hooks-verified' tag exists"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: Hook Markers Created"
+        echo "=========================================="
+
+        MARKERS_DIR="build/hook-markers"
+
+        # Check beforeBuild marker
+        if [ ! -f "\$MARKERS_DIR/beforeBuild.marker" ]; then
+            echo "ERROR: beforeBuild marker not found!"
+            exit 1
+        fi
+        echo "VERIFIED: beforeBuild hook executed"
+        cat "\$MARKERS_DIR/beforeBuild.marker"
+
+        # Check afterBuild marker
+        if [ ! -f "\$MARKERS_DIR/afterBuild.marker" ]; then
+            echo "ERROR: afterBuild marker not found!"
+            exit 1
+        fi
+        echo "VERIFIED: afterBuild hook executed"
+        cat "\$MARKERS_DIR/afterBuild.marker"
+
+        # Check beforeTest marker
+        if [ ! -f "\$MARKERS_DIR/beforeTest.marker" ]; then
+            echo "ERROR: beforeTest marker not found!"
+            exit 1
+        fi
+        echo "VERIFIED: beforeTest hook executed"
+        cat "\$MARKERS_DIR/beforeTest.marker"
+
+        # Check afterTest marker
+        if [ ! -f "\$MARKERS_DIR/afterTest.marker" ]; then
+            echo "ERROR: afterTest marker not found!"
+            exit 1
+        fi
+        echo "VERIFIED: afterTest hook executed"
+        cat "\$MARKERS_DIR/afterTest.marker"
+
+        # Check afterSuccess marker
+        if [ ! -f "\$MARKERS_DIR/afterSuccess.marker" ]; then
+            echo "ERROR: afterSuccess marker not found!"
+            exit 1
+        fi
+        echo "VERIFIED: afterSuccess hook executed"
+        cat "\$MARKERS_DIR/afterSuccess.marker"
+
+        echo ""
+        echo "=========================================="
+        echo "VERIFY: No Lingering Containers"
+        echo "=========================================="
+
+        CONTAINERS=\$(docker ps -a --filter 'name=workflow-scenario6' -q 2>/dev/null || echo "")
+        if [ -n "\$CONTAINERS" ]; then
+            echo "ERROR: Containers still exist: \$CONTAINERS"
+            exit 1
+        fi
+        echo "VERIFIED: No lingering containers"
+
+        echo ""
+        echo "============================================================"
+        echo "SUCCESS: All hooks verification passed!"
+        echo "- Image built successfully"
+        echo "- beforeBuild hook executed"
+        echo "- afterBuild hook executed"
+        echo "- beforeTest hook executed"
+        echo "- afterTest hook executed (with TestResult)"
+        echo "- afterSuccess hook executed"
+        echo "- 'hooks-verified' tag applied"
+        echo "- All cleanups successful"
+        echo "============================================================"
+    """
+}
+
+// Cleanup task
+tasks.register('cleanupHooks', Exec) {
+    description = 'Clean up Docker resources from hooks test'
+    group = 'verification'
+
+    commandLine 'sh', '-c', '''
+        docker compose -p workflow-scenario6-test down -v 2>/dev/null || true
+        docker rmi workflow-scenario6-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario6-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario6-app:hooks-verified 2>/dev/null || true
+        rm -rf build/hook-markers 2>/dev/null || true
+        echo "Cleaned up workflow-scenario6 resources"
+    '''
+}

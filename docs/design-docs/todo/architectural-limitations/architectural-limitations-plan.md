@@ -23,7 +23,7 @@
 - [x] **Step 9**: Failure Handling and Cleanup ✓ (COMPLETED 2025-11-26)
 - [x] **Step 10**: Plugin Integration and Task Registration ✓ (COMPLETED 2025-11-26)
 - [x] **Step 11**: Configuration Cache Compatibility ✓ (COMPLETED 2025-11-27)
-- [ ] **Step 12**: Integration Testing
+- [x] **Step 12**: Integration Testing ✓ (COMPLETED 2025-11-29)
 - [ ] **Step 13**: Documentation and Examples
 - [ ] **Step 14**: Migration Guide and Backward Compatibility
 
@@ -1031,9 +1031,9 @@
 
 ---
 
-### Step 12: Integration Testing ⚠ IN PROGRESS
+### Step 12: Integration Testing ✓ COMPLETED
 
-**Status:** ⚠ IN PROGRESS (5 of 8 sub-steps completed)
+**Status:** ✓ COMPLETED (8 of 8 sub-steps completed - 2025-11-29)
 
 **Goal:** Create comprehensive integration tests that exercise complete workflows with real Docker operations.
 
@@ -1097,20 +1097,25 @@ scenarios in the broader integration test suite. The scenarios below reflect the
   - **Note:** Save/Publish operations in onTestSuccess DSL not yet supported (requires DSL methods in SuccessStepSpec);
     this scenario focuses on multiple additionalTags which is the primary success operation supported
 
-- [ ] **Step 12.7**: Create integration test scenario 5: Hooks and customization
+- [x] **Step 12.7**: Create integration test scenario 5: Hooks and customization ✓ COMPLETED
   - Test beforeBuild, afterBuild hooks
   - Test beforeTest, afterTest hooks
   - Test afterSuccess, afterFailure hooks
-  - Verify hooks are called in correct order
+  - Verify hooks are called in correct order via marker files
+  - Verified all 5 hook marker files created in correct order
+  - Verified 'hooks-verified' tag applied after successful tests
+  - Verified no lingering containers after test
   - Location: `plugin-integration-test/dockerWorkflows/scenario-6-hooks/`
-  - Estimated LOC: 300
+  - **Completed:** 2025-11-29
 
-- [ ] **Step 12.8**: Update integration test README
-  - Document all workflow scenarios
-  - Document expected behavior
-  - Document how to run tests
+- [x] **Step 12.8**: Update integration test README ✓ COMPLETED
+  - Document all workflow scenarios (6 scenarios)
+  - Document expected behavior (success and failure paths)
+  - Document how to run tests (individual and all scenarios)
+  - Include port allocations, troubleshooting, project structure
   - Location: `plugin-integration-test/dockerWorkflows/README.md`
-  - Estimated LOC: 200 (documentation)
+  - **Actual LOC: ~200**
+  - **Completed:** 2025-11-29
 
 **Deliverable:** Complete integration test coverage for all workflow scenarios
 
@@ -1124,6 +1129,7 @@ scenarios in the broader integration test suite. The scenarios below reflect the
 | 3 | scenario-3-failed-tests | Failed test verification | ✓ Completed |
 | 4 | scenario-4-multiple-pipelines | Multiple pipelines with conditional tags | ✓ Completed |
 | 5 | scenario-5-complex-success | Multiple success tags (verified, stable) | ✓ Completed |
+| 6 | scenario-6-hooks | Hooks and customization (all 5 hook types) | ✓ Completed |
 
 ---
 

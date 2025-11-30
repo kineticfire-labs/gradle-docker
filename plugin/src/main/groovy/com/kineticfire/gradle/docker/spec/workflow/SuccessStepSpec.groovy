@@ -18,7 +18,10 @@ package com.kineticfire.gradle.docker.spec.workflow
 
 import com.kineticfire.gradle.docker.spec.PublishSpec
 import com.kineticfire.gradle.docker.spec.SaveSpec
+import groovy.lang.Closure
+import groovy.lang.DelegatesTo
 import org.gradle.api.Action
+import org.gradle.api.file.ProjectLayout
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
@@ -33,10 +36,12 @@ import javax.inject.Inject
 abstract class SuccessStepSpec {
 
     private final ObjectFactory objectFactory
+    private final ProjectLayout layout
 
     @Inject
-    SuccessStepSpec(ObjectFactory objectFactory) {
+    SuccessStepSpec(ObjectFactory objectFactory, ProjectLayout layout) {
         this.objectFactory = objectFactory
+        this.layout = layout
 
         additionalTags.convention([])
     }
@@ -60,4 +65,52 @@ abstract class SuccessStepSpec {
      * Hook executed after all success operations complete
      */
     abstract Property<Action<Void>> getAfterSuccess()
+
+    /**
+     * Configure save operation using a closure
+     *
+     * @param closure Configuration closure for SaveSpec
+     */
+    void save(@DelegatesTo(SaveSpec) Closure closure) {
+        def saveSpec = objectFactory.newInstance(SaveSpec, objectFactory, layout)
+        closure.delegate = saveSpec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call()
+        save.set(saveSpec)
+    }
+
+    /**
+     * Configure save operation using an action
+     *
+     * @param action Configuration action for SaveSpec
+     */
+    void save(Action<SaveSpec> action) {
+        def saveSpec = objectFactory.newInstance(SaveSpec, objectFactory, layout)
+        action.execute(saveSpec)
+        save.set(saveSpec)
+    }
+
+    /**
+     * Configure publish operation using a closure
+     *
+     * @param closure Configuration closure for PublishSpec
+     */
+    void publish(@DelegatesTo(PublishSpec) Closure closure) {
+        def publishSpec = objectFactory.newInstance(PublishSpec, objectFactory)
+        closure.delegate = publishSpec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call()
+        publish.set(publishSpec)
+    }
+
+    /**
+     * Configure publish operation using an action
+     *
+     * @param action Configuration action for PublishSpec
+     */
+    void publish(Action<PublishSpec> action) {
+        def publishSpec = objectFactory.newInstance(PublishSpec, objectFactory)
+        action.execute(publishSpec)
+        publish.set(publishSpec)
+    }
 }

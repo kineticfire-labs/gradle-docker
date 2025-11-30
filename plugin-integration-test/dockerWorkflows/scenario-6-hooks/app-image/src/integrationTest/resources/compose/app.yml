@@ -1,0 +1,16 @@
+# Docker Compose configuration for workflow scenario 6: Hooks and Customization
+#
+# This compose stack is used to test the complete pipeline with hook execution.
+# Port 9205 is allocated for workflow scenario 6 (per README conventions).
+
+services:
+  app:
+    image: workflow-scenario6-app:latest
+    ports:
+      - "9205:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5

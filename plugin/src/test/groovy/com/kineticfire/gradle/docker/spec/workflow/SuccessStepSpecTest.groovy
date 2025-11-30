@@ -257,4 +257,168 @@ class SuccessStepSpecTest extends Specification {
         successStepSpec.additionalTags.get() == ['production']
         successStepSpec.additionalTags.get().size() == 1
     }
+
+    // ===== DSL METHOD TESTS =====
+
+    def "save closure creates and configures SaveSpec"() {
+        when:
+        successStepSpec.save {
+            compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        }
+
+        then:
+        successStepSpec.save.present
+        successStepSpec.save.get().compression.get() == com.kineticfire.gradle.docker.model.SaveCompression.GZIP
+    }
+
+    def "save action creates and configures SaveSpec"() {
+        when:
+        successStepSpec.save({ saveSpec ->
+            saveSpec.compression.set(com.kineticfire.gradle.docker.model.SaveCompression.BZIP2)
+        } as org.gradle.api.Action)
+
+        then:
+        successStepSpec.save.present
+        successStepSpec.save.get().compression.get() == com.kineticfire.gradle.docker.model.SaveCompression.BZIP2
+    }
+
+    def "save closure sets outputFile correctly"() {
+        when:
+        successStepSpec.save {
+            outputFile.set(project.layout.buildDirectory.file('images/my-image.tar'))
+        }
+
+        then:
+        successStepSpec.save.present
+        successStepSpec.save.get().outputFile.get().asFile.path.endsWith('images/my-image.tar')
+    }
+
+    def "publish closure creates and configures PublishSpec"() {
+        when:
+        successStepSpec.publish {
+            publishTags.set(['latest', 'v1.0'])
+        }
+
+        then:
+        successStepSpec.publish.present
+        successStepSpec.publish.get().publishTags.get() == ['latest', 'v1.0']
+    }
+
+    def "publish action creates and configures PublishSpec"() {
+        when:
+        successStepSpec.publish({ publishSpec ->
+            publishSpec.publishTags.set(['prod'])
+        } as org.gradle.api.Action)
+
+        then:
+        successStepSpec.publish.present
+        successStepSpec.publish.get().publishTags.get() == ['prod']
+    }
+
+    def "publish closure with targets configures correctly"() {
+        when:
+        successStepSpec.publish {
+            to('production') {
+                registry.set('ghcr.io')
+                namespace.set('myorg')
+            }
+        }
+
+        then:
+        successStepSpec.publish.present
+        successStepSpec.publish.get().to.size() == 1
+        successStepSpec.publish.get().to.getByName('production').registry.get() == 'ghcr.io'
+        successStepSpec.publish.get().to.getByName('production').namespace.get() == 'myorg'
+    }
+
+    def "combined save and publish DSL works"() {
+        when:
+        successStepSpec.save {
+            compression.set(com.kineticfire.gradle.docker.model.SaveCompression.XZ)
+        }
+        successStepSpec.publish {
+            publishTags.set(['release'])
+        }
+
+        then:
+        successStepSpec.save.present
+        successStepSpec.publish.present
+        successStepSpec.save.get().compression.get() == com.kineticfire.gradle.docker.model.SaveCompression.XZ
+        successStepSpec.publish.get().publishTags.get() == ['release']
+    }
+
+    def "save DSL can be called multiple times - last wins"() {
+        when:
+        successStepSpec.save {
+            compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        }
+        successStepSpec.save {
+            compression.set(com.kineticfire.gradle.docker.model.SaveCompression.NONE)
+        }
+
+        then:
+        successStepSpec.save.present
+        successStepSpec.save.get().compression.get() == com.kineticfire.gradle.docker.model.SaveCompression.NONE
+    }
+
+    def "publish DSL can be called multiple times - last wins"() {
+        when:
+        successStepSpec.publish {
+            publishTags.set(['first'])
+        }
+        successStepSpec.publish {
+            publishTags.set(['second'])
+        }
+
+        then:
+        successStepSpec.publish.present
+        successStepSpec.publish.get().publishTags.get() == ['second']
+    }
+
+    def "publish closure with multiple targets works correctly"() {
+        when:
+        successStepSpec.publish {
+            to('staging') {
+                registry.set('staging.example.com')
+            }
+            to('production') {
+                registry.set('prod.example.com')
+            }
+        }
+
+        then:
+        successStepSpec.publish.present
+        successStepSpec.publish.get().to.size() == 2
+        successStepSpec.publish.get().to.getByName('staging').registry.get() == 'staging.example.com'
+        successStepSpec.publish.get().to.getByName('production').registry.get() == 'prod.example.com'
+    }
+
+    def "combined DSL with additionalTags and hooks works correctly"() {
+        given:
+        def hookCalled = false
+
+        when:
+        successStepSpec.additionalTags.set(['verified', 'stable'])
+        successStepSpec.save {
+            compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        }
+        successStepSpec.publish {
+            to('release') {
+                registry.set('registry.example.com')
+            }
+        }
+        successStepSpec.afterSuccess.set({ hookCalled = true } as org.gradle.api.Action<Void>)
+
+        then:
+        successStepSpec.additionalTags.get() == ['verified', 'stable']
+        successStepSpec.save.present
+        successStepSpec.publish.present
+        successStepSpec.afterSuccess.present
+
+        when:
+        successStepSpec.afterSuccess.get().execute(null)
+
+        then:
+        hookCalled
+    }
 }
