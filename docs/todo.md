@@ -3,6 +3,21 @@
 
 ## Clean-up
 
+Recommendations
+
+1. Consider consolidating delegateStackManagement and lifecycle - they serve overlapping purposes. Options:
+   - Make lifecycle = 'method' automatically set delegateStackManagement = true
+   - Or replace both with a single enum property: containerManagement = SUITE | CLASS | METHOD
+2. Enforce sequential execution for method lifecycle - don't just warn, actively prevent parallel forks
+3. Leverage existing infrastructure - The analysis underestimates how much is already built. Focus changes on:
+   - Adding lifecycle property to TestStepSpec
+   - Setting system properties in TestStepExecutor
+   - Validation logic
+4. Reduce user configuration burden - If possible, auto-detect lifecycle from DSL and eliminate the need for @ComposeUp annotation when using workflows
+5. Add integration test for the key scenario - Ensure the test demonstrates:
+   - Two test methods
+   - Fresh containers for each method
+   - Conditional actions still work based on aggregate test results
 
 ## Documentation
 

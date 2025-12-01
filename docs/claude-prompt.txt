@@ -9,6 +9,36 @@ with Gradle 9 and 10 (especially the configuration build cache) per @docs/design
 ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
+## method lifecycle support in workflow
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+The plugin was extended with 'dockerWorkFlows' DSL to allow for pipelines of build -> integration test -> tag/save/publish of Docker images; this pipeline was not possible
+ with the original 'docker' and 'dockerOrch' DSLs.  The analysis, plans, and implementation for these are described in:
+@docs/design-docs/todo/architectural-limitations/architectural-limitations-plan.md ,
+@docs/design-docs/todo/architectural-limitations/architectural-limitations-plan-part2.md , @docs/design-docs/todo/workflow-lifecycle/workflow-support-lifecycle.md ,
+@docs/design-docs/todo/workflow-lifecycle/workflow-support-lifecycle.md , and @docs/design-docs/todo/workflow-lifecycle/workflow-support-lifecycle-part2.md .
+
+The current implementation, per the plans above, identified a limitation that the plugin could NOT support "method" lifecycle integration tests and could only support
+"class" lifecycle.  Having "method" lifecycle integration tests is useful to the user of the plugin for testing and aligns with 'dockerOrch' which supports both "class"
+and "method" lifecycle tests.
+
+Ffurther analysis was done specifically on how to add "method" lifecycle support and an option was proposed.  The analysis and proposed approach to add "method" lifecycle
+is presented in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md .
+
+Analayze that plan and determine if it is a good plan based on:
+- will it enable the "method" lifecycle for the dockerWorkFlows DSL?  will it actually work?
+- will it be simple for a user of the plugin to use?
+- is this a good and reasonable approach?  is there a better approach?
+- is this a low-risk approach and implementation?
+- is it compatible with Gradle 9 and 10 per @docs/design-docs/gradle-9-and-10-compatibility.md
+
+Think carefully about this analysis and proposed approach.  Provide your anlaysis, findings, and recommendations.  Do NOT edit files.
+
+
 ## wait for logs
 
 You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
