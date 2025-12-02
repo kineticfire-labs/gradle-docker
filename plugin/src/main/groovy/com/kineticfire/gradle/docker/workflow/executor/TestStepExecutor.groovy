@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
@@ -29,6 +30,7 @@ import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 import org.gradle.api.tasks.TaskContainer
+import org.gradle.api.tasks.testing.Test
 
 /**
  * Executor for the test step in a pipeline workflow
@@ -78,13 +80,19 @@ class TestStepExecutor {
     PipelineContext execute(TestStepSpec testSpec, PipelineContext context) {
         validateTestSpec(testSpec)
 
+        def lifecycle = testSpec.lifecycle.getOrElse(WorkflowLifecycle.CLASS)
         def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
         def testTaskName = testSpec.testTaskName.get()
 
-        // Get stack name only when we manage lifecycle (stack is optional when delegating)
-        def stackName = delegateStackManagement ? null : testSpec.stack.get().name
+        // METHOD lifecycle forces delegation to test framework
+        def shouldDelegateCompose = (lifecycle == WorkflowLifecycle.METHOD) || delegateStackManagement
 
-        if (delegateStackManagement) {
+        // Get stack name only when we manage lifecycle (stack is optional when delegating)
+        def stackName = shouldDelegateCompose ? null : testSpec.stack.get().name
+
+        if (lifecycle == WorkflowLifecycle.METHOD) {
+            LOGGER.lifecycle("Executing test step with METHOD lifecycle, test task: {}", testTaskName)
+        } else if (delegateStackManagement) {
             LOGGER.lifecycle("Executing test step with delegated stack management, test task: {}", testTaskName)
         } else {
             LOGGER.lifecycle("Executing test step for stack: {} with test task: {}", stackName, testTaskName)
@@ -96,6 +104,12 @@ class TestStepExecutor {
             throw new GradleException("Test task '${testTaskName}' not found.")
         }
 
+        // For METHOD lifecycle, set system properties so test framework knows what to do
+        if (lifecycle == WorkflowLifecycle.METHOD) {
+            def stackSpec = testSpec.stack.get()
+            setSystemPropertiesForMethodLifecycle(testTask, stackSpec)
+        }
+
         TestResult testResult = null
         Exception testException = null
 
@@ -103,12 +117,13 @@ class TestStepExecutor {
             // Execute beforeTest hook if configured
             executeBeforeTestHook(testSpec)
 
-            // Execute compose up only when we manage lifecycle (not when delegating)
-            if (!delegateStackManagement) {
+            // Execute compose up only when we manage lifecycle (not when delegating or METHOD lifecycle)
+            if (!shouldDelegateCompose) {
                 def composeUpTaskName = computeComposeUpTaskName(stackName)
                 executeComposeUpTask(composeUpTaskName)
             } else {
-                LOGGER.info("Skipping composeUp - stack management delegated to testIntegration")
+                LOGGER.info("Skipping composeUp - compose management delegated to test framework (lifecycle: {})",
+                    lifecycle)
             }
 
             // Execute test task
@@ -121,12 +136,13 @@ class TestStepExecutor {
                 testResult = resultCapture.captureFailure(testTask, e)
             }
         } finally {
-            // Execute compose down only when we manage lifecycle (not when delegating)
-            if (!delegateStackManagement) {
+            // Execute compose down only when we manage lifecycle (not when delegating or METHOD lifecycle)
+            if (!shouldDelegateCompose) {
                 def composeDownTaskName = computeComposeDownTaskName(stackName)
                 executeComposeDownTask(composeDownTaskName)
             } else {
-                LOGGER.info("Skipping composeDown - stack management delegated to testIntegration")
+                LOGGER.info("Skipping composeDown - compose management delegated to test framework (lifecycle: {})",
+                    lifecycle)
             }
         }
 
@@ -281,5 +297,113 @@ class TestStepExecutor {
      */
     void executeHook(Action<Void> hook) {
         hook.execute(null)
+    }
+
+    /**
+     * Set system properties on the test task for METHOD lifecycle.
+     *
+     * <p>These system properties are read by the test framework extension (@ComposeUp for Spock,
+     * @ExtendWith for JUnit 5) to configure per-method compose lifecycle.</p>
+     *
+     * <p>Configuration cache compatible: Uses Test.systemProperty() API which stores values
+     * as serializable properties.</p>
+     *
+     * @param testTask The test task to configure
+     * @param stackSpec The compose stack specification containing files and configuration
+     */
+    void setSystemPropertiesForMethodLifecycle(Task testTask, ComposeStackSpec stackSpec) {
+        if (!(testTask instanceof Test)) {
+            LOGGER.warn("Test task '{}' is not a Test task - cannot set system properties for METHOD lifecycle. " +
+                "Test framework extension may not receive compose configuration.", testTask.name)
+            return
+        }
+
+        def testTaskTyped = testTask as Test
+
+        LOGGER.info("Setting system properties for METHOD lifecycle on test task: {}", testTask.name)
+
+        // Core lifecycle configuration
+        testTaskTyped.systemProperty('docker.compose.lifecycle', 'method')
+        testTaskTyped.systemProperty('docker.compose.stack', stackSpec.name)
+
+        // Compose files - collect from files property
+        def composeFilePaths = collectComposeFilePaths(stackSpec)
+        if (!composeFilePaths.isEmpty()) {
+            testTaskTyped.systemProperty('docker.compose.files', composeFilePaths.join(','))
+        }
+
+        // Project name (optional)
+        if (stackSpec.projectName.isPresent()) {
+            testTaskTyped.systemProperty('docker.compose.projectName', stackSpec.projectName.get())
+        }
+
+        // Wait for healthy configuration (optional)
+        if (stackSpec.waitForHealthy.isPresent()) {
+            def waitForHealthy = stackSpec.waitForHealthy.get()
+            setWaitSpecSystemProperties(testTaskTyped, 'docker.compose.waitForHealthy', waitForHealthy)
+        }
+
+        // Wait for running configuration (optional)
+        if (stackSpec.waitForRunning.isPresent()) {
+            def waitForRunning = stackSpec.waitForRunning.get()
+            setWaitSpecSystemProperties(testTaskTyped, 'docker.compose.waitForRunning', waitForRunning)
+        }
+    }
+
+    /**
+     * Collect compose file paths from the stack specification.
+     *
+     * @param stackSpec The compose stack specification
+     * @return List of absolute file paths, or empty list if no files configured
+     */
+    List<String> collectComposeFilePaths(ComposeStackSpec stackSpec) {
+        def paths = []
+
+        // Collect from files ConfigurableFileCollection
+        if (stackSpec.files != null && !stackSpec.files.isEmpty()) {
+            stackSpec.files.each { file ->
+                paths << file.absolutePath
+            }
+        }
+
+        // Also check composeFile if set (single file property)
+        if (stackSpec.composeFile.isPresent()) {
+            paths << stackSpec.composeFile.get().asFile.absolutePath
+        }
+
+        // Also check composeFileCollection
+        if (stackSpec.composeFileCollection != null && !stackSpec.composeFileCollection.isEmpty()) {
+            stackSpec.composeFileCollection.each { file ->
+                if (!paths.contains(file.absolutePath)) {
+                    paths << file.absolutePath
+                }
+            }
+        }
+
+        return paths
+    }
+
+    /**
+     * Set wait specification system properties on a test task.
+     *
+     * @param testTask The test task to configure
+     * @param prefix The property prefix (e.g., 'docker.compose.waitForHealthy')
+     * @param waitSpec The wait specification
+     */
+    void setWaitSpecSystemProperties(Test testTask, String prefix, def waitSpec) {
+        if (waitSpec.waitForServices != null && waitSpec.waitForServices.isPresent()) {
+            def services = waitSpec.waitForServices.get()
+            if (!services.isEmpty()) {
+                testTask.systemProperty("${prefix}.services", services.join(','))
+            }
+        }
+
+        if (waitSpec.timeoutSeconds != null && waitSpec.timeoutSeconds.isPresent()) {
+            testTask.systemProperty("${prefix}.timeoutSeconds", waitSpec.timeoutSeconds.get().toString())
+        }
+
+        if (waitSpec.pollSeconds != null && waitSpec.pollSeconds.isPresent()) {
+            testTask.systemProperty("${prefix}.pollSeconds", waitSpec.pollSeconds.get().toString())
+        }
     }
 }

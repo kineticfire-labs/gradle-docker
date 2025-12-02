@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
@@ -27,6 +28,7 @@ import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.tasks.testing.Test as GradleTestTask
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -837,5 +839,323 @@ class TestStepExecutorTest extends Specification {
 
         then:
         executionOrder == ['before', 'test', 'after']
+    }
+
+    // ===== METHOD LIFECYCLE TESTS =====
+
+    def "execute skips composeUp when lifecycle is METHOD"() {
+        given:
+        def composeUpCalled = false
+        project.tasks.create('composeUpTestStack') {
+            doLast { composeUpCalled = true }
+        }
+        project.tasks.create('composeDownTestStack')
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        !composeUpCalled
+    }
+
+    def "execute skips composeDown when lifecycle is METHOD"() {
+        given:
+        def composeDownCalled = false
+        project.tasks.create('composeUpTestStack')
+        project.tasks.create('composeDownTestStack') {
+            doLast { composeDownCalled = true }
+        }
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        !composeDownCalled
+    }
+
+    def "execute still runs composeUp when lifecycle is CLASS"() {
+        given:
+        def composeUpCalled = false
+        project.tasks.create('composeUpTestStack') {
+            doLast { composeUpCalled = true }
+        }
+        project.tasks.create('composeDownTestStack')
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.CLASS)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        composeUpCalled
+    }
+
+    def "execute still runs composeDown when lifecycle is CLASS"() {
+        given:
+        def composeDownCalled = false
+        project.tasks.create('composeUpTestStack')
+        project.tasks.create('composeDownTestStack') {
+            doLast { composeDownCalled = true }
+        }
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.CLASS)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        composeDownCalled
+    }
+
+    def "execute runs hooks and test task without compose when lifecycle is METHOD"() {
+        given:
+        def executionOrder = []
+
+        def beforeHook = { executionOrder << 'before' } as Action<Void>
+        def afterHook = { TestResult r -> executionOrder << 'after' } as Action<TestResult>
+
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.METHOD)
+        spec.beforeTest.set(beforeHook)
+        spec.afterTest.set(afterHook)
+
+        // Create compose tasks but they should NOT be called
+        project.tasks.create('composeUpTestStack') {
+            doLast { executionOrder << 'composeUp' }
+        }
+        project.tasks.create('composeDownTestStack') {
+            doLast { executionOrder << 'composeDown' }
+        }
+        testTask.doLast { executionOrder << 'test' }
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 1, 0, 0, 0, 1)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        executionOrder == ['before', 'test', 'after']
+    }
+
+    def "execute still captures test result when lifecycle is METHOD"() {
+        given:
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.testTaskName.set('integrationTest')
+        spec.stack.set(stackSpec)
+        spec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        def context = PipelineContext.create('test')
+        def expectedResult = new TestResult(true, 5, 0, 0, 0, 5)
+        mockResultCapture.captureFromTask(testTask) >> expectedResult
+
+        when:
+        def result = executor.execute(spec, context)
+
+        then:
+        result.testResult == expectedResult
+        result.testCompleted
+    }
+
+    // ===== SET SYSTEM PROPERTIES FOR METHOD LIFECYCLE TESTS =====
+
+    def "setSystemPropertiesForMethodLifecycle sets core properties on Test task"() {
+        given:
+        def gradleTestTask = project.tasks.create('methodTest', GradleTestTask)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.lifecycle'] == 'method'
+        gradleTestTask.systemProperties['docker.compose.stack'] == 'testStack'
+    }
+
+    def "setSystemPropertiesForMethodLifecycle sets compose files property"() {
+        given:
+        def gradleTestTask = project.tasks.create('methodTest', GradleTestTask)
+        def tempFile = File.createTempFile('compose', '.yml')
+        tempFile.deleteOnExit()
+        stackSpec.files.from(tempFile)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.files'] != null
+        gradleTestTask.systemProperties['docker.compose.files'].contains(tempFile.absolutePath)
+    }
+
+    def "setSystemPropertiesForMethodLifecycle sets project name when present"() {
+        given:
+        def gradleTestTask = project.tasks.create('methodTest', GradleTestTask)
+        stackSpec.projectName.set('my-project')
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.projectName'] == 'my-project'
+    }
+
+    def "setSystemPropertiesForMethodLifecycle does not set project name when not present"() {
+        given:
+        def gradleTestTask = project.tasks.create('methodTest', GradleTestTask)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        !gradleTestTask.systemProperties.containsKey('docker.compose.projectName')
+    }
+
+    def "setSystemPropertiesForMethodLifecycle logs warning for non-Test task"() {
+        given:
+        def regularTask = project.tasks.create('nonTestTask')
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(regularTask, stackSpec)
+
+        then:
+        noExceptionThrown()
+        // Warning is logged but no exception is thrown
+    }
+
+    def "setSystemPropertiesForMethodLifecycle does not throw for non-Test task"() {
+        given:
+        def regularTask = project.tasks.create('regularTask')
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(regularTask, stackSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== COLLECT COMPOSE FILE PATHS TESTS =====
+
+    def "collectComposeFilePaths returns empty list when no files configured"() {
+        expect:
+        executor.collectComposeFilePaths(stackSpec).isEmpty()
+    }
+
+    def "collectComposeFilePaths collects from files property"() {
+        given:
+        def tempFile = File.createTempFile('compose', '.yml')
+        tempFile.deleteOnExit()
+        stackSpec.files.from(tempFile)
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.size() == 1
+        paths[0] == tempFile.absolutePath
+    }
+
+    def "collectComposeFilePaths collects multiple files"() {
+        given:
+        def tempFile1 = File.createTempFile('compose1', '.yml')
+        def tempFile2 = File.createTempFile('compose2', '.yml')
+        tempFile1.deleteOnExit()
+        tempFile2.deleteOnExit()
+        stackSpec.files.from(tempFile1, tempFile2)
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.size() == 2
+        paths.contains(tempFile1.absolutePath)
+        paths.contains(tempFile2.absolutePath)
+    }
+
+    // ===== SET WAIT SPEC SYSTEM PROPERTIES TESTS =====
+
+    def "setWaitSpecSystemProperties sets services property"() {
+        given:
+        def gradleTestTask = project.tasks.create('waitTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.waitForServices.set(['service1', 'service2'])
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.waitForHealthy', waitSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.services'] == 'service1,service2'
+    }
+
+    def "setWaitSpecSystemProperties sets timeoutSeconds property"() {
+        given:
+        def gradleTestTask = project.tasks.create('waitTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.timeoutSeconds.set(120)
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.waitForHealthy', waitSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '120'
+    }
+
+    def "setWaitSpecSystemProperties sets pollSeconds property"() {
+        given:
+        def gradleTestTask = project.tasks.create('waitTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.pollSeconds.set(5)
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.waitForRunning', waitSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.pollSeconds'] == '5'
+    }
+
+    def "setWaitSpecSystemProperties does not set empty services"() {
+        given:
+        def gradleTestTask = project.tasks.create('waitTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.waitForServices.set([])
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.waitForHealthy', waitSpec)
+
+        then:
+        !gradleTestTask.systemProperties.containsKey('docker.compose.waitForHealthy.services')
     }
 }
