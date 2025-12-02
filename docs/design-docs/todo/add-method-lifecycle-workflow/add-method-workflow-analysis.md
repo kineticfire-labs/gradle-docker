@@ -1,9 +1,10 @@
 # Analysis: Adding Method Lifecycle Support to dockerWorkflows DSL
 
-**Status:** Analysis Complete - Ready for Implementation
+**Status:** Analysis Complete - Implementation Plan Refined
 **Date:** 2025-12-01
 **Author:** Development Team
 **Related Documents:**
+- [Recommendations](recommendations.md)
 - [Architectural Limitations Analysis](../architectural-limitations/architectural-limitations-analysis.md)
 - [Architectural Limitations Plan](../architectural-limitations/architectural-limitations-plan.md)
 - [Workflow Support Lifecycle](../workflow-lifecycle/workflow-support-lifecycle.md)
@@ -19,6 +20,9 @@ pipeline's conditional post-test actions (tag/save/publish on success).
 
 **Recommendation:** Option E (Enhanced Test Framework Integration) provides the best balance of user experience,
 implementation complexity, and architectural fit.
+
+**Key Refinement:** After reviewing the existing codebase, most required infrastructure already exists and is tested.
+The implementation effort is reduced from 7 days to 2-3 days (Phase 1).
 
 ---
 
@@ -64,7 +68,7 @@ Users wanting per-method container isolation AND conditional post-test actions (
 between two incomplete solutions:
 
 | Feature | dockerOrch + testIntegration | dockerWorkflows |
-|---------|------------------------------|--------------------|
+|---------|------------------------------|-----------------|
 | Method lifecycle | ✅ | ❌ |
 | Class lifecycle | ✅ | ✅ (with delegateStackManagement) |
 | Conditional on test result | ❌ | ✅ |
@@ -99,8 +103,8 @@ back to the pipeline for conditional actions.
 ```
 
 **Implementation**:
-1. Add `lifecycle = 'method'` property to `TestStepSpec`
-2. When `lifecycle = 'method'`:
+1. Add `lifecycle` property to `TestStepSpec`
+2. When `lifecycle = METHOD`:
    - Skip pipeline's composeUp/composeDown calls
    - Set system properties for test framework to detect
    - Test uses `@ComposeUp` (Spock) or `@ExtendWith(ComposeExtension.class)` (JUnit 5)
@@ -148,7 +152,7 @@ method.
    - Uses JUnit Platform Launcher API to discover and run tests
    - Wraps each test method execution with compose up/down
    - Injects `ComposeService` for container control
-2. Replace standard test task execution when `lifecycle = 'method'`
+2. Replace standard test task execution when `lifecycle = METHOD`
 
 **Pros**:
 - ✅ Complete control over execution order
@@ -246,8 +250,8 @@ method.
 
 ### Option E: Enhanced Test Framework Integration (Recommended)
 
-**Concept**: Extend current test framework integration to communicate lifecycle intent from DSL to test runtime, with
-automatic annotation injection.
+**Concept**: Extend current test framework integration to communicate lifecycle intent from DSL to test runtime via
+system properties. The test framework extensions already support this pattern.
 
 **Architecture**:
 ```
@@ -255,22 +259,22 @@ automatic annotation injection.
 │  Configuration Time:                                            │
 │    dockerWorkflows { pipelines { ci {                           │
 │        test {                                                   │
-│            lifecycle = 'method'  // NEW                         │
+│            lifecycle = WorkflowLifecycle.METHOD  // Type-safe   │
 │            testTaskName = 'integrationTest'                     │
 │        }                                                        │
 │    }}}                                                          │
 │                                                                 │
-│  → Sets system property: docker.workflow.lifecycle=method       │
-│  → Sets system property: docker.workflow.stack=testStack        │
+│  → Sets system property: docker.compose.lifecycle=method        │
+│  → Sets system property: docker.compose.stack=testStack         │
 ├─────────────────────────────────────────────────────────────────┤
 │  Test Runtime:                                                  │
-│    Enhanced @ComposeUp / JUnit extension reads system props     │
+│    @ComposeUp / JUnit extension reads system props              │
 │    → Detects lifecycle=method                                   │
-│    → Auto-applies method lifecycle behavior                     │
+│    → Applies method lifecycle behavior (ALREADY IMPLEMENTED)    │
 │    → Reports results to pipeline via shared file                │
 ├─────────────────────────────────────────────────────────────────┤
 │  Pipeline Execution:                                            │
-│    TestStepExecutor detects lifecycle=method                    │
+│    TestStepExecutor detects lifecycle=METHOD                    │
 │    → Skips composeUp/Down (framework handles)                   │
 │    → Runs test task                                             │
 │    → Reads aggregated result                                    │
@@ -278,80 +282,170 @@ automatic annotation injection.
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-**Key Innovation**: The test framework extension auto-detects pipeline context via system properties and applies
-appropriate lifecycle without explicit annotation changes.
+**Key Insight**: The test framework extensions (`ComposeMethodInterceptor`, `DockerComposeMethodExtension`,
+`DockerComposeSpockExtension`) **already read system properties** to configure lifecycle. The pipeline just needs to
+set the correct system property - the extension already knows what to do with it.
 
-**Implementation Details**:
+**Implementation Details** (Refined):
 
-1. **Add `lifecycle` Property to TestStepSpec**:
+1. **Create `WorkflowLifecycle` Enum** (NEW - type-safe):
+   ```groovy
+   // plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/WorkflowLifecycle.groovy
+   enum WorkflowLifecycle {
+       /**
+        * CLASS lifecycle - Containers start once before all test methods and stop after all complete.
+        * This is the default. The pipeline orchestrates compose up/down via Gradle tasks,
+        * or delegates to testIntegration when delegateStackManagement=true.
+        */
+       CLASS,
+
+       /**
+        * METHOD lifecycle - Containers start fresh before each test method and stop after each.
+        * When METHOD is selected, the pipeline automatically delegates compose management to the
+        * test framework extension (@ComposeUp for Spock, @ExtendWith for JUnit 5).
+        */
+       METHOD
+   }
+   ```
+
+2. **Add `lifecycle` Property to TestStepSpec**:
    ```groovy
    // TestStepSpec.groovy
-   abstract Property<String> getLifecycle()  // 'suite', 'class', 'method'
+   abstract Property<WorkflowLifecycle> getLifecycle()
 
-   // Constructor
-   lifecycle.convention('suite')
+   // In constructor:
+   lifecycle.convention(WorkflowLifecycle.CLASS)
    ```
 
-2. **Modify TestStepExecutor**:
+3. **Modify TestStepExecutor**:
    ```groovy
-   void execute(TestStepSpec spec, PipelineContext ctx) {
-       def lifecycle = spec.lifecycle.getOrElse('suite')
+   PipelineContext execute(TestStepSpec testSpec, PipelineContext context) {
+       validateTestSpec(testSpec)
 
-       if (lifecycle == 'method') {
-           // Set system properties for test framework
-           setSystemProperty('docker.workflow.lifecycle', 'method')
-           setSystemProperty('docker.workflow.stack', spec.stack.get().name)
-           setSystemProperty('docker.workflow.compose.files', getComposeFiles(spec))
+       def lifecycle = testSpec.lifecycle.getOrElse(WorkflowLifecycle.CLASS)
+       def testTaskName = testSpec.testTaskName.get()
 
-           // Skip pipeline compose management
-           executeTestTask(spec.testTaskName.get())
-       } else {
-           // Existing suite/class behavior
-           executeComposeUp()
-           executeTestTask()
-           executeComposeDown()
+       // METHOD lifecycle forces delegation to test framework
+       def shouldDelegateCompose = (lifecycle == WorkflowLifecycle.METHOD) ||
+                                   testSpec.delegateStackManagement.getOrElse(false)
+
+       // For METHOD lifecycle, set system properties so test framework knows what to do
+       if (lifecycle == WorkflowLifecycle.METHOD) {
+           def stackSpec = testSpec.stack.get()
+           setSystemPropertiesForMethodLifecycle(testTaskName, stackSpec)
        }
 
-       captureResults()
+       def testTask = lookupTask(testTaskName)
+       // ... validation ...
+
+       try {
+           executeBeforeTestHook(testSpec)
+
+           if (!shouldDelegateCompose) {
+               // CLASS lifecycle with pipeline management
+               def stackName = testSpec.stack.get().name
+               executeComposeUpTask(computeComposeUpTaskName(stackName))
+           } else {
+               LOGGER.info("Compose management delegated to test framework (lifecycle: {})", lifecycle)
+           }
+
+           // Execute test task
+           executeTestTask(testTask)
+           testResult = resultCapture.captureFromTask(testTask)
+
+       } finally {
+           if (!shouldDelegateCompose) {
+               def stackName = testSpec.stack.get().name
+               executeComposeDownTask(computeComposeDownTaskName(stackName))
+           }
+       }
+
+       // ... hooks and return ...
+   }
+
+   private void setSystemPropertiesForMethodLifecycle(String testTaskName, ComposeStackSpec stackSpec) {
+       def testTask = lookupTask(testTaskName) as Test
+
+       testTask.systemProperty('docker.compose.lifecycle', 'method')
+       testTask.systemProperty('docker.compose.stack', stackSpec.name)
+       testTask.systemProperty('docker.compose.files', stackSpec.files.collect { it.absolutePath }.join(','))
+       testTask.systemProperty('docker.compose.projectName', stackSpec.projectName.getOrElse(''))
+
+       // Set wait configuration if present
+       def waitForHealthy = stackSpec.waitForHealthy.getOrNull()
+       if (waitForHealthy) {
+           testTask.systemProperty('docker.compose.waitForHealthy.services',
+               waitForHealthy.waitForServices.getOrElse([]).join(','))
+           testTask.systemProperty('docker.compose.waitForHealthy.timeoutSeconds',
+               waitForHealthy.timeoutSeconds.getOrElse(60).toString())
+       }
+
+       // ... similar for waitForRunning ...
    }
    ```
 
-3. **Enhance ComposeExtension (JUnit 5) / @ComposeUp (Spock)**:
+4. **Add Validation in PipelineValidator** (Enforce sequential execution as ERROR):
    ```groovy
-   // In extension beforeEach/setup:
-   def lifecycle = System.getProperty('docker.workflow.lifecycle')
-   if (lifecycle == 'method') {
-       def stackName = System.getProperty('docker.workflow.stack')
-       composeService.up(stackName)
+   void validateTestStep(PipelineSpec pipeline, TestStepSpec testSpec, Project project) {
+       // ... existing validation ...
+
+       def lifecycle = testSpec.lifecycle.getOrElse(WorkflowLifecycle.CLASS)
+
+       if (lifecycle == WorkflowLifecycle.METHOD) {
+           validateMethodLifecycleConfiguration(pipeline, testSpec, project)
+       }
    }
 
-   // In extension afterEach/cleanup:
-   if (lifecycle == 'method') {
-       composeService.down(stackName)
-   }
-   ```
+   private void validateMethodLifecycleConfiguration(PipelineSpec pipeline, TestStepSpec testSpec, Project project) {
+       def testTaskName = testSpec.testTaskName.get()
+       def testTask = project.tasks.findByName(testTaskName)
 
-4. **Handle Port Conflicts**:
-   ```groovy
-   // Use unique project name per test method to avoid port conflicts
-   def projectName = "${stackName}-${testClassName}-${testMethodName}"
-   composeService.up(stackName, projectName)
+       if (testTask instanceof Test) {
+           def maxForks = testTask.maxParallelForks
+
+           if (maxForks > 1) {
+               throw new GradleException(
+                   "Pipeline '${pipeline.name}' has lifecycle=METHOD but test task '${testTaskName}' " +
+                   "has maxParallelForks=${maxForks}. " +
+                   "Method lifecycle requires sequential test execution (maxParallelForks=1) to avoid port conflicts. " +
+                   "Either:\n" +
+                   "  1. Set maxParallelForks=1 on the test task, OR\n" +
+                   "  2. Use lifecycle=CLASS for parallel test execution\n\n" +
+                   "Example fix:\n" +
+                   "  tasks.named('${testTaskName}') {\n" +
+                   "      maxParallelForks = 1\n" +
+                   "  }"
+               )
+           }
+       }
+
+       // Also validate stack is configured (needed for system properties)
+       if (!testSpec.stack.isPresent()) {
+           throw new GradleException(
+               "Pipeline '${pipeline.name}' has lifecycle=METHOD but no stack is configured. " +
+               "Method lifecycle requires a stack to configure compose settings. " +
+               "Add: stack = dockerOrch.composeStacks.<yourStack>"
+           )
+       }
+   }
    ```
 
 **Pros**:
-- ✅ Minimal user-facing change (just set `lifecycle = 'method'` in DSL)
-- ✅ No required test annotation changes
+- ✅ Minimal user-facing change (just set `lifecycle = WorkflowLifecycle.METHOD` in DSL)
+- ✅ Type-safe enum with IDE autocomplete and compile-time checking
+- ✅ No required test framework extension changes (ALREADY IMPLEMENTED)
 - ✅ Configuration cache compatible
 - ✅ Leverages existing compose service infrastructure
 - ✅ Works for both JUnit 5 and Spock
 - ✅ Maintains pipeline's conditional action capability
+- ✅ Backward compatible - `CLASS` remains default
 
 **Cons**:
-- ⚠️ Requires enhancement to existing test extensions
+- ⚠️ Requires test class annotation (`@ComposeUp` for Spock, `@ExtendWith` for JUnit 5)
 - ⚠️ System property coordination (could fail if misconfigured)
 - ⚠️ Sequential test execution required to avoid port conflicts
 
-**Effort**: ~5-7 days
+**Effort**: ~16 hours (2-3 days) - REDUCED from 7 days due to existing infrastructure
 
 ---
 
@@ -374,24 +468,23 @@ appropriate lifecycle without explicit annotation changes.
 
 ### Rationale
 
-1. **Best User Experience**: Users only need to set `lifecycle = 'method'` in the DSL—no test code changes required
-   in most cases.
+1. **Best User Experience**: Users only need to set `lifecycle = WorkflowLifecycle.METHOD` in the DSL—minimal test
+   code changes required (annotation on test class).
 
-2. **Leverages Existing Infrastructure**: Builds on the already-working `@ComposeUp` and `ComposeExtension`
-   implementations rather than creating parallel systems.
+2. **Leverages Existing Infrastructure**: The `@ComposeUp` extension and `DockerComposeMethodExtension` already:
+   - Read system properties (`docker.compose.lifecycle`, `docker.compose.stack`, etc.)
+   - Implement per-method compose up/down
+   - Generate unique project names to avoid conflicts
 
 3. **Configuration Cache Safe**: Uses system properties (safe) rather than holding non-serializable state.
 
 4. **Clear Architecture**: Maintains separation of concerns:
-   - DSL declares intent
+   - DSL declares intent (lifecycle mode)
+   - Pipeline sets system properties and skips Gradle compose tasks
    - Test framework executes lifecycle
-   - Pipeline handles conditional actions
+   - Pipeline handles conditional actions based on test results
 
-5. **Incremental Implementation**: Can be built in phases:
-   - Phase 1: Add `lifecycle` property and system property passing
-   - Phase 2: Enhance Spock extension
-   - Phase 3: Enhance JUnit 5 extension
-   - Phase 4: Integration tests and documentation
+5. **Reduced Scope**: By leveraging existing infrastructure, Phase 1 effort is reduced from 7 days to 2-3 days.
 
 ### Target DSL Usage
 
@@ -408,7 +501,7 @@ dockerWorkflows {
             test {
                 stack = dockerOrch.composeStacks.testStack
                 testTaskName = 'integrationTest'
-                lifecycle = 'method'  // NEW: enables per-method container lifecycle
+                lifecycle = WorkflowLifecycle.METHOD  // Type-safe enum
             }
 
             onTestSuccess {
@@ -425,57 +518,164 @@ dockerWorkflows {
 }
 ```
 
+### Test Class Requirement
+
+When using `lifecycle = METHOD`, the test class **MUST** have the appropriate annotation:
+
+**Spock:**
+```groovy
+@ComposeUp  // Reads system properties set by pipeline
+class MyIntegrationTest extends Specification {
+    def "test method 1"() { /* gets fresh containers */ }
+    def "test method 2"() { /* gets fresh containers */ }
+}
+```
+
+**JUnit 5:**
+```java
+@ExtendWith(DockerComposeMethodExtension.class)
+class MyIntegrationTest {
+    @Test
+    void testMethod1() { /* gets fresh containers */ }
+    @Test
+    void testMethod2() { /* gets fresh containers */ }
+}
+```
+
 ---
 
 ## Implementation Plan
 
-### Step Overview
+### Phase 1: Core Method Lifecycle Support (Annotation-Based)
 
+**Step 1: Create WorkflowLifecycle Enum** (0.5 hours)
 ```
-Step 1: Add lifecycle property to TestStepSpec (0.5 day)
-   └── Property<String> lifecycle with convention('suite')
-
-Step 2: Modify TestStepExecutor for method lifecycle (1 day)
-   ├── Detect lifecycle = 'method'
-   ├── Set system properties
-   └── Skip internal compose management
-
-Step 3: Enhance Spock @ComposeUp extension (1.5 days)
-   ├── Read system properties in setup/cleanup
-   ├── Handle per-method compose up/down
-   └── Generate unique project names
-
-Step 4: Enhance JUnit 5 ComposeExtension (1.5 days)
-   ├── Read system properties in beforeEach/afterEach
-   ├── Handle per-method compose up/down
-   └── Generate unique project names
-
-Step 5: Unit and functional tests (1 day)
-   ├── TestStepSpecTest for lifecycle property
-   ├── TestStepExecutorTest for method lifecycle handling
-   └── Functional tests for DSL parsing
-
-Step 6: Integration test scenarios (1 day)
-   ├── scenario-7: Method lifecycle with Spock
-   └── scenario-8: Method lifecycle with JUnit 5
-
-Step 7: Documentation (0.5 day)
-   └── Update usage-docker-workflows.md
+plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/WorkflowLifecycle.groovy
+└── Enum with CLASS and METHOD values
+└── Comprehensive Javadoc explaining each mode
 ```
 
-**Total Estimated Effort: 7 days**
+**Step 2: Add lifecycle Property to TestStepSpec** (0.5 hours)
+```
+plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/workflow/TestStepSpec.groovy
+└── Property<WorkflowLifecycle> lifecycle
+└── Convention: WorkflowLifecycle.CLASS
+```
 
-### Key Design Decisions
+**Step 3: Modify TestStepExecutor** (2 hours)
+```
+plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/TestStepExecutor.groovy
+├── Detect lifecycle = METHOD
+├── Set system properties for test framework
+│   ├── docker.compose.lifecycle=method
+│   ├── docker.compose.stack=<stackName>
+│   ├── docker.compose.files=<paths>
+│   ├── docker.compose.projectName=<name>
+│   └── docker.compose.waitFor* properties
+└── Skip Gradle compose tasks when METHOD
+```
 
-1. **Sequential Test Execution**: When `lifecycle = 'method'`, tests must run sequentially (not in parallel) to avoid
-   port conflicts. This is acceptable for method-lifecycle scenarios where isolation is prioritized over speed.
+**Step 4: Add Validation to PipelineValidator** (1 hour)
+```
+plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidator.groovy
+├── Validate maxParallelForks=1 when METHOD (ERROR, not warning)
+└── Validate stack is configured when METHOD
+```
 
-2. **Unique Project Names**: Each test method gets a unique compose project name (`{stack}-{class}-{method}`) to
-   ensure complete isolation.
+**Step 5: Unit Tests** (4 hours)
+```
+plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/workflow/WorkflowLifecycleTest.groovy
+└── Enum value tests
 
-3. **Backward Compatibility**: Default `lifecycle = 'suite'` preserves existing behavior.
+plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/workflow/TestStepSpecTest.groovy
+├── lifecycle property default is CLASS
+├── lifecycle property can be set to METHOD
+└── lifecycle property persists across configuration
 
-4. **Validation**: Add PipelineValidator check that warns if `lifecycle = 'method'` but test parallelism is enabled.
+plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/executor/TestStepExecutorTest.groovy
+├── METHOD lifecycle sets system properties
+├── METHOD lifecycle skips Gradle compose tasks
+├── CLASS lifecycle calls Gradle compose tasks
+└── System properties include all stack configuration
+
+plugin/src/test/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidatorTest.groovy
+├── METHOD lifecycle rejects parallel test execution (ERROR)
+├── METHOD lifecycle accepts sequential test execution
+├── METHOD lifecycle requires stack configuration
+└── CLASS lifecycle allows parallel test execution
+```
+
+**Step 6: Functional Tests** (2 hours)
+```
+plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/workflow/MethodLifecycleFunctionalTest.groovy
+├── DSL parsing with lifecycle = WorkflowLifecycle.METHOD
+├── DSL parsing with lifecycle = WorkflowLifecycle.CLASS
+├── Default lifecycle is CLASS
+└── Enum values are type-checked
+```
+
+**Step 7: Integration Test Scenario** (4 hours)
+```
+plugin-integration-test/dockerWorkflows/scenario-7-method-lifecycle/
+├── build.gradle                          # Pipeline configuration
+├── app-image/
+│   ├── build.gradle                      # Image build + test configuration
+│   └── src/
+│       ├── main/docker/
+│       │   └── Dockerfile
+│       └── integrationTest/
+│           ├── groovy/com/kineticfire/test/
+│           │   └── MethodLifecycleIT.groovy  # Spock test with @ComposeUp
+│           └── resources/compose/
+│               └── app.yml
+```
+
+**Step 8: Documentation** (2 hours)
+```
+docs/usage/usage-docker-workflows.md
+└── Document lifecycle option with examples
+
+docs/design-docs/todo/add-method-lifecycle-workflow/workflow-cannot-method-lifecycle.md
+└── Update to reflect new METHOD lifecycle capability
+```
+
+**Phase 1 Total: ~16 hours (2-3 days)**
+
+### Phase 2: Auto-Detection Enhancement (Future)
+
+After Phase 1 is complete and validated, implement global extensions to eliminate the annotation requirement:
+
+```
+plugin/src/main/groovy/com/kineticfire/gradle/docker/spock/DockerComposeGlobalExtension.groovy
+└── Global Spock extension (IGlobalExtension)
+
+plugin/src/main/java/com/kineticfire/gradle/docker/junit/DockerComposeGlobalExtension.java
+└── Global JUnit 5 extension
+
+META-INF/services/org.spockframework.runtime.extension.IGlobalExtension
+META-INF/services/org.junit.jupiter.api.extension.Extension
+└── Service registration files
+```
+
+**Phase 2 Total: ~18 hours (2-3 days)**
+
+---
+
+## Existing Infrastructure (No Changes Required)
+
+The following components already exist and work correctly. No modifications needed for Phase 1:
+
+| Component | Location | Status |
+|-----------|----------|--------|
+| `LifecycleMode` enum | `plugin/src/main/groovy/.../spock/LifecycleMode.groovy` | ✅ Complete |
+| `ComposeMethodInterceptor` | `plugin/src/main/groovy/.../spock/ComposeMethodInterceptor.groovy` | ✅ Complete (388 lines) |
+| `DockerComposeMethodExtension` | `plugin/src/main/java/.../junit/DockerComposeMethodExtension.java` | ✅ Complete |
+| `DockerComposeSpockExtension` | `plugin/src/main/groovy/.../spock/DockerComposeSpockExtension.groovy` | ✅ Complete (482 lines) |
+| System property reading | In all interceptors/extensions | ✅ Complete |
+| `docker.compose.lifecycle` property | Read by extensions | ✅ Complete |
+| `TestIntegrationExtension.usesCompose()` | `plugin/src/main/groovy/.../extension/TestIntegrationExtension.groovy` | ✅ Supports 'class' and 'method' |
+| `delegateStackManagement` property | `TestStepSpec.groovy` | ✅ Complete |
+| TaskLookup abstraction | `plugin/src/main/groovy/.../workflow/TaskLookup.groovy` | ✅ Config cache safe |
 
 ---
 
@@ -485,18 +685,18 @@ Step 7: Documentation (0.5 day)
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `TestStepSpec.groovy` | Modify | Add `lifecycle` property |
-| `TestStepExecutor.groovy` | Modify | Handle method lifecycle flow |
-| `PipelineValidator.groovy` | Modify | Validate lifecycle configuration |
-| `ComposeUpExtension.groovy` (Spock) | Modify | Read system props, method lifecycle |
-| `ComposeExtension.java` (JUnit 5) | Modify | Read system props, method lifecycle |
+| `WorkflowLifecycle.groovy` | Create | New enum (CLASS, METHOD) |
+| `TestStepSpec.groovy` | Modify | Add `lifecycle` property with convention `CLASS` |
+| `TestStepExecutor.groovy` | Modify | Handle METHOD lifecycle: set system properties, skip Gradle compose tasks |
+| `PipelineValidator.groovy` | Modify | Add validation for METHOD lifecycle configuration |
 
 ### Test Code
 
 | File | Change Type | Description |
 |------|-------------|-------------|
+| `WorkflowLifecycleTest.groovy` | Create | Tests for enum |
 | `TestStepSpecTest.groovy` | Modify | Tests for lifecycle property |
-| `TestStepExecutorTest.groovy` | Modify | Tests for method lifecycle |
+| `TestStepExecutorTest.groovy` | Modify | Tests for method lifecycle handling |
 | `PipelineValidatorTest.groovy` | Modify | Tests for lifecycle validation |
 | `MethodLifecycleFunctionalTest.groovy` | Create | DSL parsing tests |
 
@@ -504,8 +704,7 @@ Step 7: Documentation (0.5 day)
 
 | Directory | Change Type | Description |
 |-----------|-------------|-------------|
-| `scenario-7-method-lifecycle-spock/` | Create | Spock method lifecycle demo |
-| `scenario-8-method-lifecycle-junit/` | Create | JUnit 5 method lifecycle demo |
+| `scenario-7-method-lifecycle/` | Create | Method lifecycle with Spock |
 
 ### Documentation
 
@@ -513,6 +712,20 @@ Step 7: Documentation (0.5 day)
 |------|-------------|-------------|
 | `usage-docker-workflows.md` | Modify | Document lifecycle option |
 | `workflow-cannot-method-lifecycle.md` | Modify | Update to reflect new capability |
+| `dockerWorkflows/README.md` | Modify | Add scenario-7 to table |
+
+---
+
+## Relationship Between `lifecycle` and `delegateStackManagement`
+
+| `lifecycle` | `delegateStackManagement` | Pipeline Compose Management | Who Handles Compose |
+|-------------|---------------------------|-----------------------------|--------------------|
+| `CLASS` (default) | `false` (default) | Pipeline calls `composeUp`/`composeDown` tasks once | Pipeline via Gradle tasks |
+| `CLASS` | `true` | Pipeline skips compose tasks | `testIntegration` via task dependencies |
+| `METHOD` | `true` (forced automatically) | Pipeline skips compose tasks | Test framework extension per method |
+
+**Key behavior**: When `lifecycle = METHOD`, the pipeline automatically forces `delegateStackManagement = true`
+because Gradle tasks cannot execute per-method—only the test framework extension can.
 
 ---
 
@@ -520,9 +733,9 @@ Step 7: Documentation (0.5 day)
 
 | Risk | Mitigation |
 |------|------------|
-| Port conflicts during parallel test execution | Validate and warn when `lifecycle = 'method'` and parallel enabled |
+| Port conflicts during parallel test execution | Validate and ERROR when `lifecycle = METHOD` and parallel enabled |
 | System property not reaching test JVM | Use `Test.systemProperty()` API, document in troubleshooting |
-| ComposeService not available in test runtime | Inject via service locator pattern, fallback to Docker Compose CLI |
+| User forgets annotation on test class | Document requirement clearly; Phase 2 eliminates this with global extensions |
 | Performance degradation | Document that method lifecycle is slower; recommend class for speed |
 
 ---
@@ -531,75 +744,11 @@ Step 7: Documentation (0.5 day)
 
 All proposed changes maintain configuration cache compatibility:
 
-1. **TestStepSpec.lifecycle**: Uses `Property<String>` (lazy evaluation, serializable)
-2. **System properties**: Set via `Test.systemProperty()` which is configuration cache safe
-3. **TestStepExecutor**: No Project references captured; uses TaskContainer lookup
-4. **Test extensions**: Read system properties at execution time, not configuration time
-
----
-
-## Comparison: Before and After
-
-### Before (Current Limitation)
-
-Users wanting method lifecycle with conditional actions must choose:
-
-**Option 1: Use dockerOrch (method lifecycle, NO conditional actions)**
-```groovy
-dockerOrch {
-    composeStacks {
-        testStack { files.from('compose.yml') }
-    }
-}
-
-testIntegration {
-    usesCompose(integrationTest, 'testStack', 'method')
-}
-
-// Must manually run: ./gradlew dockerBuild integrationTest
-// Then manually: ./gradlew dockerTag -PadditionalTags=tested (if tests passed)
-```
-
-**Option 2: Use dockerWorkflows (conditional actions, NO method lifecycle)**
-```groovy
-dockerWorkflows {
-    pipelines {
-        ci {
-            build { image = docker.images.myApp }
-            test {
-                stack = dockerOrch.composeStacks.testStack
-                testTaskName = 'integrationTest'
-                // lifecycle = 'method' NOT AVAILABLE
-            }
-            onTestSuccess {
-                additionalTags = ['tested']
-            }
-        }
-    }
-}
-```
-
-### After (With Option E Implementation)
-
-**Both method lifecycle AND conditional actions:**
-```groovy
-dockerWorkflows {
-    pipelines {
-        ci {
-            build { image = docker.images.myApp }
-            test {
-                stack = dockerOrch.composeStacks.testStack
-                testTaskName = 'integrationTest'
-                lifecycle = 'method'  // NEW: enables per-method isolation
-            }
-            onTestSuccess {
-                additionalTags = ['tested']
-                publish { ... }
-            }
-        }
-    }
-}
-```
+1. **WorkflowLifecycle enum**: Enum values are serializable
+2. **TestStepSpec.lifecycle**: Uses `Property<WorkflowLifecycle>` (lazy evaluation, serializable)
+3. **System properties**: Set via `Test.systemProperty()` which is configuration cache safe
+4. **TestStepExecutor**: No Project references captured; uses TaskLookup abstraction
+5. **Test extensions**: Read system properties at execution time, not configuration time
 
 ---
 
@@ -609,11 +758,13 @@ After implementation, the following lifecycle options will be available:
 
 | Lifecycle | Containers Start | Containers Stop | Use Case |
 |-----------|------------------|-----------------|----------|
-| `'suite'` (default) | Before all tests | After all tests | Fast, shared state OK |
-| `'class'` | Before each test class | After each test class | Isolation per class |
-| `'method'` | Before each test method | After each test method | Complete isolation |
+| `CLASS` (default) | Before all tests | After all tests | Fast, shared state OK |
+| `METHOD` | Before each test method | After each test method | Complete isolation |
 
-All three lifecycles will work with the full pipeline capabilities:
+**Note**: The `'suite'` lifecycle terminology was removed from the codebase. See
+`docs/design-docs/done/remove-suite-lifecycle-terminology.md`.
+
+All lifecycle options work with the full pipeline capabilities:
 - Build step execution
 - Test step execution
 - Conditional actions on test success (tag, save, publish)
@@ -626,37 +777,52 @@ All three lifecycles will work with the full pipeline capabilities:
 
 The implementation is complete when:
 
-- [ ] `lifecycle` property added to TestStepSpec with `convention('suite')`
-- [ ] TestStepExecutor handles `lifecycle = 'method'` by setting system properties
-- [ ] Spock `@ComposeUp` extension respects `docker.workflow.lifecycle` system property
-- [ ] JUnit 5 `ComposeExtension` respects `docker.workflow.lifecycle` system property
+### Phase 1 (Core Method Lifecycle Support)
+
+- [ ] `WorkflowLifecycle` enum created with `CLASS` and `METHOD` values
+- [ ] `lifecycle` property added to TestStepSpec with `convention(WorkflowLifecycle.CLASS)`
+- [ ] TestStepExecutor handles `lifecycle = METHOD` by:
+  - [ ] Setting system properties for test framework
+  - [ ] Skipping Gradle compose tasks
+- [ ] PipelineValidator enforces:
+  - [ ] Sequential execution (`maxParallelForks=1`) as ERROR for METHOD lifecycle
+  - [ ] Stack must be configured for METHOD lifecycle
 - [ ] Unit tests achieve 100% coverage on new code
 - [ ] Functional tests verify DSL parsing for lifecycle option
 - [ ] Integration test scenario-7 (Spock method lifecycle) passes
-- [ ] Integration test scenario-8 (JUnit 5 method lifecycle) passes
 - [ ] No Docker containers remain after integration tests
 - [ ] Configuration cache works with method lifecycle scenarios
 - [ ] Documentation updated with lifecycle option details
+
+### Phase 2 (Auto-Detection - Future)
+
+- [ ] Spock global extension auto-detects compose configuration
+- [ ] JUnit 5 global extension auto-detects compose configuration
+- [ ] Test class annotation no longer required
+- [ ] Backward compatibility with existing annotation-based tests
 
 ---
 
 ## Conclusion
 
 Option E (Enhanced Test Framework Integration) provides the best balance of user experience, implementation complexity,
-and architectural fit. It builds on existing infrastructure, maintains configuration cache compatibility, and requires
-minimal user-facing changes while delivering the requested method lifecycle capability.
+and architectural fit. The key insight is that **the test framework extensions already implement method lifecycle**
+and read system properties to configure themselves.
 
-The key insight is that **the test framework already has hooks at the method level** (JUnit's `@BeforeEach`/`@AfterEach`,
-Spock's `setup()`/`cleanup()`). By passing lifecycle intent from the DSL to the test framework via system properties,
-we bridge the gap between Gradle's task-level execution model and the test framework's method-level execution model.
+The pipeline just needs to:
+1. Add a type-safe `lifecycle` property to `TestStepSpec`
+2. Set the correct system properties when `lifecycle = METHOD`
+3. Skip Gradle compose tasks (let test framework handle)
+4. Validate configuration (sequential execution required)
 
 This approach preserves the pipeline's ability to perform conditional post-test actions while enabling complete
-container isolation per test method—achieving the best of both worlds.
+container isolation per test method—achieving the best of both worlds with minimal new code.
 
 ---
 
 ## Related Documents
 
+- [Recommendations](recommendations.md)
 - [Architectural Limitations Analysis](../architectural-limitations/architectural-limitations-analysis.md)
 - [Architectural Limitations Plan](../architectural-limitations/architectural-limitations-plan.md)
 - [Workflow Support Lifecycle](../workflow-lifecycle/workflow-support-lifecycle.md)

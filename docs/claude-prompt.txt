@@ -26,7 +26,7 @@ The current implementation, per the plans above, identified a limitation that th
 "class" lifecycle.  Having "method" lifecycle integration tests is useful to the user of the plugin for testing and aligns with 'dockerOrch' which supports both "class"
 and "method" lifecycle tests.
 
-Ffurther analysis was done specifically on how to add "method" lifecycle support and an option was proposed.  The analysis and proposed approach to add "method" lifecycle
+Further analysis was done specifically on how to add "method" lifecycle support and an option was proposed.  The analysis and proposed approach to add "method" lifecycle
 is presented in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md .
 
 Analayze that plan and determine if it is a good plan based on:
@@ -36,7 +36,7 @@ Analayze that plan and determine if it is a good plan based on:
 - is this a low-risk approach and implementation?
 - is it compatible with Gradle 9 and 10 per @docs/design-docs/gradle-9-and-10-compatibility.md
 
-Think carefully about this analysis and proposed approach.  Provide your anlaysis, findings, and recommendations.  Do NOT edit files.
+Think carefully about this analysis and proposed approach.  Provide your analysis, findings, and recommendations.  Do NOT edit files.
 
 
 ## wait for logs
