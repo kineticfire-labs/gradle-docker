@@ -42,6 +42,7 @@ abstract class TestStepSpec {
 
         timeoutMinutes.convention(30)
         delegateStackManagement.convention(false)
+        lifecycle.convention(WorkflowLifecycle.CLASS)
     }
 
     /**
@@ -88,4 +89,47 @@ abstract class TestStepSpec {
      * Default: false (pipeline manages compose lifecycle)
      */
     abstract Property<Boolean> getDelegateStackManagement()
+
+    /**
+     * Container lifecycle mode for the test step.
+     *
+     * <p>Determines when Docker Compose containers start and stop relative to test method execution:</p>
+     * <ul>
+     *   <li><b>{@link WorkflowLifecycle#CLASS}</b> (default) - Containers start once before all test methods
+     *       and stop after all complete. The pipeline manages compose lifecycle via Gradle tasks.</li>
+     *   <li><b>{@link WorkflowLifecycle#METHOD}</b> - Containers start fresh before each test method and stop
+     *       after each. When METHOD is selected, the pipeline automatically delegates compose management to
+     *       the test framework extension.</li>
+     * </ul>
+     *
+     * <h4>METHOD Lifecycle Requirements</h4>
+     * <p>When using {@code lifecycle = WorkflowLifecycle.METHOD}:</p>
+     * <ul>
+     *   <li>The test task must have {@code maxParallelForks = 1} (sequential execution required to avoid
+     *       port conflicts)</li>
+     *   <li>The test class must use {@code @ComposeUp} (Spock) or
+     *       {@code @ExtendWith(DockerComposeMethodExtension.class)} (JUnit 5)</li>
+     *   <li>A compose stack must be configured in the test step</li>
+     * </ul>
+     *
+     * <h4>Example</h4>
+     * <pre>{@code
+     * dockerWorkflows {
+     *     pipelines {
+     *         ci {
+     *             test {
+     *                 stack = dockerOrch.composeStacks.testStack
+     *                 testTaskName = 'integrationTest'
+     *                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test method
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     *
+     * <p>Default: {@link WorkflowLifecycle#CLASS} (pipeline manages compose lifecycle)</p>
+     *
+     * @see WorkflowLifecycle
+     */
+    abstract Property<WorkflowLifecycle> getLifecycle()
 }

@@ -44,6 +44,8 @@ class TestStepSpecTest extends Specification {
         testStepSpec.timeoutMinutes.get() == 30
         testStepSpec.delegateStackManagement.present
         testStepSpec.delegateStackManagement.get() == false
+        testStepSpec.lifecycle.present
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.CLASS
     }
 
     // ===== PROPERTY TESTS =====
@@ -128,6 +130,62 @@ class TestStepSpecTest extends Specification {
         testStepSpec.delegateStackManagement.get() == true
     }
 
+    def "lifecycle has default value of CLASS"() {
+        expect:
+        testStepSpec.lifecycle.present
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.CLASS
+    }
+
+    def "lifecycle property can be set to METHOD"() {
+        when:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        then:
+        testStepSpec.lifecycle.present
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.METHOD
+    }
+
+    def "lifecycle property can be set to CLASS explicitly"() {
+        when:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.CLASS)
+
+        then:
+        testStepSpec.lifecycle.present
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.CLASS
+    }
+
+    def "lifecycle property can be updated after initial configuration"() {
+        when:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        then:
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.METHOD
+
+        when:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.CLASS)
+
+        then:
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.CLASS
+
+        when:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        then:
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.METHOD
+    }
+
+    def "lifecycle property persists across configuration"() {
+        given:
+        testStepSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        def spec2 = project.objects.newInstance(TestStepSpec)
+        spec2.lifecycle.set(testStepSpec.lifecycle.get())
+
+        then:
+        spec2.lifecycle.get() == WorkflowLifecycle.METHOD
+    }
+
     def "beforeTest hook property works correctly"() {
         given:
         def hookCalled = false
@@ -188,6 +246,7 @@ class TestStepSpecTest extends Specification {
         testStepSpec.timeoutMinutes.set(60)
         testStepSpec.beforeTest.set(beforeHook)
         testStepSpec.afterTest.set(afterHook)
+        testStepSpec.lifecycle.set(WorkflowLifecycle.METHOD)
 
         then:
         testStepSpec.stack.get() == stackSpec
@@ -195,6 +254,7 @@ class TestStepSpecTest extends Specification {
         testStepSpec.timeoutMinutes.get() == 60
         testStepSpec.beforeTest.present
         testStepSpec.afterTest.present
+        testStepSpec.lifecycle.get() == WorkflowLifecycle.METHOD
 
         when:
         testStepSpec.beforeTest.get().execute(null)
