@@ -21,11 +21,13 @@ import com.kineticfire.gradle.docker.extension.DockerOrchExtension
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
+import org.gradle.api.tasks.testing.Test
 
 /**
  * Validator for pipeline specifications
@@ -131,6 +133,12 @@ class PipelineValidator {
 
         validateStackReference(pipelineSpec.name, testSpec)
         validateTestTaskReference(pipelineName: pipelineSpec.name, testSpec: testSpec)
+
+        // Validate METHOD lifecycle configuration if applicable
+        def lifecycle = testSpec.lifecycle.getOrElse(WorkflowLifecycle.CLASS)
+        if (lifecycle == WorkflowLifecycle.METHOD) {
+            validateMethodLifecycleConfiguration(pipelineSpec, testSpec)
+        }
     }
 
     /**
@@ -230,6 +238,84 @@ class PipelineValidator {
         }
 
         LOGGER.debug("Test task reference '{}' validated for pipeline '{}'", taskName, pipelineName)
+    }
+
+    /**
+     * Validate METHOD lifecycle configuration.
+     *
+     * <p>METHOD lifecycle requires:</p>
+     * <ul>
+     *   <li>Sequential test execution (maxParallelForks = 1) to avoid port conflicts</li>
+     *   <li>A compose stack must be configured (needed for system properties)</li>
+     * </ul>
+     *
+     * @param pipelineSpec The pipeline specification
+     * @param testSpec The test step specification
+     * @throws GradleException if validation fails
+     */
+    void validateMethodLifecycleConfiguration(PipelineSpec pipelineSpec, TestStepSpec testSpec) {
+        def testTaskName = testSpec.testTaskName.get()
+
+        // Validate that stack is configured for METHOD lifecycle
+        if (!testSpec.stack.isPresent()) {
+            throw new GradleException(
+                "Pipeline '${pipelineSpec.name}' has lifecycle=METHOD but no stack is configured. " +
+                "Method lifecycle requires a stack to configure compose settings.\n" +
+                "Add: stack = dockerOrch.composeStacks.<yourStack>"
+            )
+        }
+
+        // Validate that test task has sequential execution
+        validateSequentialTestExecution(pipelineSpec.name, testTaskName)
+    }
+
+    /**
+     * Validate that the test task is configured for sequential execution.
+     *
+     * <p>METHOD lifecycle requires maxParallelForks = 1 to avoid port conflicts when
+     * multiple tests try to start containers simultaneously.</p>
+     *
+     * @param pipelineName The pipeline name for error messages
+     * @param testTaskName The test task name to validate
+     * @throws GradleException if the test task has parallel execution enabled
+     */
+    void validateSequentialTestExecution(String pipelineName, String testTaskName) {
+        def testTask = project.tasks.findByName(testTaskName)
+
+        if (testTask == null) {
+            // Task not found - this is handled by validateTestTaskReference
+            return
+        }
+
+        if (!(testTask instanceof Test)) {
+            // Not a Test task - cannot validate maxParallelForks
+            LOGGER.warn(
+                "Pipeline '{}' has lifecycle=METHOD but test task '{}' is not a Test task. " +
+                "Cannot validate maxParallelForks setting. Ensure sequential execution manually.",
+                pipelineName, testTaskName
+            )
+            return
+        }
+
+        def gradleTestTask = testTask as Test
+        def maxForks = gradleTestTask.maxParallelForks
+
+        if (maxForks > 1) {
+            throw new GradleException(
+                "Pipeline '${pipelineName}' has lifecycle=METHOD but test task '${testTaskName}' " +
+                "has maxParallelForks=${maxForks}. " +
+                "Method lifecycle requires sequential test execution (maxParallelForks=1) to avoid port conflicts.\n" +
+                "Either:\n" +
+                "  1. Set maxParallelForks=1 on the test task, OR\n" +
+                "  2. Use lifecycle=CLASS for parallel test execution\n\n" +
+                "Example fix:\n" +
+                "  tasks.named('${testTaskName}') {\n" +
+                "      maxParallelForks = 1\n" +
+                "  }"
+            )
+        }
+
+        LOGGER.debug("Sequential test execution validated for pipeline '{}', task '{}'", pipelineName, testTaskName)
     }
 
     /**

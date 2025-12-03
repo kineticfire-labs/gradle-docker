@@ -23,9 +23,11 @@ import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.Task
+import org.gradle.api.tasks.testing.Test as GradleTestTask
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -483,6 +485,253 @@ class PipelineValidatorTest extends Specification {
         def e = thrown(GradleException)
         e.message.contains("missing1")
         e.message.contains("missing2")
+    }
+
+    // ===== METHOD LIFECYCLE VALIDATION TESTS =====
+
+    def "validateMethodLifecycleConfiguration fails when no stack configured"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'methodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+        // No stack configured
+
+        when:
+        validator.validateMethodLifecycleConfiguration(pipelineSpec, testSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("lifecycle=METHOD but no stack is configured")
+        e.message.contains("Add: stack = dockerOrch.composeStacks")
+    }
+
+    def "validateMethodLifecycleConfiguration passes with valid configuration"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'methodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        validator.validateMethodLifecycleConfiguration(pipelineSpec, testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSequentialTestExecution fails when maxParallelForks greater than 1"() {
+        given:
+        project.tasks.create('parallelTest', GradleTestTask) {
+            maxParallelForks = 4
+        }
+
+        when:
+        validator.validateSequentialTestExecution('testPipeline', 'parallelTest')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("lifecycle=METHOD")
+        e.message.contains("maxParallelForks=4")
+        e.message.contains("sequential test execution")
+        e.message.contains("port conflicts")
+    }
+
+    def "validateSequentialTestExecution passes when maxParallelForks is 1"() {
+        given:
+        project.tasks.create('sequentialTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        when:
+        validator.validateSequentialTestExecution('testPipeline', 'sequentialTest')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateSequentialTestExecution passes when task not found"() {
+        when:
+        validator.validateSequentialTestExecution('testPipeline', 'nonExistentTask')
+
+        then:
+        // Task not found is handled by validateTestTaskReference, not here
+        noExceptionThrown()
+    }
+
+    def "validateSequentialTestExecution passes for non-Test task"() {
+        given:
+        project.tasks.create('regularTask')
+
+        when:
+        validator.validateSequentialTestExecution('testPipeline', 'regularTask')
+
+        then:
+        // Warning is logged but no exception
+        noExceptionThrown()
+    }
+
+    def "validateSequentialTestExecution error message includes fix suggestions"() {
+        given:
+        project.tasks.create('parallelTest', GradleTestTask) {
+            maxParallelForks = 2
+        }
+
+        when:
+        validator.validateSequentialTestExecution('myPipeline', 'parallelTest')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Set maxParallelForks=1")
+        e.message.contains("Use lifecycle=CLASS")
+        e.message.contains("tasks.named('parallelTest')")
+    }
+
+    def "validateTestStep validates METHOD lifecycle when configured"() {
+        given:
+        // Create parallel test task - should fail validation
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 4
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'methodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("maxParallelForks=4")
+    }
+
+    def "validateTestStep does not validate METHOD lifecycle when CLASS"() {
+        given:
+        // Create parallel test task - should be allowed with CLASS lifecycle
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 4
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'classPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.lifecycle.set(WorkflowLifecycle.CLASS)
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestStep does not validate METHOD lifecycle when default"() {
+        given:
+        // Create parallel test task - should be allowed with default lifecycle
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 4
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'defaultPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        // lifecycle not set - defaults to CLASS
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate fails for METHOD lifecycle with missing stack"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badMethodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+        // No stack configured
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("lifecycle=METHOD but no stack is configured")
+    }
+
+    def "validate fails for METHOD lifecycle with parallel test task"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 8
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badMethodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("maxParallelForks=8")
+    }
+
+    def "validate passes for METHOD lifecycle with valid configuration"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
+        dockerOrchExtension.composeStacks.add(stackSpec)
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'validMethodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.stack.set(stackSpec)
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        noExceptionThrown()
     }
 
     // ===== HELPER METHODS =====
