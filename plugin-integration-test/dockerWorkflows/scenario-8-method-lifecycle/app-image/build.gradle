@@ -1,0 +1,249 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 8 - Method Lifecycle
+ *
+ * This scenario demonstrates using dockerWorkflows with lifecycle=METHOD,
+ * where containers are started fresh before each test method and stopped after.
+ *
+ * Key pattern:
+ * 1. Pipeline defines lifecycle = WorkflowLifecycle.METHOD in test step
+ * 2. Pipeline sets system properties for test framework to detect
+ * 3. Test class uses @ComposeUp annotation (Spock) for method lifecycle
+ * 4. Each test method gets fresh containers
+ * 5. Pipeline orchestrates build → test → conditional tag operations
+ *
+ * This allows users to have complete test isolation (fresh containers per test)
+ * while still benefiting from dockerWorkflows' CI/CD pipeline orchestration.
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9207 (workflow scenario 8)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from the shared app subproject
+def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// =============================================================================
+// DOCKER DSL: Define the image to build
+// =============================================================================
+docker {
+    images {
+        // The image name must be unique across integration tests
+        methodApp {
+            imageName = 'workflow-scenario8-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task prepares files for Docker build
+            contextTask = tasks.register('prepareMethodAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for method lifecycle test app'
+                into layout.buildDirectory.dir('docker-context/methodApp')
+                from('src/main/docker')
+
+                // Copy JAR from shared app project
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':app').tasks.named('jar')
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER ORCH DSL: Define the compose stack for testing
+// =============================================================================
+dockerOrch {
+    composeStacks {
+        methodTest {
+            files.from('src/integrationTest/resources/compose/app.yml')
+            projectName = "workflow-scenario8-test"
+
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// DOCKER WORKFLOWS DSL: Define the pipeline with METHOD lifecycle
+// =============================================================================
+dockerWorkflows {
+    pipelines {
+        // Pipeline using METHOD lifecycle - containers start/stop per test method
+        methodLifecyclePipeline {
+            description = 'Pipeline with METHOD lifecycle - fresh containers per test method'
+
+            // Build step: build the methodApp image
+            build {
+                image = docker.images.methodApp
+            }
+
+            // Test step: use METHOD lifecycle
+            test {
+                stack = dockerOrch.composeStacks.methodTest
+                testTaskName = 'integrationTest'
+                // KEY: METHOD lifecycle means containers start/stop per test method
+                // The test framework extension (@ComposeUp) handles the lifecycle
+                lifecycle = WorkflowLifecycle.METHOD
+            }
+
+            // On test success: add 'tested' tag to the image
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Configuration
+// =============================================================================
+// Plugin automatically creates integrationTest source set when composeStacks configured
+
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.groovy.all
+    integrationTestImplementation libs.spock.core
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+    integrationTestRuntimeOnly libs.junit.platform.launcher
+
+    // Add plugin classes for @ComposeUp annotation access
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+}
+
+// Configure integration test task
+afterEvaluate {
+    tasks.named('integrationTest') {
+        // CRITICAL: METHOD lifecycle requires sequential test execution
+        // to avoid port conflicts when containers are started per method
+        maxParallelForks = 1
+
+        // Pass info to tests
+        systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario8-test"
+        systemProperty 'IMAGE_NAME', 'workflow-scenario8-app'
+    }
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Ensure proper task dependencies for pipeline execution
+afterEvaluate {
+    // Ensure context is prepared before docker build
+    tasks.named('dockerBuildMethodApp') {
+        dependsOn tasks.named('prepareMethodAppContext')
+    }
+
+    // Ensure image is built before compose up
+    tasks.named('composeUpMethodTest') {
+        dependsOn tasks.named('dockerBuildMethodApp')
+    }
+
+    // Ensure image is built before tests run
+    // Note: With METHOD lifecycle, the test framework handles compose up/down per method
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('dockerBuildMethodApp')
+    }
+
+    // Ensure pipeline has access to prepared context
+    tasks.named('runMethodLifecyclePipeline') {
+        dependsOn tasks.named('prepareMethodAppContext')
+    }
+
+    // Ensure integration test classes are compiled before pipeline runs
+    // The pipeline executes the integrationTest task which needs compiled classes
+    tasks.named('runMethodLifecyclePipeline') {
+        dependsOn tasks.named('integrationTestClasses')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('verifyMethodLifecycle', Exec) {
+    description = 'Run the method lifecycle pipeline and verify results'
+    group = 'verification'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Ensure context is prepared
+    dependsOn tasks.named('prepareMethodAppContext')
+
+    // Run the pipeline
+    dependsOn tasks.named('runMethodLifecyclePipeline')
+
+    // Verify the 'tested' tag was applied
+    commandLine 'docker', 'images', '-q', 'workflow-scenario8-app:tested'
+    standardOutput = new ByteArrayOutputStream()
+
+    doLast {
+        def imageId = standardOutput.toString().trim()
+        if (imageId.isEmpty()) {
+            throw new GradleException("Expected image 'workflow-scenario8-app:tested' not found! " +
+                "The onTestSuccess additionalTags may not have been applied.")
+        }
+        logger.lifecycle("SUCCESS: Image 'workflow-scenario8-app:tested' found with ID: ${imageId}")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupMethodWorkflow') {
+    description = 'Clean up Docker resources from method lifecycle workflow test'
+    group = 'verification'
+
+    doLast {
+        // Remove test containers (may already be down from test framework)
+        exec {
+            commandLine 'docker', 'compose', '-p', 'workflow-scenario8-test', 'down', '-v'
+            ignoreExitValue = true
+        }
+
+        // Remove test images
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "workflow-scenario8-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+    }
+}

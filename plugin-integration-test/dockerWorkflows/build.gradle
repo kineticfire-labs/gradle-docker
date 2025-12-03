@@ -57,10 +57,13 @@ tasks.register('integrationTest') {
     // Note: Uses verifyHooks which validates all hook executions via marker files
     dependsOn ':dockerWorkflows:scenario-6-hooks:app-image:verifyHooks'
 
-    // Note: scenario-3-method-lifecycle was removed as redundant.
-    // Method lifecycle cannot be achieved with dockerWorkflows due to Gradle task architecture.
-    // See docs/design-docs/todo/workflow-cannot-method-lifecycle.md for details.
-    // For method lifecycle, use @ComposeUp annotation directly without a pipeline.
+    // Scenario 7: Save/Publish operations
+    // Note: scenario-7-save-publish tests save and publish DSL operations
+    dependsOn ':dockerWorkflows:scenario-7-save-publish:app-image:verifySavePublish'
+
+    // Scenario 8: Method lifecycle (fresh containers per test method)
+    // Note: Uses verifyMethodLifecycle which validates @ComposeUp with METHOD lifecycle
+    dependsOn ':dockerWorkflows:scenario-8-method-lifecycle:app-image:verifyMethodLifecycle'
 
     doLast {
         logger.lifecycle("All dockerWorkflows tests complete")
@@ -78,6 +81,8 @@ tasks.named('clean') {
     dependsOn ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-5-complex-success:app-image:clean'
     dependsOn ':dockerWorkflows:scenario-6-hooks:app-image:clean'
+    dependsOn ':dockerWorkflows:scenario-7-save-publish:app-image:clean'
+    dependsOn ':dockerWorkflows:scenario-8-method-lifecycle:app-image:clean'
 }
 
 // ========================================
@@ -112,6 +117,12 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi workflow-scenario6-app:latest 2>/dev/null || true
         docker rmi workflow-scenario6-app:1.0.0 2>/dev/null || true
         docker rmi workflow-scenario6-app:hooks-verified 2>/dev/null || true
+        docker rmi workflow-scenario7-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario7-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario7-app:tested 2>/dev/null || true
+        docker rmi workflow-scenario8-app:latest 2>/dev/null || true
+        docker rmi workflow-scenario8-app:1.0.0 2>/dev/null || true
+        docker rmi workflow-scenario8-app:tested 2>/dev/null || true
         echo "Cleaned up workflow test images"
     '''
 }

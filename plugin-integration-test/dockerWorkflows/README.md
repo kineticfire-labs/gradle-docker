@@ -21,6 +21,7 @@ The `dockerWorkflows` DSL provides a high-level orchestration layer that combine
 | 5 | `scenario-5-complex-success` | Complex success operations (multiple tags) | `verifyComplexSuccess` |
 | 6 | `scenario-6-hooks` | All hook types (beforeBuild, afterBuild, beforeTest, afterTest, afterSuccess) | `verifyHooks` |
 | 7 | `scenario-7-save-publish` | Save and publish DSL operations (save image to tar.gz) | `verifySavePublish` |
+| 8 | `scenario-8-method-lifecycle` | Method lifecycle (fresh containers per test method) | `verifyMethodLifecycle` |
 
 ## Port Allocations
 
@@ -35,6 +36,7 @@ Each scenario uses a dedicated port to avoid conflicts when running tests in par
 | scenario-5-complex-success | 9204 |
 | scenario-6-hooks | 9205 |
 | scenario-7-save-publish | 9206 |
+| scenario-8-method-lifecycle | 9207 |
 
 ## Running the Tests
 
@@ -65,6 +67,9 @@ cd plugin-integration-test
 
 # Scenario 7: Save/Publish verification
 ./gradlew -Pplugin_version=1.0.0 :dockerWorkflows:scenario-7-save-publish:app-image:verifySavePublish
+
+# Scenario 8: Method lifecycle verification
+./gradlew -Pplugin_version=1.0.0 :dockerWorkflows:scenario-8-method-lifecycle:app-image:verifyMethodLifecycle
 ```
 
 ### Cleanup Docker Resources
@@ -200,6 +205,54 @@ dockerWorkflows {
 - Saved file is a valid gzip archive
 - 'tested' tag applied to image
 
+### Scenario 8: Method Lifecycle
+
+Demonstrates the `lifecycle = WorkflowLifecycle.METHOD` configuration where containers are started
+fresh before each test method and stopped after each test method:
+- Pipeline sets `lifecycle = WorkflowLifecycle.METHOD` in the test step
+- Pipeline sets system properties for the test framework to detect
+- Test class uses `@ComposeUp` annotation (Spock) which reads the system properties
+- Each test method gets fresh containers (no state persists between tests)
+- Pipeline still orchestrates build → test → conditional tag operations
+
+**DSL Example:**
+```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+dockerWorkflows {
+    pipelines {
+        methodLifecyclePipeline {
+            build {
+                image = docker.images.myApp
+            }
+            test {
+                stack = dockerOrch.composeStacks.myTest
+                testTaskName = 'integrationTest'
+                lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test method
+            }
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+```
+
+**Test Class Requirement:**
+When using `lifecycle = METHOD`, the test class **MUST** have the `@ComposeUp` annotation:
+```groovy
+@ComposeUp  // Reads system properties set by the pipeline
+class MyIntegrationTest extends Specification {
+    def "test method 1"() { /* gets fresh containers */ }
+    def "test method 2"() { /* gets fresh containers */ }
+}
+```
+
+**Key Verification:**
+- Each test method gets a different container (verified by different start times)
+- Request counts reset between tests (proving fresh state)
+- Pipeline's conditional tagging still works after all tests pass
+
 ## Project Structure
 
 ```
@@ -224,7 +277,9 @@ dockerWorkflows/
 │   └── ...
 ├── scenario-6-hooks/
 │   └── ...
-└── scenario-7-save-publish/
+├── scenario-7-save-publish/
+│   └── ...
+└── scenario-8-method-lifecycle/
     └── ...
 ```
 
@@ -238,6 +293,7 @@ Each scenario uses a unique image name pattern:
 - `workflow-scenario5-app`
 - `workflow-scenario6-app`
 - `workflow-scenario7-app`
+- `workflow-scenario8-app`
 
 ## Expected Behavior
 

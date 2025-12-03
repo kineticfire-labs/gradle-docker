@@ -1,0 +1,36 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerWorkflows Integration Test: Scenario 8 - Method Lifecycle
+ *
+ * This scenario demonstrates using dockerWorkflows with lifecycle=METHOD,
+ * where containers are started and stopped for each test method.
+ *
+ * Key characteristics:
+ * - Uses lifecycle = WorkflowLifecycle.METHOD in the pipeline's test step
+ * - Containers start fresh before each test method
+ * - Containers stop after each test method
+ * - Test class uses @ComposeUp annotation for Spock method lifecycle
+ * - Pipeline still orchestrates build → test → conditional tag operations
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9207 (workflow scenario 8)
+ */
+
+plugins {
+    id 'base'
+}
