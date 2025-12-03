@@ -9,7 +9,7 @@ with Gradle 9 and 10 (especially the configuration build cache) per @docs/design
 ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
-Great, now for implementation plan in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md : implement Phase 1, Step 5.
+Great, now for implementation plan in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md : implement Phase 1, Step 7.
 
 ## wait for logs
 
