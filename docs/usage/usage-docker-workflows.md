@@ -13,6 +13,10 @@ building, testing, and conditional post-test actions.
   - [build Step](#build-step)
   - [test Step](#test-step)
   - [onTestSuccess Step](#ontestsuccess-step)
+- [Lifecycle Options](#lifecycle-options)
+  - [Suite Lifecycle (Default)](#suite-lifecycle-default)
+  - [Class Lifecycle](#class-lifecycle)
+  - [Method Lifecycle](#method-lifecycle)
 - [Delegated Stack Management](#delegated-stack-management)
 - [Combining dockerWorkflows with testIntegration](#combining-dockerworkflows-with-testintegration)
 - [Lifecycle Options Comparison](#lifecycle-options-comparison)
@@ -53,11 +57,11 @@ Use `dockerWorkflows` when you need:
 | Simple integration testing | Use `dockerOrch` directly with `testIntegration` |
 | Conditional tag on test success | ✅ Use `dockerWorkflows` |
 | Conditional publish on test success | ✅ Use `dockerWorkflows` |
-| Method-level container lifecycle | ❌ Use `@ComposeUp` without `dockerWorkflows` |
+| Method-level container lifecycle | ✅ Use `dockerWorkflows` with `lifecycle = METHOD` |
 | CI/CD pipeline orchestration | ✅ Use `dockerWorkflows` |
 
-**Important Limitation:** `dockerWorkflows` does **not** support per-method container lifecycle. See
-[Lifecycle Options Comparison](#lifecycle-options-comparison) for details.
+**All lifecycle modes are supported:** Suite (default), Class, and Method. See
+[Lifecycle Options](#lifecycle-options) for details.
 
 ---
 
@@ -177,18 +181,28 @@ build {
 The `test` step configures testing:
 
 ```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
 test {
-    stack = dockerOrch.composeStacks.appTest  // Compose stack (optional with delegation)
+    stack = dockerOrch.composeStacks.appTest  // Compose stack
     testTaskName = 'integrationTest'          // Name of the test task to run
+    lifecycle = WorkflowLifecycle.CLASS       // Container lifecycle (default: CLASS)
     delegateStackManagement = false           // Default: false
 }
 ```
 
 | Property | Type | Required | Default | Description |
 |----------|------|----------|---------|-------------|
-| `stack` | ComposeStackSpec | Conditional | - | Compose stack to use. Required unless `delegateStackManagement = true` |
+| `stack` | ComposeStackSpec | Yes | - | Compose stack to use for testing |
 | `testTaskName` | String | Yes | - | Name of the Gradle test task to execute |
+| `lifecycle` | WorkflowLifecycle | No | `CLASS` | Container lifecycle: `CLASS` or `METHOD` |
 | `delegateStackManagement` | boolean | No | `false` | If `true`, skip compose up/down; delegate to `testIntegration` |
+
+**Lifecycle Values:**
+- `WorkflowLifecycle.CLASS` - Containers start once before all tests and stop after all complete (default)
+- `WorkflowLifecycle.METHOD` - Containers start fresh before each test method and stop after each
+
+See [Lifecycle Options](#lifecycle-options) for detailed usage examples.
 
 ### onTestSuccess Step
 
@@ -205,6 +219,132 @@ onTestSuccess {
 |----------|------|----------|---------|-------------|
 | `additionalTags` | List<String> | No | `[]` | Tags to add to the image when tests pass |
 | `publish` | boolean | No | `false` | Whether to publish the image to a registry |
+
+---
+
+## Lifecycle Options
+
+The `lifecycle` property in the test step controls when containers are started and stopped during test execution.
+
+### Suite Lifecycle (Default)
+
+With `lifecycle = WorkflowLifecycle.CLASS` (the default), containers start once before all tests and stop after
+all tests complete. This is the fastest option when test isolation is not required.
+
+```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+dockerWorkflows {
+    pipelines {
+        ciPipeline {
+            build {
+                image = docker.images.myApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.appTest
+                testTaskName = 'integrationTest'
+                lifecycle = WorkflowLifecycle.CLASS  // Default - can be omitted
+            }
+
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+```
+
+**Execution flow:**
+1. Build the Docker image
+2. Start compose stack (once)
+3. Run ALL test methods
+4. Stop compose stack (once)
+5. Apply tags on success
+
+### Class Lifecycle
+
+Class lifecycle behaves the same as suite lifecycle when using `dockerWorkflows` directly. For true per-class
+container restarts, use `delegateStackManagement = true` with `testIntegration.usesCompose()`. See
+[Delegated Stack Management](#delegated-stack-management).
+
+### Method Lifecycle
+
+With `lifecycle = WorkflowLifecycle.METHOD`, containers start fresh before each test method and stop after each
+test method. This provides complete test isolation at the cost of slower execution.
+
+```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+dockerWorkflows {
+    pipelines {
+        isolatedPipeline {
+            description = 'Pipeline with fresh containers per test method'
+
+            build {
+                image = docker.images.myApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.appTest
+                testTaskName = 'integrationTest'
+                lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test
+            }
+
+            onTestSuccess {
+                additionalTags = ['tested']
+            }
+        }
+    }
+}
+```
+
+**Requirements for METHOD lifecycle:**
+
+1. **Sequential test execution required:** The test task must have `maxParallelForks = 1` to avoid port conflicts:
+   ```groovy
+   tasks.named('integrationTest') {
+       maxParallelForks = 1  // Required for METHOD lifecycle
+   }
+   ```
+
+2. **Test class must use @ComposeUp annotation:** The test framework extension handles per-method compose
+   operations:
+   ```groovy
+   import com.kineticfire.gradle.docker.spock.ComposeUp
+
+   @ComposeUp  // Required for METHOD lifecycle
+   class MyIntegrationTest extends Specification {
+       def "test method 1"() { /* gets fresh containers */ }
+       def "test method 2"() { /* gets fresh containers */ }
+   }
+   ```
+
+   For JUnit 5:
+   ```java
+   import com.kineticfire.gradle.docker.junit.DockerComposeMethodExtension;
+
+   @ExtendWith(DockerComposeMethodExtension.class)
+   class MyIntegrationTest {
+       @Test
+       void testMethod1() { /* gets fresh containers */ }
+       @Test
+       void testMethod2() { /* gets fresh containers */ }
+   }
+   ```
+
+**How METHOD lifecycle works:**
+1. Pipeline builds the Docker image
+2. Pipeline sets system properties for the test framework
+3. Pipeline skips Gradle compose tasks (no `composeUp`/`composeDown`)
+4. Test framework extension handles compose up/down per method
+5. Pipeline applies tags on success after all tests complete
+
+**Execution flow for each test method:**
+1. `@ComposeUp` starts compose stack
+2. Test method executes
+3. `@ComposeUp` stops compose stack
+4. Repeat for next test method...
 
 ---
 
@@ -322,88 +462,21 @@ dockerWorkflows {
 }
 ```
 
-**Important:** Method lifecycle is **not supported** with `dockerWorkflows`. For method lifecycle (fresh containers
-per test method), use `@ComposeUp` annotation directly without a pipeline. See
-[Why dockerWorkflows Cannot Support Method Lifecycle](../design-docs/todo/workflow-cannot-method-lifecycle.md) for
-technical details.
+**Note:** For method lifecycle with pipeline benefits, use `lifecycle = WorkflowLifecycle.METHOD` in the test step.
+See [Method Lifecycle](#method-lifecycle) for details.
 
 ---
 
 ## Lifecycle Options Comparison
 
-| Lifecycle | dockerWorkflows | @ComposeUp / testIntegration |
-|-----------|-----------------|------------------------------|
-| **Suite** | ✅ Supported | ✅ Supported |
-| **Class** | ✅ Supported (with delegateStackManagement) | ✅ Supported |
-| **Method** | ❌ **Not Supported** | ✅ Supported |
+| Lifecycle | dockerWorkflows | How to Configure |
+|-----------|-----------------|------------------|
+| **Suite/Class** | ✅ Supported | `lifecycle = WorkflowLifecycle.CLASS` (default) |
+| **Class (delegated)** | ✅ Supported | `delegateStackManagement = true` with `testIntegration` |
+| **Method** | ✅ Supported | `lifecycle = WorkflowLifecycle.METHOD` with `@ComposeUp` |
 
-### Suite Lifecycle
-Containers start once before all tests and stop after all tests complete.
-
-```groovy
-// Use standard pipeline test step (no delegation)
-dockerWorkflows {
-    pipelines {
-        ciPipeline {
-            test {
-                stack = dockerOrch.composeStacks.appTest
-                testTaskName = 'integrationTest'
-            }
-        }
-    }
-}
-```
-
-### Class Lifecycle
-Containers restart for each test class. Requires delegation to `testIntegration`.
-
-```groovy
-// Delegate to testIntegration for class lifecycle
-testIntegration {
-    usesCompose(integrationTest, 'appTest', 'class')
-}
-
-dockerWorkflows {
-    pipelines {
-        ciPipeline {
-            test {
-                testTaskName = 'integrationTest'
-                delegateStackManagement = true
-            }
-        }
-    }
-}
-```
-
-### Method Lifecycle (Not Supported with dockerWorkflows)
-
-For method lifecycle, use `@ComposeUp` **without** a pipeline:
-
-```groovy
-// NO dockerWorkflows pipeline - use direct approach
-
-dockerOrch {
-    composeStacks {
-        isolatedTest {
-            files.from('src/integrationTest/resources/compose/app.yml')
-        }
-    }
-}
-
-testIntegration {
-    usesCompose(integrationTest, 'isolatedTest', 'method')
-}
-```
-
-```groovy
-@ComposeUp  // Method lifecycle - each test method gets fresh containers
-class IsolatedTestIT extends Specification {
-    def "test 1"() { /* fresh containers */ }
-    def "test 2"() { /* fresh containers again */ }
-}
-```
-
-**Trade-off:** You lose conditional post-test actions (tag on success, publish on success).
+All lifecycle modes preserve the pipeline's ability to perform conditional post-test actions (tag on success,
+publish on success).
 
 ---
 
@@ -503,6 +576,60 @@ dockerWorkflows {
 }
 ```
 
+### Example 4: Method Lifecycle Pipeline
+
+```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+dockerWorkflows {
+    pipelines {
+        isolatedTestPipeline {
+            description = 'Pipeline with fresh containers per test method'
+
+            build {
+                image = docker.images.myApp
+            }
+
+            test {
+                stack = dockerOrch.composeStacks.appTest
+                testTaskName = 'integrationTest'
+                lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test
+            }
+
+            onTestSuccess {
+                additionalTags = ['tested', 'verified']
+            }
+        }
+    }
+}
+
+// Required: sequential test execution for METHOD lifecycle
+tasks.named('integrationTest') {
+    maxParallelForks = 1
+}
+```
+
+Test class (Spock):
+
+```groovy
+import com.kineticfire.gradle.docker.spock.ComposeUp
+
+@ComposeUp  // Required for METHOD lifecycle
+class IsolatedTestIT extends Specification {
+    def "first test gets fresh container"() {
+        // Container started fresh for this test
+        expect:
+        // ... test logic
+    }
+
+    def "second test also gets fresh container"() {
+        // Container restarted - completely fresh state
+        expect:
+        // ... test logic
+    }
+}
+```
+
 ---
 
 ## Task Reference
@@ -518,7 +645,8 @@ The pipeline task orchestrates these underlying tasks:
 | Step | Tasks Invoked |
 |------|---------------|
 | build | `dockerBuild<ImageName>` |
-| test (without delegation) | `composeUp<StackName>`, `<testTaskName>`, `composeDown<StackName>` |
+| test (CLASS lifecycle) | `composeUp<StackName>`, `<testTaskName>`, `composeDown<StackName>` |
+| test (METHOD lifecycle) | `<testTaskName>` only (compose handled by test framework) |
 | test (with delegation) | `<testTaskName>` only |
 | onTestSuccess | `dockerTag<ImageName>`, optionally `dockerPublish<ImageName>` |
 
@@ -582,12 +710,49 @@ dockerWorkflows {
 }
 ```
 
-### Port conflicts with @ComposeUp
+### Port conflicts with @ComposeUp (CLASS lifecycle)
 
-Do not combine `@ComposeUp` annotation with a pipeline that manages the same compose stack. The two mechanisms are
-mutually exclusive. Either:
-- Use the pipeline for suite/class lifecycle, OR
-- Use `@ComposeUp` for method lifecycle (without a pipeline)
+When using CLASS lifecycle (the default), do **not** add `@ComposeUp` annotation to your test classes. The pipeline
+manages compose up/down via Gradle tasks - adding the annotation would cause port conflicts.
+
+### Method lifecycle not working
+
+If method lifecycle is configured but containers aren't restarting per method:
+
+1. **Verify `lifecycle = WorkflowLifecycle.METHOD`** is set in the test step
+2. **Ensure `@ComposeUp` annotation** is present on the test class
+3. **Check `maxParallelForks = 1`** is set on the test task
+4. **Verify system properties** are being passed (check test output for compose start/stop messages)
+
+```groovy
+// All three are required for METHOD lifecycle:
+
+// 1. In pipeline:
+test {
+    lifecycle = WorkflowLifecycle.METHOD
+}
+
+// 2. On test class:
+@ComposeUp
+class MyTest extends Specification { }
+
+// 3. In test task configuration:
+tasks.named('integrationTest') {
+    maxParallelForks = 1
+}
+```
+
+### Method lifecycle fails with parallel tests
+
+Method lifecycle requires sequential test execution. If you see port conflicts or "address already in use" errors:
+
+```groovy
+tasks.named('integrationTest') {
+    maxParallelForks = 1  // Required for METHOD lifecycle
+}
+```
+
+The pipeline validates this and throws an error if `maxParallelForks > 1` with METHOD lifecycle.
 
 ---
 
@@ -596,4 +761,4 @@ mutually exclusive. Either:
 - [Docker DSL Guide](usage-docker.md) - Image building, tagging, saving, publishing
 - [Docker Orch DSL Guide](usage-docker-orch.md) - Compose stack management
 - [Spock/JUnit Test Extensions](spock-junit-test-extensions.md) - @ComposeUp and lifecycle annotations
-- [Why dockerWorkflows Cannot Support Method Lifecycle](../design-docs/todo/workflow-cannot-method-lifecycle.md)
+- [Method Lifecycle Implementation](../design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md)

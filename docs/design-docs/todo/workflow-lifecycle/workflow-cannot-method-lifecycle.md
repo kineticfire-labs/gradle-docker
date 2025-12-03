@@ -1,238 +1,249 @@
-# Why dockerWorkflows Cannot Support Method Lifecycle
+# How dockerWorkflows Supports Method Lifecycle
 
-**Date:** 2025-11-29
-**Status:** Architectural Limitation (Not a Bug)
-**Related:** [Workflow Support Lifecycle](workflow-support-lifecycle.md)
+**Date:** 2025-12-03 (Updated)
+**Status:** Feature Implemented ✅
+**Related:**
+- [Workflow Support Lifecycle](workflow-support-lifecycle.md)
+- [Method Lifecycle Implementation Analysis](../add-method-lifecycle-workflow/add-method-workflow-analysis.md)
 
 ---
 
 ## Summary
 
-The `dockerWorkflows` DSL cannot support per-method container lifecycle (fresh containers for each test method).
-This is a fundamental architectural limitation, not a bug or missing feature. This document explains why.
+The `dockerWorkflows` DSL now supports per-method container lifecycle (fresh containers for each test method)
+through a combination of the `lifecycle = WorkflowLifecycle.METHOD` setting and the test framework extension
+(`@ComposeUp` for Spock, `@ExtendWith(DockerComposeMethodExtension.class)` for JUnit 5).
+
+**Previous Status:** Method lifecycle was not supported (architectural limitation).
+**Current Status:** Method lifecycle IS supported via enhanced test framework integration.
 
 ---
 
 ## Background: Container Lifecycle Modes
 
-The plugin supports three container lifecycle modes for integration testing:
+The plugin supports two container lifecycle modes for integration testing:
 
 | Lifecycle | Containers Start | Containers Stop | Use Case |
 |-----------|------------------|-----------------|----------|
-| **Suite** | Before all tests | After all tests | Fast, shared state OK |
-| **Class** | Before each test class | After each test class | Isolation per class |
-| **Method** | Before each test method | After each test method | Complete isolation |
+| **CLASS** | Before all tests | After all tests | Fast, shared state OK (default) |
+| **METHOD** | Before each test method | After each test method | Complete isolation |
 
 ---
 
-## The Limitation Explained
+## How Method Lifecycle Works
 
-### How dockerWorkflows Works
+### The Original Limitation
 
-`dockerWorkflows` orchestrates pipelines using **Gradle task dependencies**:
+Gradle tasks execute once per build invocation. When `integrationTest` runs, it executes ALL test methods in a
+single task execution. There is no Gradle mechanism to restart tasks between individual test method executions.
+
+### The Solution: Test Framework Integration
+
+Instead of trying to make Gradle tasks restart per method, the solution delegates container lifecycle to the
+test framework extension, which operates at the JVM level inside the test process:
+
+1. **Pipeline configures method lifecycle**: `lifecycle = WorkflowLifecycle.METHOD`
+2. **Pipeline sets system properties**: Compose file paths, project name, wait configuration
+3. **Pipeline skips Gradle compose tasks**: No `composeUp`/`composeDown` task execution
+4. **Test framework extension reads system properties**: `@ComposeUp` annotation detects method lifecycle
+5. **Extension manages compose per method**: Up before each method, down after each method
+6. **Pipeline handles post-test actions**: Tag/publish on success after all tests complete
+
+### Execution Flow
 
 ```
 runMyPipeline
-    ├── dockerBuildMyApp          (build step)
-    ├── composeUpTestStack        (test step - compose up)
-    ├── integrationTest           (test step - run tests)
-    ├── composeDownTestStack      (test step - compose down)
-    └── dockerTagMyApp:tested     (onTestSuccess step)
+    ├── dockerBuildMyApp              (build step)
+    ├── integrationTest               (test step - no Gradle compose tasks!)
+    │   └── For each test method:
+    │       ├── @ComposeUp calls compose up
+    │       ├── Test method executes
+    │       └── @ComposeUp calls compose down
+    └── dockerTagMyApp:tested         (onTestSuccess - if all tests passed)
 ```
-
-The key insight: **Gradle tasks execute once per build invocation**. When `integrationTest` runs, it executes
-ALL test methods in a single task execution.
-
-### Why Method Lifecycle Cannot Work
-
-For method lifecycle to work, the compose stack would need to:
-1. Start before test method 1
-2. Stop after test method 1
-3. Start before test method 2
-4. Stop after test method 2
-5. ... and so on
-
-But Gradle task dependencies only provide:
-1. `composeUp` runs once (before `integrationTest` task starts)
-2. `integrationTest` runs (executes ALL test methods)
-3. `composeDown` runs once (after `integrationTest` task completes)
-
-**There is no Gradle mechanism to restart a task between individual test method executions.**
-
-### The delegateStackManagement Feature
-
-The `delegateStackManagement = true` feature was added to allow `testIntegration.usesCompose()` to manage the
-compose lifecycle instead of the pipeline. However, `testIntegration.usesCompose()` also uses Gradle task
-dependencies:
-
-```groovy
-testIntegration {
-    usesCompose(integrationTest, 'myStack', 'class')  // or 'method'
-}
-```
-
-Even when you specify `'method'` as the lifecycle parameter, this only affects how `testIntegration` **configures**
-the Spock extension. The actual Gradle tasks (`composeUp`/`composeDown`) still only run once per build.
 
 ---
 
-## How Method Lifecycle Actually Works
+## Usage Example
 
-Method lifecycle is achieved through the **`@ComposeUp` Spock annotation**, which hooks into Spock's test
-lifecycle at the framework level (not Gradle's task level):
-
-```groovy
-@ComposeUp  // Spock extension manages lifecycle
-class IsolatedTestsExampleIT extends Specification {
-
-    def "test 1: creates user alice"() {
-        // Container started fresh before this method
-        // ...
-    }
-    // Container stopped after this method
-
-    def "test 2: alice does NOT exist"() {
-        // Container started fresh again - proves isolation!
-        // ...
-    }
-    // Container stopped after this method
-}
-```
-
-The `@ComposeUp` annotation:
-1. Intercepts Spock's `setup()` method → calls compose up
-2. Runs the test method
-3. Intercepts Spock's `cleanup()` method → calls compose down
-
-This happens **inside the JVM running the tests**, not through Gradle task dependencies.
-
----
-
-## Why You Cannot Combine @ComposeUp with dockerWorkflows
-
-If you try to use `@ComposeUp` on tests that are also managed by `dockerWorkflows`, you get **port conflicts**:
-
-1. Pipeline's `composeUp` task starts the stack on port 8080
-2. Test runs, `@ComposeUp` tries to start the stack again on port 8080
-3. **Error: Port 8080 is already in use**
-
-The two mechanisms are mutually exclusive for the same compose stack.
-
----
-
-## What Users Can Do
-
-### Option 1: Use dockerWorkflows with Class/Suite Lifecycle
-
-If you need conditional post-test actions (tag on success, publish on success):
+### Pipeline Configuration
 
 ```groovy
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
 dockerWorkflows {
     pipelines {
-        ciPipeline {
-            build { image = docker.images.myApp }
+        isolatedPipeline {
+            description = 'Pipeline with fresh containers per test method'
+
+            build {
+                image = docker.images.myApp
+            }
+
             test {
+                stack = dockerOrch.composeStacks.appTest
                 testTaskName = 'integrationTest'
-                delegateStackManagement = true  // testIntegration handles class lifecycle
+                lifecycle = WorkflowLifecycle.METHOD  // KEY: Method lifecycle
             }
+
             onTestSuccess {
-                additionalTags = ['tested']
+                additionalTags = ['tested']  // Still works! Applied after all tests pass
             }
         }
     }
 }
 
-testIntegration {
-    usesCompose(integrationTest, 'testStack', 'class')  // Class lifecycle only
+// Required: sequential test execution to avoid port conflicts
+tasks.named('integrationTest') {
+    maxParallelForks = 1
 }
 ```
 
-### Option 2: Use @ComposeUp for Method Lifecycle (No Pipeline)
-
-If you need complete isolation per test method:
+### Test Class (Spock)
 
 ```groovy
-// NO dockerWorkflows pipeline - just use dockerOrch + @ComposeUp
+import com.kineticfire.gradle.docker.spock.ComposeUp
 
-dockerOrch {
-    composeStacks {
-        isolatedTest {
-            files.from('src/integrationTest/resources/compose/app.yml')
-        }
+@ComposeUp  // Required: reads system properties set by pipeline
+class IsolatedTestIT extends Specification {
+
+    def "first test gets fresh container"() {
+        // Container started fresh for this test
+        expect:
+        // ... test logic
+    }
+
+    def "second test also gets fresh container"() {
+        // Container restarted - completely fresh state
+        // No data persists from first test
+        expect:
+        // ... test logic
     }
 }
+```
 
-testIntegration {
-    usesCompose(integrationTest, 'isolatedTest', 'method')
+### Test Class (JUnit 5)
+
+```java
+import com.kineticfire.gradle.docker.junit.DockerComposeMethodExtension;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+
+@ExtendWith(DockerComposeMethodExtension.class)  // Required for method lifecycle
+class IsolatedTestIT {
+
+    @Test
+    void firstTestGetsFreshContainer() {
+        // Container started fresh for this test
+    }
+
+    @Test
+    void secondTestAlsoGetsFreshContainer() {
+        // Container restarted - completely fresh state
+    }
 }
 ```
-
-```groovy
-@ComposeUp  // Method lifecycle via Spock extension
-class IsolatedTestIT extends Specification {
-    // Each test gets fresh containers
-}
-```
-
-**Trade-off:** You lose the pipeline's conditional actions (tag on success, publish on success).
-
-### Option 3: Separate Pipelines for Build and Test
-
-Split the workflow into separate Gradle invocations:
-
-```bash
-# Build and test with method lifecycle
-./gradlew dockerBuildMyApp integrationTest
-
-# If tests passed, tag the image
-./gradlew dockerTagMyApp -PadditionalTags=tested
-```
-
-This is manual but gives full control.
 
 ---
 
-## Comparison Table
+## Requirements for Method Lifecycle
 
-| Feature | dockerWorkflows | @ComposeUp |
-|---------|-----------------|------------|
+1. **`lifecycle = WorkflowLifecycle.METHOD`** in the pipeline's test step
+2. **`@ComposeUp` annotation** (Spock) or `@ExtendWith(DockerComposeMethodExtension.class)` (JUnit 5) on test class
+3. **`maxParallelForks = 1`** on the test task (validated by pipeline - throws error if > 1)
+4. **Stack must be configured** in the test step (provides compose file paths)
+
+---
+
+## Validation
+
+The pipeline validator enforces:
+
+- **Sequential execution required**: If `lifecycle = METHOD` and `maxParallelForks > 1`, throws `GradleException`
+  with clear message and fix instructions
+- **Stack required**: If `lifecycle = METHOD` and no stack is configured, throws `GradleException`
+
+---
+
+## System Properties Set by Pipeline
+
+When `lifecycle = WorkflowLifecycle.METHOD`, the pipeline sets these system properties on the test task:
+
+| Property | Description |
+|----------|-------------|
+| `docker.compose.lifecycle` | Set to `method` |
+| `docker.compose.stack` | Stack name |
+| `docker.compose.files` | Comma-separated compose file paths |
+| `docker.compose.projectName` | Compose project name (if configured) |
+| `docker.compose.waitForHealthy.services` | Services to wait for healthy |
+| `docker.compose.waitForHealthy.timeoutSeconds` | Health check timeout |
+| `docker.compose.waitForRunning.services` | Services to wait for running |
+| `docker.compose.waitForRunning.timeoutSeconds` | Running check timeout |
+
+The `@ComposeUp` extension reads these properties to configure itself.
+
+---
+
+## Comparison: Before and After
+
+### Before (Not Supported)
+
+| Feature | dockerWorkflows | @ComposeUp (standalone) |
+|---------|-----------------|-------------------------|
 | Suite lifecycle | ✅ | ❌ |
-| Class lifecycle | ✅ (with delegateStackManagement) | ✅ |
-| Method lifecycle | ❌ (impossible) | ✅ |
-| Conditional tag on success | ✅ | ❌ |
-| Conditional publish on success | ✅ | ❌ |
-| Pipeline orchestration | ✅ | ❌ |
+| Class lifecycle | ✅ (delegated) | ✅ |
+| Method lifecycle | ❌ | ✅ |
+| Tag on success | ✅ | ❌ |
+| Publish on success | ✅ | ❌ |
+
+**Trade-off:** Users had to choose between method lifecycle OR conditional post-test actions.
+
+### After (Supported)
+
+| Feature | dockerWorkflows |
+|---------|-----------------|
+| Suite lifecycle | ✅ (`lifecycle = CLASS`) |
+| Class lifecycle | ✅ (`delegateStackManagement = true`) |
+| Method lifecycle | ✅ (`lifecycle = METHOD`) |
+| Tag on success | ✅ (all modes) |
+| Publish on success | ✅ (all modes) |
+
+**No trade-off:** Users get both method lifecycle AND conditional post-test actions.
 
 ---
 
-## Where Method Lifecycle IS Tested
+## Integration Test Verification
 
-The method lifecycle feature is fully tested, just not within `dockerWorkflows`:
+The method lifecycle feature is verified by:
 
-- **Location:** `plugin-integration-test/dockerOrch/examples/isolated-tests/`
-- **Test file:** `IsolatedTestsExampleIT.groovy`
+- **Location:** `plugin-integration-test/dockerWorkflows/scenario-8-method-lifecycle/`
+- **Test file:** `MethodLifecycleIT.groovy`
 - **What it proves:**
-  - Test 1 creates user "alice"
-  - Test 2 verifies "alice" does NOT exist (fresh database!)
-  - Test 3 creates "alice" again (succeeds because database is fresh)
-
-This demonstrates complete isolation between test methods.
+  - Test 1 records container start time
+  - Test 2 verifies container start time is DIFFERENT (proving fresh container)
+  - Test 3 verifies container start time is DIFFERENT from both previous tests
+  - Pipeline's `onTestSuccess` correctly applies 'tested' tag after all tests pass
 
 ---
 
-## Conclusion
+## Historical Context
 
-The inability to support method lifecycle in `dockerWorkflows` is a **fundamental architectural constraint**,
-not a missing feature. Gradle's task execution model does not support restarting tasks between individual test
-method executions.
+This document was originally titled "Why dockerWorkflows Cannot Support Method Lifecycle" and explained the
+architectural limitation. The limitation was overcome by:
 
-Users who need method lifecycle should use the `@ComposeUp` Spock annotation directly, without wrapping it in
-a `dockerWorkflows` pipeline. The trade-off is losing the pipeline's conditional post-test actions.
+1. Leveraging the existing `@ComposeUp` extension's ability to manage compose lifecycle at the JVM level
+2. Adding the `lifecycle` property to `TestStepSpec`
+3. Having the pipeline set system properties instead of executing Gradle compose tasks
+4. Letting the test framework extension read those properties and handle per-method lifecycle
+
+This approach maintains Gradle's task execution model while achieving method-level container isolation.
 
 ---
 
 ## Related Documents
 
-- [Workflow Support Lifecycle Plan](workflow-support-lifecycle.md) - Original implementation plan
-- [Spock/JUnit Test Extensions](../../usage/spock-junit-test-extensions.md) - @ComposeUp documentation
-- [Isolated Tests Example](../../../plugin-integration-test/dockerOrch/examples/isolated-tests/) - Method lifecycle demo
+- [Method Lifecycle Implementation Analysis](../add-method-lifecycle-workflow/add-method-workflow-analysis.md)
+- [Workflow Support Lifecycle Plan](workflow-support-lifecycle.md)
+- [Spock/JUnit Test Extensions](../../../usage/spock-junit-test-extensions.md)
+- [Docker Workflows Usage Guide](../../../usage/usage-docker-workflows.md)
+- [Integration Test: Scenario 8](../../../../plugin-integration-test/dockerWorkflows/scenario-8-method-lifecycle/)
