@@ -8,8 +8,24 @@ with Gradle 9 and 10 (especially the configuration build cache) per @docs/design
 
 ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
+Summary of Recommendations
 
-Great, now for implementation plan in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md : implement Phase 1, Step 7.
+  | Priority | Issue                                | Recommendation                                               |
+  |----------|--------------------------------------|--------------------------------------------------------------|
+  | High     | #3 Contradictory annotation handling | Clarify: skip vs error strategy                              |
+  | Medium   | #2 Incomplete constructor signature  | Fix code example consistency                                 |
+  | Medium   | #4 shouldApply logic flaw            | Handle repeatable annotations                                |
+  | Medium   | #5 Test examples missing injection   | Align test mocks with implementation                         |
+  | Medium   | #10 Step 0 effort underestimated     | Revise to 4-6 hours                                          |
+  | Medium   | #11 Missing validation docs          | Document delegateStackManagement + lifecycle=METHOD behavior |
+  | Low      | #1 Missing recommendations.md        | Create file or remove reference                              |
+  | Low      | #6 Missing error message content     | Add example error messages                                   |
+  | Low      | #7 Fragile port allocation           | Consider dynamic ports                                       |
+  | Low      | #9 Incomplete functional tests       | Complete or mark as pseudocode                               |
+  | Low      | #12 Extension class confusion        | Clarify extension-lifecycle mapping                          |
+
+
+
 
 ## wait for logs
 
