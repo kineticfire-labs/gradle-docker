@@ -399,26 +399,8 @@ set the correct system property - the extension already knows what to do with it
        def testTaskName = testSpec.testTaskName.get()
        def testTask = project.tasks.findByName(testTaskName)
 
-       // Validate that delegateStackManagement is not explicitly set with lifecycle=METHOD
-       // Both accomplish the same thing (delegate compose to test framework), so having both
-       // is redundant and indicates a configuration misunderstanding
-       if (testSpec.delegateStackManagement.isPresent() && testSpec.delegateStackManagement.get()) {
-           throw new GradleException(
-               "Pipeline '${pipeline.name}' has both lifecycle=METHOD and delegateStackManagement=true. " +
-               "These are redundant - lifecycle=METHOD automatically delegates compose management to the test framework. " +
-               "Remove one of these settings:\n\n" +
-               "Option A - Use lifecycle (recommended for per-method container isolation):\n" +
-               "  test {\n" +
-               "      lifecycle = WorkflowLifecycle.METHOD\n" +
-               "      // delegateStackManagement not needed\n" +
-               "  }\n\n" +
-               "Option B - Use delegateStackManagement (for class-level delegation to testIntegration):\n" +
-               "  test {\n" +
-               "      delegateStackManagement = true\n" +
-               "      // lifecycle defaults to CLASS\n" +
-               "  }"
-           )
-       }
+       // NOTE: Validation for delegateStackManagement + lifecycle=METHOD redundancy does NOT exist in Phase 1.
+       // This validation is added in Phase 2, Step 2. Phase 1 focuses on core functionality only.
 
        if (testTask instanceof Test) {
            def maxForks = testTask.maxParallelForks
@@ -637,7 +619,7 @@ plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/workflow/MethodLi
 
 **Step 7: Integration Test Scenario** (4 hours)
 ```
-plugin-integration-test/dockerWorkflows/scenario-7-method-lifecycle/
+plugin-integration-test/dockerWorkflows/scenario-8-method-lifecycle/
 ├── build.gradle                          # Pipeline configuration
 ├── app-image/
 │   ├── build.gradle                      # Image build + test configuration
@@ -650,6 +632,9 @@ plugin-integration-test/dockerWorkflows/scenario-7-method-lifecycle/
 │           └── resources/compose/
 │               └── app.yml
 ```
+
+> **Note:** Phase 1 Step 7 originally referenced `scenario-7-method-lifecycle` but the actual implementation used
+> `scenario-8-method-lifecycle` (port 9207). This has been corrected to match the implemented scenario.
 
 **Step 8: Documentation** (2 hours)
 ```
@@ -671,30 +656,419 @@ After Phase 1 is complete and validated, implement global extensions to eliminat
 annotations to test classes should produce an error—all compose lifecycle management must be via system properties
 set by the pipeline.
 
-**Step 0: Refactor Existing Extensions for Delegation** (4-6 hours)
+---
 
-Before implementing global extensions, refactor the existing `DockerComposeMethodExtension` and
-`DockerComposeClassExtension` (JUnit 5) and `ComposeMethodInterceptor`/`ComposeClassInterceptor` (Spock) to support
-delegation from global extensions. This involves:
+#### Phase 2 Step Dependencies
 
-1. Extract shared configuration-from-system-properties logic into reusable methods
-2. Ensure extensions can be instantiated and called without annotation context
-3. Remove hardcoded defaults (e.g., `"time-server"` wait service) - all configuration must come from system properties
+The Phase 2 steps have explicit dependencies that must be followed:
 
-**File Changes:**
-- `DockerComposeMethodExtension.groovy` - Add `createConfigurationFromSystemProperties()` method
-- `DockerComposeClassExtension.groovy` - Add `createConfigurationFromSystemProperties()` method
-- `ComposeMethodInterceptor.groovy` - Ensure constructor accepts config map from any source
-- `ComposeClassInterceptor.groovy` - Ensure constructor accepts config map from any source
+```
+Step Dependencies Diagram:
 
-**Step 1: Create Spock Global Extension** (3 hours)
+  ┌─────────────────────────────────────────────────────────────────────────┐
+  │                                                                         │
+  │   Step 1: Refactor JUnit 5 Extensions ──────────────────────┐          │
+  │      (Remove hardcoded defaults, add system-property config) │          │
+  │                                                              │          │
+  │                      │                                       │          │
+  │                      ▼                                       │          │
+  │                                                              │          │
+  │   Step 2: Add Validation ◄────── (Independent, can run      │          │
+  │      (delegateStackManagement     in parallel with Step 1)  │          │
+  │       + lifecycle=METHOD)                                    │          │
+  │                                                              │          │
+  │                      │                                       │          │
+  │                      ▼                                       ▼          │
+  │                                                                         │
+  │   Step 3: Create Spock Global Extension ◄─── Step 1 must be complete   │
+  │      (Uses existing interceptors)            before delegation works    │
+  │                                                                         │
+  │                      │                                                  │
+  │                      ▼                                                  │
+  │                                                                         │
+  │   Step 4: Create Spock Service Registration                             │
+  │      (META-INF/services file)                                           │
+  │                                                                         │
+  │                      │                                                  │
+  │                      ▼                                                  │
+  │                                                                         │
+  │   Step 5: Create JUnit 5 Global Extension ◄─── Step 1 MUST be complete │
+  │      (Delegates to refactored extensions)      Extensions must support  │
+  │                                                system-property config   │
+  │                      │                                                  │
+  │                      ▼                                                  │
+  │                                                                         │
+  │   Step 6: Create JUnit 5 Service Registration                           │
+  │      (META-INF/services file)                                           │
+  │                                                                         │
+  │                      │                                                  │
+  │                      ▼                                                  │
+  │                                                                         │
+  │   Steps 7-9: Unit Tests, Functional Tests, Integration Tests            │
+  │      (Can be written incrementally as each step completes)              │
+  │                                                                         │
+  └─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Critical Dependency**: Steps 3 and 5 (global extensions) **cannot work correctly** until Step 1 is complete.
+The JUnit 5 extensions currently have hardcoded defaults that prevent system-property-only configuration.
+
+---
+
+#### Service Class Locations (Important for Implementation)
+
+The service interfaces and implementations used by test framework extensions are split between Java and Groovy:
+
+**Java files** (in `plugin/src/main/java/com/kineticfire/gradle/docker/junit/service/`):
+| File | Type | Description |
+|------|------|-------------|
+| `ProcessExecutor.java` | Interface | External process execution |
+| `DefaultProcessExecutor.java` | Implementation | Uses `ProcessBuilder` |
+| `FileService.java` | Interface | File system operations |
+| `DefaultFileService.java` | Implementation | Standard `java.nio.file` |
+| `SystemPropertyService.java` | Interface | System property access |
+| `DefaultSystemPropertyService.java` | Implementation | `System.getProperty()` |
+| `TimeService.java` | Interface | Time operations |
+| `DefaultTimeService.java` | Implementation | `LocalDateTime.now()` |
+
+**Groovy file** (in `plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/service/`):
+| File | Type | Description |
+|------|------|-------------|
+| `JUnitComposeService.groovy` | Implementation | Standalone `ComposeService` for test extensions |
+
+**Why "JUnit" in the package name?** These services are **framework-agnostic** despite the package name. The name
+is a historical artifact from when they were first created for JUnit 5 support. Both Spock and JUnit 5 extensions
+use these same services because they need standalone implementations that work without Gradle context.
+
+**Import pattern** (works in both Groovy and Java):
+```groovy
+import com.kineticfire.gradle.docker.junit.service.*  // All service interfaces and implementations
+import com.kineticfire.gradle.docker.service.ComposeService  // ComposeService interface from main service package
+```
+
+---
+
+**Step 1: Refactor JUnit 5 Extensions to Remove Hardcoded Defaults** (2-3 hours)
+
+Before implementing global extensions, refactor the existing JUnit 5 extensions to remove hardcoded defaults
+and add system-properties-only configuration methods. The Spock interceptors (`ComposeMethodInterceptor`,
+`ComposeClassInterceptor`) already receive all configuration via their constructor's `config` map parameter
+and have NO hardcoded defaults—they are ready for delegation as-is.
+
+**Pre-Implementation: Locate Hardcoded Defaults**
+
+Search for hardcoded defaults that must be removed from JUnit 5 extensions:
+
+```bash
+# Search for hardcoded service names in JUnit extensions (the "time-server" default)
+rg "time-server" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/
+
+# Search for waitForServices defaults in JUnit extensions
+rg "waitServicesProperty" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/ -C 5
+```
+
+**Known Hardcoded Default:**
+The JUnit 5 extensions have a hardcoded default in `waitForStackToBeReady()`:
+```java
+// Default for plugin integration tests
+services = Collections.singletonList("time-server");
+```
+This must be changed to fail if no services are specified via system properties.
+
+**Files to Modify:**
+- `plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/DockerComposeMethodExtension.groovy`
+  - Remove `"time-server"` hardcoded default in `waitForStackToBeReady()` (search for `Collections.singletonList("time-server")`)
+  - Add `createConfigurationFromSystemProperties(ExtensionContext context)` method
+- `plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/DockerComposeClassExtension.groovy`
+  - Remove `"time-server"` hardcoded default in `waitForStackToBeReady()` (search for `Collections.singletonList("time-server")`)
+  - Add `createConfigurationFromSystemProperties(ExtensionContext context)` method
+
+**Files NOT Modified (already support delegation):**
+- `plugin/src/main/groovy/com/kineticfire/gradle/docker/spock/ComposeMethodInterceptor.groovy` - ✅ No hardcoded defaults
+- `plugin/src/main/groovy/com/kineticfire/gradle/docker/spock/ComposeClassInterceptor.groovy` - ✅ No hardcoded defaults
+
+**Required Change: Remove Hardcoded Default**
+
+In both `DockerComposeMethodExtension.groovy` and `DockerComposeClassExtension.groovy`, change:
+
+```java
+// BEFORE (line ~346):
+} else {
+    // Default for plugin integration tests
+    services = Collections.singletonList("time-server");
+}
+```
+
+To:
+
+```java
+// AFTER:
+} else {
+    // No hardcoded default - system property is required when using global extension
+    System.err.println("Warning: No wait services configured via docker.compose.waitServices system property. " +
+                       "Health check will be skipped.");
+    return;  // Skip health check if no services specified
+}
+```
+
+**Required Change: Add Backward Compatibility for System Property Names**
+
+The JUnit 5 extensions currently read `docker.compose.waitServices` but the canonical property name used by
+`TestIntegrationExtension` and `TestStepExecutor` is `docker.compose.waitForHealthy.services`. Add backward
+compatibility by reading BOTH property names, with the canonical name taking precedence.
+
+In both `DockerComposeMethodExtension.groovy` and `DockerComposeClassExtension.groovy`, update the
+`waitForStackToBeReady()` method to read both property names:
+
+```java
+// BEFORE (approximately line ~340):
+String waitServicesProperty = systemPropertyService.getProperty(COMPOSE_WAIT_SERVICES_PROPERTY);
+List<String> services;
+if (waitServicesProperty != null && !waitServicesProperty.isEmpty()) {
+    services = Arrays.asList(waitServicesProperty.split(","));
+} else {
+    // ... (hardcoded default removed above)
+}
+```
+
+```java
+// AFTER - with backward compatibility:
+// Read canonical name first, fall back to legacy for backward compatibility
+String waitServicesProperty = systemPropertyService.getProperty("docker.compose.waitForHealthy.services");
+if (waitServicesProperty == null || waitServicesProperty.isEmpty()) {
+    // Legacy property name - for backward compatibility with older configurations
+    waitServicesProperty = systemPropertyService.getProperty(COMPOSE_WAIT_SERVICES_PROPERTY);  // "docker.compose.waitServices"
+}
+
+List<String> services;
+if (waitServicesProperty != null && !waitServicesProperty.isEmpty()) {
+    services = Arrays.asList(waitServicesProperty.split(","));
+} else {
+    // No hardcoded default - system property is required when using global extension
+    System.err.println("Warning: No wait services configured. Health check will be skipped.");
+    return;  // Skip health check if no services specified
+}
+```
+
+**Why this matters:**
+- Existing configurations using `docker.compose.waitServices` continue to work (backward compatible)
+- New configurations using `docker.compose.waitForHealthy.services` also work (canonical name)
+- The canonical name takes precedence if both are set
+- No breaking changes for existing users
+
+**Required Addition: `createConfigurationFromSystemProperties` Method**
+
+Add this method to both JUnit 5 extension classes. This method enables the global extension to delegate
+configuration setup to the existing extensions:
+
+```java
+/**
+ * Creates configuration map from system properties only (no annotation fallback).
+ *
+ * <p>This method is used by the global extension when auto-detecting compose configuration
+ * from system properties set by the pipeline. Unlike annotation-based configuration, this
+ * method requires ALL configuration to come from system properties.</p>
+ *
+ * @param context the JUnit extension context
+ * @return configuration map suitable for compose lifecycle management
+ * @throws IllegalStateException if required system properties are missing
+ */
+Map<String, Object> createConfigurationFromSystemProperties(ExtensionContext context) {
+    // Read required properties
+    String stackName = systemPropertyService.getProperty("docker.compose.stack", "");
+    String composeFilesStr = systemPropertyService.getProperty("docker.compose.files", "");
+    String lifecycleStr = systemPropertyService.getProperty("docker.compose.lifecycle", "class");
+
+    // Validate required properties
+    if (stackName.isEmpty()) {
+        throw new IllegalStateException(
+            "docker.compose.stack system property is required but not set. " +
+            "Ensure the pipeline configures lifecycle=METHOD with a stack."
+        );
+    }
+    if (composeFilesStr.isEmpty()) {
+        throw new IllegalStateException(
+            "docker.compose.files system property is required but not set. " +
+            "Ensure the stack has compose files configured."
+        );
+    }
+
+    // Parse compose files (comma-separated)
+    List<String> composeFiles = Arrays.stream(composeFilesStr.split(","))
+        .map(String::trim)
+        .filter(s -> !s.isEmpty())
+        .collect(Collectors.toList());
+
+    // Read optional properties
+    String projectNameBase = systemPropertyService.getProperty("docker.compose.projectName", "");
+    if (projectNameBase.isEmpty()) {
+        projectNameBase = stackName;  // Fallback to stack name
+    }
+
+    // Parse wait configuration
+    String waitForHealthyStr = systemPropertyService.getProperty("docker.compose.waitForHealthy.services", "");
+    List<String> waitForHealthy = waitForHealthyStr.isEmpty() ? Collections.emptyList() :
+        Arrays.stream(waitForHealthyStr.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
+
+    String waitForRunningStr = systemPropertyService.getProperty("docker.compose.waitForRunning.services", "");
+    List<String> waitForRunning = waitForRunningStr.isEmpty() ? Collections.emptyList() :
+        Arrays.stream(waitForRunningStr.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toList());
+
+    // Parse timeout and poll values
+    String timeoutStr = systemPropertyService.getProperty("docker.compose.waitForHealthy.timeoutSeconds", "");
+    if (timeoutStr.isEmpty()) {
+        timeoutStr = systemPropertyService.getProperty("docker.compose.waitForRunning.timeoutSeconds", "60");
+    }
+    int timeoutSeconds = Integer.parseInt(timeoutStr);
+
+    String pollStr = systemPropertyService.getProperty("docker.compose.waitForHealthy.pollSeconds", "");
+    if (pollStr.isEmpty()) {
+        pollStr = systemPropertyService.getProperty("docker.compose.waitForRunning.pollSeconds", "2");
+    }
+    int pollSeconds = Integer.parseInt(pollStr);
+
+    // Get class name for unique project name generation
+    String className = context.getTestClass()
+        .map(Class::getSimpleName)
+        .orElse("UnknownTest");
+
+    // Build configuration map (matches Spock interceptor config map format)
+    Map<String, Object> config = new HashMap<>();
+    config.put("stackName", stackName);
+    config.put("composeFiles", composeFiles);
+    config.put("lifecycle", lifecycleStr.equalsIgnoreCase("method") ? "METHOD" : "CLASS");
+    config.put("projectNameBase", projectNameBase);
+    config.put("className", className);
+    config.put("waitForHealthy", waitForHealthy);
+    config.put("waitForRunning", waitForRunning);
+    config.put("timeoutSeconds", timeoutSeconds);
+    config.put("pollSeconds", pollSeconds);
+
+    return config;
+}
+```
+
+**Required Imports for the new method:**
+```java
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.stream.Collectors;
+```
+
+---
+
+### Expected Unit Test Adjustments After Step 1
+
+> **⚠️ Implementation Note:** Completing Step 1 will likely cause some existing unit tests to fail. This section
+> documents the expected test adjustments required after implementing the changes above.
+
+**Tests That May Need Updates:**
+
+The following test files test the `waitForStackToBeReady()` method behavior and may need adjustments:
+
+1. **`DockerComposeMethodExtensionTest.groovy`** (if it exists)
+   - Tests that expect the `"time-server"` default behavior must be updated
+   - Tests should verify the new warning message and early return when no services configured
+   - Add tests for backward compatibility (reading both `docker.compose.waitServices` and
+     `docker.compose.waitForHealthy.services`)
+
+2. **`DockerComposeClassExtensionTest.groovy`** (if it exists)
+   - Same changes as above for the class-level extension
+
+**New Test Cases Required:**
+
+After Step 1, add these test cases to verify the changes:
+
+```groovy
+// Test: No services configured - should skip health check with warning
+def "waitForStackToBeReady skips health check when no services configured"() {
+    given:
+    systemPropertyService.getProperty("docker.compose.waitForHealthy.services") >> null
+    systemPropertyService.getProperty("docker.compose.waitServices") >> null  // Legacy name
+
+    when:
+    extension.waitForStackToBeReady(stackName, projectName)
+
+    then:
+    // Verify warning printed and method returned early (no compose wait calls)
+    0 * composeService.waitForHealthy(_, _, _)
+}
+
+// Test: Canonical property name takes precedence
+def "waitForStackToBeReady uses canonical property name over legacy"() {
+    given:
+    systemPropertyService.getProperty("docker.compose.waitForHealthy.services") >> "app,db"
+    systemPropertyService.getProperty("docker.compose.waitServices") >> "old-service"  // Should be ignored
+
+    when:
+    extension.waitForStackToBeReady(stackName, projectName)
+
+    then:
+    1 * composeService.waitForHealthy(_, ["app", "db"], _)  // Uses canonical, not legacy
+}
+
+// Test: Legacy property name works when canonical is not set
+def "waitForStackToBeReady falls back to legacy property name"() {
+    given:
+    systemPropertyService.getProperty("docker.compose.waitForHealthy.services") >> null
+    systemPropertyService.getProperty("docker.compose.waitServices") >> "legacy-service"
+
+    when:
+    extension.waitForStackToBeReady(stackName, projectName)
+
+    then:
+    1 * composeService.waitForHealthy(_, ["legacy-service"], _)
+}
+```
+
+**Verification Command:**
+
+After completing Step 1, run the unit tests to identify failures:
+```bash
+cd plugin && ./gradlew test --tests "*DockerComposeMethodExtension*" --tests "*DockerComposeClassExtension*"
+```
+
+Review failures and update tests according to the new behavior. Do NOT proceed to Step 2 until all unit tests pass.
+
+---
+
+**Step 2: Add `delegateStackManagement + lifecycle=METHOD` Validation** (1 hour)
+
+Add validation to `PipelineValidator` to produce an error when both `lifecycle=METHOD` and
+`delegateStackManagement=true` are set (redundant configuration).
+
+**File:** `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidator.groovy`
+
+```groovy
+// In validateMethodLifecycleConfiguration():
+if (testSpec.delegateStackManagement.getOrElse(false)) {
+    throw new GradleException(
+        "Pipeline '${pipeline.name}' has both lifecycle=METHOD and delegateStackManagement=true. " +
+        "This is redundant: lifecycle=METHOD automatically delegates compose management to the test framework. " +
+        "Remove delegateStackManagement=true from your configuration."
+    )
+}
+```
+
+**Step 3: Create Spock Global Extension** (3 hours)
 
 **File:** `plugin/src/main/groovy/com/kineticfire/gradle/docker/spock/DockerComposeGlobalExtension.groovy`
 
 ```groovy
 package com.kineticfire.gradle.docker.spock
 
-import com.kineticfire.gradle.docker.spock.service.*
+import com.kineticfire.gradle.docker.junit.service.*  // Reuses JUnit service implementations (framework-agnostic)
+import com.kineticfire.gradle.docker.junit.service.JUnitComposeService
+import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.spock.ComposeUp  // Required for annotation conflict detection
+import com.kineticfire.gradle.docker.spock.LifecycleMode
 import org.spockframework.runtime.extension.IGlobalExtension
 import org.spockframework.runtime.model.SpecInfo
 
@@ -729,15 +1103,58 @@ class DockerComposeGlobalExtension implements IGlobalExtension {
     /**
      * Default constructor - uses default service implementations.
      * Called by Spock's ServiceLoader mechanism.
+     *
+     * <h3>Why "JUnit" Service Implementations in Spock Extension?</h3>
+     *
+     * <p>Both Spock and JUnit 5 extensions share the same service implementations from
+     * {@code com.kineticfire.gradle.docker.junit.service.*}. Despite the package name containing "junit",
+     * these are <strong>framework-agnostic</strong> implementations that work without Gradle context.</p>
+     *
+     * <p><strong>The package name is a historical artifact from when these services were first created
+     * for JUnit 5 support.</strong> The services implement interfaces like {@code ComposeService},
+     * {@code ProcessExecutor}, {@code FileService}, etc., and have no dependencies on JUnit 5 APIs.</p>
+     *
+     * <p><strong>Key insight:</strong> The Gradle plugin's {@code DockerServiceImpl} and
+     * {@code ExecLibraryComposeService} require Gradle context (Project, services, etc.). Test framework
+     * extensions run <em>inside the test JVM</em>, which doesn't have Gradle context. Therefore, test
+     * extensions need standalone implementations that execute Docker commands directly via
+     * {@code ProcessBuilder} or similar—which is exactly what these "JUnit" services provide.</p>
+     *
+     * <p>The existing {@code DockerComposeSpockExtension} already uses these same services (see its
+     * constructor), confirming they work correctly with Spock.</p>
+     *
+     * <p><strong>Future refactoring consideration:</strong> The {@code JUnitComposeService} could be
+     * renamed to {@code StandaloneComposeService} or {@code TestComposeService} to better reflect its
+     * framework-agnostic nature. This is a low-priority cosmetic change that doesn't affect functionality.</p>
      */
     DockerComposeGlobalExtension() {
-        this(
-            new JUnitComposeService(),
-            new DefaultProcessExecutor(),
-            new DefaultFileService(),
-            new DefaultSystemPropertyService(),
-            new DefaultTimeService()
-        )
+        // Error handling: Service creation should not fail during extension loading.
+        // If any service fails to initialize, catch the exception and log it,
+        // allowing other tests to run. The extension will be non-functional but
+        // won't prevent test execution entirely.
+        ComposeService cs = null
+        ProcessExecutor pe = null
+        FileService fs = null
+        SystemPropertyService sps = null
+        TimeService ts = null
+
+        try {
+            cs = new JUnitComposeService()  // Framework-agnostic ComposeService (name is historical)
+            pe = new DefaultProcessExecutor()
+            fs = new DefaultFileService()
+            sps = new DefaultSystemPropertyService()
+            ts = new DefaultTimeService()
+        } catch (Exception e) {
+            System.err.println("WARNING: DockerComposeGlobalExtension failed to initialize services: " + e.getMessage())
+            System.err.println("Docker Compose auto-detection will be disabled for this test run.")
+            // Services remain null - visitSpec will return early if services are null
+        }
+
+        this.composeService = cs
+        this.processExecutor = pe
+        this.fileService = fs
+        this.systemPropertyService = sps
+        this.timeService = ts
     }
 
     /**
@@ -762,6 +1179,11 @@ class DockerComposeGlobalExtension implements IGlobalExtension {
 
     @Override
     void visitSpec(SpecInfo spec) {
+        // Guard: If services failed to initialize, skip this extension entirely
+        if (systemPropertyService == null) {
+            return  // Services not available - silently skip
+        }
+
         // Check for system properties indicating pipeline-managed compose
         def lifecycle = systemPropertyService.getProperty('docker.compose.lifecycle', '')
         def stack = systemPropertyService.getProperty('docker.compose.stack', '')
@@ -772,13 +1194,19 @@ class DockerComposeGlobalExtension implements IGlobalExtension {
             return
         }
 
+        // Guard: Verify all services are available before proceeding
+        if (composeService == null || processExecutor == null || fileService == null || timeService == null) {
+            System.err.println("WARNING: DockerComposeGlobalExtension services not fully initialized. " +
+                "Skipping compose auto-detection for: " + spec.name)
+            return
+        }
+
         // ERROR if class has @ComposeUp annotation - configuration conflict
         if (spec.getAnnotation(ComposeUp) != null) {
             throw new IllegalStateException(
-                "Test class '${spec.name}' has @ComposeUp annotation but compose configuration is managed by " +
-                "dockerWorkflows pipeline with lifecycle=${lifecycle}. " +
-                "Remove the @ComposeUp annotation from the test class. " +
-                "All compose configuration should be in build.gradle via the dockerWorkflows DSL."
+                "Test class '${spec.name}' has @ComposeUp annotation but compose lifecycle is being managed " +
+                "automatically via system properties (docker.compose.lifecycle=${lifecycle}). " +
+                "Remove the @ComposeUp annotation from the test class."
             )
         }
 
@@ -868,10 +1296,43 @@ class DockerComposeGlobalExtension implements IGlobalExtension {
 - Use same interceptors as annotation-driven extension for consistency
 - Services injected via constructor for testability
 
-**Step 2: Create Service Registration for Spock** (0.5 hours)
+**Required Config Map Keys for Spock Interceptors:**
+
+The Spock interceptors (`ComposeMethodInterceptor`, `ComposeClassInterceptor`) receive configuration via a `Map<String, Object>`
+constructor parameter. The global extension must populate this map with the following keys:
+
+| Key | Type | Required | Description |
+|-----|------|----------|-------------|
+| `stackName` | `String` | Yes | Name of the compose stack |
+| `composeFiles` | `List<String>` | Yes | List of compose file paths (absolute) |
+| `lifecycle` | `LifecycleMode` | Yes | `LifecycleMode.METHOD` or `LifecycleMode.CLASS` |
+| `projectNameBase` | `String` | Yes | Base name for unique project name generation |
+| `className` | `String` | Yes | **Simple** class name (not fully qualified) for unique project name generation. Extract from `spec.name` using `spec.name.substring(spec.name.lastIndexOf('.') + 1)` since `spec.name` returns the fully qualified name (e.g., `com.example.TestSpec` → `TestSpec`). |
+| `waitForHealthy` | `List<String>` | No | Services to wait for healthy status |
+| `waitForRunning` | `List<String>` | No | Services to wait for running status |
+| `timeoutSeconds` | `Integer` | No | Wait timeout in seconds (default: 60) |
+| `pollSeconds` | `Integer` | No | Poll interval in seconds (default: 2) |
+
+Example config map creation (used in `createConfigurationFromSystemProperties`):
+```groovy
+return [
+    stackName: stackName,
+    composeFiles: composeFiles,
+    lifecycle: lifecycle,
+    projectNameBase: projectNameBase,
+    className: spec.name?.substring(spec.name.lastIndexOf('.') + 1) ?: 'UnknownSpec',
+    waitForHealthy: waitForHealthy,
+    waitForRunning: waitForRunning,
+    timeoutSeconds: timeoutSeconds,
+    pollSeconds: pollSeconds
+]
+```
+
+**Step 4: Create Service Registration for Spock** (0.5 hours)
 
 **File:** `plugin/src/main/resources/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension`
 
+**Content (single line, no whitespace):**
 ```
 com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension
 ```
@@ -879,10 +1340,39 @@ com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension
 **Notes:**
 - This file enables Spock's ServiceLoader to discover the global extension automatically
 - No additional configuration required in user's build.gradle
-- **IMPORTANT**: The `plugin/src/main/resources/` directory is currently empty. This step creates the
-  `META-INF/services/` directory structure for the first time in the plugin
+- **IMPORTANT**: The `plugin/src/main/resources/` directory does NOT exist. This step requires creating the full
+  directory structure:
+  ```bash
+  # Create the directory structure
+  mkdir -p plugin/src/main/resources/META-INF/services/
 
-**Step 3: Create JUnit 5 Global Extension** (3 hours)
+  # Create the service file
+  echo 'com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension' > \
+      plugin/src/main/resources/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension
+
+  # Verify Gradle's processResources task includes this directory (should be automatic with standard layout)
+  # The standard Groovy/Java plugin source set convention includes src/main/resources automatically
+  ```
+- **Verified**: As of 2025-12-04, no `META-INF/services/` files exist in `plugin/src/main/`
+
+**Service File Format Requirements:**
+- The file must contain the fully qualified class name on a single line
+- **No trailing whitespace** after the class name
+- **No extra newlines** at the end of the file (at most one newline character)
+- **UTF-8 encoding** is required
+- The class name must be exactly correct: `com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension`
+- ServiceLoader is sensitive to whitespace—any deviation can cause discovery failures
+
+**Spock IGlobalExtension Dependency:**
+The `IGlobalExtension` interface is part of Spock's public extension API and is available in `spock-core`.
+This project already has `spock-core` as a dependency, so no additional dependencies are required.
+Verify by checking imports compile successfully:
+```groovy
+import org.spockframework.runtime.extension.IGlobalExtension
+import org.spockframework.runtime.model.SpecInfo
+```
+
+**Step 5: Create JUnit 5 Global Extension** (3 hours)
 
 **File:** `plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/DockerComposeGlobalExtension.groovy`
 
@@ -910,12 +1400,29 @@ The Spock extensions use idiomatic Groovy syntax since they naturally integrate 
 - `DockerComposeMethodExtension` → METHOD lifecycle (containers per test method)
 - `DockerComposeClassExtension` → CLASS lifecycle (containers per test class)
 
+**Required Dependency Note:**
+
+The JUnit 5 global extension uses `org.junit.platform.commons.support.AnnotationSupport` for annotation detection.
+This class is part of `junit-platform-commons`, which is typically available transitively through `junit-jupiter-api`.
+Verify it's on the classpath by checking your dependencies:
+
+```bash
+./gradlew dependencies --configuration testRuntimeClasspath | grep junit-platform-commons
+```
+
+If not present, add explicitly:
+```groovy
+dependencies {
+    implementation 'org.junit.platform:junit-platform-commons:1.10.0'
+}
+```
+
 ```groovy
 package com.kineticfire.gradle.docker.junit
 
 import com.kineticfire.gradle.docker.junit.service.*
 import org.junit.jupiter.api.extension.*
-import org.junit.platform.commons.support.AnnotationSupport
+import org.junit.platform.commons.support.AnnotationSupport  // From junit-platform-commons
 
 /**
  * Global JUnit 5 extension that auto-detects Docker Compose configuration from system properties.
@@ -959,15 +1466,33 @@ class DockerComposeGlobalExtension
     private DockerComposeClassExtension classExtension
 
     DockerComposeGlobalExtension() {
-        this(new DefaultSystemPropertyService())
+        // Error handling: If service creation fails, log and continue with null.
+        // The extension will be non-functional but won't prevent test execution.
+        SystemPropertyService sps = null
+        try {
+            sps = new DefaultSystemPropertyService()
+        } catch (Exception e) {
+            System.err.println("WARNING: DockerComposeGlobalExtension failed to initialize: " + e.getMessage())
+            System.err.println("Docker Compose auto-detection will be disabled for this test run.")
+        }
+        this.systemPropertyService = sps
     }
 
     DockerComposeGlobalExtension(SystemPropertyService systemPropertyService) {
         this.systemPropertyService = systemPropertyService
     }
 
+    // Guard method: Check if extension is properly initialized
+    private boolean isInitialized() {
+        return systemPropertyService != null
+    }
+
     @Override
     void beforeAll(ExtensionContext context) throws Exception {
+        // Guard: If services failed to initialize, skip entirely
+        if (!isInitialized()) {
+            return
+        }
         checkForAnnotationConflict(context)
         if (!shouldApply(context)) {
             return
@@ -1037,19 +1562,17 @@ class DockerComposeGlobalExtension
                 if (ext == DockerComposeMethodExtension.class) {
                     throw new IllegalStateException(
                         "Test class '${testClass.name}' has @ExtendWith(DockerComposeMethodExtension.class) " +
-                        "but compose configuration is managed by dockerWorkflows pipeline with lifecycle=${lifecycle}. " +
-                        "Remove the @ExtendWith annotation from the test class. " +
-                        "DockerComposeMethodExtension is for METHOD lifecycle (containers per test method). " +
-                        "All compose configuration should be in build.gradle via the dockerWorkflows DSL."
+                        "but compose lifecycle is being managed automatically via system properties " +
+                        "(docker.compose.lifecycle=${lifecycle}). " +
+                        "Remove the @ExtendWith annotation from the test class."
                     )
                 }
                 if (ext == DockerComposeClassExtension.class) {
                     throw new IllegalStateException(
                         "Test class '${testClass.name}' has @ExtendWith(DockerComposeClassExtension.class) " +
-                        "but compose configuration is managed by dockerWorkflows pipeline with lifecycle=${lifecycle}. " +
-                        "Remove the @ExtendWith annotation from the test class. " +
-                        "DockerComposeClassExtension is for CLASS lifecycle (containers per test class). " +
-                        "All compose configuration should be in build.gradle via the dockerWorkflows DSL."
+                        "but compose lifecycle is being managed automatically via system properties " +
+                        "(docker.compose.lifecycle=${lifecycle}). " +
+                        "Remove the @ExtendWith annotation from the test class."
                     )
                 }
             }
@@ -1092,6 +1615,17 @@ class DockerComposeGlobalExtension
 ```
 
 **Key Design Decisions:**
+- **Single extension with all four callbacks** (`BeforeAllCallback`, `AfterAllCallback`, `BeforeEachCallback`,
+  `AfterEachCallback`) - This is the simplest approach that mirrors the Spock global extension pattern.
+  The extension conditionally invokes callbacks based on lifecycle mode detected from system properties:
+  - CLASS lifecycle: uses `beforeAll`/`afterAll` (delegates to `DockerComposeClassExtension`)
+  - METHOD lifecycle: uses `beforeEach`/`afterEach` (delegates to `DockerComposeMethodExtension`)
+  Alternative approaches (separate extensions or splitting callbacks) were considered but rejected as unnecessary
+  complexity since the extension already routes to different delegate extensions based on lifecycle mode.
+- **Annotation conflict check in `beforeAll`**: JUnit 5 guarantees that `beforeAll` is called before any test
+  methods execute, even for test classes that only use `@BeforeEach`/`@AfterEach` lifecycle methods. This makes
+  `beforeAll` the appropriate place to detect annotation conflicts early. The check will always execute before
+  any `beforeEach` callbacks, ensuring conflicts are caught before container lifecycle begins.
 - **Error** (not skip) when class has `@ExtendWith` for DockerCompose extensions - prevents configuration conflicts
 - Uses `AnnotationSupport.findRepeatableAnnotations()` to handle all annotation patterns (repeatable, composed, meta)
 - Written in Groovy to match existing JUnit 5 extensions in this project
@@ -1101,7 +1635,65 @@ class DockerComposeGlobalExtension
 - Requires all system properties before applying
 - Clear error messages explain extension-lifecycle mapping
 
-**Step 4: Create Service Registration for JUnit 5** (0.5 hours)
+**Why Spock and JUnit 5 Global Extensions Have Different Injection Patterns:**
+
+The Spock global extension (`DockerComposeGlobalExtension` in `spock/`) has a constructor with 5 injected services
+(`ComposeService`, `ProcessExecutor`, `FileService`, `SystemPropertyService`, `TimeService`), while the JUnit 5
+global extension (`DockerComposeGlobalExtension` in `junit/`) only injects `SystemPropertyService`.
+
+**This asymmetry is intentional and correct:**
+
+1. **Spock global extension creates interceptors directly**: It instantiates `ComposeMethodInterceptor` or
+   `ComposeClassInterceptor` directly, passing the config map and all services to their constructors. Therefore,
+   it needs all 5 services.
+
+2. **JUnit 5 global extension delegates to existing extensions**: It lazily creates `DockerComposeMethodExtension`
+   or `DockerComposeClassExtension` instances, which handle their own service creation internally. Therefore, it
+   only needs `SystemPropertyService` to read configuration and delegate appropriately.
+
+This design minimizes code duplication—the JUnit 5 delegate extensions already encapsulate their service dependencies,
+so the global extension doesn't need to duplicate that knowledge.
+
+**Annotation Detection Timing - Important Clarification:**
+
+When a test class has both `@ExtendWith(DockerComposeMethodExtension.class)` AND JUnit 5 auto-detection is enabled,
+**both extensions will be registered** by JUnit 5's extension mechanism:
+
+1. The `@ExtendWith` annotation causes JUnit 5 to instantiate and register `DockerComposeMethodExtension`
+2. ServiceLoader discovery causes JUnit 5 to instantiate and register `DockerComposeGlobalExtension`
+
+Both extensions would receive lifecycle callbacks (`beforeAll`, `beforeEach`, etc.) and could both attempt to
+start containers, causing port conflicts or duplicate operations.
+
+**The annotation conflict check prevents this:**
+
+```
+Test Class with @ExtendWith + System Properties Set:
+┌─────────────────────────────────────────────────────────────────┐
+│  JUnit 5 Extension Registration (before any tests run)         │
+│    ├── Register @ExtendWith(DockerComposeMethodExtension)      │
+│    └── Register DockerComposeGlobalExtension (via ServiceLoader)│
+├─────────────────────────────────────────────────────────────────┤
+│  beforeAll() callbacks                                          │
+│    ├── DockerComposeGlobalExtension.beforeAll() ◄─── FIRST     │
+│    │      └── checkForAnnotationConflict()                     │
+│    │            └── THROWS IllegalStateException (conflict!)   │
+│    └── DockerComposeMethodExtension.beforeAll() ◄─── NEVER REACHED │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Why check in `beforeAll` (not during registration)?**
+- JUnit 5's extension registration phase doesn't provide access to test class metadata
+- The `ExtensionContext` with test class information is only available during lifecycle callbacks
+- `beforeAll` is guaranteed to run before any `beforeEach` callbacks
+- Checking early in `beforeAll` ensures the error is thrown before any compose operations begin
+
+**Order Guarantee:** JUnit 5 does NOT guarantee a specific order for extensions registered via different
+mechanisms (annotation vs ServiceLoader). However, `beforeAll` from the global extension will always run
+before any test methods or `beforeEach` callbacks, so the conflict check catches the problem early regardless
+of which extension's `beforeAll` runs first.
+
+**Step 6: Create Service Registration for JUnit 5** (0.5 hours)
 ```
 plugin/src/main/resources/META-INF/services/org.junit.jupiter.api.extension.Extension
 └── Contains: com.kineticfire.gradle.docker.junit.DockerComposeGlobalExtension
@@ -1110,6 +1702,66 @@ plugin/src/main/resources/META-INF/services/org.junit.jupiter.api.extension.Exte
 **CRITICAL:** JUnit 5 requires explicit user opt-in for extension auto-detection. The pipeline does NOT
 automatically enable this setting. See "JUnit 5 Auto-Detection: Important Implications" section below
 for detailed rationale and user configuration options.
+
+---
+
+### JUnit 5 Delegation Pattern Clarification
+
+> **⚠️ Implementation Clarification Required:** This section explains how the JUnit 5 global extension delegates
+> to the existing extensions and how configuration flows through the system.
+
+**The Configuration Flow:**
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  1. Pipeline/usesCompose() sets system properties on Test task:             │
+│     - docker.compose.lifecycle=method                                       │
+│     - docker.compose.stack=testStack                                        │
+│     - docker.compose.files=/path/to/compose.yml                             │
+│     - docker.compose.waitForHealthy.services=app                            │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  2. Test JVM starts with system properties available                        │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  3. DockerComposeGlobalExtension.beforeAll/beforeEach() called:             │
+│     ├── Reads system properties via SystemPropertyService                   │
+│     ├── Detects lifecycle mode (METHOD or CLASS)                            │
+│     ├── Creates delegate extension: new DockerComposeMethodExtension()      │
+│     └── Calls delegate.beforeEach(context)                                  │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  4. DockerComposeMethodExtension.beforeEach() runs:                         │
+│     ├── Reads same system properties internally (it already does this!)     │
+│     ├── Gets stack name from docker.compose.stack                           │
+│     ├── Gets compose files from docker.compose.files                        │
+│     └── Starts containers via ComposeService                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key Insight: The delegate extensions ALREADY read system properties internally.**
+
+The existing `DockerComposeMethodExtension` and `DockerComposeClassExtension` were designed to read configuration
+from system properties (this is how `usesCompose()` works today). When the global extension creates a new instance
+via `new DockerComposeMethodExtension()`, the delegate extension's internal methods will read the same system
+properties that the global extension used to detect lifecycle mode.
+
+**This means:**
+1. The `createConfigurationFromSystemProperties()` method added in Step 1 is NOT called by the global extension
+2. It exists for potential future use or direct programmatic configuration
+3. The delegate extensions' default constructors + internal system property reading handle everything
+
+**Why Step 1 still matters:**
+- Step 1 removes the hardcoded `"time-server"` default that would override system properties
+- Step 1 adds backward compatibility for legacy property names (see below)
+- Without Step 1, the delegate extensions would use incorrect defaults when system properties are missing
+
+**Verification During Implementation:**
+
+Before implementing Step 5, verify that `DockerComposeMethodExtension.beforeEach()` and
+`DockerComposeClassExtension.beforeAll()` correctly read these system properties:
+- `docker.compose.stack` (required)
+- `docker.compose.files` (required)
+- `docker.compose.waitServices` or `docker.compose.waitForHealthy.services` (optional)
+
+The implementer should trace through the existing extension code to confirm the delegation pattern works.
 
 ---
 
@@ -1149,13 +1801,33 @@ tasks.named('integrationTest') {
 ```
 
 **Troubleshooting:** If you experience unexpected test behaviors after enabling auto-detection:
-1. Check `gradle dependencies` for transitive dependencies that might register extensions
-2. Look for `META-INF/services/org.junit.jupiter.api.extension.Extension` files in your dependency JARs
-3. Consider using `@ExtendWith` explicitly on test classes instead of auto-detection
+
+1. **Check `gradle dependencies` for transitive dependencies** that might register extensions
+
+2. **Discover all registered extensions on your classpath:**
+   ```bash
+   # Find all JUnit 5 extension service files in your build output and dependencies
+   find ~/.gradle/caches -name "*.jar" -exec sh -c \
+     'unzip -l "{}" 2>/dev/null | grep -q "META-INF/services/org.junit.jupiter.api.extension.Extension" && echo "{}"' \;
+
+   # Check a specific JAR for registered extensions
+   unzip -p build/libs/your-app.jar META-INF/services/org.junit.jupiter.api.extension.Extension 2>/dev/null || echo "None found"
+
+   # List all extensions from all JARs in a Gradle project
+   ./gradlew dependencies --configuration integrationTestRuntimeClasspath | grep -E "^\+---|^\\\\---" | head -50
+   ```
+
+3. **Inspect a suspect dependency:**
+   ```bash
+   # Extract and view service file from a JAR
+   jar tf ~/.gradle/caches/modules-2/files-2.1/<group>/<artifact>/<version>/<hash>/<artifact>.jar | grep Extension
+   ```
+
+4. Consider using `@ExtendWith` explicitly on test classes instead of auto-detection
 
 ---
 
-**Step 5: Unit Tests** (4 hours)
+**Step 7: Unit Tests** (4 hours)
 
 **Testing Pattern Notes:**
 - Follow existing test patterns in `DockerComposeSpockExtensionTest.groovy` and `DockerComposeMethodExtensionTest.groovy`
@@ -1163,6 +1835,60 @@ tasks.named('integrationTest') {
 - Inject mock `SystemPropertyService` to control system property values without affecting actual system state
 - Test both positive cases (interceptor registered) and negative cases (no interceptor when conditions not met)
 - Use `@AutoCleanup` or explicit cleanup blocks to restore system property state
+
+**Testing Annotation Conflict Detection:**
+
+To properly test annotation conflict detection, use real annotated inner classes rather than mocking annotations.
+This ensures the reflection-based annotation detection works correctly:
+
+```groovy
+// Define real annotated test classes as static inner classes for testing
+@ComposeUp
+static class AnnotatedSpockTestClass {}
+
+static class UnannotatedTestClass {}
+
+def "detects @ComposeUp annotation on real test class"() {
+    given: "system properties indicate pipeline-managed compose"
+    stubAllRequiredSystemProperties('method')
+
+    def extension = createExtension()
+    def spec = Mock(SpecInfo)
+    // Use reflection to get the actual annotation from the real class
+    spec.getAnnotation(ComposeUp) >> AnnotatedSpockTestClass.getAnnotation(ComposeUp)
+    spec.name >> 'AnnotatedSpockTestClass'
+
+    when:
+    extension.visitSpec(spec)
+
+    then: "error thrown because annotation conflicts with system properties"
+    def e = thrown(IllegalStateException)
+    e.message.contains("@ComposeUp annotation")
+}
+```
+
+For JUnit 5 tests, use `AnnotationSupport.findRepeatableAnnotations()` with real annotated classes:
+
+```groovy
+@ExtendWith(DockerComposeMethodExtension)
+static class JUnit5AnnotatedTestClass {}
+
+def "detects @ExtendWith annotation on real test class"() {
+    given:
+    stubRequiredSystemProperties()
+
+    def extension = new DockerComposeGlobalExtension(mockSystemPropertyService)
+    def context = Mock(ExtensionContext)
+    context.getRequiredTestClass() >> JUnit5AnnotatedTestClass  // Real class, not mock
+
+    when:
+    extension.beforeAll(context)
+
+    then:
+    def e = thrown(IllegalStateException)
+    e.message.contains("@ExtendWith")
+}
+```
 
 **File:** `plugin/src/test/groovy/com/kineticfire/gradle/docker/spock/DockerComposeGlobalExtensionTest.groovy`
 
@@ -1248,7 +1974,7 @@ class DockerComposeGlobalExtensionTest extends Specification {
         then: "IllegalStateException thrown with clear error message"
         def e = thrown(IllegalStateException)
         e.message.contains("@ComposeUp annotation")
-        e.message.contains("dockerWorkflows pipeline")
+        e.message.contains("docker.compose.lifecycle")
         e.message.contains("Remove the @ComposeUp annotation")
     }
 
@@ -1344,9 +2070,8 @@ class DockerComposeGlobalExtensionTest extends Specification {
         then: "IllegalStateException thrown with clear error message"
         def e = thrown(IllegalStateException)
         e.message.contains("@ExtendWith(DockerComposeMethodExtension.class)")
-        e.message.contains("dockerWorkflows pipeline")
+        e.message.contains("docker.compose.lifecycle")
         e.message.contains("Remove the @ExtendWith annotation")
-        e.message.contains("METHOD lifecycle")  // Explains extension-lifecycle mapping
     }
 
     def "throws error when @ExtendWith(DockerComposeClassExtension) present with system properties"() {
@@ -1363,7 +2088,8 @@ class DockerComposeGlobalExtensionTest extends Specification {
         then: "IllegalStateException thrown with clear error message"
         def e = thrown(IllegalStateException)
         e.message.contains("@ExtendWith(DockerComposeClassExtension.class)")
-        e.message.contains("CLASS lifecycle")  // Explains extension-lifecycle mapping
+        e.message.contains("docker.compose.lifecycle")
+        e.message.contains("Remove the @ExtendWith annotation")
     }
 
     def "no error when @ExtendWith present but no system properties"() {
@@ -1439,7 +2165,17 @@ class DockerComposeGlobalExtensionTest extends Specification {
         mockSystemPropertyService.getProperty('docker.compose.files', _) >> '/path/to/compose.yml'
     }
 
-    // Test helper classes (would be defined in a separate file or as static inner classes)
+    // Test helper classes - MUST be defined as static inner classes within the test class.
+    // This ensures annotation reflection works correctly and keeps test fixtures co-located.
+    // Do NOT define these in separate files.
+    //
+    // NOTE: Using JUnit 5 @ExtendWith annotation in a Spock test file is intentional.
+    // This test file (DockerComposeGlobalExtensionTest.groovy) is a Spock Specification that
+    // tests the JUnit 5 global extension. The static inner classes below are NOT actual tests -
+    // they are fixtures used to verify annotation detection logic. Since we're testing JUnit 5
+    // extension behavior, these fixtures must have JUnit 5 annotations. Groovy can reference
+    // JUnit 5 annotations without issue; the file extension (.groovy) only affects the test
+    // framework used to run THIS test class (Spock), not the annotations on inner classes.
     static class TestClassWithoutAnnotation {}
 
     @ExtendWith(DockerComposeMethodExtension)
@@ -1450,7 +2186,7 @@ class DockerComposeGlobalExtensionTest extends Specification {
 }
 ```
 
-**Step 6: Functional Tests** (2 hours)
+**Step 8: Functional Tests** (2 hours)
 
 **File:** `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/workflow/GlobalExtensionFunctionalTest.groovy`
 
@@ -1470,48 +2206,69 @@ class GlobalExtensionFunctionalTest extends Specification {
         buildFile = new File(projectDir, 'build.gradle')
     }
 
-    def "service file registers Spock global extension"() {
-        given: "a project that applies the plugin and processes resources"
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.docker'
-            }
-        """
+    /**
+     * IMPLEMENTATION NOTE: Service File Verification Approach
+     *
+     * The tests below verify that service files are correctly packaged in the plugin JAR.
+     * However, the approach using `getClass().getClassLoader().getResource()` has a limitation:
+     * in TestKit functional tests, the plugin is loaded separately via `GradleRunner.withPluginClasspath()`,
+     * so the test's classloader may not have direct access to the plugin's service files.
+     *
+     * ALTERNATIVE APPROACHES (decide during implementation):
+     *
+     * 1. **Direct JAR inspection** (recommended):
+     *    ```groovy
+     *    def pluginJar = new File('build/libs/gradle-docker-plugin.jar')
+     *    def jarFile = new java.util.jar.JarFile(pluginJar)
+     *    def entry = jarFile.getEntry('META-INF/services/org.spockframework.runtime.extension.IGlobalExtension')
+     *    assert entry != null
+     *    def content = jarFile.getInputStream(entry).text
+     *    assert content.contains('DockerComposeGlobalExtension')
+     *    ```
+     *
+     * 2. **Integration test validation** (implicit verification):
+     *    If scenario-10 (auto-detect without annotation) passes, it proves the service files
+     *    are correctly packaged and auto-discovery works. This is the most reliable validation.
+     *
+     * 3. **Unit test the service file creation** (build verification):
+     *    Add a unit test that verifies the source file exists in src/main/resources/META-INF/services/
+     *    and contains the correct content before the JAR is built.
+     *
+     * The tests below use approach #1 if classloader access fails, falling back to JAR inspection.
+     */
 
-        when: "processResources runs"
-        def result = GradleRunner.create()
-            .withProjectDir(projectDir)
-            .withArguments('processResources', '--info')
-            .withPluginClasspath()
-            .build()
+    def "plugin JAR contains Spock global extension service file"() {
+        given: "the plugin classpath JARs from TestKit"
+        // GradleRunner.withPluginClasspath() loads plugin JARs for testing
+        // We need to verify the plugin JAR contains the service file
 
-        then: "the Spock global extension service file exists and contains correct class"
-        def serviceFile = new File(projectDir,
-            'build/resources/main/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension')
-        serviceFile.exists()
-        serviceFile.text.contains('com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension')
+        when: "we examine the plugin JAR on the classpath"
+        def pluginClasspath = getClass().getClassLoader().getResource(
+            'META-INF/services/org.spockframework.runtime.extension.IGlobalExtension')
+
+        then: "the Spock global extension service file exists in the plugin JAR"
+        pluginClasspath != null
+
+        and: "the service file contains the correct extension class"
+        def serviceContent = pluginClasspath.text
+        serviceContent.contains('com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension')
     }
 
-    def "service file registers JUnit 5 global extension"() {
-        given: "a project that applies the plugin and processes resources"
-        buildFile << """
-            plugins {
-                id 'com.kineticfire.gradle.docker'
-            }
-        """
+    def "plugin JAR contains JUnit 5 global extension service file"() {
+        given: "the plugin classpath JARs from TestKit"
+        // GradleRunner.withPluginClasspath() loads plugin JARs for testing
+        // We need to verify the plugin JAR contains the service file
 
-        when: "processResources runs"
-        def result = GradleRunner.create()
-            .withProjectDir(projectDir)
-            .withArguments('processResources', '--info')
-            .withPluginClasspath()
-            .build()
+        when: "we examine the plugin JAR on the classpath"
+        def pluginClasspath = getClass().getClassLoader().getResource(
+            'META-INF/services/org.junit.jupiter.api.extension.Extension')
 
-        then: "the JUnit 5 global extension service file exists and contains correct class"
-        def serviceFile = new File(projectDir,
-            'build/resources/main/META-INF/services/org.junit.jupiter.api.extension.Extension')
-        serviceFile.exists()
-        serviceFile.text.contains('com.kineticfire.gradle.docker.junit.DockerComposeGlobalExtension')
+        then: "the JUnit 5 global extension service file exists in the plugin JAR"
+        pluginClasspath != null
+
+        and: "the service file contains the correct extension class"
+        def serviceContent = pluginClasspath.text
+        serviceContent.contains('com.kineticfire.gradle.docker.junit.DockerComposeGlobalExtension')
     }
 
     def "METHOD lifecycle DSL configures integrationTest task with system properties"() {
@@ -1627,23 +2384,254 @@ class GlobalExtensionFunctionalTest extends Specification {
         result.output.contains('delegateStackManagement=true')
         result.output.contains('redundant')
     }
+
+    /**
+     * IMPLEMENTATION NOTE: Annotation Conflict Tests and ServiceLoader Dependency
+     *
+     * The annotation conflict tests below rely on the global extension being auto-discovered
+     * via ServiceLoader during test execution. For this to work:
+     *
+     * 1. The plugin JAR with META-INF/services files must be on the test runtime classpath
+     * 2. For Spock: Global extension mechanism (IGlobalExtension) is always active
+     * 3. For JUnit 5: Extension auto-detection must be enabled via junit-platform.properties
+     *
+     * If these tests fail unexpectedly:
+     * - Verify the service files are correctly packaged in the plugin JAR
+     * - For JUnit 5 tests, ensure junit-platform.properties is in test resources with:
+     *   junit.jupiter.extensions.autodetection.enabled=true
+     * - Check that GradleRunner.withPluginClasspath() is properly configured
+     */
+
+    def "Spock test class with @ComposeUp annotation produces error when system properties present"() {
+        given: "a project with METHOD lifecycle and a test class that has @ComposeUp annotation"
+        def composeFile = new File(projectDir, 'src/integrationTest/resources/compose/app.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+
+        // Create a test class with @ComposeUp annotation (this should cause an error)
+        def testDir = new File(projectDir, 'src/integrationTest/groovy/com/example')
+        testDir.mkdirs()
+        new File(testDir, 'AnnotatedTestIT.groovy') << """
+            package com.example
+
+            import com.kineticfire.gradle.docker.spock.ComposeUp
+            import spock.lang.Specification
+
+            @ComposeUp  // This annotation conflicts with pipeline-managed compose
+            class AnnotatedTestIT extends Specification {
+                def "test method"() {
+                    expect:
+                    true
+                }
+            }
+        """
+
+        buildFile << """
+            plugins {
+                id 'groovy'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+            repositories {
+                mavenCentral()
+            }
+
+            dependencies {
+                integrationTestImplementation 'org.spockframework:spock-core:2.3-groovy-4.0'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    testStack {
+                        files.from('src/integrationTest/resources/compose/app.yml')
+                    }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    testPipeline {
+                        test {
+                            lifecycle = WorkflowLifecycle.METHOD
+                            stack = dockerOrch.composeStacks.testStack
+                            testTaskName = 'integrationTest'
+                        }
+                    }
+                }
+            }
+        """
+
+        when: "we run the integration test (which triggers the global extension)"
+        def result = GradleRunner.create()
+            .withProjectDir(projectDir)
+            .withArguments('integrationTest', '--info')
+            .withPluginClasspath()
+            .buildAndFail()
+
+        then: "error message indicates annotation conflict"
+        result.output.contains('@ComposeUp annotation')
+        result.output.contains('docker.compose.lifecycle')
+        result.output.contains('Remove the @ComposeUp annotation')
+    }
+
+    def "JUnit 5 test class with @ExtendWith annotation produces error when system properties present"() {
+        given: "a project with METHOD lifecycle and a test class that has @ExtendWith annotation"
+        def composeFile = new File(projectDir, 'src/integrationTest/resources/compose/app.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+
+        // Create a test class with @ExtendWith annotation (this should cause an error)
+        def testDir = new File(projectDir, 'src/integrationTest/java/com/example')
+        testDir.mkdirs()
+        new File(testDir, 'AnnotatedJUnitIT.java') << """
+            package com.example;
+
+            import com.kineticfire.gradle.docker.junit.DockerComposeMethodExtension;
+            import org.junit.jupiter.api.Test;
+            import org.junit.jupiter.api.extension.ExtendWith;
+
+            @ExtendWith(DockerComposeMethodExtension.class)  // This annotation conflicts with pipeline-managed compose
+            class AnnotatedJUnitIT {
+                @Test
+                void testMethod() {
+                    // Test content
+                }
+            }
+        """
+
+        // Enable JUnit 5 extension auto-detection
+        def resourceDir = new File(projectDir, 'src/integrationTest/resources')
+        resourceDir.mkdirs()
+        new File(resourceDir, 'junit-platform.properties') << """
+            junit.jupiter.extensions.autodetection.enabled=true
+        """
+
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+
+            repositories {
+                mavenCentral()
+            }
+
+            dependencies {
+                integrationTestImplementation 'org.junit.jupiter:junit-jupiter:5.10.0'
+            }
+
+            dockerOrch {
+                composeStacks {
+                    testStack {
+                        files.from('src/integrationTest/resources/compose/app.yml')
+                    }
+                }
+            }
+
+            dockerWorkflows {
+                pipelines {
+                    testPipeline {
+                        test {
+                            lifecycle = WorkflowLifecycle.METHOD
+                            stack = dockerOrch.composeStacks.testStack
+                            testTaskName = 'integrationTest'
+                        }
+                    }
+                }
+            }
+        """
+
+        when: "we run the integration test (which triggers the global extension)"
+        def result = GradleRunner.create()
+            .withProjectDir(projectDir)
+            .withArguments('integrationTest', '--info')
+            .withPluginClasspath()
+            .buildAndFail()
+
+        then: "error message indicates annotation conflict"
+        result.output.contains('@ExtendWith')
+        result.output.contains('docker.compose.lifecycle')
+        result.output.contains('Remove the @ExtendWith annotation')
+    }
 }
 ```
 
-**Step 7: JUnit 5 Integration Test Scenario** (3 hours)
+**Step 9: JUnit 5 Integration Test Scenario** (3 hours)
 
 **Directory:** `plugin-integration-test/dockerWorkflows/scenario-9-method-lifecycle-junit/`
 
 This scenario mirrors scenario-8 but uses JUnit 5 instead of Spock.
 
 **Port Allocation Strategy:**
-Integration test scenarios manually deconflict ports to avoid collisions. Each scenario uses a unique port range:
-- scenario-8 (Spock method lifecycle): port 9207
-- scenario-9 (JUnit 5 method lifecycle): port 9208
-- scenario-10 (auto-detect): port 9209
+
+> **IMPORTANT:** These port allocations apply to `plugin-integration-test/dockerWorkflows/` scenarios ONLY.
+> There are separate `docker/scenario-9` and `docker/scenario-10` directories that test different features
+> (sourceRef mode, save/publish). Those scenarios use different port ranges (509x for registries).
+
+Integration test scenarios in `dockerWorkflows/` manually deconflict ports to avoid collisions. Each scenario uses a
+unique port range. **Complete port allocation table:**
+
+| Scenario | Description | Host Port | Container Port |
+|----------|-------------|-----------|----------------|
+| scenario-1-basic | Basic workflow integration test | 9200 | 8080 |
+| scenario-2-delegated-lifecycle | Delegated CLASS lifecycle (Spock) | 9201 | 8080 |
+| scenario-3-failed-tests | Failed test handling | 9202 | 8080 |
+| scenario-4-multiple-pipelines | Multiple pipelines | 9203 | 8080 |
+| scenario-5-complex-success | Complex success actions | 9204 | 8080 |
+| scenario-6-hooks | Hook execution | 9205 | 8080 |
+| scenario-7-save-publish | Save and publish actions | 9206 | 8080 |
+| scenario-8-method-lifecycle | METHOD lifecycle (Spock) | 9207 | 8080 |
+| scenario-9-method-lifecycle-junit | METHOD lifecycle (JUnit 5) [Phase 2] | 9208 | 8080 |
+| scenario-10-method-lifecycle-auto-detect | Auto-detect without annotation [Phase 2] | 9209 | 8080 |
 
 Ports are configured in each scenario's `compose/app.yml` file and must be unique across all simultaneously-running
-scenarios. When adding new scenarios, select the next available port in the 92xx range.
+`dockerWorkflows/` scenarios. When adding new `dockerWorkflows/` scenarios, select the next available port in the
+92xx range (9210, 9211, etc.).
+
+**Port Conflict Troubleshooting:**
+
+If integration tests fail with port binding errors:
+
+1. **Check for leftover containers:**
+   ```bash
+   docker ps -a | grep workflow-scenario
+   docker compose ls | grep workflow
+   ```
+
+2. **Check for processes using the port:**
+   ```bash
+   # Linux
+   ss -tlnp | grep 920
+   # macOS
+   lsof -i :9207
+   ```
+
+3. **Force cleanup and retry:**
+   ```bash
+   # Stop all workflow containers
+   docker ps -q --filter "name=workflow-scenario" | xargs -r docker stop
+   docker ps -aq --filter "name=workflow-scenario" | xargs -r docker rm
+
+   # Retry tests
+   ./gradlew cleanAll integrationTest
+   ```
+
+4. **If ports conflict with local services:**
+   - Modify the port in the scenario's `compose/app.yml`
+   - Update corresponding test assertions
+   - Document the port change in the scenario's README
 
 **File:** `scenario-9-method-lifecycle-junit/app-image/build.gradle`
 
@@ -1678,6 +2666,7 @@ package com.kineticfire.test;
 import com.kineticfire.gradle.docker.junit.DockerComposeMethodExtension;
 import io.restassured.RestAssured;
 import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import static io.restassured.RestAssured.given;
@@ -1703,8 +2692,9 @@ class MethodLifecycleJUnitIT {
 
     @Test
     @Order(1)
-    void firstTestMethodGetsFreshContainer() throws Exception {
-        Thread.sleep(2000);
+    @Timeout(30)  // Fail test if container not ready within 30 seconds
+    void firstTestMethodGetsFreshContainer() {
+        // Container should be ready - extension handles startup/health wait
 
         given()
             .when()
@@ -1730,8 +2720,9 @@ class MethodLifecycleJUnitIT {
 
     @Test
     @Order(2)
-    void secondTestMethodGetsDifferentFreshContainer() throws Exception {
-        Thread.sleep(2000);
+    @Timeout(30)  // Fail test if container not ready within 30 seconds
+    void secondTestMethodGetsDifferentFreshContainer() {
+        // Container should be ready - extension handles startup/health wait
 
         given()
             .when()
@@ -1759,8 +2750,9 @@ class MethodLifecycleJUnitIT {
 
     @Test
     @Order(3)
-    void thirdTestMethodAlsoGetsFreshContainer() throws Exception {
-        Thread.sleep(2000);
+    @Timeout(30)  // Fail test if container not ready within 30 seconds
+    void thirdTestMethodAlsoGetsFreshContainer() {
+        // Container should be ready - extension handles startup/health wait
 
         given()
             .when()
@@ -1804,7 +2796,7 @@ plugin-integration-test/dockerWorkflows/scenario-9-method-lifecycle-junit/
 │               └── app.yml
 ```
 
-**Step 8: Auto-Detection Integration Test Scenario (Phase 2 Validation)** (2 hours)
+**Step 10: Auto-Detection Integration Test Scenario (Phase 2 Validation)** (2 hours)
 
 **Directory:** `plugin-integration-test/dockerWorkflows/scenario-10-method-lifecycle-auto-detect/`
 
@@ -1912,7 +2904,64 @@ plugin-integration-test/dockerWorkflows/scenario-10-method-lifecycle-auto-detect
 │           └── junit-platform.properties  # Enables JUnit 5 auto-detection
 ```
 
-**Step 9: Documentation** (2 hours)
+**Step 11: Remove Annotations from Existing Integration Tests** (3 hours)
+
+Phase 2 eliminates annotation requirements. The following integration test files with `@ComposeUp` or `@ExtendWith`
+annotations must be updated to remove annotations and configure via `build.gradle` instead:
+
+**Files with `@ComposeUp` Annotations (Spock):**
+
+> **⚠️ IMPORTANT - Pre-Implementation Verification Required:**
+>
+> Before implementing Step 11, the implementer MUST verify the file list is current by running:
+> ```bash
+> # Search for actual @ComposeUp annotations (not just comments mentioning them)
+> rg "^@ComposeUp" plugin-integration-test/ --glob "*.groovy"
+> # Or search for the import + annotation combination
+> rg -l "import.*ComposeUp" plugin-integration-test/ --glob "*.groovy" | xargs -I{} grep -l "^@ComposeUp" {}
+> ```
+>
+> **Why verification is needed:** The `rg "@ComposeUp"` command may return false positives from comments that mention
+> the annotation (e.g., "We do NOT use @ComposeUp here..."). Manual verification ensures only files with actual
+> annotations are modified.
+>
+> **Verified 2025-12-04:** `DelegatedClassLifecycleIT.groovy` does NOT have `@ComposeUp` annotation—it only has a
+> comment explaining why the annotation is not used. This was verified by reading the actual file content.
+
+1. `plugin-integration-test/dockerOrch/verification/lifecycle-class/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleClassIT.groovy`
+2. `plugin-integration-test/dockerOrch/verification/lifecycle-method/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleMethodIT.groovy`
+3. `plugin-integration-test/dockerOrch/examples/database-app/app-image/src/integrationTest/groovy/com/kineticfire/test/DatabaseAppExampleIT.groovy`
+4. `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
+5. `plugin-integration-test/dockerOrch/examples/web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/WebAppExampleIT.groovy`
+6. `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy`
+7. `plugin-integration-test/dockerWorkflows/scenario-8-method-lifecycle/app-image/src/integrationTest/groovy/com/kineticfire/test/MethodLifecycleIT.groovy`
+
+> **Note:** `scenario-2-delegated-lifecycle/.../DelegatedClassLifecycleIT.groovy` does NOT have `@ComposeUp` annotation.
+> It uses Gradle task dependencies via `testIntegration.usesCompose()` - no annotation removal needed.
+
+**Files with `@ExtendWith(DockerCompose*)` Annotations (JUnit 5):**
+
+> **Note:** Verify this list by running `rg "@ExtendWith.*DockerCompose" plugin-integration-test/ --type java` before implementation.
+
+8. `plugin-integration-test/dockerOrch/examples/web-app-junit/app-image/src/integrationTest/java/com/kineticfire/test/WebAppJUnit5ClassIT.java`
+9. `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5MethodIT.java`
+
+**Total: 9 files** (7 Spock + 2 JUnit 5)
+
+**No unit tests or functional tests are affected** - these files do not use `@ComposeUp` or `@ExtendWith(DockerCompose*)` annotations.
+
+For each Spock file:
+1. Remove the `@ComposeUp` annotation from the test class
+2. Configure compose lifecycle via `usesCompose()` in the scenario's `build.gradle`
+
+For each JUnit 5 file:
+1. Remove the `@ExtendWith(DockerComposeMethodExtension.class)` or `@ExtendWith(DockerComposeClassExtension.class)` annotation
+2. Configure compose lifecycle via `usesCompose()` in the scenario's `build.gradle`
+3. Add `junit-platform.properties` with `junit.jupiter.extensions.autodetection.enabled=true`
+
+---
+
+**Step 12: Documentation** (2 hours)
 
 **File:** `docs/usage/usage-docker-workflows.md`
 
@@ -2004,20 +3053,21 @@ Add section on global extension auto-detection with same content as above.
 
 | Step | Task | Hours | Status |
 |------|------|-------|--------|
-| 0 | Refactor existing extensions for delegation | 2 | Pending |
-| 1 | Create Spock `DockerComposeGlobalExtension` | 3 | Pending |
-| 2 | Create Spock service registration file | 0.5 | Pending |
-| 3 | Create JUnit 5 `DockerComposeGlobalExtension` (Groovy) | 3 | Pending |
-| 4 | Create JUnit 5 service registration file | 0.5 | Pending |
-| 5 | Unit tests for global extensions | 4 | Pending |
-| 6 | Functional tests for service registration | 2 | Pending |
-| 7 | scenario-9: JUnit 5 method lifecycle integration test | 3 | Pending |
-| 8 | scenario-10: Auto-detect integration test (validates Phase 2) | 2 | Pending |
-| 9 | Remove annotations from existing tests & update build.gradle | 2 | Pending |
-| 10 | Documentation updates | 2 | Pending |
-| **Total** | | **24** | |
+| 1 | Refactor JUnit 5 extensions to remove hardcoded defaults | 2-3 | Pending |
+| 2 | Add `delegateStackManagement + lifecycle=METHOD` validation to PipelineValidator | 1 | Pending |
+| 3 | Create Spock `DockerComposeGlobalExtension` | 3 | Pending |
+| 4 | Create Spock service registration file | 0.5 | Pending |
+| 5 | Create JUnit 5 `DockerComposeGlobalExtension` (Groovy) | 3 | Pending |
+| 6 | Create JUnit 5 service registration file | 0.5 | Pending |
+| 7 | Unit tests for global extensions | 4 | Pending |
+| 8 | Functional tests for service registration | 2 | Pending |
+| 9 | scenario-9: JUnit 5 method lifecycle integration test (port 9208) | 3 | Pending |
+| 10 | scenario-10: Auto-detect integration test (port 9209, validates Phase 2) | 2 | Pending |
+| 11 | Remove annotations from existing tests (9 files: 7 Spock + 2 JUnit 5) & update build.gradle | 3 | Pending |
+| 12 | Documentation updates | 2 | Pending |
+| **Total** | | **26-27** | |
 
-**Phase 2 Total: ~24 hours (3-4 days)**
+**Phase 2 Total: ~26-27 hours (3-4 days)**
 
 ---
 
@@ -2029,7 +3079,7 @@ The following components already exist and work correctly. No modifications need
 |-----------|----------|--------|
 | `LifecycleMode` enum | `plugin/src/main/groovy/.../spock/LifecycleMode.groovy` | ✅ Complete |
 | `ComposeMethodInterceptor` | `plugin/src/main/groovy/.../spock/ComposeMethodInterceptor.groovy` | ✅ Complete (388 lines) |
-| `DockerComposeMethodExtension` | `plugin/src/main/java/.../junit/DockerComposeMethodExtension.java` | ✅ Complete |
+| `DockerComposeMethodExtension` | `plugin/src/main/groovy/.../junit/DockerComposeMethodExtension.groovy` | ✅ Complete |
 | `DockerComposeSpockExtension` | `plugin/src/main/groovy/.../spock/DockerComposeSpockExtension.groovy` | ✅ Complete (482 lines) |
 | System property reading | In all interceptors/extensions | ✅ Complete |
 | `docker.compose.lifecycle` property | Read by extensions | ✅ Complete |
@@ -2078,14 +3128,14 @@ The following components already exist and work correctly. No modifications need
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `DockerComposeMethodExtension.groovy` | Modify | Add `createConfigurationFromSystemProperties()` method for delegation |
-| `DockerComposeClassExtension.groovy` | Modify | Add `createConfigurationFromSystemProperties()` method for delegation |
-| `ComposeMethodInterceptor.groovy` | Modify | Remove hardcoded defaults; all config from system properties |
-| `ComposeClassInterceptor.groovy` | Modify | Remove hardcoded defaults; all config from system properties |
+| `DockerComposeMethodExtension.groovy` | Modify | Remove `"time-server"` hardcoded default; add `createConfigurationFromSystemProperties(ExtensionContext)` |
+| `DockerComposeClassExtension.groovy` | Modify | Remove `"time-server"` hardcoded default; add `createConfigurationFromSystemProperties(ExtensionContext)` |
+| `ComposeMethodInterceptor.groovy` | None | ✅ Already ready - receives all config via constructor parameter |
+| `ComposeClassInterceptor.groovy` | None | ✅ Already ready - receives all config via constructor parameter |
 | `spock/DockerComposeGlobalExtension.groovy` | Create | Spock global extension implementing `IGlobalExtension` |
 | `junit/DockerComposeGlobalExtension.groovy` | Create | JUnit 5 global extension (Groovy for consistency) |
-| `META-INF/services/org.spockframework.runtime.extension.IGlobalExtension` | Create | Spock service registration (new directory structure) |
-| `META-INF/services/org.junit.jupiter.api.extension.Extension` | Create | JUnit 5 service registration |
+| `plugin/src/main/resources/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension` | Create | Spock service registration (new directory structure) |
+| `plugin/src/main/resources/META-INF/services/org.junit.jupiter.api.extension.Extension` | Create | JUnit 5 service registration |
 
 ### Phase 2 Test Code (PENDING)
 
@@ -2106,9 +3156,22 @@ The following components already exist and work correctly. No modifications need
 
 | File | Change Type | Description |
 |------|-------------|-------------|
-| `scenario-8-method-lifecycle/` tests | Modify | Remove `@ComposeUp` annotation, configure via `build.gradle` |
-| All `dockerOrch` integration tests | Modify | Remove annotations, configure via `usesCompose()` in build.gradle |
-| All `dockerWorkflows` integration tests | Modify | Remove annotations if present, configure via DSL |
+| `dockerOrch/verification/lifecycle-class/.../LifecycleClassIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/verification/lifecycle-method/.../LifecycleMethodIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/examples/database-app/.../DatabaseAppExampleIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/examples/isolated-tests/.../IsolatedTestsExampleIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/examples/web-app/.../WebAppExampleIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/examples/stateful-web-app/.../StatefulWebAppExampleIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerWorkflows/scenario-8-method-lifecycle/.../MethodLifecycleIT.groovy` | Modify | Remove `@ComposeUp`, configure via `build.gradle` |
+| `dockerOrch/examples/web-app-junit/.../WebAppJUnit5ClassIT.java` | Modify | Remove `@ExtendWith`, configure via `build.gradle` |
+| `dockerOrch/examples/isolated-tests-junit/.../IsolatedTestsJUnit5MethodIT.java` | Modify | Remove `@ExtendWith`, configure via `build.gradle` |
+
+**Total: 9 files** (7 Spock + 2 JUnit 5)
+
+**Note:** `dockerWorkflows/scenario-2-delegated-lifecycle/.../DelegatedClassLifecycleIT.groovy` is NOT included because
+it does not use `@ComposeUp` - it relies on Gradle task dependencies via `testIntegration.usesCompose()` in build.gradle.
+
+**Note:** No unit tests or functional tests are affected by annotation removal.
 
 ### Phase 2 Documentation (PENDING)
 
@@ -2137,6 +3200,120 @@ is redundant and produces an error to prevent configuration confusion. Choose on
 
 ---
 
+## Clarification: `usesCompose()` vs `dockerWorkflows` Lifecycle Configuration
+
+### Two Configuration Paths
+
+There are two distinct paths to configure compose lifecycle for tests:
+
+1. **`testIntegration.usesCompose()`** (via `dockerOrch` DSL)
+   - Used when tests are NOT part of a `dockerWorkflows` pipeline
+   - Directly configures a test task to use compose with specified lifecycle
+   - Example: `testIntegration.usesCompose(tasks.integrationTest, 'testStack', 'method')`
+
+2. **`dockerWorkflows` pipeline `lifecycle` property** (via `dockerWorkflows` DSL)
+   - Used when tests ARE part of a `dockerWorkflows` pipeline
+   - Pipeline orchestrates build → test → conditional actions
+   - Example: `test { lifecycle = WorkflowLifecycle.METHOD; stack = ... }`
+
+### System Property Convergence
+
+Both paths converge on the **same system properties** at test runtime:
+
+| System Property | Set By `usesCompose()` | Set By `dockerWorkflows` |
+|-----------------|------------------------|--------------------------|
+| `docker.compose.lifecycle` | ✅ | ✅ |
+| `docker.compose.stack` | ✅ | ✅ |
+| `docker.compose.files` | ✅ | ✅ |
+| `docker.compose.projectName` | ✅ | ✅ |
+| `docker.compose.waitForHealthy.services` | ✅ | ✅ |
+| `docker.compose.waitForRunning.services` | ✅ | ✅ |
+
+### Global Extensions Read from Either Path
+
+The Phase 2 global extensions (`DockerComposeGlobalExtension` for Spock and JUnit 5) detect compose configuration
+**purely from system properties**. They don't know or care whether the properties were set by:
+- `testIntegration.usesCompose()` in `dockerOrch` context
+- `TestStepExecutor` in `dockerWorkflows` context
+- Manual `systemProperty()` calls in `build.gradle`
+
+This means Phase 2's global extensions work seamlessly with both configuration approaches.
+
+### When to Use Which Approach
+
+| Use Case | Recommended Approach |
+|----------|---------------------|
+| Standalone integration tests (no pipeline) | `testIntegration.usesCompose()` |
+| Pipeline with build → test → tag/publish | `dockerWorkflows` with `lifecycle` |
+| Need conditional post-test actions | `dockerWorkflows` (only option) |
+| Simple compose + test without build artifacts | `testIntegration.usesCompose()` |
+
+### Phase 2 Impact on Existing Tests
+
+After Phase 2, tests using `testIntegration.usesCompose()` will:
+- **Continue to work** with the global extensions (system properties are set the same way)
+- **NOT require annotation removal** if they don't have annotations currently
+- **Require annotation removal** if they do have `@ComposeUp` or `@ExtendWith` (error on conflict)
+
+---
+
+## Canonical System Property Names
+
+The following system properties are used for compose configuration. These names are canonical and must be used
+consistently across all configuration paths (`usesCompose()`, `dockerWorkflows`, and global extensions):
+
+| Property | Type | Required | Description |
+|----------|------|----------|-------------|
+| `docker.compose.lifecycle` | `String` | Yes | Either `"class"` or `"method"` |
+| `docker.compose.stack` | `String` | Yes | Name of the compose stack |
+| `docker.compose.files` | `String` | Yes | Comma-separated list of compose file paths (absolute) |
+| `docker.compose.project` | `String` | No | Project name for compose (legacy property) |
+| `docker.compose.projectName` | `String` | No | Base name for unique project name generation |
+| `docker.compose.waitServices` | `String` | No | Comma-separated service names to wait for (JUnit 5 extensions) |
+| `docker.compose.waitForHealthy.services` | `String` | No | Comma-separated service names to wait for healthy |
+| `docker.compose.waitForHealthy.timeoutSeconds` | `String` | No | Timeout in seconds (default: 60) |
+| `docker.compose.waitForHealthy.pollSeconds` | `String` | No | Poll interval in seconds (default: 2) |
+| `docker.compose.waitForRunning.services` | `String` | No | Comma-separated service names to wait for running |
+| `docker.compose.waitForRunning.timeoutSeconds` | `String` | No | Timeout in seconds (default: 60) |
+| `docker.compose.waitForRunning.pollSeconds` | `String` | No | Poll interval in seconds (default: 2) |
+
+### System Property Name Inconsistency (Phase 2 Pre-Requisite)
+
+> ⚠️ **IMPORTANT**: Before implementing Phase 2 global extensions, the system property names must be unified.
+> There is currently an inconsistency between what different components use:
+
+| Component | Wait Services Property | Notes |
+|-----------|----------------------|-------|
+| `TestIntegrationExtension.usesCompose()` | `docker.compose.waitForHealthy.services` | Canonical name |
+| `TestStepExecutor` (Phase 1) | `docker.compose.waitForHealthy.services` | Matches canonical |
+| `DockerComposeMethodExtension` (JUnit 5) | `docker.compose.waitServices` | **Legacy name** |
+| `DockerComposeClassExtension` (JUnit 5) | `docker.compose.waitServices` | **Legacy name** |
+
+**Phase 2 Step 1 must address this** by updating the JUnit 5 extensions to read BOTH property names (canonical and
+legacy) for backward compatibility, with canonical taking precedence:
+
+```java
+// In DockerComposeMethodExtension and DockerComposeClassExtension:
+// Read canonical name first, fall back to legacy for backward compatibility
+String waitServices = systemPropertyService.getProperty("docker.compose.waitForHealthy.services", "");
+if (waitServices == null || waitServices.isEmpty()) {
+    // Legacy property name - for backward compatibility with older configurations
+    waitServices = systemPropertyService.getProperty("docker.compose.waitServices", "");
+}
+```
+
+This approach:
+1. **Maintains backward compatibility** with existing configurations that use `docker.compose.waitServices`
+2. **Prioritizes canonical names** so new configurations use the consistent naming convention
+3. **Requires no migration** for existing users who already have working configurations
+
+**Verified in codebase**: The property names shown above are verified against:
+- `TestIntegrationExtension.groovy:161-169` (sets `docker.compose.stack`, `docker.compose.lifecycle`, `docker.compose.files`)
+- `DockerComposeMethodExtension.groovy:57` (reads `docker.compose.waitServices`)
+- `TestStepExecutor.groovy:326-332` (sets `docker.compose.lifecycle`, `docker.compose.stack`, `docker.compose.files`)
+
+---
+
 ## Risk Mitigation
 
 ### Phase 1 Risks
@@ -2158,6 +3335,304 @@ is redundant and produces an error to prevent configuration confusion. Choose on
 | User has existing annotated tests | Global extension produces error with clear migration instructions |
 | Global extension registered but no compose config | Extension checks for all required system properties before applying |
 | Port conflicts between integration test scenarios | Manual port allocation strategy documented (92xx range) |
+
+---
+
+## Phase 2 Implementation Details
+
+### Conflict Detection Logic
+
+The global extensions must detect annotation conflicts and produce errors with clear migration instructions.
+
+**Spock `DockerComposeGlobalExtension` conflict detection:**
+```groovy
+void visitSpec(SpecInfo spec) {
+    // Check if system properties are present (indicates global extension should handle)
+    if (!hasRequiredSystemProperties()) {
+        return  // No system properties = don't apply, let annotation-based extension handle if present
+    }
+
+    // Check for conflicting @ComposeUp annotation on the spec class
+    Class<?> specClass = spec.reflection
+    if (specClass.isAnnotationPresent(ComposeUp)) {
+        throw new IllegalStateException(
+            "Annotation conflict detected on ${specClass.name}.\n" +
+            "The @ComposeUp annotation is present but system properties indicate global extension should handle.\n" +
+            "Remove the @ComposeUp annotation from ${specClass.simpleName} - configuration is now via build.gradle."
+        )
+    }
+
+    // Apply global extension logic...
+}
+```
+
+**JUnit 5 `DockerComposeGlobalExtension` conflict detection:**
+```groovy
+void beforeAll(ExtensionContext context) {
+    // Check if system properties are present
+    if (!hasRequiredSystemProperties()) {
+        return
+    }
+
+    // Check for conflicting @ExtendWith annotations with compose extensions
+    Class<?> testClass = context.requiredTestClass
+    ExtendWith extendWithAnnotation = testClass.getAnnotation(ExtendWith)
+
+    if (extendWithAnnotation != null) {
+        List<Class<?>> conflictingExtensions = Arrays.stream(extendWithAnnotation.value())
+            .filter { ext ->
+                ext == DockerComposeMethodExtension || ext == DockerComposeClassExtension
+            }
+            .collect(Collectors.toList())
+
+        if (!conflictingExtensions.isEmpty()) {
+            throw new IllegalStateException(
+                "Annotation conflict detected on ${testClass.name}.\n" +
+                "@ExtendWith contains Docker Compose extensions but system properties indicate global extension should handle.\n" +
+                "Remove DockerComposeMethodExtension/DockerComposeClassExtension from @ExtendWith - configuration is now via build.gradle."
+            )
+        }
+    }
+}
+```
+
+### Handling `@ExtendWith` with Multiple Extensions
+
+JUnit 5's `@ExtendWith` can contain multiple extensions. The conflict detection must specifically check for
+`DockerComposeMethodExtension` or `DockerComposeClassExtension` among the extensions, not just the presence
+of any `@ExtendWith` annotation.
+
+**Example of valid usage (no conflict):**
+```java
+@ExtendWith(MockitoExtension.class)  // Other extensions are fine
+class MyTest { ... }
+```
+
+**Example of conflict (produces error):**
+```java
+@ExtendWith({MockitoExtension.class, DockerComposeMethodExtension.class})  // Error!
+class MyTest { ... }
+```
+
+### Port Allocation for Scenarios 9 and 10
+
+The following ports are allocated for integration test scenarios:
+
+| Scenario | Port | Description |
+|----------|------|-------------|
+| scenario-1 | 9200 | Basic build workflow |
+| scenario-2 | 9201 | Delegated class lifecycle |
+| scenario-3 | 9202 | On-success tagging |
+| scenario-4 | 9203 | On-failure handling |
+| scenario-5 | 9204 | Always step |
+| scenario-6 | 9205 | Save workflow |
+| scenario-7 | 9206 | Publish workflow |
+| scenario-8 | 9207 | Method lifecycle (Spock) |
+| **scenario-9** | **9208** | **Method lifecycle (JUnit 5)** |
+| **scenario-10** | **9209** | **Auto-detection without annotation** |
+
+**Verification required:** Before implementation, verify ports 9208 and 9209 are not in use by checking:
+```bash
+grep -r "920[89]" plugin-integration-test/
+```
+
+### JUnit 5 Auto-Detection Complexity Warning
+
+> ⚠️ **IMPORTANT: JVM-Wide Implications of JUnit 5 Auto-Detection**
+>
+> When `junit.jupiter.extensions.autodetection.enabled=true` is set:
+> - Auto-detection applies to **ALL tests on the JVM classpath**, not just your project
+> - In multi-module projects, other modules may unexpectedly have extensions applied
+> - Third-party libraries that include JUnit 5 extensions will be auto-registered
+>
+> **Recommendations:**
+> 1. Only enable auto-detection in projects that **exclusively** use Docker Compose for testing
+> 2. For multi-module projects, enable auto-detection **per-module** via `junit-platform.properties`
+> 3. Review your classpath dependencies before enabling to avoid unexpected behaviors
+>
+> **Troubleshooting:**
+> - If tests fail unexpectedly after enabling auto-detection, check for extension conflicts
+> - Use `--debug` flag to see which extensions are being loaded
+> - Temporarily disable auto-detection to isolate the issue
+
+### ThreadLocal Cleanup Verification
+
+Both JUnit 5 extensions (`DockerComposeMethodExtension`, `DockerComposeClassExtension`) use `ThreadLocal` storage
+for `uniqueProjectName` and `composeState`. When used as global extensions via ServiceLoader, proper cleanup
+is critical to prevent memory leaks in long-running test suites.
+
+**Verification checklist:**
+- [ ] `ThreadLocal.remove()` is called in `afterEach()` / `afterAll()` for all ThreadLocal variables
+- [ ] Cleanup occurs even if exceptions are thrown during test execution
+- [ ] Unit tests verify ThreadLocal cleanup with mock verification
+
+**Current implementation (verified):**
+```groovy
+// In afterEach/afterAll:
+uniqueProjectName.remove()
+composeState.remove()
+```
+
+### Error Message Templates
+
+The following error messages should be used for consistent user experience:
+
+**1. Annotation Conflict - Spock:**
+```
+ERROR: Docker Compose Extension Conflict
+
+The @ComposeUp annotation is present on class 'MyIntegrationTest' but Docker Compose
+configuration is being provided via system properties (build.gradle configuration).
+
+This typically happens when:
+- You're using dockerWorkflows with lifecycle=METHOD
+- You're using testIntegration.usesCompose() in build.gradle
+
+To fix this error:
+1. Remove the @ComposeUp annotation from your test class
+2. Configuration is now handled automatically via build.gradle
+
+Before:
+  @ComposeUp
+  class MyIntegrationTest extends Specification { ... }
+
+After:
+  // No annotation needed - global extension auto-detects from system properties
+  class MyIntegrationTest extends Specification { ... }
+```
+
+**2. Annotation Conflict - JUnit 5:**
+```
+ERROR: Docker Compose Extension Conflict
+
+The @ExtendWith annotation on class 'MyIntegrationTest' contains DockerComposeMethodExtension
+or DockerComposeClassExtension, but Docker Compose configuration is being provided via
+system properties (build.gradle configuration).
+
+To fix this error:
+1. Remove DockerComposeMethodExtension or DockerComposeClassExtension from @ExtendWith
+2. Keep other extensions (e.g., MockitoExtension) if needed
+3. Configuration is now handled automatically via build.gradle
+
+Before:
+  @ExtendWith({MockitoExtension.class, DockerComposeMethodExtension.class})
+  class MyIntegrationTest { ... }
+
+After:
+  @ExtendWith(MockitoExtension.class)  // Keep other extensions, remove compose ones
+  class MyIntegrationTest { ... }
+```
+
+**3. Missing System Properties:**
+```
+ERROR: Docker Compose configuration incomplete
+
+Required system properties for Docker Compose lifecycle are missing:
+- docker.compose.lifecycle: [present/MISSING]
+- docker.compose.stack: [present/MISSING]
+- docker.compose.files: [present/MISSING]
+
+Ensure your build.gradle configures the test task with usesCompose() or
+your dockerWorkflows pipeline includes a properly configured test step.
+
+Example build.gradle configuration:
+  testIntegration.usesCompose(tasks.integrationTest, 'myStack', 'method')
+```
+
+**4. Redundant Configuration (delegateStackManagement + lifecycle=METHOD):**
+```
+ERROR: Redundant configuration detected
+
+Both 'lifecycle = METHOD' and 'delegateStackManagement = true' are set.
+
+When lifecycle=METHOD, the test framework extension automatically handles container
+lifecycle per test method. Setting delegateStackManagement=true is redundant because:
+- lifecycle=METHOD already delegates compose management to the test framework
+- delegateStackManagement=true is for class-level delegation to testIntegration
+
+Choose ONE approach:
+1. Use 'lifecycle = METHOD' for per-method container isolation (test framework handles compose)
+2. Use 'delegateStackManagement = true' with default CLASS lifecycle (testIntegration handles compose)
+
+To fix: Remove 'delegateStackManagement = true' from your test step configuration.
+```
+
+### Migration Example
+
+**Before Phase 2 (annotation required):**
+```groovy
+// build.gradle
+dockerWorkflows {
+    pipelines {
+        myPipeline {
+            test {
+                lifecycle = WorkflowLifecycle.METHOD
+                stack = 'testStack'
+            }
+        }
+    }
+}
+
+// MyIntegrationTest.groovy
+@ComposeUp  // Required annotation to trigger Spock extension
+class MyIntegrationTest extends Specification {
+    def "my test"() { ... }
+}
+```
+
+**After Phase 2 (annotation removed, global extension auto-detects):**
+```groovy
+// build.gradle - same configuration
+dockerWorkflows {
+    pipelines {
+        myPipeline {
+            test {
+                lifecycle = WorkflowLifecycle.METHOD
+                stack = 'testStack'
+            }
+        }
+    }
+}
+
+// MyIntegrationTest.groovy
+// No annotation needed - global extension auto-detects from system properties set by pipeline
+class MyIntegrationTest extends Specification {
+    def "my test"() { ... }
+}
+```
+
+**JUnit 5 Migration:**
+```java
+// Before Phase 2
+@ExtendWith(DockerComposeMethodExtension.class)
+class MyIntegrationTest { ... }
+
+// After Phase 2
+// No @ExtendWith needed for compose - global extension handles it
+class MyIntegrationTest { ... }
+
+// If you have other extensions, keep them:
+@ExtendWith(MockitoExtension.class)  // Other extensions are still fine
+class MyIntegrationTest { ... }
+```
+
+---
+
+### Backward Compatibility Note
+
+**No backward compatibility considerations or migration guide are required for Phase 2.**
+
+**Rationale:** The plugin is not yet published and has no external users. This is a conscious design decision—all
+breaking changes can be made without maintaining deprecated APIs, migration guides, or transition periods. When the
+plugin is eventually published, Phase 2 will already be complete and users will only ever know the final design.
+
+**Breaking Changes Permitted (No Migration Guide Needed):**
+- Test class annotations (`@ComposeUp`, `@ExtendWith`) will immediately produce errors when system properties are present
+- No deprecation warnings or gradual transition period is needed
+- No documentation of "before/after" migration steps required
+- All integration tests in this repository will be updated as part of Phase 2 implementation
+
+**Decision Date:** 2025-12-04
 
 ---
 
@@ -2217,37 +3692,58 @@ The implementation is complete when:
 
 ### Phase 2 (Auto-Detection - Future)
 
-**Step 0 - Refactoring:**
-- [ ] Existing extensions refactored to support delegation from global extensions
-- [ ] `createConfigurationFromSystemProperties()` method added to extensions
-- [ ] Hardcoded defaults removed from interceptors (e.g., `"time-server"` wait service)
+**Step 1 - Refactor JUnit 5 Extensions:**
+- [ ] Remove `"time-server"` hardcoded default from `DockerComposeMethodExtension` and `DockerComposeClassExtension`
+- [ ] Add `createConfigurationFromSystemProperties(ExtensionContext)` method to JUnit 5 extensions
+- Note: Spock interceptors (`ComposeMethodInterceptor`, `ComposeClassInterceptor`) already support delegation - no changes needed
 
-**Production Code:**
+**Step 2 - Validation:**
+- [ ] Add `delegateStackManagement + lifecycle=METHOD` redundancy validation to `PipelineValidator`
+- [ ] Validation produces error with clear message explaining the redundancy and how to fix it
+
+**Steps 3-6 - Production Code:**
 - [ ] Spock `DockerComposeGlobalExtension` created implementing `IGlobalExtension`
-- [ ] Spock service registration file created at `META-INF/services/org.spockframework.runtime.extension.IGlobalExtension`
+- [ ] Spock service registration file created at `plugin/src/main/resources/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension`
   - Note: This creates new `plugin/src/main/resources/META-INF/services/` directory structure
 - [ ] JUnit 5 `DockerComposeGlobalExtension.groovy` created (Groovy for consistency)
-- [ ] JUnit 5 service registration file created at `META-INF/services/org.junit.jupiter.api.extension.Extension`
+- [ ] JUnit 5 service registration file created at `plugin/src/main/resources/META-INF/services/org.junit.jupiter.api.extension.Extension`
 - [ ] Global extensions produce **error** when test class has annotation (not skip)
 - [ ] Global extensions only apply when all required system properties are present:
   - `docker.compose.lifecycle`
   - `docker.compose.stack`
   - `docker.compose.files`
 
-**Testing:**
+**Steps 7-10 - Testing:**
 - [ ] Unit tests achieve 100% coverage on new global extension code
 - [ ] Unit tests follow existing patterns using mock `SystemPropertyService` for isolation
-- [ ] Functional tests verify service file registration
+- [ ] Functional tests verify plugin JAR contains service files
+- [ ] Functional tests verify annotation conflict produces error (Spock `@ComposeUp`)
+- [ ] Functional tests verify annotation conflict produces error (JUnit 5 `@ExtendWith`)
 - [ ] scenario-9 (JUnit 5 method lifecycle, port 9208) created and passes
 - [ ] scenario-10 (auto-detect without annotation, port 9209) created and passes for both Spock and JUnit 5
 
-**Existing Test Updates:**
-- [ ] All `@ComposeUp` annotations removed from Spock integration tests
-- [ ] All `@ExtendWith(DockerComposeMethodExtension.class)` annotations removed from JUnit 5 tests
-- [ ] All tests configured via `usesCompose()` in `build.gradle` instead of annotations
-- [ ] scenario-8 tests updated to remove annotations
+**Step 11 - Existing Test Updates (9 files: 7 Spock + 2 JUnit 5):**
 
-**Documentation:**
+Spock tests (remove `@ComposeUp`):
+- [ ] `dockerOrch/verification/lifecycle-class/.../LifecycleClassIT.groovy`
+- [ ] `dockerOrch/verification/lifecycle-method/.../LifecycleMethodIT.groovy`
+- [ ] `dockerOrch/examples/database-app/.../DatabaseAppExampleIT.groovy`
+- [ ] `dockerOrch/examples/isolated-tests/.../IsolatedTestsExampleIT.groovy`
+- [ ] `dockerOrch/examples/web-app/.../WebAppExampleIT.groovy`
+- [ ] `dockerOrch/examples/stateful-web-app/.../StatefulWebAppExampleIT.groovy`
+- [ ] `dockerWorkflows/scenario-8-method-lifecycle/.../MethodLifecycleIT.groovy`
+
+JUnit 5 tests (remove `@ExtendWith`, add `junit-platform.properties`):
+- [ ] `dockerOrch/examples/web-app-junit/.../WebAppJUnit5ClassIT.java`
+- [ ] `dockerOrch/examples/isolated-tests-junit/.../IsolatedTestsJUnit5MethodIT.java`
+
+- [ ] All tests configured via `usesCompose()` in `build.gradle` instead of annotations
+- [ ] JUnit 5 tests have `junit-platform.properties` with auto-detection enabled
+- Note: `dockerWorkflows/scenario-2-delegated-lifecycle/.../DelegatedClassLifecycleIT.groovy` is NOT included because
+  it does not use `@ComposeUp` - it relies on Gradle task dependencies via `testIntegration.usesCompose()` in build.gradle.
+- Note: No unit tests or functional tests are affected
+
+**Step 12 - Documentation:**
 - [ ] `usage-docker-workflows.md` updated with auto-detection (annotation produces error)
 - [ ] `spock-junit-test-extensions.md` updated to deprecate annotations
 - [ ] JUnit 5 auto-detection requirement (`junit-platform.properties`) documented
@@ -2264,6 +3760,142 @@ The implementation is complete when:
 - [ ] scenario-10 includes comment explaining why auto-detection is intentionally enabled for testing
 - [ ] Pipeline does NOT automatically set `junit.jupiter.extensions.autodetection.enabled` system property
 - [ ] Troubleshooting guidance provided for users who experience unexpected behaviors after enabling auto-detection
+
+---
+
+## Phase 2 Troubleshooting Guide
+
+This section provides guidance for common issues during Phase 2 implementation.
+
+### ServiceLoader Not Finding Extensions
+
+**Symptom:** Global extensions are not being applied; test classes without annotations don't get compose lifecycle.
+
+**Diagnosis:**
+```bash
+# Verify service files are in the built JAR
+jar tf plugin/build/libs/gradle-docker-*.jar | grep META-INF/services
+
+# Check service file content
+unzip -p plugin/build/libs/gradle-docker-*.jar \
+    META-INF/services/org.spockframework.runtime.extension.IGlobalExtension
+```
+
+**Common Causes:**
+1. **Service file not in resources:** Verify file exists at `plugin/src/main/resources/META-INF/services/`
+2. **Trailing whitespace:** Service files are whitespace-sensitive
+3. **Wrong class name:** Must be fully qualified: `com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension`
+4. **File encoding:** Must be UTF-8
+
+**Fix:**
+```bash
+# Recreate service file with correct content
+echo -n 'com.kineticfire.gradle.docker.spock.DockerComposeGlobalExtension' > \
+    plugin/src/main/resources/META-INF/services/org.spockframework.runtime.extension.IGlobalExtension
+```
+
+### JUnit 5 Auto-Detection Not Working
+
+**Symptom:** JUnit 5 global extension not applied even with system properties set.
+
+**Diagnosis:**
+1. Check if auto-detection is enabled:
+```bash
+# In test class, add temporary debug
+System.out.println("autodetection: " + 
+    System.getProperty("junit.jupiter.extensions.autodetection.enabled"));
+```
+
+2. Verify service file:
+```bash
+jar tf plugin/build/libs/gradle-docker-*.jar | grep org.junit.jupiter
+```
+
+**Common Causes:**
+1. **Auto-detection not enabled:** Must set `junit.jupiter.extensions.autodetection.enabled=true`
+2. **Service file missing:** Check `META-INF/services/org.junit.jupiter.api.extension.Extension`
+3. **Dependency conflict:** Another extension may be interfering
+
+**Fix:**
+```properties
+# In src/test/resources/junit-platform.properties
+junit.jupiter.extensions.autodetection.enabled=true
+```
+
+### Annotation Conflict Error When Expected
+
+**Symptom:** `IllegalStateException` about annotation conflict when test class has `@ComposeUp` or `@ExtendWith`.
+
+**This is expected behavior!** Phase 2 intentionally errors when annotations are present alongside system properties.
+
+**Fix:** Remove the annotation from the test class. The pipeline sets system properties that configure compose
+lifecycle automatically.
+
+### System Properties Not Being Set
+
+**Symptom:** Global extension doesn't activate because system properties are empty.
+
+**Diagnosis:**
+```groovy
+// Add to test class setup
+def lifecycle = System.getProperty('docker.compose.lifecycle')
+def stack = System.getProperty('docker.compose.stack')
+def files = System.getProperty('docker.compose.files')
+println "lifecycle=${lifecycle}, stack=${stack}, files=${files}"
+```
+
+**Common Causes:**
+1. **Wrong lifecycle mode:** Verify `lifecycle = WorkflowLifecycle.METHOD` in pipeline config
+2. **Missing stack:** Verify `stack = dockerOrch.composeStacks.yourStack` is configured
+3. **Empty files:** Verify stack has compose files configured
+
+**Fix:** Check `TestStepExecutor.setSystemPropertiesForMethodLifecycle()` is being called.
+
+### Both Extensions Running (Duplicate Compose Operations)
+
+**Symptom:** Containers start twice; port conflicts; compose operations duplicate.
+
+**Cause:** Both annotation-based extension AND global extension are running.
+
+**Diagnosis:** The annotation conflict check should prevent this. If it's not working:
+1. Verify system properties are being set (see above)
+2. Check `checkForAnnotationConflict()` is being called
+3. Verify `AnnotationSupport.findRepeatableAnnotations()` is finding the annotation
+
+**Fix:** Ensure the annotation conflict check runs early in `beforeAll`:
+```java
+@Override
+void beforeAll(ExtensionContext context) throws Exception {
+    checkForAnnotationConflict(context)  // MUST be first!
+    // ... rest of method
+}
+```
+
+### Service Initialization Failures
+
+**Symptom:** Warning message about services failing to initialize; extension silently skipped.
+
+**Diagnosis:** Check stderr for initialization warnings:
+```
+WARNING: DockerComposeGlobalExtension failed to initialize services: <error message>
+```
+
+**Common Causes:**
+1. **Missing dependency:** Service class not on classpath
+2. **Class loading issue:** Circular dependency or initialization error
+3. **Docker not available:** `JUnitComposeService` may fail if Docker is not running
+
+**Fix:** Ensure all service dependencies are available. The error handling allows tests to continue,
+but compose lifecycle won't be managed.
+
+### Spock vs JUnit 5 Behavior Differences
+
+| Aspect | Spock | JUnit 5 |
+|--------|-------|---------|
+| Auto-detection | Always enabled | Requires opt-in |
+| Extension registration | `IGlobalExtension.visitSpec()` | ServiceLoader + `beforeAll` |
+| Annotation API | `spec.getAnnotation()` | `AnnotationSupport.findRepeatableAnnotations()` |
+| Service injection | 5 services (creates interceptors) | 1 service (delegates to extensions) |
 
 ---
 

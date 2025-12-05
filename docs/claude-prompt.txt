@@ -3,6 +3,9 @@ Compose.  You are on a team building a custom Gradle plugin to build, tag, save,
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
 with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
+Evaluate the Phase 2 plan in @docs/design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md for its readiness for implementation.  Determine if it is accurate, clear,
+  complete and not misleading or missing information.  Analyze and report your findings and recommendations.  Do NOT edit files.
+
 
 ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 
