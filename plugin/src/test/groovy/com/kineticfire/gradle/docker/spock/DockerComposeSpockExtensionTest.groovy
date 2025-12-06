@@ -73,7 +73,7 @@ class DockerComposeSpockExtensionTest extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains('Stack name must be specified')
+        e.message.contains('Stack name not configured')
     }
 
     def "visitSpecAnnotation should validate composeFile is not empty"() {
@@ -85,7 +85,7 @@ class DockerComposeSpockExtensionTest extends Specification {
 
         then:
         def e = thrown(IllegalArgumentException)
-        e.message.contains('Compose file(s) must be specified')
+        e.message.contains('Compose file(s) not configured')
     }
 
     def "visitSpecAnnotation should validate timeoutSeconds is positive"() {

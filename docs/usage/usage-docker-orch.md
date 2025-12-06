@@ -1187,6 +1187,94 @@ tasks.named('integrationTest') {
 }
 ```
 
+### Why Annotations Are Required
+
+Both Spock and JUnit 5 require explicit annotations (`@ComposeUp` or `@ExtendWith`) to enable Docker Compose
+lifecycle management. This is a deliberate design choice, not a limitation.
+
+#### The Two-Step Configuration
+
+Docker Compose test integration requires configuration at **two levels**:
+
+1. **Build script (`build.gradle`)**: Defines *what* to run (compose files, wait conditions, stack names)
+2. **Test class annotation**: Enables *when* to run (per-class or per-method lifecycle)
+
+```groovy
+// Step 1: build.gradle - WHAT to run
+dockerOrch {
+    composeStacks {
+        myTest { files.from('compose.yml') }
+    }
+}
+
+// Step 2: Test annotation - WHEN to run (enables the extension)
+@ComposeUp  // ← This activates the extension!
+class MyTest extends Specification { ... }
+```
+
+#### Why Can't This Be Automatic?
+
+**Short answer:** Safety and predictability.
+
+Test framework extensions that manage external resources (containers, databases, services) should be **opt-in** at
+the test class level. This ensures:
+
+1. **Explicit intent**: Developers see at a glance which tests manage containers
+2. **IDE integration**: Annotations enable IDE features (navigation, refactoring, inspections)
+3. **Selective testing**: Run unit tests without Docker overhead
+4. **Debugging clarity**: Easy to identify container-related test classes during failures
+
+**Technical reasons:**
+
+| Framework | Auto-detection mechanism | Why we don't use it |
+|-----------|-------------------------|---------------------|
+| Spock | `IGlobalExtension` | Would affect *all* Spock tests in JVM |
+| JUnit 5 | `junit.jupiter.extensions.autodetection.enabled` | JVM-wide setting affects all JUnit 5 tests on classpath |
+
+Both auto-detection mechanisms are global (JVM-wide), meaning they would affect **all** tests including third-party
+library tests, unrelated projects in a multi-project build, and tests that shouldn't have Docker overhead.
+
+#### What Happens If You Forget the Annotation?
+
+If you configure `usesCompose()` in `build.gradle` but forget the annotation in your test class:
+
+1. **The plugin detects this**: When tests fail with connection-related errors, the plugin prints a helpful hint
+2. **Error messages guide you**: Extension error messages include examples of the correct annotation to add
+3. **Tests fail clearly**: You'll see "Connection refused" or similar errors indicating containers aren't running
+
+**Example hint output:**
+```
+================================================================================
+HINT: Possible missing Docker Compose annotation
+
+Test class 'com.example.MyAppIT' is configured to use Docker Compose stack 'myTest'
+with 'class' lifecycle, but tests are failing with connection errors.
+
+This often indicates the test class is missing the required annotation.
+Add one of the following:
+
+  Spock:
+    @ComposeUp
+    class MyAppIT extends Specification { ... }
+
+  JUnit 5:
+    @ExtendWith(DockerComposeClassExtension.class)
+    class MyAppIT { ... }
+
+For more information: docs/usage/usage-docker-orch.md
+================================================================================
+```
+
+#### Quick Reference: Required Annotations
+
+| Framework | CLASS Lifecycle | METHOD Lifecycle |
+|-----------|-----------------|------------------|
+| **Spock** | `@ComposeUp` | `@ComposeUp` |
+| **JUnit 5** | `@ExtendWith(DockerComposeClassExtension.class)` | `@ExtendWith(DockerComposeMethodExtension.class)` |
+
+**Note:** The annotation alone doesn't specify lifecycle - that's configured in `build.gradle` via
+`usesCompose(stack: "name", lifecycle: "class")`. The annotation simply enables the extension.
+
 ## Gradle Tasks (Optional - Suite Lifecycle)
 
 Gradle tasks provide suite-level orchestration using `composeUp*` and `composeDown*` tasks. Use this approach when:
@@ -1397,7 +1485,53 @@ These are used internally by extensions and are available to your test code.
 
 ### Common Issues and Solutions
 
-#### 1. Containers Not Stopping After Tests
+#### 1. Missing Test Annotation (Connection Refused)
+
+**Symptom:** Tests fail with "Connection refused", "Connect timed out", or similar network errors even though
+`usesCompose()` is configured in `build.gradle`.
+
+**Cause:** The test class is missing the required annotation (`@ComposeUp` for Spock, `@ExtendWith` for JUnit 5).
+Without the annotation, the test framework extension doesn't run, so containers never start.
+
+**Solution:** Add the appropriate annotation to your test class:
+
+```groovy
+// Spock
+@ComposeUp
+class MyAppIT extends Specification {
+    // ...
+}
+```
+
+```java
+// JUnit 5 - CLASS lifecycle
+@ExtendWith(DockerComposeClassExtension.class)
+class MyAppIT {
+    // ...
+}
+
+// JUnit 5 - METHOD lifecycle
+@ExtendWith(DockerComposeMethodExtension.class)
+class MyAppIT {
+    // ...
+}
+```
+
+**How to verify:** The plugin prints a helpful hint when this issue is detected:
+
+```
+================================================================================
+HINT: Possible missing Docker Compose annotation
+
+Test class 'com.example.MyAppIT' is configured to use Docker Compose stack 'myTest'
+with 'class' lifecycle, but tests are failing with connection errors.
+...
+================================================================================
+```
+
+See [Why Annotations Are Required](#why-annotations-are-required) for more details on why annotations are needed.
+
+#### 2. Containers Not Stopping After Tests
 
 **Symptom:** Running `docker ps` shows leftover containers from previous test runs.
 
@@ -1421,7 +1555,7 @@ docker compose -p my-app down -v
 docker ps -aq --filter name=my-app | xargs -r docker rm -f
 ```
 
-#### 2. Health Checks Timing Out
+#### 3. Health Checks Timing Out
 
 **Symptom:** Tests fail with "Service did not become healthy within timeout"
 
@@ -1440,7 +1574,7 @@ wait {
 }
 ```
 
-#### 3. Port Conflicts
+#### 4. Port Conflicts
 
 **Symptom:** `docker compose up` fails with "port is already allocated"
 
@@ -1460,7 +1594,7 @@ wait {
   docker stop $(docker ps -q --filter publish=8080)
   ```
 
-#### 4. State File Not Found
+#### 5. State File Not Found
 
 **Symptom:** `System.getProperty("COMPOSE_STATE_FILE")` returns null
 
@@ -1470,7 +1604,7 @@ wait {
 - Check that stack name in system property matches dockerOrch DSL
 - Verify compose up completed successfully before tests access state file
 
-#### 5. Extension Not Running Containers
+#### 6. Extension Not Running Containers
 
 **Symptom:** Test framework extension doesn't start containers
 
@@ -1485,7 +1619,7 @@ wait {
 - Verify dockerOrch DSL has matching stack configured
 - Check test output for error messages during setup
 
-#### 6. Compose File Version Warnings
+#### 7. Compose File Version Warnings
 
 **Symptom:** Warning about deprecated `version` field in compose file
 

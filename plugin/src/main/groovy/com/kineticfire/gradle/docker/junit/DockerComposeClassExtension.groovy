@@ -193,9 +193,19 @@ public class DockerComposeClassExtension implements BeforeAllCallback, AfterAllC
     private String getStackName(ExtensionContext context) {
         String stackName = systemPropertyService.getProperty(COMPOSE_STACK_PROPERTY);
         if (stackName == null || stackName.isEmpty()) {
+            String className = context.getTestClass().map(Class::getName).orElse("unknown");
             throw new IllegalStateException(
-                "Docker Compose stack name not configured. " +
-                "Ensure test task is configured with usesCompose and docker.compose.stack system property is set."
+                "Docker Compose stack name not configured for test class '" + className + "'.\n\n" +
+                "This extension requires configuration from one of these sources:\n\n" +
+                "Option 1 - Configure in build.gradle with usesCompose() (RECOMMENDED):\n" +
+                "  tasks.named('integrationTest') {\n" +
+                "      usesCompose(stack: 'myStack', lifecycle: 'class')\n" +
+                "  }\n" +
+                "  Then use: @ExtendWith(DockerComposeClassExtension.class) // no parameters\n\n" +
+                "Option 2 - Configure entirely in annotation (standalone mode):\n" +
+                "  This extension does not support standalone annotation configuration.\n" +
+                "  Use usesCompose() in build.gradle instead.\n\n" +
+                "For more information: docs/usage/usage-docker-orch.md"
             );
         }
         return stackName;

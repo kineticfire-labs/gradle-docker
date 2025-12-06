@@ -1,0 +1,96 @@
+<templateSet group="Gradle Docker">
+  <!--
+    IntelliJ IDEA Live Templates for gradle-docker plugin
+
+    Installation:
+    1. Copy this file to your IntelliJ IDEA settings directory:
+       - macOS: ~/Library/Application Support/JetBrains/IntelliJIdea<version>/templates/
+       - Linux: ~/.config/JetBrains/IntelliJIdea<version>/templates/
+       - Windows: %APPDATA%\JetBrains\IntelliJIdea<version>\templates\
+    2. Restart IntelliJ IDEA
+    3. The templates will appear under "Gradle Docker" group
+
+    Usage:
+    - Type the abbreviation and press Tab to expand
+    - Use Tab to move between template variables
+    - Press Enter to complete
+  -->
+
+  <!-- Spock: ComposeUp annotation with CLASS lifecycle -->
+  <template name="composeup" value="@ComposeUp&#10;class $CLASS_NAME$ extends Specification {&#10;    $END$&#10;}"
+            description="Spock test class with @ComposeUp (Docker Compose)"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="CLASS_NAME" expression="groovyScript(&quot;_1.replaceAll('.groovy$', '')&quot;, fileNameWithoutExtension())" defaultValue="MyIntegrationTest" alwaysStopAt="true"/>
+    <context>
+      <option name="GROOVY_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <!-- Spock: Full integration test class template -->
+  <template name="spockintegration"
+            value="package $PACKAGE_NAME$&#10;&#10;import com.kineticfire.gradle.docker.spock.ComposeUp&#10;import spock.lang.Specification&#10;import spock.lang.Shared&#10;import groovy.json.JsonSlurper&#10;&#10;/**&#10; * Integration test for $SERVICE_NAME$ using Docker Compose.&#10; *&#10; * Prerequisites:&#10; * - Configure stack in build.gradle: usesCompose(stack: &quot;$STACK_NAME$&quot;, lifecycle: &quot;class&quot;)&#10; */&#10;@ComposeUp&#10;class $CLASS_NAME$ extends Specification {&#10;&#10;    @Shared&#10;    String baseUrl&#10;&#10;    def setupSpec() {&#10;        def stateFile = new File(System.getProperty('COMPOSE_STATE_FILE'))&#10;        def state = new JsonSlurper().parse(stateFile)&#10;        def port = state.services['$SERVICE_NAME$'].publishedPorts[0].host&#10;        baseUrl = &quot;http://localhost:\${port}&quot;&#10;    }&#10;&#10;    def &quot;$TEST_NAME$&quot;() {&#10;        when:&#10;        $END$&#10;&#10;        then:&#10;        true&#10;    }&#10;}"
+            description="Complete Spock integration test class with @ComposeUp"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="PACKAGE_NAME" expression="groovyScript(&quot;def result = _1; if (result) result else 'com.example.integration'&quot;, currentPackage())" defaultValue="com.example.integration" alwaysStopAt="true"/>
+    <variable name="CLASS_NAME" expression="groovyScript(&quot;_1.replaceAll('.groovy$', '')&quot;, fileNameWithoutExtension())" defaultValue="MyServiceIT" alwaysStopAt="true"/>
+    <variable name="STACK_NAME" expression="" defaultValue="myTest" alwaysStopAt="true"/>
+    <variable name="SERVICE_NAME" expression="" defaultValue="my-service" alwaysStopAt="true"/>
+    <variable name="TEST_NAME" expression="" defaultValue="should respond to health check" alwaysStopAt="true"/>
+    <context>
+      <option name="GROOVY_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <!-- JUnit 5: ExtendWith for CLASS lifecycle -->
+  <template name="junit5class"
+            value="@ExtendWith(DockerComposeClassExtension.class)&#10;class $CLASS_NAME$ {&#10;    $END$&#10;}"
+            description="JUnit 5 test class with DockerComposeClassExtension"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="CLASS_NAME" expression="groovyScript(&quot;_1.replaceAll('.java$', '')&quot;, fileNameWithoutExtension())" defaultValue="MyIntegrationTest" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <!-- JUnit 5: ExtendWith for METHOD lifecycle -->
+  <template name="junit5method"
+            value="@ExtendWith(DockerComposeMethodExtension.class)&#10;class $CLASS_NAME$ {&#10;    $END$&#10;}"
+            description="JUnit 5 test class with DockerComposeMethodExtension"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="CLASS_NAME" expression="groovyScript(&quot;_1.replaceAll('.java$', '')&quot;, fileNameWithoutExtension())" defaultValue="MyIntegrationTest" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <!-- JUnit 5: Full integration test class template (CLASS lifecycle) -->
+  <template name="junit5integration"
+            value="package $PACKAGE_NAME$;&#10;&#10;import com.kineticfire.gradle.docker.junit.DockerComposeClassExtension;&#10;import org.junit.jupiter.api.BeforeAll;&#10;import org.junit.jupiter.api.Test;&#10;import org.junit.jupiter.api.extension.ExtendWith;&#10;import com.fasterxml.jackson.databind.ObjectMapper;&#10;import java.io.File;&#10;import java.util.Map;&#10;&#10;/**&#10; * Integration test for $SERVICE_NAME$ using Docker Compose.&#10; *&#10; * Prerequisites:&#10; * - Configure stack in build.gradle: usesCompose(stack: &quot;$STACK_NAME$&quot;, lifecycle: &quot;class&quot;)&#10; */&#10;@ExtendWith(DockerComposeClassExtension.class)&#10;class $CLASS_NAME$ {&#10;&#10;    private static String baseUrl;&#10;&#10;    @BeforeAll&#10;    static void setUp() throws Exception {&#10;        File stateFile = new File(System.getProperty(&quot;COMPOSE_STATE_FILE&quot;));&#10;        ObjectMapper mapper = new ObjectMapper();&#10;        Map&lt;String, Object&gt; state = mapper.readValue(stateFile, Map.class);&#10;        Map&lt;String, Object&gt; services = (Map&lt;String, Object&gt;) state.get(&quot;services&quot;);&#10;        Map&lt;String, Object&gt; service = (Map&lt;String, Object&gt;) services.get(&quot;$SERVICE_NAME$&quot;);&#10;        // Extract port from state&#10;        String port = extractPort(service);&#10;        baseUrl = &quot;http://localhost:&quot; + port;&#10;    }&#10;&#10;    private static String extractPort(Map&lt;String, Object&gt; service) {&#10;        // Implementation depends on state file format&#10;        return &quot;8080&quot;; // placeholder&#10;    }&#10;&#10;    @Test&#10;    void $TEST_NAME$() {&#10;        $END$&#10;    }&#10;}"
+            description="Complete JUnit 5 integration test class with DockerComposeClassExtension"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="PACKAGE_NAME" expression="groovyScript(&quot;def result = _1; if (result) result else 'com.example.integration'&quot;, currentPackage())" defaultValue="com.example.integration" alwaysStopAt="true"/>
+    <variable name="CLASS_NAME" expression="groovyScript(&quot;_1.replaceAll('.java$', '')&quot;, fileNameWithoutExtension())" defaultValue="MyServiceIT" alwaysStopAt="true"/>
+    <variable name="STACK_NAME" expression="" defaultValue="myTest" alwaysStopAt="true"/>
+    <variable name="SERVICE_NAME" expression="" defaultValue="my-service" alwaysStopAt="true"/>
+    <variable name="TEST_NAME" expression="" defaultValue="shouldRespondToHealthCheck" alwaysStopAt="true"/>
+    <context>
+      <option name="JAVA_DECLARATION" value="true"/>
+    </context>
+  </template>
+
+  <!-- Gradle: dockerOrch composeStacks configuration -->
+  <template name="dockerorch"
+            value="dockerOrch {&#10;    composeStacks {&#10;        $STACK_NAME$ {&#10;            files.from('$COMPOSE_FILE$')&#10;            waitForHealthy {&#10;                waitForServices.set(['$SERVICE_NAME$'])&#10;                timeoutSeconds.set($TIMEOUT$)&#10;            }&#10;        }&#10;    }&#10;}&#10;&#10;tasks.named('$TEST_TASK$') {&#10;    usesCompose(stack: &quot;$STACK_NAME$&quot;, lifecycle: &quot;$LIFECYCLE$&quot;)&#10;}"
+            description="Complete dockerOrch configuration with usesCompose"
+            toReformat="true" toShortenFQNames="true">
+    <variable name="STACK_NAME" expression="" defaultValue="myTest" alwaysStopAt="true"/>
+    <variable name="COMPOSE_FILE" expression="" defaultValue="src/integrationTest/resources/compose/app.yml" alwaysStopAt="true"/>
+    <variable name="SERVICE_NAME" expression="" defaultValue="my-service" alwaysStopAt="true"/>
+    <variable name="TIMEOUT" expression="" defaultValue="60" alwaysStopAt="true"/>
+    <variable name="TEST_TASK" expression="" defaultValue="integrationTest" alwaysStopAt="true"/>
+    <variable name="LIFECYCLE" expression="" defaultValue="class" alwaysStopAt="true"/>
+    <context>
+      <option name="GROOVY" value="true"/>
+    </context>
+  </template>
+</templateSet>

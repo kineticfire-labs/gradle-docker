@@ -117,6 +117,7 @@ services:
     def "getStackName with null property throws exception"() {
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> null
+        context.getTestClass() >> Optional.of(String.class)
 
         when:
         invokeGetStackName(context)
@@ -124,11 +125,13 @@ services:
         then:
         def ex = thrown(java.lang.reflect.InvocationTargetException)
         ex.cause instanceof IllegalStateException
+        ex.cause.message.contains("stack name not configured")
     }
 
     def "getStackName with empty property throws exception"() {
         given:
         systemPropertyService.getProperty("docker.compose.stack") >> ""
+        context.getTestClass() >> Optional.of(String.class)
 
         when:
         invokeGetStackName(context)
@@ -136,6 +139,7 @@ services:
         then:
         def ex = thrown(java.lang.reflect.InvocationTargetException)
         ex.cause instanceof IllegalStateException
+        ex.cause.message.contains("stack name not configured")
     }
 
     def "getProjectName handles various scenarios"() {

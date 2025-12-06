@@ -130,6 +130,9 @@ abstract class TestIntegrationExtension {
         // Auto-wire task dependencies to ensure compose tasks run
         autoWireComposeDependencies(test, stackName)
 
+        // Add listener to provide helpful hints if tests fail due to missing annotation
+        addAnnotationHintListener(test, stackName, "class")
+
         logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
         logger.info("JUnit 5: Use @ExtendWith(DockerComposeClassExtension.class)")
@@ -143,6 +146,9 @@ abstract class TestIntegrationExtension {
 
         // Auto-wire task dependencies to ensure compose tasks run
         autoWireComposeDependencies(test, stackName)
+
+        // Add listener to provide helpful hints if tests fail due to missing annotation
+        addAnnotationHintListener(test, stackName, "method")
 
         logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
@@ -219,5 +225,21 @@ abstract class TestIntegrationExtension {
             "Auto-wired test task '${test.name}': " +
             "dependsOn ${composeUpTaskName}, finalizedBy ${composeDownTaskName}"
         )
+    }
+
+    /**
+     * Add a test listener that provides helpful hints when tests fail due to missing annotations.
+     *
+     * <p>When tests fail with connection-related errors, this listener prints a hint suggesting
+     * the user may have forgotten to add the required annotation (@ComposeUp for Spock,
+     * @ExtendWith for JUnit 5).</p>
+     *
+     * @param test Test task to add listener to
+     * @param stackName Name of the compose stack
+     * @param lifecycle Lifecycle mode ("class" or "method")
+     */
+    private void addAnnotationHintListener(Test test, String stackName, String lifecycle) {
+        test.addTestListener(new ComposeAnnotationHintListener(stackName, lifecycle))
+        logger.debug("Added annotation hint listener to test task '{}'", test.name)
     }
 }

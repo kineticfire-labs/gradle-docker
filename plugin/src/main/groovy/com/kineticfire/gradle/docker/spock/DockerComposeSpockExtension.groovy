@@ -150,14 +150,31 @@ class DockerComposeSpockExtension extends AbstractAnnotationDrivenExtension<Comp
     private void validateConfiguration(Map<String, Object> config) {
         if (!config.stackName) {
             throw new IllegalArgumentException(
-                "Stack name must be specified either in build.gradle usesCompose() " +
-                "or @ComposeUp annotation stackName parameter"
+                "Stack name not configured for @ComposeUp test class '${config.className}'.\n\n" +
+                "Configure the stack using one of these approaches:\n\n" +
+                "Option 1 - Configure in build.gradle with usesCompose() (RECOMMENDED):\n" +
+                "  tasks.named('integrationTest') {\n" +
+                "      usesCompose(stack: 'myStack', lifecycle: 'class')\n" +
+                "  }\n" +
+                "  Then use: @ComposeUp  // zero parameters\n\n" +
+                "Option 2 - Configure in annotation (standalone mode):\n" +
+                "  @ComposeUp(stackName = 'myStack', composeFile = 'path/to/compose.yml')\n\n" +
+                "For more information: docs/usage/usage-docker-orch.md"
             )
         }
         if (!config.composeFiles || (config.composeFiles as List).isEmpty()) {
             throw new IllegalArgumentException(
-                "Compose file(s) must be specified either in build.gradle dockerOrch.composeStacks " +
-                "or @ComposeUp annotation composeFile/composeFiles parameter"
+                "Compose file(s) not configured for @ComposeUp test class '${config.className}'.\n\n" +
+                "Configure compose files using one of these approaches:\n\n" +
+                "Option 1 - Configure in build.gradle (RECOMMENDED):\n" +
+                "  dockerOrch {\n" +
+                "      composeStacks {\n" +
+                "          myStack { files.from('src/integrationTest/resources/compose/app.yml') }\n" +
+                "      }\n" +
+                "  }\n\n" +
+                "Option 2 - Configure in annotation:\n" +
+                "  @ComposeUp(stackName = 'myStack', composeFile = 'path/to/compose.yml')\n\n" +
+                "For more information: docs/usage/usage-docker-orch.md"
             )
         }
         if (config.timeoutSeconds <= 0) {
