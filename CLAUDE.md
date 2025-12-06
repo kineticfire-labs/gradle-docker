@@ -133,6 +133,8 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - Run:
       - Rebuild plugin to Maven local: `./gradlew -Pplugin_version=<version> build publishToMavenLocal` (from `plugin/` directory).
       - Run tests: `./gradlew cleanAll integrationTest` (from `plugin-integration-test/` directory).
+      - Allow 30 to 35 minutes for the integration tests to run.  Set a timer for 10 minutes to check the status until
+        the tests have completed or failed.  Do NOT continuously poll the status.
   - Do not treat partial pass rates (e.g., “most tests passed”) as acceptable.
 - **No lingering containers may remain.**
   - Do not declare success until `docker ps -a` shows no containers.

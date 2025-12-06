@@ -199,7 +199,8 @@ afterEvaluate {
 // =============================================================================
 // Verification Task: Run the full pipeline and verify results
 // =============================================================================
-tasks.register('verifyMethodLifecycle', Exec) {
+// Use ProcessBuilder for configuration cache compatibility (no Project reference needed)
+tasks.register('verifyMethodLifecycle') {
     description = 'Run the method lifecycle pipeline and verify results'
     group = 'verification'
 
@@ -212,13 +213,15 @@ tasks.register('verifyMethodLifecycle', Exec) {
     // Run the pipeline
     dependsOn tasks.named('runMethodLifecyclePipeline')
 
-    // Verify the 'tested' tag was applied
-    commandLine 'docker', 'images', '-q', 'workflow-scenario8-app:tested'
-    standardOutput = new ByteArrayOutputStream()
-
     doLast {
-        def imageId = standardOutput.toString().trim()
-        if (imageId.isEmpty()) {
+        // Verify the 'tested' tag was applied using ProcessBuilder (config cache safe)
+        def process = new ProcessBuilder('docker', 'images', '-q', 'workflow-scenario8-app:tested')
+            .redirectErrorStream(true)
+            .start()
+        def imageId = process.inputStream.text.trim()
+        def exitCode = process.waitFor()
+
+        if (exitCode != 0 || imageId.isEmpty()) {
             throw new GradleException("Expected image 'workflow-scenario8-app:tested' not found! " +
                 "The onTestSuccess additionalTags may not have been applied.")
         }
@@ -226,24 +229,29 @@ tasks.register('verifyMethodLifecycle', Exec) {
     }
 }
 
-// Cleanup task
+// Cleanup task - uses ProcessBuilder for configuration cache compatibility
 tasks.register('cleanupMethodWorkflow') {
     description = 'Clean up Docker resources from method lifecycle workflow test'
     group = 'verification'
 
     doLast {
-        // Remove test containers (may already be down from test framework)
-        exec {
-            commandLine 'docker', 'compose', '-p', 'workflow-scenario8-test', 'down', '-v'
-            ignoreExitValue = true
+        // Helper to run commands ignoring exit value
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text // consume output
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
         }
+
+        // Remove test containers (may already be down from test framework)
+        runCommand(['docker', 'compose', '-p', 'workflow-scenario8-test', 'down', '-v'])
 
         // Remove test images
         ['latest', '1.0.0', 'tested'].each { tag ->
-            exec {
-                commandLine 'docker', 'rmi', "workflow-scenario8-app:${tag}"
-                ignoreExitValue = true
-            }
+            runCommand(['docker', 'rmi', "workflow-scenario8-app:${tag}"])
         }
     }
 }

@@ -1,5 +1,5 @@
 # Integration test scenario-4: Empty publish target inheritance test
-FROM openjdk:11-jre-slim
+FROM eclipse-temurin:21-jre
 
 # Create app directory
 RUN mkdir /app
