@@ -1,0 +1,1264 @@
+# Design Plan: `dockerProject` Simplified Facade DSL
+
+**Created:** 2025-12-06
+**Status:** TODO
+**Priority:** Medium-term improvement
+
+---
+
+## Origin
+
+This feature was identified as a recommendation in the project review conducted on 2025-12-06.
+See: `docs/design-docs/project-reviews/2025-12-06-project-review.md`
+
+The review identified that while the plugin architecture is sound, the three-DSL approach
+(`docker`, `dockerOrch`, `dockerWorkflows`) creates a high cognitive load for users.
+The `dockerProject` simplified facade addresses the "80% use case" recommendation from
+that review.
+
+---
+
+## Overview
+
+The `dockerProject` DSL is a **high-level abstraction** that internally generates the lower-level `docker`,
+`dockerOrch`, and `dockerWorkflows` configurations. It targets the 80% use case of:
+**build image -> test with compose -> tag/save/publish on success**.
+
+---
+
+## Target User Experience
+
+### Build Mode Example
+
+```groovy
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+// Simplified DSL - one block instead of three
+dockerProject {
+    image {
+        name = 'my-app'
+        tags = ['latest', '1.0.0']
+        dockerfile = 'src/main/docker/Dockerfile'
+        jarFrom = ':app:jar'  // Auto-creates contextTask + wiring
+    }
+
+    test {
+        compose = 'src/integrationTest/resources/compose/app.yml'
+        waitForHealthy = ['app']
+        lifecycle = 'class'  // or 'method'
+    }
+
+    onSuccess {
+        additionalTags = ['tested', 'stable']
+        save 'build/images/my-app.tar.gz'
+        // publish to: 'registry.example.com', namespace: 'myproject'
+    }
+}
+
+dependencies {
+    integrationTestImplementation libs.rest.assured
+}
+```
+
+### SourceRef Mode Example
+
+```groovy
+dockerProject {
+    image {
+        // Use existing image instead of building
+        sourceRefRegistry = 'docker.io'
+        sourceRefNamespace = 'library'
+        sourceRefImageName = 'nginx'
+        sourceRefTag = '1.25'
+
+        // Local tags to apply
+        tags = ['my-nginx', 'latest']
+
+        pullIfMissing = true
+
+        // For private registries (optional)
+        pullAuth {
+            username = System.getenv('DOCKER_USER')
+            password = System.getenv('DOCKER_PASS')
+        }
+    }
+
+    test {
+        compose = 'src/integrationTest/resources/compose/app.yml'
+        waitForHealthy = ['app']
+    }
+
+    onSuccess {
+        additionalTags = ['tested']
+    }
+}
+```
+
+This replaces 100+ lines of `docker { }`, `dockerOrch { }`, `dockerWorkflows { }`, and wiring code with ~20 lines.
+
+---
+
+## Architecture Approach
+
+### Design Principle: Translator Pattern
+
+The `dockerProject` DSL doesn't introduce new runtime behavior. It is a **configuration translator** that:
+
+1. Collects simplified configuration at configuration time
+2. Translates into equivalent `docker`, `dockerOrch`, `dockerWorkflows` configurations
+3. Lets the existing infrastructure do all the work
+
+This has several advantages:
+
+- **No new tasks needed** - reuses existing task types
+- **No new services needed** - reuses existing DockerService, ComposeService
+- **Full backward compatibility** - advanced users can still use the three separate DSLs
+- **Reduced test surface** - only need to test the translation logic
+
+---
+
+## Implementation Plan
+
+### Phase 1: Core Infrastructure (Spec Classes)
+
+#### New Files to Create
+
+| File | Purpose |
+|------|---------|
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/DockerProjectSpec.groovy` | Top-level spec for the entire dockerProject block |
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/ProjectImageSpec.groovy` | Simplified image configuration |
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/ProjectTestSpec.groovy` | Simplified test configuration |
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/ProjectSuccessSpec.groovy` | Simplified onSuccess configuration |
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/ProjectFailureSpec.groovy` | Simplified onFailure configuration (optional) |
+
+#### `DockerProjectSpec.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.spec.project
+
+import org.gradle.api.Action
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.api.file.ProjectLayout
+
+import javax.inject.Inject
+
+/**
+ * Top-level specification for the dockerProject { } simplified DSL.
+ *
+ * This spec collects simplified configuration and is later translated
+ * into docker, dockerOrch, and dockerWorkflows configurations.
+ */
+abstract class DockerProjectSpec {
+
+    private final ObjectFactory objectFactory
+    private final ProviderFactory providers
+    private final ProjectLayout layout
+
+    @Inject
+    DockerProjectSpec(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout) {
+        this.objectFactory = objectFactory
+        this.providers = providers
+        this.layout = layout
+
+        // Initialize nested specs with conventions
+        image.convention(objectFactory.newInstance(ProjectImageSpec, objectFactory, providers, layout))
+        test.convention(objectFactory.newInstance(ProjectTestSpec, objectFactory))
+        onSuccess.convention(objectFactory.newInstance(ProjectSuccessSpec, objectFactory, layout))
+        onFailure.convention(objectFactory.newInstance(ProjectFailureSpec, objectFactory))
+    }
+
+    abstract Property<ProjectImageSpec> getImage()
+    abstract Property<ProjectTestSpec> getTest()
+    abstract Property<ProjectSuccessSpec> getOnSuccess()
+    abstract Property<ProjectFailureSpec> getOnFailure()
+
+    void image(Action<ProjectImageSpec> action) {
+        action.execute(image.get())
+    }
+
+    void test(Action<ProjectTestSpec> action) {
+        action.execute(test.get())
+    }
+
+    void onSuccess(Action<ProjectSuccessSpec> action) {
+        action.execute(onSuccess.get())
+    }
+
+    void onFailure(Action<ProjectFailureSpec> action) {
+        action.execute(onFailure.get())
+    }
+
+    /**
+     * Check if this spec has been configured (at minimum, image block is present)
+     */
+    boolean isConfigured() {
+        return image.get().name.isPresent() ||
+               image.get().sourceRef.isPresent() ||
+               image.get().sourceRefImageName.isPresent() ||
+               image.get().sourceRefRepository.isPresent()
+    }
+}
+```
+
+#### `ProjectImageSpec.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.spec.project
+
+import com.kineticfire.gradle.docker.spec.AuthSpec
+import org.gradle.api.Action
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.MapProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.api.file.ProjectLayout
+
+import javax.inject.Inject
+
+/**
+ * Simplified image configuration for dockerProject DSL.
+ *
+ * Supports two modes:
+ * - Build Mode: build image from Dockerfile (name, dockerfile, jarFrom/contextDir)
+ * - SourceRef Mode: use existing image (sourceRef or component properties)
+ */
+abstract class ProjectImageSpec {
+
+    private final ObjectFactory objectFactory
+
+    @Inject
+    ProjectImageSpec(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout) {
+        this.objectFactory = objectFactory
+
+        // Build mode conventions
+        dockerfile.convention('src/main/docker/Dockerfile')
+        buildArgs.convention([:])
+
+        // SourceRef mode conventions
+        sourceRef.convention('')
+        sourceRefRegistry.convention('')
+        sourceRefNamespace.convention('')
+        sourceRefImageName.convention('')
+        sourceRefTag.convention('')
+        sourceRefRepository.convention('')
+        pullIfMissing.convention(false)
+
+        // Common conventions
+        registry.convention('')
+        namespace.convention('')
+        tags.convention(['latest'])
+    }
+
+    // === BUILD MODE PROPERTIES ===
+
+    /**
+     * Image name (e.g., 'my-app')
+     */
+    abstract Property<String> getName()
+
+    /**
+     * Tags to apply to the built image (e.g., ['latest', '1.0.0'])
+     */
+    abstract ListProperty<String> getTags()
+
+    /**
+     * Path to Dockerfile relative to project root.
+     * Default: 'src/main/docker/Dockerfile'
+     */
+    abstract Property<String> getDockerfile()
+
+    /**
+     * Task path that produces a JAR to include in context (e.g., ':app:jar').
+     * When specified, auto-creates a Copy task that:
+     * - Copies the Dockerfile to build context
+     * - Copies the JAR as 'app.jar' to build context
+     */
+    abstract Property<String> getJarFrom()
+
+    /**
+     * Alternative to jarFrom: specify a directory as build context.
+     * Mutually exclusive with jarFrom.
+     */
+    abstract Property<String> getContextDir()
+
+    /**
+     * Build arguments to pass to docker build
+     */
+    abstract MapProperty<String, String> getBuildArgs()
+
+    // === SOURCE REF MODE PROPERTIES ===
+
+    /**
+     * Full source image reference (e.g., 'docker.io/library/nginx:1.25').
+     * When specified, skips build and uses this existing image.
+     */
+    abstract Property<String> getSourceRef()
+
+    /**
+     * SourceRef component: registry (e.g., 'docker.io')
+     */
+    abstract Property<String> getSourceRefRegistry()
+
+    /**
+     * SourceRef component: namespace (e.g., 'library')
+     */
+    abstract Property<String> getSourceRefNamespace()
+
+    /**
+     * SourceRef component: image name (e.g., 'nginx')
+     */
+    abstract Property<String> getSourceRefImageName()
+
+    /**
+     * SourceRef component: tag (e.g., '1.25')
+     */
+    abstract Property<String> getSourceRefTag()
+
+    /**
+     * SourceRef component: repository (e.g., 'library/nginx')
+     * Alternative to namespace+imageName
+     */
+    abstract Property<String> getSourceRefRepository()
+
+    /**
+     * Whether to pull the image if not present locally.
+     * Only applies in sourceRef mode.
+     */
+    abstract Property<Boolean> getPullIfMissing()
+
+    // === COMMON PROPERTIES ===
+
+    /**
+     * Target registry for publishing (e.g., 'docker.io')
+     */
+    abstract Property<String> getRegistry()
+
+    /**
+     * Target namespace for publishing (e.g., 'myorg')
+     */
+    abstract Property<String> getNamespace()
+
+    /**
+     * Authentication for pulling images (sourceRef mode with private registries)
+     */
+    AuthSpec pullAuth
+
+    // === DSL METHODS ===
+
+    void pullAuth(Action<AuthSpec> action) {
+        if (!pullAuth) {
+            pullAuth = objectFactory.newInstance(AuthSpec)
+        }
+        action.execute(pullAuth)
+    }
+
+    /**
+     * Check if this spec is in sourceRef mode
+     */
+    boolean isSourceRefMode() {
+        return (sourceRef.isPresent() && !sourceRef.get().isEmpty()) ||
+               (sourceRefRepository.isPresent() && !sourceRefRepository.get().isEmpty()) ||
+               (sourceRefImageName.isPresent() && !sourceRefImageName.get().isEmpty())
+    }
+
+    /**
+     * Check if this spec is in build mode
+     */
+    boolean isBuildMode() {
+        return !isSourceRefMode() && (
+            (jarFrom.isPresent() && !jarFrom.get().isEmpty()) ||
+            (contextDir.isPresent() && !contextDir.get().isEmpty())
+        )
+    }
+}
+```
+
+#### `ProjectTestSpec.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.spec.project
+
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+
+import javax.inject.Inject
+
+/**
+ * Simplified test configuration for dockerProject DSL.
+ */
+abstract class ProjectTestSpec {
+
+    @Inject
+    ProjectTestSpec(ObjectFactory objectFactory) {
+        lifecycle.convention('class')
+        timeoutSeconds.convention(60)
+        pollSeconds.convention(2)
+        testTaskName.convention('integrationTest')
+    }
+
+    /**
+     * Path to Docker Compose file relative to project root.
+     * (e.g., 'src/integrationTest/resources/compose/app.yml')
+     */
+    abstract Property<String> getCompose()
+
+    /**
+     * Services to wait for healthy status before running tests.
+     * (e.g., ['app', 'db'])
+     */
+    abstract ListProperty<String> getWaitForHealthy()
+
+    /**
+     * Services to wait for running status before running tests.
+     * Alternative to waitForHealthy for services without health checks.
+     */
+    abstract ListProperty<String> getWaitForRunning()
+
+    /**
+     * Container lifecycle mode: 'class' or 'method'.
+     * - 'class': containers start once per test class (default)
+     * - 'method': containers restart for each test method
+     */
+    abstract Property<String> getLifecycle()
+
+    /**
+     * Timeout in seconds for waiting on containers.
+     * Default: 60
+     */
+    abstract Property<Integer> getTimeoutSeconds()
+
+    /**
+     * Poll interval in seconds when waiting for containers.
+     * Default: 2
+     */
+    abstract Property<Integer> getPollSeconds()
+
+    /**
+     * Compose project name. If not specified, derived from project name.
+     */
+    abstract Property<String> getProjectName()
+
+    /**
+     * Name of the test task to execute.
+     * Default: 'integrationTest'
+     */
+    abstract Property<String> getTestTaskName()
+}
+```
+
+#### `ProjectSuccessSpec.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.spec.project
+
+import com.kineticfire.gradle.docker.model.SaveCompression
+import org.gradle.api.GradleException
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.Property
+import org.gradle.api.file.ProjectLayout
+
+import javax.inject.Inject
+
+/**
+ * Simplified success operations configuration for dockerProject DSL.
+ */
+abstract class ProjectSuccessSpec {
+
+    private final ObjectFactory objectFactory
+    private final ProjectLayout layout
+
+    @Inject
+    ProjectSuccessSpec(ObjectFactory objectFactory, ProjectLayout layout) {
+        this.objectFactory = objectFactory
+        this.layout = layout
+
+        additionalTags.convention([])
+        saveCompression.convention('gzip')
+    }
+
+    /**
+     * Additional tags to apply when tests pass.
+     * These are ADDED to the base tags, not replacing them.
+     */
+    abstract ListProperty<String> getAdditionalTags()
+
+    /**
+     * Path to save the image as a tar file.
+     * Compression is inferred from the file extension:
+     * - .tar.gz, .tgz -> GZIP
+     * - .tar.bz2, .tbz2 -> BZIP2
+     * - .tar.xz, .txz -> XZ
+     * - .tar -> NONE
+     * - .zip -> ZIP
+     */
+    abstract Property<String> getSaveFile()
+
+    /**
+     * Explicit compression override. Only needed if filename doesn't have
+     * a recognized extension. Values: 'none', 'gzip', 'bzip2', 'xz', 'zip'
+     */
+    abstract Property<String> getSaveCompression()
+
+    // === PUBLISH PROPERTIES ===
+
+    /**
+     * Registry to publish to (e.g., 'registry.example.com')
+     */
+    abstract Property<String> getPublishRegistry()
+
+    /**
+     * Namespace to publish to (e.g., 'myproject')
+     */
+    abstract Property<String> getPublishNamespace()
+
+    /**
+     * Tags to publish. If not specified, uses additionalTags.
+     */
+    abstract ListProperty<String> getPublishTags()
+
+    // === DSL METHODS ===
+
+    /**
+     * Shorthand for setting saveFile
+     */
+    void save(String filePath) {
+        saveFile.set(filePath)
+    }
+
+    /**
+     * Extended save with explicit compression
+     */
+    void save(Map<String, String> args) {
+        if (args.file) {
+            saveFile.set(args.file)
+        }
+        if (args.compression) {
+            saveCompression.set(args.compression)
+        }
+    }
+
+    /**
+     * Infer SaveCompression from filename extension
+     */
+    SaveCompression inferCompression() {
+        if (!saveFile.isPresent()) {
+            return null
+        }
+
+        def filename = saveFile.get()
+
+        // Check explicit override first
+        if (saveCompression.isPresent() && saveCompression.get() != 'gzip') {
+            return parseCompression(saveCompression.get())
+        }
+
+        // Infer from filename
+        if (filename.endsWith('.tar.gz') || filename.endsWith('.tgz')) {
+            return SaveCompression.GZIP
+        } else if (filename.endsWith('.tar.bz2') || filename.endsWith('.tbz2')) {
+            return SaveCompression.BZIP2
+        } else if (filename.endsWith('.tar.xz') || filename.endsWith('.txz')) {
+            return SaveCompression.XZ
+        } else if (filename.endsWith('.zip')) {
+            return SaveCompression.ZIP
+        } else if (filename.endsWith('.tar')) {
+            return SaveCompression.NONE
+        } else {
+            throw new GradleException(
+                "Cannot infer compression from filename '${filename}'. " +
+                "Use one of: .tar.gz, .tgz, .tar.bz2, .tbz2, .tar.xz, .txz, .tar, .zip " +
+                "or specify compression explicitly: save file: '...', compression: 'gzip'"
+            )
+        }
+    }
+
+    private SaveCompression parseCompression(String compression) {
+        switch (compression.toLowerCase()) {
+            case 'none': return SaveCompression.NONE
+            case 'gzip': return SaveCompression.GZIP
+            case 'bzip2': return SaveCompression.BZIP2
+            case 'xz': return SaveCompression.XZ
+            case 'zip': return SaveCompression.ZIP
+            default:
+                throw new GradleException(
+                    "Unknown compression type '${compression}'. " +
+                    "Valid values: none, gzip, bzip2, xz, zip"
+                )
+        }
+    }
+}
+```
+
+#### `ProjectFailureSpec.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.spec.project
+
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ListProperty
+
+import javax.inject.Inject
+
+/**
+ * Simplified failure operations configuration for dockerProject DSL.
+ */
+abstract class ProjectFailureSpec {
+
+    @Inject
+    ProjectFailureSpec(ObjectFactory objectFactory) {
+        additionalTags.convention([])
+    }
+
+    /**
+     * Additional tags to apply when tests fail (e.g., ['failed', 'needs-review'])
+     */
+    abstract ListProperty<String> getAdditionalTags()
+}
+```
+
+---
+
+### Phase 2: Extension Class
+
+#### New File
+
+| File | Purpose |
+|------|---------|
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerProjectExtension.groovy` | Extension providing the `dockerProject { }` DSL |
+
+#### `DockerProjectExtension.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.extension
+
+import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectFailureSpec
+import org.gradle.api.Action
+import org.gradle.api.model.ObjectFactory
+import org.gradle.api.provider.ProviderFactory
+import org.gradle.api.file.ProjectLayout
+
+import javax.inject.Inject
+
+/**
+ * Extension providing the dockerProject { } simplified DSL.
+ *
+ * This extension provides a high-level facade that internally translates
+ * to docker, dockerOrch, and dockerWorkflows configurations.
+ */
+abstract class DockerProjectExtension {
+
+    private final DockerProjectSpec spec
+
+    @Inject
+    DockerProjectExtension(ObjectFactory objectFactory, ProviderFactory providers, ProjectLayout layout) {
+        this.spec = objectFactory.newInstance(DockerProjectSpec, objectFactory, providers, layout)
+    }
+
+    DockerProjectSpec getSpec() {
+        return spec
+    }
+
+    void image(Action<ProjectImageSpec> action) {
+        action.execute(spec.image.get())
+    }
+
+    void test(Action<ProjectTestSpec> action) {
+        action.execute(spec.test.get())
+    }
+
+    void onSuccess(Action<ProjectSuccessSpec> action) {
+        action.execute(spec.onSuccess.get())
+    }
+
+    void onFailure(Action<ProjectFailureSpec> action) {
+        action.execute(spec.onFailure.get())
+    }
+}
+```
+
+---
+
+### Phase 3: Translator Service
+
+#### New File
+
+| File | Purpose |
+|------|---------|
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/DockerProjectTranslator.groovy` | Translates `DockerProjectSpec` -> existing DSL configurations |
+
+This is the **key class** that does the heavy lifting. It reads the simplified spec and configures:
+
+1. `docker.images { }` with appropriate ImageSpec
+2. `dockerOrch.composeStacks { }` with appropriate ComposeStackSpec
+3. `dockerWorkflows.pipelines { }` with appropriate PipelineSpec
+4. Creates the `contextTask` (Copy task) if `jarFrom` is specified
+5. Wires task dependencies automatically
+
+#### `DockerProjectTranslator.groovy`
+
+```groovy
+package com.kineticfire.gradle.docker.service
+
+import com.kineticfire.gradle.docker.extension.DockerExtension
+import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
+import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
+import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+import org.gradle.api.GradleException
+import org.gradle.api.Project
+import org.gradle.api.tasks.Copy
+
+/**
+ * Translates dockerProject spec into docker, dockerOrch, and dockerWorkflows configurations.
+ *
+ * This translator implements the "facade pattern" where the simplified dockerProject DSL
+ * is translated into the full three-DSL configuration that the plugin already supports.
+ */
+class DockerProjectTranslator {
+
+    /**
+     * Translate the dockerProject spec into the underlying DSL configurations.
+     *
+     * @param project The Gradle project
+     * @param projectSpec The dockerProject specification
+     * @param dockerExt The docker extension to configure
+     * @param dockerOrchExt The dockerOrch extension to configure
+     * @param dockerWorkflowsExt The dockerWorkflows extension to configure
+     */
+    void translate(Project project, DockerProjectSpec projectSpec,
+                   DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                   DockerWorkflowsExtension dockerWorkflowsExt) {
+
+        def imageSpec = projectSpec.image.get()
+        def testSpec = projectSpec.test.get()
+        def successSpec = projectSpec.onSuccess.get()
+        def failureSpec = projectSpec.onFailure.get()
+
+        // Validate configuration
+        validateSpec(projectSpec)
+
+        // Generate sanitized names for internal use
+        def imageName = deriveImageName(imageSpec, project)
+        def sanitizedName = sanitizeName(imageName)
+        def stackName = "${sanitizedName}Test"
+        def pipelineName = "${sanitizedName}Pipeline"
+
+        // 1. Configure docker.images
+        configureDockerImage(project, dockerExt, imageSpec, sanitizedName)
+
+        // 2. Configure dockerOrch.composeStacks (if test block is configured)
+        if (testSpec.compose.isPresent()) {
+            configureComposeStack(project, dockerOrchExt, testSpec, stackName)
+        }
+
+        // 3. Configure dockerWorkflows.pipelines
+        configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerOrchExt,
+                          sanitizedName, stackName, pipelineName, testSpec, successSpec, failureSpec)
+
+        // 4. Configure task dependencies
+        configureTaskDependencies(project, sanitizedName, stackName, testSpec)
+
+        project.logger.lifecycle("dockerProject: Configured image '${imageName}' with pipeline '${pipelineName}'")
+    }
+
+    private void validateSpec(DockerProjectSpec projectSpec) {
+        def imageSpec = projectSpec.image.get()
+
+        // Must have either build mode or sourceRef mode configured
+        if (!imageSpec.isBuildMode() && !imageSpec.isSourceRefMode()) {
+            throw new GradleException(
+                "dockerProject.image must specify either build properties (jarFrom or contextDir) " +
+                "or sourceRef properties (sourceRef, sourceRefImageName, or sourceRefRepository)"
+            )
+        }
+
+        // Cannot mix build mode and sourceRef mode
+        if (imageSpec.isBuildMode() && imageSpec.isSourceRefMode()) {
+            throw new GradleException(
+                "dockerProject.image cannot mix build mode (jarFrom/contextDir) with sourceRef mode"
+            )
+        }
+
+        // Cannot specify both jarFrom and contextDir
+        def hasJarFrom = imageSpec.jarFrom.isPresent() && !imageSpec.jarFrom.get().isEmpty()
+        def hasContextDir = imageSpec.contextDir.isPresent() && !imageSpec.contextDir.get().isEmpty()
+        if (hasJarFrom && hasContextDir) {
+            throw new GradleException(
+                "dockerProject.image cannot specify both jarFrom and contextDir - use one or the other"
+            )
+        }
+    }
+
+    private String deriveImageName(ProjectImageSpec imageSpec, Project project) {
+        if (imageSpec.name.isPresent() && !imageSpec.name.get().isEmpty()) {
+            return imageSpec.name.get()
+        }
+        if (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) {
+            return imageSpec.sourceRefImageName.get()
+        }
+        // Fall back to project name
+        return project.name
+    }
+
+    private String sanitizeName(String name) {
+        // Remove special characters, convert to camelCase-safe format
+        return name.replaceAll('[^a-zA-Z0-9]', '')
+                   .replaceFirst('^([A-Z])', { it[0].toLowerCase() })
+    }
+
+    private void configureDockerImage(Project project, DockerExtension dockerExt,
+                                       ProjectImageSpec imageSpec, String sanitizedName) {
+        dockerExt.images.create(sanitizedName) { image ->
+            // Common properties
+            image.imageName.set(imageSpec.name)
+            image.tags.set(imageSpec.tags)
+            image.registry.set(imageSpec.registry)
+            image.namespace.set(imageSpec.namespace)
+            image.buildArgs.putAll(imageSpec.buildArgs)
+
+            if (imageSpec.isBuildMode()) {
+                // Build mode configuration
+                if (imageSpec.jarFrom.isPresent() && !imageSpec.jarFrom.get().isEmpty()) {
+                    def contextTask = createContextTask(project, sanitizedName, imageSpec)
+                    image.contextTask = contextTask
+                } else if (imageSpec.contextDir.isPresent()) {
+                    image.context.set(project.file(imageSpec.contextDir.get()))
+                }
+
+                if (imageSpec.dockerfile.isPresent()) {
+                    image.dockerfile.set(project.file(imageSpec.dockerfile.get()))
+                }
+            } else {
+                // SourceRef mode configuration
+                if (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) {
+                    image.sourceRef.set(imageSpec.sourceRef)
+                } else {
+                    image.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
+                    image.sourceRefNamespace.set(imageSpec.sourceRefNamespace)
+                    image.sourceRefImageName.set(imageSpec.sourceRefImageName)
+                    image.sourceRefTag.set(imageSpec.sourceRefTag)
+                    image.sourceRefRepository.set(imageSpec.sourceRefRepository)
+                }
+
+                image.pullIfMissing.set(imageSpec.pullIfMissing)
+
+                if (imageSpec.pullAuth != null) {
+                    image.pullAuth {
+                        username.set(imageSpec.pullAuth.username)
+                        password.set(imageSpec.pullAuth.password)
+                    }
+                }
+            }
+        }
+    }
+
+    private def createContextTask(Project project, String imageName, ProjectImageSpec imageSpec) {
+        def taskName = "prepare${imageName.capitalize()}Context"
+
+        return project.tasks.register(taskName, Copy) { task ->
+            task.group = 'docker'
+            task.description = "Prepare Docker build context for ${imageName}"
+            task.into(project.layout.buildDirectory.dir("docker-context/${imageName}"))
+
+            // Copy Dockerfile
+            def dockerfilePath = imageSpec.dockerfile.getOrElse('src/main/docker/Dockerfile')
+            def dockerfileFile = project.file(dockerfilePath)
+            task.from(dockerfileFile.parentFile) { spec ->
+                spec.include(dockerfileFile.name)
+            }
+
+            // Copy JAR from specified task
+            def jarTaskPath = imageSpec.jarFrom.get()
+            // Handle both ':app:jar' and 'jar' formats
+            def jarTaskName = jarTaskPath.startsWith(':') ?
+                jarTaskPath.substring(jarTaskPath.lastIndexOf(':') + 1) : jarTaskPath
+            def jarProject = jarTaskPath.contains(':') && jarTaskPath.startsWith(':') ?
+                project.project(jarTaskPath.substring(0, jarTaskPath.lastIndexOf(':'))) : project
+
+            def jarTask = jarProject.tasks.named(jarTaskName)
+            task.from(jarTask.flatMap { it.archiveFile }) { spec ->
+                spec.rename { 'app.jar' }
+            }
+
+            task.dependsOn(jarTaskPath)
+        }
+    }
+
+    private void configureComposeStack(Project project, DockerOrchExtension dockerOrchExt,
+                                        ProjectTestSpec testSpec, String stackName) {
+        dockerOrchExt.composeStacks.create(stackName) { stack ->
+            stack.files.from(testSpec.compose.get())
+
+            if (testSpec.projectName.isPresent()) {
+                stack.projectName.set(testSpec.projectName)
+            } else {
+                stack.projectName.set("${project.name}-${stackName}")
+            }
+
+            if (testSpec.waitForHealthy.isPresent() && !testSpec.waitForHealthy.get().isEmpty()) {
+                stack.waitForHealthy {
+                    waitForServices.set(testSpec.waitForHealthy)
+                    timeoutSeconds.set(testSpec.timeoutSeconds)
+                    pollSeconds.set(testSpec.pollSeconds)
+                }
+            }
+
+            if (testSpec.waitForRunning.isPresent() && !testSpec.waitForRunning.get().isEmpty()) {
+                stack.waitForRunning {
+                    waitForServices.set(testSpec.waitForRunning)
+                    timeoutSeconds.set(testSpec.timeoutSeconds)
+                    pollSeconds.set(testSpec.pollSeconds)
+                }
+            }
+        }
+    }
+
+    private void configurePipeline(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
+                                    DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                    String imageName, String stackName, String pipelineName,
+                                    ProjectTestSpec testSpec, ProjectSuccessSpec successSpec,
+                                    def failureSpec) {
+        dockerWorkflowsExt.pipelines.create(pipelineName) { pipeline ->
+            pipeline.description.set("Auto-generated pipeline for ${imageName}")
+
+            pipeline.build {
+                image = dockerExt.images.getByName(imageName)
+            }
+
+            if (testSpec.compose.isPresent()) {
+                pipeline.test {
+                    stack = dockerOrchExt.composeStacks.getByName(stackName)
+                    testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
+                    lifecycle = parseLifecycle(testSpec.lifecycle.getOrElse('class'))
+                }
+            }
+
+            pipeline.onTestSuccess {
+                additionalTags.set(successSpec.additionalTags)
+
+                if (successSpec.saveFile.isPresent()) {
+                    save {
+                        outputFile.set(project.file(successSpec.saveFile.get()))
+                        compression.set(successSpec.inferCompression())
+                    }
+                }
+
+                if (successSpec.publishRegistry.isPresent()) {
+                    publish {
+                        def tags = successSpec.publishTags.isPresent() ?
+                            successSpec.publishTags.get() : successSpec.additionalTags.get()
+                        publishTags.set(tags)
+                        to('default') {
+                            registry.set(successSpec.publishRegistry)
+                            namespace.set(successSpec.publishNamespace)
+                        }
+                    }
+                }
+            }
+
+            if (failureSpec.additionalTags.isPresent() && !failureSpec.additionalTags.get().isEmpty()) {
+                pipeline.onTestFailure {
+                    additionalTags.set(failureSpec.additionalTags)
+                }
+            }
+        }
+    }
+
+    private WorkflowLifecycle parseLifecycle(String lifecycle) {
+        switch (lifecycle.toLowerCase()) {
+            case 'class': return WorkflowLifecycle.CLASS
+            case 'method': return WorkflowLifecycle.METHOD
+            default:
+                throw new GradleException(
+                    "Unknown lifecycle '${lifecycle}'. Valid values: class, method"
+                )
+        }
+    }
+
+    private void configureTaskDependencies(Project project, String imageName, String stackName,
+                                            ProjectTestSpec testSpec) {
+        project.afterEvaluate {
+            def capitalizedImage = imageName.capitalize()
+            def capitalizedStack = stackName.capitalize()
+
+            if (testSpec.compose.isPresent()) {
+                // composeUp depends on dockerBuild
+                project.tasks.named("composeUp${capitalizedStack}").configure { task ->
+                    task.dependsOn("dockerBuild${capitalizedImage}")
+                }
+
+                // integrationTest depends on composeUp, finalizedBy composeDown
+                def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
+                project.tasks.named(testTaskName).configure { task ->
+                    task.dependsOn("composeUp${capitalizedStack}")
+                    task.finalizedBy("composeDown${capitalizedStack}")
+                }
+            }
+        }
+    }
+}
+```
+
+---
+
+### Phase 4: Plugin Integration
+
+#### File to Modify
+
+| File | Change |
+|------|--------|
+| `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy` | Register `dockerProject` extension and call translator |
+
+#### Changes to `GradleDockerPlugin.groovy`
+
+In the `apply()` method, add after existing extension creation:
+
+```groovy
+// Create dockerProject extension (simplified facade)
+def dockerProjectExt = project.extensions.create(
+    'dockerProject',
+    DockerProjectExtension,
+    project.objects,
+    project.providers,
+    project.layout
+)
+```
+
+In `configureAfterEvaluation()`, add translation step before existing validation:
+
+```groovy
+project.afterEvaluate {
+    try {
+        // Translate dockerProject to docker/dockerOrch/dockerWorkflows if configured
+        if (dockerProjectExt.spec.isConfigured()) {
+            def translator = new DockerProjectTranslator()
+            translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        }
+
+        // ... existing validation and configuration
+        dockerExt.validate()
+        dockerOrchExt.validate()
+        // ...
+    }
+}
+```
+
+---
+
+### Phase 5: Testing
+
+#### New Test Files
+
+| File | Purpose |
+|------|---------|
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/DockerProjectSpecTest.groovy` | Unit tests for DockerProjectSpec |
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/ProjectImageSpecTest.groovy` | Unit tests for ProjectImageSpec |
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/ProjectTestSpecTest.groovy` | Unit tests for ProjectTestSpec |
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/ProjectSuccessSpecTest.groovy` | Unit tests for ProjectSuccessSpec |
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerProjectExtensionTest.groovy` | Unit tests for DockerProjectExtension |
+| `plugin/src/test/groovy/com/kineticfire/gradle/docker/service/DockerProjectTranslatorTest.groovy` | Unit tests for DockerProjectTranslator |
+| `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/DockerProjectFunctionalTest.groovy` | Functional tests for DSL parsing |
+
+#### Integration Test Scenarios
+
+| Directory | Purpose |
+|-----------|---------|
+| `plugin-integration-test/dockerProject/scenario-1-build-mode/` | Basic build mode: jarFrom, test, additionalTags |
+| `plugin-integration-test/dockerProject/scenario-2-sourceref-mode/` | SourceRef mode with component properties |
+| `plugin-integration-test/dockerProject/scenario-3-save-publish/` | Save and publish on success |
+| `plugin-integration-test/dockerProject/scenario-4-method-lifecycle/` | Method lifecycle mode |
+
+##### Scenario 2: SourceRef Mode with Component Properties
+
+This scenario tests using an existing image via `sourceRef` component properties:
+
+```groovy
+// plugin-integration-test/dockerProject/scenario-2-sourceref-mode/app-image/build.gradle
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+dockerProject {
+    image {
+        // Use existing nginx image via component properties
+        sourceRefRegistry = 'docker.io'
+        sourceRefNamespace = 'library'
+        sourceRefImageName = 'nginx'
+        sourceRefTag = '1.25-alpine'
+
+        // Apply local tags
+        tags = ['test-nginx', 'latest']
+
+        pullIfMissing = true
+    }
+
+    test {
+        compose = 'src/integrationTest/resources/compose/nginx.yml'
+        waitForHealthy = ['nginx']
+    }
+
+    onSuccess {
+        additionalTags = ['verified']
+    }
+}
+
+dependencies {
+    integrationTestImplementation libs.rest.assured
+}
+```
+
+---
+
+### Phase 6: Documentation
+
+#### Files to Create/Update
+
+| File | Purpose |
+|------|---------|
+| `docs/usage/usage-docker-project.md` | New usage guide for simplified DSL |
+| `docs/usage/usage-docker.md` | Add reference to dockerProject as simplified alternative |
+| `docs/usage/usage-docker-orch.md` | Add reference to dockerProject |
+| `docs/usage/usage-docker-workflows.md` | Add reference to dockerProject |
+
+#### Key Documentation Topics
+
+1. **When to use dockerProject vs the three-DSL approach**
+2. **Build mode vs SourceRef mode**
+3. **Save file compression inference from filename**
+4. **Task wiring that happens automatically**
+5. **Migration guide from three-DSL to dockerProject**
+
+---
+
+## File Summary
+
+### New Files (17)
+
+| Directory | File | Purpose |
+|-----------|------|---------|
+| `spec/project/` | `DockerProjectSpec.groovy` | Top-level spec |
+| `spec/project/` | `ProjectImageSpec.groovy` | Image configuration |
+| `spec/project/` | `ProjectTestSpec.groovy` | Test configuration |
+| `spec/project/` | `ProjectSuccessSpec.groovy` | Success operations |
+| `spec/project/` | `ProjectFailureSpec.groovy` | Failure operations |
+| `extension/` | `DockerProjectExtension.groovy` | DSL extension |
+| `service/` | `DockerProjectTranslator.groovy` | Translation logic |
+| `test/.../spec/project/` | `DockerProjectSpecTest.groovy` | Unit tests |
+| `test/.../spec/project/` | `ProjectImageSpecTest.groovy` | Unit tests |
+| `test/.../spec/project/` | `ProjectTestSpecTest.groovy` | Unit tests |
+| `test/.../spec/project/` | `ProjectSuccessSpecTest.groovy` | Unit tests |
+| `test/.../extension/` | `DockerProjectExtensionTest.groovy` | Extension tests |
+| `test/.../service/` | `DockerProjectTranslatorTest.groovy` | Translator tests |
+| `functionalTest/` | `DockerProjectFunctionalTest.groovy` | Functional tests |
+| `integration-test/dockerProject/` | `scenario-1-build-mode/` | Build mode integration test |
+| `integration-test/dockerProject/` | `scenario-2-sourceref-mode/` | SourceRef mode integration test |
+| `integration-test/dockerProject/` | `scenario-3-save-publish/` | Save/publish integration test |
+
+### Modified Files (5)
+
+| File | Changes |
+|------|---------|
+| `GradleDockerPlugin.groovy` | Register extension, call translator |
+| `docs/usage/usage-docker.md` | Cross-reference to dockerProject |
+| `docs/usage/usage-docker-orch.md` | Cross-reference to dockerProject |
+| `docs/usage/usage-docker-workflows.md` | Cross-reference to dockerProject |
+| `docs/design-docs/project-reviews/2025-12-06-project-review.md` | Mark recommendation as completed |
+
+---
+
+## Key Design Decisions
+
+1. **Translator Pattern**: The `dockerProject` DSL is purely a configuration translator. It does not introduce
+   new runtime behavior, tasks, or services.
+
+2. **Optional Facade**: Users can still use `docker { }`, `dockerOrch { }`, and `dockerWorkflows { }` directly.
+   The `dockerProject` DSL is additive.
+
+3. **Mutual Exclusivity**: If `dockerProject { }` is configured, it should be the only way to configure that
+   image. Mixing `dockerProject` with direct `docker { }` configuration for the same image would be an error.
+
+4. **Convention Over Configuration**: Heavy use of defaults:
+   - Default tags: `['latest']`
+   - Default compose project name: derived from project name
+   - Default lifecycle: `'class'`
+   - Default compression: inferred from filename
+   - Default test task: `'integrationTest'`
+
+5. **Configuration Cache Compatible**: All new code follows the Provider API patterns and avoids Project
+   references at execution time.
+
+6. **Property Naming**: Use `additionalTags` instead of `tags` in `onSuccess` to clearly communicate
+   additive semantics and avoid `+=` vs `=` confusion.
+
+7. **Compression Inference**: Save file compression is inferred from the filename extension to reduce
+   configuration verbosity.
+
+8. **SourceRef Support**: Full support for both build mode (jarFrom/contextDir) and sourceRef mode
+   (sourceRef string or component properties).
+
+---
+
+## Risks and Mitigations
+
+| Risk | Mitigation |
+|------|------------|
+| Translator complexity | Thorough unit testing of translation logic |
+| Edge cases in wiring | Comprehensive functional tests |
+| Naming conflicts | Use sanitized, unique names for generated entities |
+| User confusion about which DSL to use | Clear documentation with decision flowchart |
+| Configuration cache violations | Follow existing patterns from working code |
+
+---
+
+## Implementation Order
+
+1. **Phase 1**: Create spec classes (foundation)
+2. **Phase 2**: Create extension class (DSL entry point)
+3. **Phase 3**: Create translator service (core logic)
+4. **Phase 4**: Integrate into plugin (wire it up)
+5. **Phase 5**: Write tests (validate behavior)
+6. **Phase 6**: Write documentation (user-facing)
+
+Each phase can be completed and tested independently before moving to the next.
+
+---
+
+## Completion Checklist
+
+- [ ] Phase 1: Spec classes created and unit tested
+- [ ] Phase 2: Extension class created and unit tested
+- [ ] Phase 3: Translator service created and unit tested
+- [ ] Phase 4: Plugin integration complete
+- [ ] Phase 5: All tests passing (unit, functional, integration)
+- [ ] Phase 6: Documentation complete
+- [ ] Update project review with completion note
+
+---
+
+## Follow-up Actions
+
+Upon completion of this feature:
+
+1. Update `docs/design-docs/project-reviews/2025-12-06-project-review.md` to mark the
+   "Simplified facade for 80% use case" recommendation as completed
+
+2. Add reference to this plan document in the project review
+
+3. Consider additional improvements identified during implementation
