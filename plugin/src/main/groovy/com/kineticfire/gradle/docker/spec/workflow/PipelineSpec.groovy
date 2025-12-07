@@ -44,6 +44,8 @@ abstract class PipelineSpec {
         test.convention(objectFactory.newInstance(TestStepSpec))
         onTestSuccess.convention(objectFactory.newInstance(SuccessStepSpec))
         onTestFailure.convention(objectFactory.newInstance(FailureStepSpec))
+        onSuccess.convention(objectFactory.newInstance(SuccessStepSpec))
+        onFailure.convention(objectFactory.newInstance(FailureStepSpec))
         always.convention(objectFactory.newInstance(AlwaysStepSpec))
     }
 

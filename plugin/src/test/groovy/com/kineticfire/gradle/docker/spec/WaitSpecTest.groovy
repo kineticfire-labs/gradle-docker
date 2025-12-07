@@ -160,6 +160,14 @@ class WaitSpecTest extends Specification {
 
     // ===== EDGE CASES =====
 
+    def "waitForServices has convention of empty list"() {
+        expect:
+        // Verify the convention is set to empty list
+        waitSpec.waitForServices.present
+        waitSpec.waitForServices.get() == []
+        waitSpec.waitForServices.get().isEmpty()
+    }
+
     def "services is initially empty when not configured"() {
         expect:
         // ListProperty is typically present but empty by default

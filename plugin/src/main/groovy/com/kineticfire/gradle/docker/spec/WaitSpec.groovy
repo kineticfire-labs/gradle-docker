@@ -32,6 +32,7 @@ abstract class WaitSpec {
         // Set defaults
         timeoutSeconds.convention(60)
         pollSeconds.convention(2)
+        waitForServices.convention([])
     }
     
     abstract ListProperty<String> getWaitForServices()
