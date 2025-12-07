@@ -181,7 +181,11 @@ tasks.named('integrationTest') {
 
 // Configure task ordering without direct task references
 tasks.named('startTestRegistries') { mustRunAfter 'ensureSourceImage' }
-tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { dependsOn 'startTestRegistries' }
+// Individual publish task must depend on registry being started
+afterEvaluate {
+    tasks.named('dockerPublishNginxTest') { dependsOn 'startTestRegistries' }
+}
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyDockerBuildArgs') {

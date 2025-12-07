@@ -179,7 +179,14 @@ tasks.named('integrationTest') {
 
 // Configure task ordering without direct task references
 tasks.named('startTestRegistries') { mustRunAfter 'removeSourceImage' }
-tasks.named('dockerImages') { mustRunAfter 'startTestRegistries' }
+tasks.named('dockerImages') { dependsOn 'startTestRegistries' }
+
+// CRITICAL: Individual publish tasks must also depend on startTestRegistries
+// The dockerImages aggregate depends on startTestRegistries, but individual publish
+// tasks run independently and need their own dependency to ensure registry is ready
+afterEvaluate {
+    tasks.named('dockerPublishBusyboxSourceRef') { dependsOn 'startTestRegistries' }
+}
 tasks.named('verifyDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifySavedDockerImages') { mustRunAfter 'dockerImages' }
 tasks.named('verifyRegistryDockerImages') { mustRunAfter 'dockerImages' }
