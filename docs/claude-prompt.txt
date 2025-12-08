@@ -7,6 +7,8 @@ Analyze the plan at @docs/design-docs/todo/docker-project-dsl.md for its readine
 accurate, and clear and without anything misleading or missing.  Provide your assessment and recommendations, but do
 NOT edit files.
 
+Phase 1
+
 
 ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 
