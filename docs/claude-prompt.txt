@@ -8,6 +8,8 @@ accurate, and clear and without anything misleading or missing.  Provide your as
 NOT edit files.
 
 Phase 1
+Phase 2 - testing
+next: PHase 3
 
 
 ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
