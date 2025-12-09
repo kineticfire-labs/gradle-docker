@@ -3,6 +3,10 @@
 This guide explains how to use the `dockerWorkflows` DSL to define CI/CD pipelines that orchestrate Docker image
 building, testing, and conditional post-test actions.
 
+> **Tip:** For simple, single-image projects with a standard build-test-publish workflow, consider using the
+> [dockerProject DSL](usage-docker-project.md) which provides a streamlined, single-block configuration that
+> automatically generates the workflow pipeline for you.
+
 ## Table of Contents
 
 - [Overview](#overview)

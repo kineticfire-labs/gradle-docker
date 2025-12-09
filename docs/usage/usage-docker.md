@@ -2,6 +2,9 @@
 
 This document provides simple, informal examples of how to use the 'docker' DSL for the 'gradle-docker' plugin.
 
+> **Tip:** For simple, single-image projects with a standard build-test-publish workflow, consider using the
+> [dockerProject DSL](usage-docker-project.md) which provides a streamlined configuration experience.
+
 ## Prerequisites
 
 First, add the plugin to your `build.gradle`:

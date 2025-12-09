@@ -3,6 +3,10 @@
 This document provides examples of how to use Docker Compose orchestration in your integration tests with the
 'gradle-docker' plugin.
 
+> **Tip:** For simple, single-image projects with a standard build-test-publish workflow, consider using the
+> [dockerProject DSL](usage-docker-project.md) which combines image building and compose orchestration in one
+> streamlined configuration.
+
 ## Prerequisites
 
 First, add the plugin to your `build.gradle`:

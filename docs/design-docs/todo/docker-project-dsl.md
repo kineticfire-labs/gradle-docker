@@ -1,9 +1,33 @@
 # Design Plan: `dockerProject` Simplified Facade DSL
 
 **Created:** 2025-12-06
-**Status:** TODO
+**Status:** MOSTLY COMPLETE - Integration tests NOT implemented
 **Priority:** Medium-term improvement
-**Last Updated:** 2025-12-07 (ninth plan review corrections applied)
+**Last Updated:** 2025-12-09 (implementation status update)
+
+---
+
+## Implementation Status Update (2025-12-09)
+
+**Phases 1-4 and Phase 6 are COMPLETE:**
+- Phase 1: Core Infrastructure (Spec Classes) - DONE
+- Phase 2: Extension Class - DONE
+- Phase 3: Translator Service - DONE
+- Phase 4: Plugin Integration - DONE
+- Phase 6: Documentation - DONE
+
+**Phase 5 is PARTIALLY complete:**
+- Functional tests (DSL parsing via Gradle TestKit) - DONE (20 tests)
+- **Integration tests - NOT DONE**
+
+**REMAINING WORK:**
+The following integration tests in `plugin-integration-test/dockerProject/` were NOT implemented and need to be added:
+1. `scenario-1-build-mode/` - Basic build mode: jarFrom, test, additionalTags
+2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties
+3. `scenario-3-save-publish/` - Save and publish on success
+4. `scenario-4-method-lifecycle/` - Method lifecycle mode
+5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom
+6. `README.md` - Documentation of scenarios
 
 ---
 
