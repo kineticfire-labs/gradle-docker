@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
+import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 import com.kineticfire.gradle.docker.model.CompressionType
 import com.kineticfire.gradle.docker.extension.DockerOrchExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
@@ -60,8 +61,17 @@ class GradleDockerPlugin implements Plugin<Project> {
         dockerOrchExt.configureProjectNames(project.name)
         def dockerWorkflowsExt = project.extensions.create('dockerWorkflows', DockerWorkflowsExtension, project.objects)
 
+        // Create dockerProject extension (simplified facade)
+        // Gradle injects ObjectFactory automatically via @Inject
+        def dockerProjectExt = project.extensions.create(
+            'dockerProject',
+            DockerProjectExtension,
+            project.objects
+        )
+
         // Register task creation rules
-        registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
+        registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerWorkflowsExt, dockerProjectExt,
+                                  dockerService, composeService, jsonService)
 
         // Register workflow pipeline tasks
         registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerOrchExt, dockerService, composeService)
@@ -140,8 +150,10 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
     
     private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
-                                         Provider<DockerService> dockerService, Provider<ComposeService> composeService,
-                                         Provider<JsonService> jsonService) {
+                                           DockerWorkflowsExtension dockerWorkflowsExt,
+                                           DockerProjectExtension dockerProjectExt,
+                                           Provider<DockerService> dockerService, Provider<ComposeService> composeService,
+                                           Provider<JsonService> jsonService) {
 
         // Register aggregate tasks first
         registerAggregateTasks(project)
@@ -172,6 +184,15 @@ class GradleDockerPlugin implements Plugin<Project> {
         // See: docs/design-docs/gradle-incompatibility/2025-10-18-config-cache-incompat-issues.md
         //      for verification report
         project.afterEvaluate {
+            // STEP 1: Translate dockerProject FIRST (before iterating images)
+            // This adds images/stacks/pipelines to the existing containers before task registration
+            if (dockerProjectExt.spec.isConfigured()) {
+                def translator = new DockerProjectTranslator()
+                translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+            }
+
+            // STEP 2: Now register tasks for ALL images (including translator-created ones)
+            // The .all { } callback will fire for both pre-existing AND newly-added items
             registerDockerImageTasks(project, dockerExt, dockerService)
             registerComposeStackTasks(project, dockerOrchExt, composeService, jsonService)
         }

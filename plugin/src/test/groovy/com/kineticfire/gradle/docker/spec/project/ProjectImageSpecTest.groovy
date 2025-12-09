@@ -250,7 +250,6 @@ class ProjectImageSpecTest extends Specification {
 
         then:
         imageSpec.isBuildMode() == true
-        imageSpec.isSourceRefMode() == false
     }
 
     def "isBuildMode returns true when contextDir is set"() {
@@ -259,7 +258,18 @@ class ProjectImageSpecTest extends Specification {
 
         then:
         imageSpec.isBuildMode() == true
-        imageSpec.isSourceRefMode() == false
+    }
+
+    def "isBuildMode and isSourceRefMode can both be true if both are configured"() {
+        when:
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.sourceRefImageName.set('nginx')
+
+        then:
+        // Both modes can be detected independently
+        // The translator is responsible for validating mutual exclusivity
+        imageSpec.isBuildMode() == true
+        imageSpec.isSourceRefMode() == true
     }
 
     def "isBuildMode returns false when neither jarFrom nor contextDir is set"() {

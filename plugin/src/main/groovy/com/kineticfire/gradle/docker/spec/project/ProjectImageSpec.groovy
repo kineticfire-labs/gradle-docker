@@ -238,13 +238,13 @@ abstract class ProjectImageSpec {
     }
 
     /**
-     * Check if this spec is in build mode
+     * Check if this spec is in build mode (has build properties set)
+     * Note: This only checks for build properties, not mutual exclusivity with sourceRef mode.
+     * The translator is responsible for validating that both modes are not configured simultaneously.
      */
     boolean isBuildMode() {
-        return !isSourceRefMode() && (
-            (jarFrom.isPresent() && !jarFrom.get().isEmpty()) ||
-            (contextDir.isPresent() && !contextDir.get().isEmpty())
-        )
+        return (jarFrom.isPresent() && !jarFrom.get().isEmpty()) ||
+               (contextDir.isPresent() && !contextDir.get().isEmpty())
     }
 
     /**
