@@ -210,12 +210,16 @@ class DockerProjectTranslator {
                     image.contextTask = contextTaskProvider
                     // Also set contextTaskName for configuration cache compatibility
                     image.contextTaskName.set("prepare${sanitizedName.capitalize()}Context")
+                    // NOTE: Do NOT set image.dockerfile here - the contextTask copies the Dockerfile
+                    // to the context, and GradleDockerPlugin.configureDockerfile() will automatically
+                    // resolve it from within the context when hasContextTask is true.
                 } else if (imageSpec.contextDir.isPresent()) {
                     image.context.set(project.file(imageSpec.contextDir.get()))
-                }
-
-                if (imageSpec.dockerfile.isPresent()) {
-                    image.dockerfile.set(project.file(imageSpec.dockerfile.get()))
+                    // For contextDir mode (pre-existing context), set dockerfile if non-default
+                    def defaultDockerfile = 'src/main/docker/Dockerfile'
+                    if (imageSpec.dockerfile.isPresent() && imageSpec.dockerfile.get() != defaultDockerfile) {
+                        image.dockerfile.set(project.file(imageSpec.dockerfile.get()))
+                    }
                 }
             } else {
                 // SourceRef mode configuration
@@ -373,7 +377,8 @@ class DockerProjectTranslator {
             if (testSpec.projectName.isPresent()) {
                 stack.projectName.set(testSpec.projectName)
             } else {
-                stack.projectName.set("${project.name}-${stackName}")
+                // Docker Compose project names must be lowercase alphanumeric with hyphens/underscores
+                stack.projectName.set("${project.name}-${stackName}".toLowerCase())
             }
 
             if (testSpec.waitForHealthy.isPresent() && !testSpec.waitForHealthy.get().isEmpty()) {

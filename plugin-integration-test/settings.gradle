@@ -134,3 +134,8 @@ include 'dockerWorkflows:scenario-7-save-publish'
 include 'dockerWorkflows:scenario-7-save-publish:app-image'
 include 'dockerWorkflows:scenario-8-method-lifecycle'
 include 'dockerWorkflows:scenario-8-method-lifecycle:app-image'
+
+// Include dockerProject integration tests
+include 'dockerProject'
+include 'dockerProject:scenario-1-build-mode'
+include 'dockerProject:scenario-1-build-mode:app-image'

@@ -435,7 +435,8 @@ services:
         and:
         def stack = dockerOrchExt.composeStacks.getByName('myappTest')
         stack.files.files.any { it.name == 'app.yml' }
-        stack.projectName.get() == "${project.name}-myappTest"
+        // Docker Compose project names must be lowercase
+        stack.projectName.get() == "${project.name}-myappTest".toLowerCase()
         stack.waitForHealthy.get().waitForServices.get() == ['app', 'db']
     }
 

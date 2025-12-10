@@ -1,0 +1,182 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerProject Integration Test: Scenario 1 - Build Mode
+ *
+ * This scenario demonstrates the simplified dockerProject DSL for a basic
+ * build -> test -> add success tag workflow using jarFrom.
+ *
+ * What this tests:
+ * - dockerProject single-block configuration
+ * - jarFrom property for JAR-based builds
+ * - test block with compose and waitForHealthy
+ * - onSuccess block with additionalTags
+ * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9300 (dockerProject scenario 1)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// =============================================================================
+// DOCKER PROJECT DSL: Simplified single-block configuration
+// =============================================================================
+// This is the simplified dockerProject DSL that replaces the three-DSL approach
+// (docker + dockerOrch + dockerWorkflows) for common single-image workflows.
+dockerProject {
+    // image block: Define the Docker image to build
+    image {
+        // Required: Image name (must be unique across integration tests)
+        name.set('project-scenario1-app')
+
+        // Tags to apply to the built image
+        tags.set(['latest', '1.0.0'])
+
+        // jarFrom: Reference a task that produces a JAR file
+        // The JAR will be copied to the build context as 'app.jar'
+        jarFrom.set(':app:jar')
+
+        // Optional: Build arguments passed to docker build
+        buildArgs.put('BUILD_VERSION', '1.0.0')
+
+        // Optional: Labels for the Docker image
+        labels.put('org.opencontainers.image.title', 'Project Scenario 1 App')
+        labels.put('org.opencontainers.image.version', '1.0.0')
+    }
+
+    // test block: Configure Docker Compose stack and test execution
+    test {
+        // Path to the Docker Compose file
+        compose.set('src/integrationTest/resources/compose/app.yml')
+
+        // Services to wait for HEALTHY status before running tests
+        waitForHealthy.set(['app'])
+
+        // Timeout for health checks (default: 60)
+        timeoutSeconds.set(60)
+
+        // Poll interval for health checks (default: 2)
+        pollSeconds.set(2)
+
+        // Test task to execute (default: 'integrationTest')
+        testTaskName.set('integrationTest')
+    }
+
+    // onSuccess block: Actions when tests pass
+    onSuccess {
+        // Additional tags to apply when tests succeed
+        additionalTags.set(['tested'])
+    }
+}
+
+// =============================================================================
+// Integration Test Dependencies
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task with system properties
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_PROJECT_NAME', 'project-scenario1-test'
+    systemProperty 'IMAGE_NAME', 'project-scenario1-app'
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Ensure image is built before compose up, and tests are wrapped with compose up/down
+afterEvaluate {
+    tasks.named('composeUpProjectscenario1appTest') {
+        dependsOn tasks.named('dockerBuildProjectscenario1app')
+        dependsOn project(':app').tasks.named('jar')
+    }
+
+    // The integration test flow: composeUp -> tests -> composeDown
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpProjectscenario1appTest')
+        finalizedBy tasks.named('composeDownProjectscenario1appTest')
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('runProjectIntegrationTest') {
+    description = 'Run the dockerProject pipeline and verify results'
+    group = 'verification'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Run the pipeline (task name is 'run<ImageName>Pipeline')
+    dependsOn tasks.named('runProjectscenario1appPipeline')
+
+    doLast {
+        // Verify the 'tested' tag was applied
+        def result = exec {
+            commandLine 'docker', 'images', '-q', 'project-scenario1-app:tested'
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+        def imageId = result.standardOutput.toString().trim()
+        if (imageId.isEmpty()) {
+            throw new GradleException("Expected image 'project-scenario1-app:tested' not found! " +
+                "The onSuccess additionalTags may not have been applied.")
+        }
+        logger.lifecycle("SUCCESS: Image 'project-scenario1-app:tested' found with ID: ${imageId}")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupProject') {
+    description = 'Clean up Docker resources from dockerProject test'
+    group = 'verification'
+
+    doLast {
+        // Remove test containers
+        exec {
+            commandLine 'docker', 'compose', '-p', 'project-scenario1-test', 'down', '-v'
+            ignoreExitValue = true
+        }
+
+        // Remove test images
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "project-scenario1-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+    }
+}

@@ -1,0 +1,79 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerProject Integration Tests Aggregator
+ *
+ * Coordinates all dockerProject integration test scenarios.
+ * These tests verify the simplified dockerProject DSL that provides a
+ * single-block configuration for common Docker workflows.
+ */
+
+plugins {
+    id 'base'
+}
+
+// ========================================
+// Task: integrationTest
+// Run all dockerProject integration tests
+// ========================================
+tasks.register('integrationTest') {
+    group = 'verification'
+    description = 'Run all dockerProject integration tests'
+
+    // Scenario 1: Build mode (jarFrom, test, additionalTags)
+    dependsOn ':dockerProject:scenario-1-build-mode:app-image:integrationTest'
+
+    doLast {
+        logger.lifecycle("All dockerProject tests complete")
+    }
+}
+
+// ========================================
+// Task: clean
+// Clean all dockerProject tests
+// ========================================
+tasks.named('clean') {
+    dependsOn ':dockerProject:scenario-1-build-mode:app-image:clean'
+}
+
+// ========================================
+// Task: cleanDockerImages
+// Clean Docker images created by dockerProject tests
+// ========================================
+tasks.register('cleanDockerImages', Exec) {
+    group = 'verification'
+    description = 'Remove Docker images created by dockerProject tests'
+
+    commandLine 'sh', '-c', '''
+        docker rmi project-scenario1-app:latest 2>/dev/null || true
+        docker rmi project-scenario1-app:1.0.0 2>/dev/null || true
+        docker rmi project-scenario1-app:tested 2>/dev/null || true
+        echo "Cleaned up dockerProject test images"
+    '''
+}
+
+// ========================================
+// Task: cleanAll
+// Complete cleanup
+// ========================================
+tasks.register('cleanAll') {
+    group = 'build'
+    description = 'Clean everything including Docker images'
+
+    dependsOn 'clean'
+    dependsOn 'cleanDockerImages'
+}
