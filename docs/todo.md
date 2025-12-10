@@ -3,8 +3,8 @@
 **REMAINING WORK:**
 Phase 5:
 24 +  The following integration tests in `plugin-integration-test/dockerProject/` were NOT implemented and need to be added:
-25 +  1. `scenario-1-build-mode/` - Basic build mode: jarFrom, test, additionalTags
-26 +  2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties
+25 +  1. `scenario-1-build-mode/` - Basic build mode: jarFrom, test, additionalTags - DONE
+26 +  2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties - DONE
 27 +  3. `scenario-3-save-publish/` - Save and publish on success
 28 +  4. `scenario-4-method-l` - Method lifecycle mode
       5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom

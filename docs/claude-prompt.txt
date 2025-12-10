@@ -3,13 +3,6 @@ Compose.  You are on a team building a custom Gradle plugin to build, tag, save,
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
 with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
-Analyze the plan at @docs/design-docs/todo/docker-project-dsl.md for its readiness for implementing.  Is it complete,
-accurate, and clear and without anything misleading or missing.  Provide your assessment and recommendations, but do
-NOT edit files.
-
-Phase 1
-Phase 2 - testing
-next: PHase 3
 
 
 ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal

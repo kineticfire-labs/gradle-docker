@@ -1,0 +1,32 @@
+# (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Docker Compose for dockerProject scenario-2-sourceref-mode integration testing
+# Port 9301 is allocated for dockerProject scenario 2 (per README conventions).
+#
+# This compose file uses the pulled Docker Hub image directly.
+# In sourceRef mode, the dockerProject DSL:
+# 1. Pulls nginx:1.27-alpine from docker.io/library/nginx:1.27-alpine (if pullIfMissing=true)
+# 2. Applies additional tags (like 'latest', '1.27') to the source image
+# 3. The compose file references the source tag since that's what's available
+
+services:
+  nginx:
+    # Use the pulled image directly (sourceRef mode uses existing image)
+    # The tag must match one of the tags configured in dockerProject.image.tags
+    image: nginx:1.27-alpine
+    ports:
+      - "9301:80"
+    # nginx:alpine doesn't have a built-in health check, so we use waitForRunning
+    # in the dockerProject test block instead of waitForHealthy

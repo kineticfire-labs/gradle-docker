@@ -37,6 +37,9 @@ tasks.register('integrationTest') {
     // Scenario 1: Build mode (jarFrom, test, additionalTags)
     dependsOn ':dockerProject:scenario-1-build-mode:app-image:integrationTest'
 
+    // Scenario 2: SourceRef mode (sourceRef component properties)
+    dependsOn ':dockerProject:scenario-2-sourceref-mode:app-image:integrationTest'
+
     doLast {
         logger.lifecycle("All dockerProject tests complete")
     }
@@ -48,6 +51,7 @@ tasks.register('integrationTest') {
 // ========================================
 tasks.named('clean') {
     dependsOn ':dockerProject:scenario-1-build-mode:app-image:clean'
+    dependsOn ':dockerProject:scenario-2-sourceref-mode:app-image:clean'
 }
 
 // ========================================
@@ -59,9 +63,16 @@ tasks.register('cleanDockerImages', Exec) {
     description = 'Remove Docker images created by dockerProject tests'
 
     commandLine 'sh', '-c', '''
+        # Scenario 1: Build mode images
         docker rmi project-scenario1-app:latest 2>/dev/null || true
         docker rmi project-scenario1-app:1.0.0 2>/dev/null || true
         docker rmi project-scenario1-app:tested 2>/dev/null || true
+
+        # Scenario 2: SourceRef mode images (local tags only)
+        docker rmi project-scenario2-nginx:latest 2>/dev/null || true
+        docker rmi project-scenario2-nginx:1.27 2>/dev/null || true
+        docker rmi project-scenario2-nginx:verified 2>/dev/null || true
+
         echo "Cleaned up dockerProject test images"
     '''
 }
