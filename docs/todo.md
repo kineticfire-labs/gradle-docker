@@ -7,7 +7,7 @@ Phase 5:
 26 +  2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties - DONE
 27 +  3. `scenario-3-save-publish/` - Save and publish on success - DONE
 28 +  4. `scenario-4-method-lifecycle/` - Method lifecycle mode - DONE
-      5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom
+      5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom - DONE
    30 +  6. `README.md` - Documentation of scenarios
 
 
