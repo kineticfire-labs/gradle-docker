@@ -40,6 +40,9 @@ tasks.register('integrationTest') {
     // Scenario 2: SourceRef mode (sourceRef component properties)
     dependsOn ':dockerProject:scenario-2-sourceref-mode:app-image:integrationTest'
 
+    // Scenario 3: Save and publish on success
+    dependsOn ':dockerProject:scenario-3-save-publish:app-image:integrationTest'
+
     doLast {
         logger.lifecycle("All dockerProject tests complete")
     }
@@ -52,6 +55,7 @@ tasks.register('integrationTest') {
 tasks.named('clean') {
     dependsOn ':dockerProject:scenario-1-build-mode:app-image:clean'
     dependsOn ':dockerProject:scenario-2-sourceref-mode:app-image:clean'
+    dependsOn ':dockerProject:scenario-3-save-publish:app-image:clean'
 }
 
 // ========================================
@@ -72,6 +76,15 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi project-scenario2-nginx:latest 2>/dev/null || true
         docker rmi project-scenario2-nginx:1.27 2>/dev/null || true
         docker rmi project-scenario2-nginx:verified 2>/dev/null || true
+
+        # Scenario 3: Save and publish images
+        docker rmi project-scenario3-app:latest 2>/dev/null || true
+        docker rmi project-scenario3-app:1.0.0 2>/dev/null || true
+        docker rmi project-scenario3-app:tested 2>/dev/null || true
+        docker rmi project-scenario3-app:stable 2>/dev/null || true
+        docker rmi localhost:5032/scenario3/project-scenario3-app:latest 2>/dev/null || true
+        docker rmi localhost:5032/scenario3/project-scenario3-app:1.0.0 2>/dev/null || true
+        docker rmi localhost:5032/scenario3/project-scenario3-app:tested 2>/dev/null || true
 
         echo "Cleaned up dockerProject test images"
     '''

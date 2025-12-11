@@ -1,0 +1,291 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerProject Integration Test: Scenario 3 - Save and Publish on Success
+ *
+ * This scenario demonstrates the simplified dockerProject DSL with:
+ * - Build mode using jarFrom
+ * - Test block with compose and waitForHealthy
+ * - onSuccess block with:
+ *   - additionalTags (tag image after test success)
+ *   - saveFile (save image to tar.gz archive)
+ *   - publishRegistry/publishNamespace (publish to private registry)
+ *
+ * What this tests:
+ * - Complete build -> test -> save -> publish workflow via dockerProject DSL
+ * - Save file compression inference from filename (.tar.gz -> GZIP)
+ * - Publish to private registry without authentication
+ * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9302 (dockerProject scenario 3)
+ * - Registry: 5032 (dockerProject scenario 3 private registry)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// =============================================================================
+// DOCKER PROJECT DSL: Save and Publish on Success
+// =============================================================================
+// This scenario demonstrates the full onSuccess capabilities including save and publish.
+// The dockerProject DSL translates these into the underlying docker/dockerOrch/dockerWorkflows
+// configurations automatically.
+dockerProject {
+    // image block: Define the Docker image to build
+    image {
+        // Required: Image name (must be unique across integration tests)
+        name.set('project-scenario3-app')
+
+        // Tags to apply to the built image
+        tags.set(['latest', '1.0.0'])
+
+        // jarFrom: Reference a task that produces a JAR file
+        // The JAR will be copied to the build context as 'app.jar'
+        jarFrom.set(':app:jar')
+
+        // Build arguments and labels for the Docker image
+        buildArgs.put('BUILD_VERSION', '1.0.0')
+        labels.put('org.opencontainers.image.title', 'Project Scenario 3 - Save & Publish')
+        labels.put('org.opencontainers.image.version', '1.0.0')
+    }
+
+    // test block: Configure Docker Compose stack and test execution
+    test {
+        // Path to the Docker Compose file
+        compose.set('src/integrationTest/resources/compose/app.yml')
+
+        // Services to wait for HEALTHY status before running tests
+        waitForHealthy.set(['app'])
+
+        // Timeout for health checks (default: 60)
+        timeoutSeconds.set(60)
+
+        // Test task to execute (default: 'integrationTest')
+        testTaskName.set('integrationTest')
+    }
+
+    // onSuccess block: Actions when tests pass
+    onSuccess {
+        // Additional tags to apply when tests succeed
+        // These are ADDED to the base tags, not replacing them
+        additionalTags.set(['tested', 'stable'])
+
+        // Save the image to a tar.gz archive
+        // Compression is inferred from the filename extension:
+        // - .tar.gz, .tgz -> GZIP
+        // - .tar.bz2, .tbz2 -> BZIP2
+        // - .tar.xz, .txz -> XZ
+        // - .tar -> NONE
+        // - .zip -> ZIP
+        saveFile.set('build/images/project-scenario3-app.tar.gz')
+
+        // Publish to a private registry
+        // The registry must be running before tests execute
+        publishRegistry.set('localhost:5032')
+        publishNamespace.set('scenario3')
+
+        // publishTags: Specify which tags to publish (optional)
+        // If not specified, uses additionalTags
+        publishTags.set(['latest', '1.0.0', 'tested'])
+    }
+}
+
+// =============================================================================
+// Integration Test Dependencies
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task with system properties
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_PROJECT_NAME', 'project-scenario3-test'
+    systemProperty 'IMAGE_NAME', 'project-scenario3-app'
+    systemProperty 'REGISTRY_PORT', '5032'
+    systemProperty 'REGISTRY_NAMESPACE', 'scenario3'
+}
+
+// =============================================================================
+// Test Registry Setup (Private Docker Registry)
+// =============================================================================
+// Apply the registry management plugin from buildSrc
+apply plugin: RegistryManagementPlugin
+
+// Configure test registry using the plugin
+withTestRegistry('test-registry-scenario3', 5032) {
+    // Registry will be configured with default settings
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Ensure image is built before compose up, and tests are wrapped with compose up/down
+afterEvaluate {
+    // Ensure registry is started before running the pipeline
+    tasks.named('runProjectscenario3appPipeline') {
+        dependsOn tasks.named('startTestRegistries')
+        finalizedBy tasks.named('stopTestRegistries')
+    }
+
+    tasks.named('composeUpProjectscenario3appTest') {
+        dependsOn tasks.named('dockerBuildProjectscenario3app')
+        dependsOn project(':app').tasks.named('jar')
+    }
+
+    // The integration test flow: composeUp -> tests -> composeDown
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpProjectscenario3appTest')
+        finalizedBy tasks.named('composeDownProjectscenario3appTest')
+    }
+}
+
+// =============================================================================
+// Verification Tasks: Verify save and publish results
+// =============================================================================
+// Apply the reusable Docker image testing plugin from buildSrc
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Register Docker image clean and verify tasks
+registerBuildWorkflowTasks(project, [
+    'project-scenario3-app:latest',
+    'project-scenario3-app:1.0.0',
+    'project-scenario3-app:tested',
+    'project-scenario3-app:stable'
+])
+
+// Register saved image verification task
+registerVerifySavedImagesTask(project, ['build/images/project-scenario3-app.tar.gz'])
+
+// Register registry image verification task
+registerVerifyRegistryImagesTask(project, [
+    'localhost:5032/scenario3/project-scenario3-app:latest',
+    'localhost:5032/scenario3/project-scenario3-app:1.0.0',
+    'localhost:5032/scenario3/project-scenario3-app:tested'
+])
+
+// =============================================================================
+// Full Pipeline Test Task
+// =============================================================================
+tasks.register('runProjectIntegrationTest') {
+    description = 'Run the full dockerProject save/publish pipeline and verify results'
+    group = 'verification'
+
+    // Start registry first
+    dependsOn 'startTestRegistries'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Run the pipeline (task name is 'run<ImageName>Pipeline')
+    dependsOn tasks.named('runProjectscenario3appPipeline')
+
+    // Verify results after pipeline completes
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+
+    // Stop registry when done
+    finalizedBy 'stopTestRegistries'
+
+    doLast {
+        logger.lifecycle("SUCCESS: dockerProject scenario-3 save/publish pipeline completed successfully!")
+        logger.lifecycle("  - Image built and tagged: project-scenario3-app:latest, :1.0.0, :tested, :stable")
+        logger.lifecycle("  - Image saved to: build/images/project-scenario3-app.tar.gz")
+        logger.lifecycle("  - Image published to: localhost:5032/scenario3/project-scenario3-app")
+    }
+}
+
+// Configure task ordering for verification
+afterEvaluate {
+    if (tasks.findByName('verifyDockerImages') != null) {
+        tasks.named('verifyDockerImages') {
+            mustRunAfter tasks.named('runProjectscenario3appPipeline')
+        }
+    }
+    if (tasks.findByName('verifySavedDockerImages') != null) {
+        tasks.named('verifySavedDockerImages') {
+            mustRunAfter tasks.named('runProjectscenario3appPipeline')
+        }
+    }
+    if (tasks.findByName('verifyRegistryDockerImages') != null) {
+        tasks.named('verifyRegistryDockerImages') {
+            mustRunAfter tasks.named('runProjectscenario3appPipeline')
+        }
+    }
+    if (tasks.findByName('stopTestRegistries') != null) {
+        tasks.named('stopTestRegistries') {
+            mustRunAfter 'verifyRegistryDockerImages'
+        }
+    }
+}
+
+// =============================================================================
+// Cleanup Task
+// =============================================================================
+tasks.register('cleanupProject') {
+    description = 'Clean up Docker resources from dockerProject test'
+    group = 'verification'
+
+    doLast {
+        // Stop and remove test registry
+        exec {
+            commandLine 'docker', 'rm', '-f', 'test-registry-scenario3'
+            ignoreExitValue = true
+        }
+
+        // Remove test containers
+        exec {
+            commandLine 'docker', 'compose', '-p', 'project-scenario3-test', 'down', '-v'
+            ignoreExitValue = true
+        }
+
+        // Remove test images (local)
+        ['latest', '1.0.0', 'tested', 'stable'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "project-scenario3-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+
+        // Remove test images (registry tagged)
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            exec {
+                commandLine 'docker', 'rmi', "localhost:5032/scenario3/project-scenario3-app:${tag}"
+                ignoreExitValue = true
+            }
+        }
+
+        // Remove saved image file
+        delete 'build/images/project-scenario3-app.tar.gz'
+    }
+}

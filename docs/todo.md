@@ -6,10 +6,22 @@ Phase 5:
 25 +  1. `scenario-1-build-mode/` - Basic build mode: jarFrom, test, additionalTags - DONE
 26 +  2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties - DONE
 27 +  3. `scenario-3-save-publish/` - Save and publish on success
-28 +  4. `scenario-4-method-l` - Method lifecycle mode
+28 +  4. `scenario-4-method-lifecycle/` - Method lifecycle mode
       5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom
    30 +  6. `README.md` - Documentation of scenarios
 
+
+1. in image DSL: name.set('project-scenario1-app')
+   1. what about repository or component parts?
+1. in image DSL: jarFrom.set(':app:jar')
+   1. allow for rename from app.jar?
+   1. what about for none-java projects?
+      1. mainly, one or more directories
+1. in image DSL: can we still specify Dockerfile? 
+1. in test DSL: do we have 'waitForRunning'?
+1. in onSuccess DSL: 
+   1. can only publish to one registry?
+   1. authentication example? 
 
 ## Clean-up
 
