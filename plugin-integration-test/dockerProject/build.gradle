@@ -43,6 +43,9 @@ tasks.register('integrationTest') {
     // Scenario 3: Save and publish on success
     dependsOn ':dockerProject:scenario-3-save-publish:app-image:integrationTest'
 
+    // Scenario 4: Method lifecycle mode (runs pipeline for system props)
+    dependsOn ':dockerProject:scenario-4-method-lifecycle:app-image:runProjectscenario4appPipeline'
+
     doLast {
         logger.lifecycle("All dockerProject tests complete")
     }
@@ -56,6 +59,7 @@ tasks.named('clean') {
     dependsOn ':dockerProject:scenario-1-build-mode:app-image:clean'
     dependsOn ':dockerProject:scenario-2-sourceref-mode:app-image:clean'
     dependsOn ':dockerProject:scenario-3-save-publish:app-image:clean'
+    dependsOn ':dockerProject:scenario-4-method-lifecycle:app-image:clean'
 }
 
 // ========================================
@@ -85,6 +89,11 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi localhost:5032/scenario3/project-scenario3-app:latest 2>/dev/null || true
         docker rmi localhost:5032/scenario3/project-scenario3-app:1.0.0 2>/dev/null || true
         docker rmi localhost:5032/scenario3/project-scenario3-app:tested 2>/dev/null || true
+
+        # Scenario 4: Method lifecycle images
+        docker rmi project-scenario4-app:latest 2>/dev/null || true
+        docker rmi project-scenario4-app:1.0.0 2>/dev/null || true
+        docker rmi project-scenario4-app:tested 2>/dev/null || true
 
         echo "Cleaned up dockerProject test images"
     '''
