@@ -1,0 +1,18 @@
+# Docker Compose for dockerProject Scenario 5 - ContextDir Mode
+#
+# This compose file tests the image built using contextDir mode.
+# Port 9304 is allocated for this scenario per README conventions.
+
+services:
+  app:
+    image: ${IMAGE_NAME:-project-scenario5-app}:latest
+    ports:
+      - "9304:8080"
+    environment:
+      - JAVA_OPTS=-Xmx256m
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 5s
+      timeout: 3s
+      start_period: 10s
+      retries: 5

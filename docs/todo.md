@@ -11,6 +11,56 @@ Phase 5:
    30 +  6. `README.md` - Documentation of scenarios
 
 
+> Task :dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline
+Successfully applied tags: [hooks-verified]
+HOOK: afterSuccess executed - marker created
+Success path completed for pipeline: hooksPipeline
+Executing always (cleanup) step
+Executing cleanup for pipeline: hooksPipeline
+Cleanup completed for pipeline: hooksPipeline
+Pipeline hooksPipeline completed successfully
+
+3 problems were found storing the configuration cache.
+- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.internal.tasks.DefaultTaskContainer', a subtype of 'org.gradle.api.tasks.TaskContainer', as these are not supported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:disallowed_types
+- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.tasks.Copy', a subtype of 'org.gradle.api.Task', as these are not supported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:task_access
+- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
+
+See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/85m3p6i069i6z87ntu2ef5kka/3b6rxjnr4ec4utjnfsm4ff6or/configuration-cache-report.html
+
+[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
+
+
+
+> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline
+Successfully applied tags: [prod, release]
+Success path completed for pipeline: prodPipeline
+Executing always (cleanup) step
+Executing cleanup for pipeline: prodPipeline
+Cleanup completed for pipeline: prodPipeline
+Pipeline prodPipeline completed successfully
+
+5 problems were found storing the configuration cache.
+- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
+- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
+- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.internal.tasks.DefaultTaskContainer', a subtype of 'org.gradle.api.tasks.TaskContainer', as these are not supported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:disallowed_types
+- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.tasks.Copy', a subtype of 'org.gradle.api.Task', as these are not supported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:task_access
+- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
+  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
+
+See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/8n5kvq9wy3hcs8sfd1d0kl27j/eeapxhkgg1hbcar92z846s7er/configuration-cache-report.html
+
+[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
+
+
+
+
 1. in image DSL: name.set('project-scenario1-app')
    1. what about repository or component parts?
 1. in image DSL: jarFrom.set(':app:jar')
