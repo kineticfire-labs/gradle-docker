@@ -452,7 +452,8 @@ dockerProject {
 2. **Image Identity Required**: In Source Reference Mode, must have either:
    - `sourceRef` set, OR
    - At least `imageName` (or `repository`) set
-3. **Image Must Exist**: When using Source Reference Mode, the image must exist locally or be pullable
+3. **Image Must Exist**: When using Source Reference Mode, the image must exist locally or be pullable (based on `pullPolicy`)
+4. **Pull Policy Only in Source Reference Mode**: Cannot set `pullPolicy` with any build property
 
 **Error example:**
 ```groovy
@@ -462,6 +463,116 @@ dockerProject {
         myApp {
             sourceRef.set('existing:v1.0')
             jarFrom.set(':app:jar')  // ❌ Error: mutual exclusivity violation
+        }
+    }
+}
+```
+
+### Pull Policy: Controlling Image Retrieval
+
+When using Source Reference Mode (referencing existing images), you may need to control whether the plugin attempts to pull the image from a registry. The `pullPolicy` property provides this control using the shared `PullPolicy` enum.
+
+**PullPolicy Enum:**
+```groovy
+// Defined in: com.kineticfire.gradle.docker.PullPolicy
+// Shared by both 'docker' and 'dockerProject' DSLs
+enum PullPolicy {
+    NEVER,      // Fail if image not found locally (default - safest)
+    IF_MISSING, // Pull only if not found locally
+    ALWAYS      // Always pull from registry (useful for :latest tags)
+}
+```
+
+| Value | Description | Use Case |
+|-------|-------------|----------|
+| `PullPolicy.NEVER` (default) | Fail if image not found locally | CI builds where image must be pre-built |
+| `PullPolicy.IF_MISSING` | Pull only if not found locally | Development, testing third-party images |
+| `PullPolicy.ALWAYS` | Always pull latest from registry | When using `:latest` or mutable tags |
+
+**Example - Pull if missing:**
+```groovy
+import com.kineticfire.gradle.docker.PullPolicy
+
+dockerProject {
+    images {
+        nginx {
+            sourceRef.set('nginx:1.25')
+            pullPolicy.set(PullPolicy.IF_MISSING)  // Pull if not local
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['nginx'])
+    }
+}
+```
+
+**Example - Always pull (for :latest):**
+```groovy
+import com.kineticfire.gradle.docker.PullPolicy
+
+dockerProject {
+    images {
+        myApp {
+            sourceRef.set('myregistry.com/myapp:latest')
+            pullPolicy.set(PullPolicy.ALWAYS)  // Always get latest
+        }
+    }
+    test { ... }
+}
+```
+
+**Example - Hybrid: build one image, pull another:**
+```groovy
+import com.kineticfire.gradle.docker.PullPolicy
+
+dockerProject {
+    images {
+        myApp {
+            imageName.set('my-app')
+            jarFrom.set(':app:jar')
+            primary.set(true)
+            // pullPolicy not applicable - this is Build Mode
+        }
+        database {
+            sourceRef.set('postgres:15')
+            pullPolicy.set(PullPolicy.IF_MISSING)  // Pull postgres if needed
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app', 'db'])
+    }
+    onSuccess {
+        additionalTags.set(['tested'])  // Applied to myApp (primary)
+    }
+}
+```
+
+**With static import (cleaner DSL):**
+```groovy
+import static com.kineticfire.gradle.docker.PullPolicy.*
+
+dockerProject {
+    images {
+        nginx {
+            sourceRef.set('nginx:latest')
+            pullPolicy.set(ALWAYS)
+        }
+    }
+    // ...
+}
+```
+
+**Validation Rule:** `pullPolicy` can only be set in Source Reference Mode. Setting it with any build property (`jarFrom`, `contextTask`, `contextDir`) results in a validation error:
+```groovy
+// INVALID - pullPolicy only applies in Source Reference Mode
+dockerProject {
+    images {
+        myApp {
+            imageName.set('my-app')
+            jarFrom.set(':app:jar')
+            pullPolicy.set(PullPolicy.IF_MISSING)  // ❌ Error: pullPolicy only in Source Reference Mode
         }
     }
 }
@@ -1545,40 +1656,77 @@ Since the plugin has no external users, this is a **clean replacement** rather t
    - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/Lifecycle.groovy`
    - This enum is shared between `dockerProject` and `dockerOrch` DSLs
 
+**Tasks for PullPolicy Enum (Shared)**:
+17. Create `com.kineticfire.gradle.docker.PullPolicy` enum
+   - Values: `NEVER`, `IF_MISSING`, `ALWAYS`
+   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/PullPolicy.groovy`
+   - This enum is shared between `dockerProject` and `docker` DSLs
+   - Default value: `NEVER` (safest - fail if image not found locally)
+
+**Tasks for pullPolicy in ProjectImageSpec**:
+18. Add `Property<PullPolicy> pullPolicy` to `ProjectImageSpec`
+    - Convention: `pullPolicy.convention(PullPolicy.NEVER)`
+    - Type-safe: no validation needed (compiler enforces valid values)
+    - Only applicable in Source Reference Mode (not Build Mode)
+19. Add validation: `pullPolicy` only in Source Reference Mode
+    - If `pullPolicy` is set AND any build property is set (`jarFrom`, `contextTask`, `contextDir`), throw validation error
+    - Error message: "pullPolicy can only be set in Source Reference Mode"
+20. Update `DockerProjectTaskGenerator` to respect `pullPolicy` for referenced images
+    - When in Source Reference Mode with `pullPolicy = NEVER`: Fail if image not local
+    - When in Source Reference Mode with `pullPolicy = IF_MISSING`: Pull only if not local
+    - When in Source Reference Mode with `pullPolicy = ALWAYS`: Always pull from registry
+
+**Tasks for docker DSL Migration (pullIfMissing → pullPolicy)**:
+21. Deprecate `pullIfMissing(boolean)` method in `ImageSpec`
+    - Add `@Deprecated` annotation with explanation
+    - Method internally converts to `PullPolicy`: `true` → `IF_MISSING`, `false` → `NEVER`
+22. Add `Property<PullPolicy> pullPolicy` to `ImageSpec`
+    - Convention: `pullPolicy.convention(PullPolicy.NEVER)`
+    - Works alongside deprecated `pullIfMissing()` for backward compatibility
+23. Update `DockerBuildTask` to use `pullPolicy` instead of `pullIfMissing`
+    - Convert existing `pullIfMissing` boolean logic to enum-based logic
+    - Support `ALWAYS` option (new functionality)
+24. Update `ImageSpec` DSL methods to support `PullPolicy`
+    - Add `pullPolicy(PullPolicy policy)` method
+    - Keep `pullIfMissing(boolean)` as deprecated wrapper
+
 **Tasks for ProjectTestSpec**:
-17. Add `Property<Lifecycle> lifecycle` to `ProjectTestSpec`
+25. Add `Property<Lifecycle> lifecycle` to `ProjectTestSpec`
     - Convention: `lifecycle.convention(Lifecycle.CLASS)`
     - Type-safe: no validation needed (compiler enforces valid values)
-18. Update translator/generator to configure test task lifecycle based on this property
+26. Update translator/generator to configure test task lifecycle based on this property
     - For `Lifecycle.CLASS`: Standard composeUp → tests → composeDown flow
     - For `Lifecycle.METHOD`: Register JUnit extension that manages compose per test method
 
 **Tasks for dockerOrch Migration**:
-19. Update `TestIntegrationExtension.usesCompose()` to accept `Lifecycle` enum
+27. Update `TestIntegrationExtension.usesCompose()` to accept `Lifecycle` enum
     - Change `String lifecycle` parameter to `Lifecycle lifecycle`
     - Remove string validation logic (no longer needed with enum)
-20. Update all callers of `usesCompose()` to pass `Lifecycle` enum values
+28. Update all callers of `usesCompose()` to pass `Lifecycle` enum values
 
 **Tasks for Multiple Publish Targets (onSuccess)**:
-21. Create `PublishTargetSpec` class for named publish targets
+29. Create `PublishTargetSpec` class for named publish targets
     - Properties: `registry`, `namespace`, `repository`, `tags`
     - Nested `auth` block with `username`, `password`
     - Located in `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/PublishTargetSpec.groovy`
-22. Create `PublishTargetAuthSpec` class for authentication
+30. Create `PublishTargetAuthSpec` class for authentication
     - Properties: `username`, `password` (both `Property<String>`)
     - Located in `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/project/PublishTargetAuthSpec.groovy`
-23. Update `ProjectSuccessSpec` to support multiple publish targets
+31. Update `ProjectSuccessSpec` to support multiple publish targets
     - Add `NamedDomainObjectContainer<PublishTargetSpec> publish` container
     - Add `publish(Action<NamedDomainObjectContainer<PublishTargetSpec>>)` method for DSL
     - Keep existing flat properties (`publishRegistry`, `publishNamespace`, `publishTags`) for simple cases
     - Validation: cannot use both flat properties AND `publish { }` block simultaneously
-24. Update `DockerProjectTaskGenerator` to handle multiple publish targets
+32. Update `DockerProjectTaskGenerator` to handle multiple publish targets
     - Generate `dockerProjectPublish{Name}` task for each named target
     - Wire all publish tasks as dependencies of `runDockerProject`
     - Pass auth credentials to Docker login before push
 
 **Deliverables**:
 - New `Lifecycle` enum shared by `dockerProject` and `dockerOrch` DSLs
+- New `PullPolicy` enum shared by `dockerProject` and `docker` DSLs
+  - Values: `NEVER` (default), `IF_MISSING`, `ALWAYS`
+  - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/PullPolicy.groovy`
 - **Multiple Image Support**:
   - Renamed `name` property to `imageName` in `ProjectImageSpec` for consistency with `docker` DSL
   - New `Property<Boolean> primary` to designate which image receives `onSuccess.additionalTags`
@@ -1589,17 +1737,24 @@ Since the plugin has no external users, this is a **clean replacement** rather t
   - `imageName` property (renamed from `name`)
   - `primary` property for multi-image scenarios
   - `repository`, `jarName`, `dockerfileName`, `sourceRef` properties
+  - `pullPolicy` property (`Property<PullPolicy>`) for Source Reference Mode
   - `contextTask` triple-property pattern for config cache safety (`contextTask`, `contextTaskName`, `contextTaskPath`)
   - DSL helper methods: `buildArg(key, value)`, `label(key, value)` for API consistency with `docker` DSL
   - `sourceRef(Closure)` DSL method with inner `SourceRefSpec` class for component-based sourceRef
   - `getEffectiveSourceRef()` internal helper for computing reference from component properties
+- **docker DSL Migration (pullIfMissing → pullPolicy)**:
+  - Deprecated `pullIfMissing(boolean)` method in `ImageSpec` (converts to `PullPolicy`)
+  - New `pullPolicy` property in `ImageSpec` using `PullPolicy` enum
+  - Updated `DockerBuildTask` to use `pullPolicy` instead of `pullIfMissing`
+  - Added `pullPolicy(PullPolicy)` method for type-safe DSL
+  - `ALWAYS` pull policy adds new functionality not available with boolean
 - Updated `ProjectTestSpec` with `Property<Lifecycle> lifecycle`
 - Updated `TestIntegrationExtension` to use `Lifecycle` enum instead of strings
 - New `PublishTargetSpec` and `PublishTargetAuthSpec` for multiple publish targets
 - Source Reference Mode support (no build step when `sourceRef` is set)
 - Updated `ProjectSuccessSpec` with `publish { }` container for named targets
 - Validation logic for mutual exclusivity (no lifecycle validation needed - enum is type-safe)
-- Unit tests for new properties, DSL helpers, Lifecycle enum, multi-image support, and publish target specs
+- Unit tests for new properties, DSL helpers, Lifecycle enum, PullPolicy enum, pullPolicy property, multi-image support, and publish target specs
 
 ### Phase 2: Create Task Generator Infrastructure
 
@@ -1668,7 +1823,9 @@ See the detailed **Test Strategy** section below for complete test specification
 - All unit tests passing with 100% coverage on new code
 - All functional tests passing
 - All integration tests passing with `--configuration-cache`
-- Updated documentation
+- Updated documentation:
+  - `docs/usage/usage-docker.md`: Update `pullIfMissing` section to document `pullPolicy` enum and deprecation
+  - `docs/usage/usage-docker-project.md`: Add `pullPolicy` property to Source Reference Mode section
 
 ---
 
@@ -1774,6 +1931,23 @@ Tests are required at three levels:
 | `sourceRef accepts full image reference` | Verify `myregistry.com/myorg/app:v1.0` |
 | `sourceRef accepts Docker Hub reference` | Verify `nginx:latest` |
 | `sourceRef accepts namespace reference` | Verify `myorg/myapp:v1.0` |
+
+**New tests for pullPolicy property (Source Reference Mode):**
+
+| Test | Description |
+|------|-------------|
+| `pullPolicy property has NEVER convention` | Verify default is PullPolicy.NEVER |
+| `pullPolicy can be set to NEVER` | Verify property can be set |
+| `pullPolicy can be set to IF_MISSING` | Verify property can be set |
+| `pullPolicy can be set to ALWAYS` | Verify property can be set |
+| `pullPolicy is valid when sourceRef is set` | Verify pullPolicy works in Source Reference Mode |
+| `pullPolicy is valid when no build properties set` | Verify pullPolicy works in implicit Source Reference Mode |
+| `validation fails when pullPolicy set with jarFrom` | Verify pullPolicy only in Source Reference Mode |
+| `validation fails when pullPolicy set with contextTask` | Verify pullPolicy only in Source Reference Mode |
+| `validation fails when pullPolicy set with contextDir` | Verify pullPolicy only in Source Reference Mode |
+| `validation passes with pullPolicy NEVER and sourceRef` | Verify valid config |
+| `validation passes with pullPolicy IF_MISSING and sourceRef` | Verify valid config |
+| `validation passes with pullPolicy ALWAYS and sourceRef` | Verify valid config |
 
 **New tests for DSL helper methods (API consistency with `docker` DSL):**
 
@@ -1943,7 +2117,22 @@ Tests are required at three levels:
 | `Lifecycle has exactly two values` | Verify only CLASS and METHOD exist |
 | `Lifecycle.values() returns all values` | Verify enum completeness |
 
-#### 7. `TestIntegrationExtension` Tests (dockerOrch Enum Migration)
+#### 7. `PullPolicy` Enum Tests
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/PullPolicyTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `PullPolicy has NEVER value` | Verify NEVER constant exists |
+| `PullPolicy has IF_MISSING value` | Verify IF_MISSING constant exists |
+| `PullPolicy has ALWAYS value` | Verify ALWAYS constant exists |
+| `PullPolicy has exactly three values` | Verify only NEVER, IF_MISSING, ALWAYS exist |
+| `PullPolicy.values() returns all values` | Verify enum completeness |
+| `PullPolicy.valueOf() works for NEVER` | Verify string-to-enum conversion |
+| `PullPolicy.valueOf() works for IF_MISSING` | Verify string-to-enum conversion |
+| `PullPolicy.valueOf() works for ALWAYS` | Verify string-to-enum conversion |
+
+#### 8. `TestIntegrationExtension` Tests (dockerOrch Enum Migration)
 
 **File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtensionTest.groovy`
 
@@ -1956,7 +2145,7 @@ Tests are required at three levels:
 | `usesCompose configures class lifecycle correctly` | Verify composeUp/Down wiring for CLASS |
 | `usesCompose configures method lifecycle correctly` | Verify JUnit extension for METHOD |
 
-#### 8. `PublishTargetSpec` Tests (Multiple Publish Targets)
+#### 9. `PublishTargetSpec` Tests (Multiple Publish Targets)
 
 **File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/PublishTargetSpecTest.groovy`
 
@@ -1971,7 +2160,7 @@ Tests are required at three levels:
 | `auth block can be configured` | Verify nested auth block |
 | `namespace and repository are mutually exclusive` | Verify validation |
 
-#### 9. `PublishTargetAuthSpec` Tests
+#### 10. `PublishTargetAuthSpec` Tests
 
 **File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/PublishTargetAuthSpecTest.groovy`
 
@@ -1984,7 +2173,7 @@ Tests are required at three levels:
 | `username accepts Provider for environment variable` | Verify lazy evaluation |
 | `password accepts Provider for environment variable` | Verify lazy evaluation |
 
-#### 10. `ProjectSuccessSpec` Multiple Publish Tests
+#### 11. `ProjectSuccessSpec` Multiple Publish Tests
 
 **File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/spec/project/ProjectSuccessSpecTest.groovy`
 
@@ -2041,6 +2230,34 @@ Tests are required at three levels:
 | `dockerProject DSL sourceRef still generates test tasks` | Test step runs |
 | `dockerProject DSL sourceRef still generates onSuccess tasks` | Tag/publish tasks run |
 | `dockerProject DSL implicit sourceRef when no build props` | Using name without jarFrom/contextTask/contextDir |
+
+#### Pull Policy Tests (Source Reference Mode)
+
+| Test | Description |
+|------|-------------|
+| `dockerProject DSL accepts pullPolicy with sourceRef` | Basic pullPolicy works |
+| `dockerProject DSL pullPolicy defaults to NEVER` | Verify default convention |
+| `dockerProject DSL accepts pullPolicy NEVER` | Explicit NEVER setting |
+| `dockerProject DSL accepts pullPolicy IF_MISSING` | IF_MISSING setting |
+| `dockerProject DSL accepts pullPolicy ALWAYS` | ALWAYS setting |
+| `dockerProject DSL pullPolicy requires import statement` | Verify import is needed for enum |
+| `dockerProject DSL fails when pullPolicy set with jarFrom` | Validation error |
+| `dockerProject DSL fails when pullPolicy set with contextTask` | Validation error |
+| `dockerProject DSL fails when pullPolicy set with contextDir` | Validation error |
+| `dockerProject DSL pullPolicy works with implicit sourceRef` | When no build props and no explicit sourceRef |
+
+#### docker DSL Pull Policy Tests (Migration)
+
+| Test | Description |
+|------|-------------|
+| `docker DSL accepts pullPolicy with PullPolicy enum` | Basic pullPolicy works |
+| `docker DSL pullPolicy defaults to NEVER` | Verify default convention |
+| `docker DSL accepts pullPolicy NEVER` | Explicit NEVER setting |
+| `docker DSL accepts pullPolicy IF_MISSING` | IF_MISSING setting |
+| `docker DSL accepts pullPolicy ALWAYS` | ALWAYS setting |
+| `docker DSL pullIfMissing true converts to IF_MISSING` | Backward compatibility |
+| `docker DSL pullIfMissing false converts to NEVER` | Backward compatibility |
+| `docker DSL pullIfMissing generates deprecation warning` | Deprecation notice |
 
 #### Build Context Tests
 
@@ -2866,37 +3083,154 @@ echo "All multi-publish verifications passed!"
 - Both registries receive the correct images with correct tags
 - Multi-registry pattern is viable for enterprise use cases
 
+##### Scenario 13: Pull Policy with Source Reference Mode
+
+**Location**: `plugin-integration-test/dockerProject/scenario-13-pull-policy/`
+
+**Purpose**: Verify `pullPolicy` property works correctly in Source Reference Mode with all three policy values.
+
+**Why This Test Exists**:
+This scenario demonstrates the `pullPolicy` feature which controls how the plugin handles referenced images. It tests:
+- `NEVER`: Fail if image not local (default, safest)
+- `IF_MISSING`: Pull only if not found locally
+- `ALWAYS`: Always pull from registry (useful for `:latest` tags)
+
+**Configuration**:
+```groovy
+import com.kineticfire.gradle.docker.PullPolicy
+
+dockerProject {
+    images {
+        // Reference nginx from Docker Hub with pullPolicy
+        nginx {
+            sourceRef.set('nginx:1.25-alpine')
+            pullPolicy.set(PullPolicy.IF_MISSING)  // Pull if not local
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['nginx'])
+        timeoutSeconds.set(60)
+        testTaskName.set('integrationTest')
+    }
+    onSuccess {
+        additionalTags.set(['verified'])
+    }
+}
+```
+
+**Docker Compose** (`src/integrationTest/resources/compose/app.yml`):
+```yaml
+services:
+  nginx:
+    image: nginx:1.25-alpine
+    ports:
+      - "9213:80"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+```
+
+**Integration Test** (`src/integrationTest/groovy/...Spec.groovy`):
+```groovy
+class PullPolicyVerificationSpec extends Specification {
+
+    def "nginx responds to requests after pullPolicy IF_MISSING"() {
+        when: "we request the nginx default page"
+        def response = given()
+            .get("http://localhost:9213/")
+
+        then: "we get the nginx welcome page"
+        response.statusCode == 200
+        response.body.asString().contains("Welcome to nginx")
+    }
+}
+```
+
+**Verifications**:
+1. Image is pulled if not local (IF_MISSING behavior)
+2. Compose stack starts successfully with referenced image
+3. Tests pass against the running nginx container
+4. `onSuccess.additionalTags` are applied (verify `nginx:1.25-alpine` gets `:verified` tag)
+5. Cleanup removes tags applied by onSuccess
+6. Configuration cache compatible
+
+**Additional Test Cases** (can be separate verification tasks):
+
+**Test NEVER policy (expect failure if image not local)**:
+```groovy
+// First remove the image to test NEVER policy
+// docker rmi nginx:1.25-alpine
+
+dockerProject {
+    images {
+        nginx {
+            sourceRef.set('nginx:1.25-alpine')
+            pullPolicy.set(PullPolicy.NEVER)  // Should fail if not local
+        }
+    }
+    // ...
+}
+// Expected: Build fails with "image not found locally"
+```
+
+**Test ALWAYS policy (always pulls)**:
+```groovy
+dockerProject {
+    images {
+        nginx {
+            sourceRef.set('nginx:latest')
+            pullPolicy.set(PullPolicy.ALWAYS)  // Always pull latest
+        }
+    }
+    // ...
+}
+// Expected: Always pulls even if image exists locally
+```
+
+**What This Test Proves**:
+- `pullPolicy` property works in Source Reference Mode
+- `IF_MISSING` pulls only when needed
+- `NEVER` fails correctly when image is not local
+- `ALWAYS` always pulls from registry
+- Referenced images can be used in compose stacks
+- `onSuccess` tags work with source reference images
+
 ### Test Coverage Summary
 
-| Test Type | Scenario | Image Name Mode | Repository Mode | sourceRef | contextTask | dockerfileName | buildArgs/labels | waitForRunning | lifecycle | Multi-Config | Multi-Publish | Config Cache |
-|-----------|----------|-----------------|-----------------|-----------|-------------|----------------|------------------|----------------|-----------|--------------|---------------|--------------|
-| Unit | Lifecycle enum | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A | N/A |
-| Unit | ProjectTestConfigSpec | N/A | N/A | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ (NEW) | N/A | N/A |
-| Unit | ProjectImageSpec | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | N/A |
-| Unit | ProjectTestSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A | N/A |
-| Unit | PublishTargetSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A |
-| Unit | PublishTargetAuthSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A |
-| Unit | ProjectSuccessSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A |
-| Unit | TestIntegrationExtension | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A |
-| Unit | DockerProjectTaskGenerator | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ | N/A | ✅ | ✅ (NEW) | ✅ (NEW) | N/A |
-| Unit | DockerProjectTagOnSuccessTask | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| Unit | DockerProjectStateFile | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
-| Functional | DSL parsing | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
-| Functional | Validation | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A |
-| Functional | Task graph | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
-| Functional | dockerOrch lifecycle | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A |
-| Integration | scenario-1 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | ✅ (UPDATE) |
-| Integration | scenario-2 | - | - | ✅ (existing) | - | - | - | - | CLASS | - | - | ✅ (UPDATE) |
-| Integration | scenario-3 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | ✅ (UPDATE) |
-| Integration | scenario-4 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | ✅ |
-| Integration | scenario-5 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | ✅ |
-| Integration | scenario-6 | ✅ (NEW) | - | - | - | - | ✅ (multiple) | - | CLASS | - | - | ✅ |
-| Integration | scenario-7 | ✅ | - | - | - | - | - | - | CLASS | - | - | ✅ (NEW - explicit) |
-| Integration | scenario-8 | ✅ | - | - | ✅ (NEW) | - | - | - | CLASS | - | - | ✅ |
-| Integration | scenario-9 | ✅ | - | - | - | - | - | ✅ (NEW) | CLASS | - | - | ✅ |
-| Integration | scenario-10 | ✅ | - | - | - | - | - | - | ✅ METHOD (NEW) | - | - | ✅ |
-| Integration | scenario-11 | ✅ | - | - | - | - | - | - | ✅ CLASS+METHOD | ✅ (NEW) | - | ✅ |
-| Integration | scenario-12 | ✅ | - | - | - | - | - | - | CLASS | - | ✅ (NEW) | ✅ |
+| Test Type | Scenario | Image Name Mode | Repository Mode | sourceRef | contextTask | dockerfileName | buildArgs/labels | waitForRunning | lifecycle | Multi-Config | Multi-Publish | pullPolicy | Config Cache |
+|-----------|----------|-----------------|-----------------|-----------|-------------|----------------|------------------|----------------|-----------|--------------|---------------|------------|--------------|
+| Unit | Lifecycle enum | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A | N/A | N/A |
+| Unit | PullPolicy enum | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A |
+| Unit | ProjectTestConfigSpec | N/A | N/A | N/A | N/A | N/A | N/A | ✅ | ✅ | ✅ (NEW) | N/A | N/A | N/A |
+| Unit | ProjectImageSpec | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A |
+| Unit | ProjectTestSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A | N/A | N/A |
+| Unit | PublishTargetSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A |
+| Unit | PublishTargetAuthSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A |
+| Unit | ProjectSuccessSpec | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (NEW) | N/A | N/A |
+| Unit | TestIntegrationExtension | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A | N/A |
+| Unit | DockerProjectTaskGenerator | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ | N/A | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A |
+| Unit | DockerProjectTagOnSuccessTask | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Unit | DockerProjectStateFile | ✅ (NEW) | ✅ (NEW) | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A | N/A |
+| Functional | DSL parsing | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
+| Functional | Validation | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A |
+| Functional | Task graph | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
+| Functional | dockerOrch lifecycle | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A | N/A |
+| Integration | scenario-1 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
+| Integration | scenario-2 | - | - | ✅ (existing) | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
+| Integration | scenario-3 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
+| Integration | scenario-4 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-5 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-6 | ✅ (NEW) | - | - | - | - | ✅ (multiple) | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-7 | ✅ | - | - | - | - | - | - | CLASS | - | - | - | ✅ (NEW - explicit) |
+| Integration | scenario-8 | ✅ | - | - | ✅ (NEW) | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-9 | ✅ | - | - | - | - | - | ✅ (NEW) | CLASS | - | - | - | ✅ |
+| Integration | scenario-10 | ✅ | - | - | - | - | - | - | ✅ METHOD (NEW) | - | - | - | ✅ |
+| Integration | scenario-11 | ✅ | - | - | - | - | - | - | ✅ CLASS+METHOD | ✅ (NEW) | - | - | ✅ |
+| Integration | scenario-12 | ✅ | - | - | - | - | - | - | CLASS | - | ✅ (NEW) | - | ✅ |
+| Integration | scenario-13 | - | - | ✅ | - | - | - | - | CLASS | - | - | ✅ (NEW) | ✅ |
 
 ---
 
