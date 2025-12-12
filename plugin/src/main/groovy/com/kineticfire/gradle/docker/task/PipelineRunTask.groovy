@@ -17,12 +17,15 @@
 package com.kineticfire.gradle.docker.task
 
 import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.service.TaskExecutionService
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.FailureStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
+import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
@@ -34,24 +37,25 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
-import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 
 import javax.inject.Inject
 
 /**
- * Task that executes a complete pipeline workflow
+ * Task that executes a complete pipeline workflow.
  *
  * Orchestrates the execution of: build → test → conditional (success/failure) → always (cleanup)
  * Uses executor pattern for each step to maintain separation of concerns.
  *
- * NOTE: This task is NOT compatible with Gradle's configuration cache because it:
- * 1. Needs to look up and execute other tasks dynamically at execution time
- * 2. Uses TaskContainer which cannot be serialized
- *
- * This is a fundamental limitation of the pipeline orchestration pattern.
- * The task explicitly opts out of configuration cache.
+ * Configuration Cache Compatibility:
+ * This task is marked as not compatible with configuration cache because pipeline
+ * execution inherently requires dynamic task lookup and execution at runtime.
+ * However, we use Gradle's BuildService pattern (TaskExecutionService) to minimize
+ * serialization issues:
+ * - Provider<TaskExecutionService> IS serializable (it's a provider reference)
+ * - TaskExecutionService holds TaskContainer internally (not serialized)
+ * - Executors are created at execution time, not configuration time
  */
 abstract class PipelineRunTask extends DefaultTask {
 
@@ -66,9 +70,8 @@ abstract class PipelineRunTask extends DefaultTask {
     // Flag to track if executors were explicitly set (for testing)
     private boolean executorsInjected = false
 
-    // TaskContainer captured at configuration time
-    // This is set by the plugin when registering the task
-    private TaskContainer taskContainer
+    // TaskExecutionService provider - serializable reference to the build service
+    private Provider<TaskExecutionService> taskExecutionServiceProvider
 
     // DockerService provider for tagging operations (set at configuration time)
     private Provider<DockerService> dockerServiceProvider
@@ -81,7 +84,7 @@ abstract class PipelineRunTask extends DefaultTask {
         // This task is NOT compatible with configuration cache because it needs to
         // dynamically look up and execute other tasks at runtime
         notCompatibleWithConfigurationCache(
-            "PipelineRunTask requires TaskContainer access which is not configuration cache compatible"
+            "PipelineRunTask requires dynamic task execution which is not configuration cache compatible"
         )
 
         // Note: Executors are NOT created here - they're created lazily in runPipeline()
@@ -94,7 +97,7 @@ abstract class PipelineRunTask extends DefaultTask {
     abstract Property<String> getPipelineName()
 
     /**
-     * Inject custom executors for testing
+     * Inject custom executors for testing.
      */
     void setBuildStepExecutor(BuildStepExecutor executor) {
         this.buildStepExecutor = executor
@@ -117,11 +120,13 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Set the TaskContainer for configuration cache compatibility.
+     * Set the TaskExecutionService provider.
+     *
      * This must be called during configuration time by the plugin.
+     * The Provider is serializable, allowing proper configuration cache handling.
      */
-    void setTaskContainer(TaskContainer taskContainer) {
-        this.taskContainer = taskContainer
+    void setTaskExecutionServiceProvider(Provider<TaskExecutionService> provider) {
+        this.taskExecutionServiceProvider = provider
     }
 
     /**
@@ -133,11 +138,10 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Initialize executors at execution time
+     * Initialize executors at execution time.
      *
      * This method creates the executors lazily when the task runs, not during configuration.
-     * The TaskContainer is captured at configuration time and stored in taskContainer field.
-     * This is required for configuration cache compatibility.
+     * Uses the TaskExecutionService from the build service provider.
      */
     private void initializeExecutors() {
         if (executorsInjected) {
@@ -145,17 +149,21 @@ abstract class PipelineRunTask extends DefaultTask {
             return
         }
 
-        if (taskContainer == null) {
-            throw new GradleException("TaskContainer was not set. " +
-                "Ensure the plugin sets taskContainer during task configuration.")
+        if (taskExecutionServiceProvider == null) {
+            throw new GradleException("TaskExecutionService provider was not set. " +
+                "Ensure the plugin sets taskExecutionServiceProvider during task configuration.")
         }
 
-        // Create executors with the TaskContainer captured at configuration time
+        // Get the TaskExecutionService and create TaskLookup
+        def taskExecutionService = taskExecutionServiceProvider.get()
+        def taskLookup = TaskLookupFactory.from(taskExecutionService)
+
+        // Create executors with the TaskLookup
         if (buildStepExecutor == null) {
-            buildStepExecutor = new BuildStepExecutor(taskContainer)
+            buildStepExecutor = new BuildStepExecutor(taskLookup)
         }
         if (testStepExecutor == null) {
-            testStepExecutor = new TestStepExecutor(taskContainer)
+            testStepExecutor = new TestStepExecutor(taskLookup)
         }
         if (conditionalExecutor == null) {
             conditionalExecutor = new ConditionalExecutor()
@@ -173,8 +181,7 @@ abstract class PipelineRunTask extends DefaultTask {
     void runPipeline() {
         validatePipelineSpec()
 
-        // Create executors lazily at execution time for configuration cache compatibility
-        // Only create if not already set (e.g., by tests)
+        // Create executors lazily at execution time
         initializeExecutors()
 
         def spec = pipelineSpec.get()
@@ -203,7 +210,7 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Validate that the pipeline spec is configured
+     * Validate that the pipeline spec is configured.
      */
     void validatePipelineSpec() {
         if (!pipelineSpec.isPresent()) {
@@ -215,7 +222,7 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Execute the build step if configured
+     * Execute the build step if configured.
      */
     PipelineContext executeBuildStep(PipelineSpec spec, PipelineContext context) {
         def buildSpec = spec.build.getOrNull()
@@ -229,14 +236,14 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Check if the build step has an image configured
+     * Check if the build step has an image configured.
      */
     boolean isBuildStepConfigured(BuildStepSpec buildSpec) {
         return buildSpec.image.isPresent()
     }
 
     /**
-     * Execute the test step if configured
+     * Execute the test step if configured.
      */
     PipelineContext executeTestStep(PipelineSpec spec, PipelineContext context) {
         def testSpec = spec.test.getOrNull()
@@ -250,14 +257,14 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Check if the test step has required configuration
+     * Check if the test step has required configuration.
      */
     boolean isTestStepConfigured(TestStepSpec testSpec) {
         return testSpec.stack.isPresent() && testSpec.testTaskName.isPresent()
     }
 
     /**
-     * Execute the conditional step (success or failure path) based on test results
+     * Execute the conditional step (success or failure path) based on test results.
      */
     PipelineContext executeConditionalStep(PipelineSpec spec, PipelineContext context) {
         if (!context.testCompleted) {
@@ -274,7 +281,7 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Get the success spec from either onTestSuccess or onSuccess
+     * Get the success spec from either onTestSuccess or onSuccess.
      */
     SuccessStepSpec getSuccessSpec(PipelineSpec spec) {
         if (spec.onTestSuccess.isPresent()) {
@@ -287,7 +294,7 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Get the failure spec from either onTestFailure or onFailure
+     * Get the failure spec from either onTestFailure or onFailure.
      */
     FailureStepSpec getFailureSpec(PipelineSpec spec) {
         if (spec.onTestFailure.isPresent()) {
@@ -300,7 +307,7 @@ abstract class PipelineRunTask extends DefaultTask {
     }
 
     /**
-     * Execute the always step for cleanup operations
+     * Execute the always step for cleanup operations.
      */
     void executeAlwaysStep(PipelineSpec spec, PipelineContext context) {
         def alwaysSpec = spec.always.getOrNull()

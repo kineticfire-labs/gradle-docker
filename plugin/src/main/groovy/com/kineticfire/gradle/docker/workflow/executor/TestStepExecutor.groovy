@@ -21,7 +21,6 @@ import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
-import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import com.kineticfire.gradle.docker.workflow.TestResult
 import com.kineticfire.gradle.docker.workflow.TestResultCapture
 import org.gradle.api.Action
@@ -29,16 +28,16 @@ import org.gradle.api.GradleException
 import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
-import org.gradle.api.tasks.TaskContainer
 import org.gradle.api.tasks.testing.Test
 
 /**
- * Executor for the test step in a pipeline workflow
+ * Executor for the test step in a pipeline workflow.
  *
  * Orchestrates: composeUp → test task execution → result capture → composeDown (in finally block)
  * Updates the PipelineContext with test results.
  *
- * Configuration cache compatible - uses TaskLookup abstraction instead of Project reference.
+ * Configuration cache compatible - uses TaskLookup abstraction which is backed
+ * by TaskExecutionService (a Gradle BuildService).
  */
 class TestStepExecutor {
 
@@ -48,21 +47,19 @@ class TestStepExecutor {
     private final TestResultCapture resultCapture
 
     /**
-     * Create executor with TaskContainer (configuration cache compatible)
+     * Create executor with TaskLookup abstraction.
+     *
+     * @param taskLookup The task lookup for finding and executing tasks
      */
-    TestStepExecutor(TaskContainer tasks) {
-        this(TaskLookupFactory.from(tasks), new TestResultCapture())
+    TestStepExecutor(TaskLookup taskLookup) {
+        this(taskLookup, new TestResultCapture())
     }
 
     /**
-     * Create executor with TaskContainer and custom result capture
-     */
-    TestStepExecutor(TaskContainer tasks, TestResultCapture resultCapture) {
-        this(TaskLookupFactory.from(tasks), resultCapture)
-    }
-
-    /**
-     * Create executor with TaskLookup abstraction
+     * Create executor with TaskLookup and custom result capture.
+     *
+     * @param taskLookup The task lookup for finding and executing tasks
+     * @param resultCapture The result capture for test results
      */
     TestStepExecutor(TaskLookup taskLookup, TestResultCapture resultCapture) {
         this.taskLookup = taskLookup
@@ -70,7 +67,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute the test step
+     * Execute the test step.
      *
      * @param testSpec The test step specification
      * @param context The current pipeline context
@@ -159,7 +156,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Validate the test step specification
+     * Validate the test step specification.
      *
      * When delegateStackManagement is true, stack is optional (lifecycle managed by testIntegration).
      * When delegateStackManagement is false (default), stack is required.
@@ -181,8 +178,8 @@ class TestStepExecutor {
     }
 
     /**
-     * Compute the compose up task name for a stack
-     * Follows the pattern: composeUp{StackName} where StackName is capitalized
+     * Compute the compose up task name for a stack.
+     * Follows the pattern: composeUp{StackName} where StackName is capitalized.
      */
     String computeComposeUpTaskName(String stackName) {
         def capitalizedName = capitalizeFirstLetter(stackName)
@@ -190,8 +187,8 @@ class TestStepExecutor {
     }
 
     /**
-     * Compute the compose down task name for a stack
-     * Follows the pattern: composeDown{StackName} where StackName is capitalized
+     * Compute the compose down task name for a stack.
+     * Follows the pattern: composeDown{StackName} where StackName is capitalized.
      */
     String computeComposeDownTaskName(String stackName) {
         def capitalizedName = capitalizeFirstLetter(stackName)
@@ -199,7 +196,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Capitalize the first letter of a string
+     * Capitalize the first letter of a string.
      */
     String capitalizeFirstLetter(String input) {
         if (input == null || input.isEmpty()) {
@@ -209,7 +206,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute the compose up task
+     * Execute the compose up task.
      */
     void executeComposeUpTask(String taskName) {
         LOGGER.info("Looking up composeUp task: {}", taskName)
@@ -225,7 +222,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute the compose down task
+     * Execute the compose down task.
      */
     void executeComposeDownTask(String taskName) {
         LOGGER.info("Looking up composeDown task: {}", taskName)
@@ -245,7 +242,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute the test task
+     * Execute the test task.
      */
     void executeTestTask(Task testTask) {
         LOGGER.info("Executing test task: {}", testTask.name)
@@ -254,25 +251,23 @@ class TestStepExecutor {
     }
 
     /**
-     * Look up a task by name
-     * Separated for testability
+     * Look up a task by name.
+     * Separated for testability.
      */
     Task lookupTask(String taskName) {
         return taskLookup.findByName(taskName)
     }
 
     /**
-     * Execute a task's actions
-     * Separated for testability
+     * Execute a task's actions.
+     * Separated for testability.
      */
     void executeTask(Task task) {
-        task.actions.each { action ->
-            action.execute(task)
-        }
+        taskLookup.execute(task)
     }
 
     /**
-     * Execute the beforeTest hook if configured
+     * Execute the beforeTest hook if configured.
      */
     void executeBeforeTestHook(TestStepSpec testSpec) {
         if (testSpec.beforeTest.isPresent()) {
@@ -282,7 +277,7 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute the afterTest hook if configured (receives TestResult)
+     * Execute the afterTest hook if configured (receives TestResult).
      */
     void executeAfterTestHook(TestStepSpec testSpec, TestResult testResult) {
         if (testSpec.afterTest.isPresent()) {
@@ -292,8 +287,8 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute a hook action
-     * Separated for testability
+     * Execute a hook action.
+     * Separated for testability.
      */
     void executeHook(Action<Void> hook) {
         hook.execute(null)

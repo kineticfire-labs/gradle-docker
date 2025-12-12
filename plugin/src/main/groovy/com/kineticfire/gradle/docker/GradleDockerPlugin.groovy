@@ -54,6 +54,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         def dockerService = registerDockerService(project)
         def composeService = registerComposeService(project)
         def jsonService = registerJsonService(project)
+        def taskExecutionService = registerTaskExecutionService(project)
 
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project.providers, project.layout)
@@ -74,7 +75,8 @@ class GradleDockerPlugin implements Plugin<Project> {
                                   dockerService, composeService, jsonService)
 
         // Register workflow pipeline tasks
-        registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerOrchExt, dockerService, composeService)
+        registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerOrchExt,
+                              dockerService, composeService, taskExecutionService)
 
         // Configure validation and dependency resolution
         configureAfterEvaluation(project, dockerExt, dockerOrchExt, dockerWorkflowsExt)
@@ -147,6 +149,35 @@ class GradleDockerPlugin implements Plugin<Project> {
         return project.gradle.sharedServices.registerIfAbsent('jsonService', JsonServiceImpl) {
             // No parameters needed - service uses BuildServiceParameters.None
         }
+    }
+
+    /**
+     * Register the TaskExecutionService for pipeline task execution.
+     *
+     * This service provides configuration-cache-compatible task lookup and execution
+     * for PipelineRunTask. The service holds the TaskContainer internally.
+     *
+     * IMPORTANT: Each project gets its own TaskExecutionService instance by including
+     * the project path in the service name. This is necessary because TaskContainer
+     * is project-specific and cannot be shared across projects in a multi-project build.
+     */
+    private Provider<TaskExecutionService> registerTaskExecutionService(Project project) {
+        // Use project path to create a unique service name per project
+        // This ensures each project has its own TaskContainer reference
+        def serviceName = "taskExecutionService_${project.path.replace(':', '_')}"
+
+        def provider = project.gradle.sharedServices.registerIfAbsent(
+            serviceName,
+            TaskExecutionService
+        ) {
+            // No parameters needed - TaskContainer is set separately
+        }
+
+        // Set the TaskContainer on the service after registration
+        // This is done during plugin configuration, not during service creation
+        provider.get().setTaskContainer(project.tasks)
+
+        return provider
     }
     
     private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
@@ -308,14 +339,15 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
 
     /**
-     * Register workflow pipeline tasks
+     * Register workflow pipeline tasks.
      *
      * Creates a PipelineRunTask for each defined pipeline in dockerWorkflows.pipelines.
      * Tasks are named 'run{PipelineName}' (e.g., 'runCiPipeline').
      */
     private void registerWorkflowTasks(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
                                        DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
-                                       Provider<DockerService> dockerService, Provider<ComposeService> composeService) {
+                                       Provider<DockerService> dockerService, Provider<ComposeService> composeService,
+                                       Provider<TaskExecutionService> taskExecutionService) {
         // Register an aggregate task for running all pipelines
         project.tasks.register('runPipelines') {
             group = 'docker workflows'
@@ -330,7 +362,7 @@ class GradleDockerPlugin implements Plugin<Project> {
                 def taskName = "run${capitalizedName}"
 
                 project.tasks.register(taskName, PipelineRunTask) { task ->
-                    configurePipelineRunTask(task, pipelineSpec, dockerService, composeService, project.tasks)
+                    configurePipelineRunTask(task, pipelineSpec, dockerService, taskExecutionService)
                 }
 
                 // Add to aggregate task
@@ -344,22 +376,23 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
 
     /**
-     * Configure a PipelineRunTask with the pipeline spec and services
+     * Configure a PipelineRunTask with the pipeline spec and services.
+     *
+     * Uses TaskExecutionService (a Gradle BuildService) for configuration-cache-compatible
+     * task lookup and execution.
      */
     private void configurePipelineRunTask(PipelineRunTask task, pipelineSpec,
                                           Provider<DockerService> dockerService,
-                                          Provider<ComposeService> composeService,
-                                          TaskContainer taskContainer) {
+                                          Provider<TaskExecutionService> taskExecutionService) {
         task.description = "Run pipeline: ${pipelineSpec.name}"
 
         // Configure pipeline spec and name
         task.pipelineSpec.set(pipelineSpec)
         task.pipelineName.set(pipelineSpec.name)
 
-        // Set the TaskContainer at configuration time for configuration cache compatibility
-        // This allows the task to look up other tasks during execution without
-        // accessing project.tasks (which is not allowed with configuration cache)
-        task.setTaskContainer(taskContainer)
+        // Set the TaskExecutionService provider for configuration cache compatibility
+        // The Provider is serializable, allowing proper configuration cache handling
+        task.setTaskExecutionServiceProvider(taskExecutionService)
 
         // Set the DockerService provider for tagging operations in onTestSuccess
         task.setDockerServiceProvider(dockerService)

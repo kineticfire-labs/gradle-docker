@@ -53,10 +53,12 @@ class BuildStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 
             task verifyTaskNames {
                 doLast {
-                    def executor = new BuildStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new BuildStepExecutor(taskLookup)
 
                     assert executor.computeBuildTaskName('myApp') == 'dockerBuildMyApp'
                     assert executor.computeBuildTaskName('testImage') == 'dockerBuildTestImage'
@@ -88,12 +90,14 @@ class BuildStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
             import org.gradle.api.GradleException
 
             task verifyValidation {
                 doLast {
-                    def executor = new BuildStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new BuildStepExecutor(taskLookup)
 
                     // Test null spec
                     try {
@@ -138,6 +142,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
             import com.kineticfire.gradle.docker.spec.ImageSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -152,7 +157,8 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyHooks {
                 doLast {
-                    def executor = new BuildStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new BuildStepExecutor(taskLookup)
 
                     // Create ImageSpec
                     def imageSpec = project.objects.newInstance(
@@ -206,6 +212,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
             import com.kineticfire.gradle.docker.spec.ImageSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -219,7 +226,8 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyContextUpdate {
                 doLast {
-                    def executor = new BuildStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new BuildStepExecutor(taskLookup)
 
                     def imageSpec = project.objects.newInstance(
                         ImageSpec,
@@ -272,6 +280,7 @@ class BuildStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
             import com.kineticfire.gradle.docker.spec.ImageSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -281,7 +290,8 @@ class BuildStepExecutorFunctionalTest extends Specification {
 
             task verifyMissingTaskFailure {
                 doLast {
-                    def executor = new BuildStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new BuildStepExecutor(taskLookup)
 
                     def imageSpec = project.objects.newInstance(
                         ImageSpec,

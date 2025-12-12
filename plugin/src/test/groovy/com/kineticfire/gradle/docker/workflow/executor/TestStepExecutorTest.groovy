@@ -21,7 +21,6 @@ import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
-import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import com.kineticfire.gradle.docker.workflow.TestResult
 import com.kineticfire.gradle.docker.workflow.TestResultCapture
 import org.gradle.api.Action
@@ -43,11 +42,14 @@ class TestStepExecutorTest extends Specification {
     ComposeStackSpec stackSpec
     TestStepSpec testStepSpec
     Task testTask
+    TaskLookup taskLookup
 
     def setup() {
         project = ProjectBuilder.builder().build()
         mockResultCapture = Mock(TestResultCapture)
-        executor = new TestStepExecutor(project.tasks, mockResultCapture)
+        // Create a test TaskLookup that wraps the real project.tasks
+        taskLookup = createTaskLookup(project)
+        executor = new TestStepExecutor(taskLookup, mockResultCapture)
 
         stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
 
@@ -58,19 +60,38 @@ class TestStepExecutorTest extends Specification {
         testStepSpec.testTaskName.set('integrationTest')
     }
 
-    // ===== CONSTRUCTOR TESTS =====
+    /**
+     * Create a TaskLookup for testing that wraps a project's TaskContainer.
+     */
+    private TaskLookup createTaskLookup(Project project) {
+        return new TaskLookup() {
+            @Override
+            Task findByName(String taskName) {
+                return project.tasks.findByName(taskName)
+            }
 
-    def "constructor accepts TaskContainer"() {
-        when:
-        def exec = new TestStepExecutor(project.tasks)
+            @Override
+            void execute(String taskName) {
+                def task = findByName(taskName)
+                if (task != null) {
+                    execute(task)
+                }
+            }
 
-        then:
-        exec != null
+            @Override
+            void execute(Task task) {
+                task.actions.each { action ->
+                    action.execute(task)
+                }
+            }
+        }
     }
 
-    def "constructor accepts TaskContainer and resultCapture"() {
+    // ===== CONSTRUCTOR TESTS =====
+
+    def "constructor accepts TaskLookup"() {
         when:
-        def exec = new TestStepExecutor(project.tasks, mockResultCapture)
+        def exec = new TestStepExecutor(taskLookup)
 
         then:
         exec != null
@@ -78,7 +99,7 @@ class TestStepExecutorTest extends Specification {
 
     def "constructor accepts TaskLookup and resultCapture"() {
         when:
-        def exec = new TestStepExecutor(TaskLookupFactory.from(project.tasks), mockResultCapture)
+        def exec = new TestStepExecutor(taskLookup, mockResultCapture)
 
         then:
         exec != null

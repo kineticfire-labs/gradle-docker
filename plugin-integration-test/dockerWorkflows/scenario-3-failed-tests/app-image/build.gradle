@@ -44,6 +44,7 @@ repositories {
 }
 
 dependencies {
+    // Test framework dependencies - plugin extends these to integrationTest source set
     testImplementation libs.groovy.all
     testImplementation libs.spock.core
     testRuntimeOnly libs.junit.platform.launcher

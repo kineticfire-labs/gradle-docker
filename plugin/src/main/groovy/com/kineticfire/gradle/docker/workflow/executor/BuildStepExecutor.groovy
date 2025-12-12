@@ -16,25 +16,23 @@
 
 package com.kineticfire.gradle.docker.workflow.executor
 
-import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
-import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Task
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
-import org.gradle.api.tasks.TaskContainer
 
 /**
- * Executor for the build step in a pipeline workflow
+ * Executor for the build step in a pipeline workflow.
  *
  * Orchestrates the execution of beforeBuild hooks, docker build task invocation,
  * and afterBuild hooks. Updates the PipelineContext with the built image.
  *
- * Configuration cache compatible - uses TaskLookup abstraction instead of Project reference.
+ * Configuration cache compatible - uses TaskLookup abstraction which is backed
+ * by TaskExecutionService (a Gradle BuildService).
  */
 class BuildStepExecutor {
 
@@ -43,21 +41,16 @@ class BuildStepExecutor {
     private final TaskLookup taskLookup
 
     /**
-     * Create executor with TaskContainer (configuration cache compatible)
-     */
-    BuildStepExecutor(TaskContainer tasks) {
-        this(TaskLookupFactory.from(tasks))
-    }
-
-    /**
-     * Create executor with TaskLookup abstraction
+     * Create executor with TaskLookup abstraction.
+     *
+     * @param taskLookup The task lookup for finding and executing tasks
      */
     BuildStepExecutor(TaskLookup taskLookup) {
         this.taskLookup = taskLookup
     }
 
     /**
-     * Execute the build step
+     * Execute the build step.
      *
      * @param buildSpec The build step specification
      * @param context The current pipeline context
@@ -86,7 +79,7 @@ class BuildStepExecutor {
     }
 
     /**
-     * Validate the build step specification
+     * Validate the build step specification.
      */
     void validateBuildSpec(BuildStepSpec buildSpec) {
         if (buildSpec == null) {
@@ -98,8 +91,8 @@ class BuildStepExecutor {
     }
 
     /**
-     * Compute the docker build task name for an image
-     * Follows the pattern: dockerBuild{ImageName} where ImageName is capitalized
+     * Compute the docker build task name for an image.
+     * Follows the pattern: dockerBuild{ImageName} where ImageName is capitalized.
      */
     String computeBuildTaskName(String imageName) {
         def capitalizedName = capitalizeFirstLetter(imageName)
@@ -107,7 +100,7 @@ class BuildStepExecutor {
     }
 
     /**
-     * Capitalize the first letter of a string
+     * Capitalize the first letter of a string.
      */
     String capitalizeFirstLetter(String input) {
         if (input == null || input.isEmpty()) {
@@ -117,7 +110,7 @@ class BuildStepExecutor {
     }
 
     /**
-     * Execute the docker build task
+     * Execute the docker build task.
      */
     void executeBuildTask(String taskName) {
         LOGGER.info("Looking up build task: {}", taskName)
@@ -133,25 +126,23 @@ class BuildStepExecutor {
     }
 
     /**
-     * Look up a task by name
-     * Separated for testability
+     * Look up a task by name.
+     * Separated for testability.
      */
     Task lookupTask(String taskName) {
         return taskLookup.findByName(taskName)
     }
 
     /**
-     * Execute a task's actions
-     * Separated for testability
+     * Execute a task's actions.
+     * Separated for testability.
      */
     void executeTask(Task task) {
-        task.actions.each { action ->
-            action.execute(task)
-        }
+        taskLookup.execute(task)
     }
 
     /**
-     * Execute the beforeBuild hook if configured
+     * Execute the beforeBuild hook if configured.
      */
     void executeBeforeBuildHook(BuildStepSpec buildSpec) {
         if (buildSpec.beforeBuild.isPresent()) {
@@ -161,7 +152,7 @@ class BuildStepExecutor {
     }
 
     /**
-     * Execute the afterBuild hook if configured
+     * Execute the afterBuild hook if configured.
      */
     void executeAfterBuildHook(BuildStepSpec buildSpec) {
         if (buildSpec.afterBuild.isPresent()) {
@@ -171,8 +162,8 @@ class BuildStepExecutor {
     }
 
     /**
-     * Execute a hook action
-     * Separated for testability
+     * Execute a hook action.
+     * Separated for testability.
      */
     void executeHook(Action<Void> hook) {
         hook.execute(null)

@@ -26,6 +26,7 @@ import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
+import com.kineticfire.gradle.docker.workflow.TaskLookup
 import com.kineticfire.gradle.docker.workflow.TestResult
 import com.kineticfire.gradle.docker.workflow.executor.AlwaysStepExecutor
 import com.kineticfire.gradle.docker.workflow.executor.BuildStepExecutor
@@ -33,6 +34,7 @@ import com.kineticfire.gradle.docker.workflow.executor.ConditionalExecutor
 import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
 import org.gradle.api.GradleException
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.api.provider.Provider
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -50,12 +52,41 @@ class PipelineRunTaskTest extends Specification {
 
     Project project
     PipelineRunTask task
+    TaskLookup taskLookup
 
     def setup() {
         project = ProjectBuilder.builder()
             .withProjectDir(tempDir.toFile())
             .build()
         task = project.tasks.create('pipelineRun', PipelineRunTask)
+        taskLookup = createTaskLookup(project)
+    }
+
+    /**
+     * Create a TaskLookup for testing that wraps a project's TaskContainer.
+     */
+    private TaskLookup createTaskLookup(Project project) {
+        return new TaskLookup() {
+            @Override
+            Task findByName(String taskName) {
+                return project.tasks.findByName(taskName)
+            }
+
+            @Override
+            void execute(String taskName) {
+                def task = findByName(taskName)
+                if (task != null) {
+                    execute(task)
+                }
+            }
+
+            @Override
+            void execute(Task task) {
+                task.actions.each { action ->
+                    action.execute(task)
+                }
+            }
+        }
     }
 
     // ===== VALIDATION TESTS =====
@@ -135,8 +166,9 @@ class PipelineRunTaskTest extends Specification {
         def context = PipelineContext.create('test')
         def updatedContext = context.withMetadata('built', 'true')
 
-        def mockExecutor = Mock(BuildStepExecutor, constructorArgs: [project.tasks])
-        mockExecutor.execute(buildSpec, context) >> updatedContext
+        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [taskLookup]) {
+            execute(_, _) >> updatedContext
+        }
         task.setBuildStepExecutor(mockExecutor)
 
         when:
@@ -206,8 +238,8 @@ class PipelineRunTaskTest extends Specification {
         def testResult = new TestResult(true, 5, 0, 0, 0, 5)
         def updatedContext = context.withTestResult(testResult)
 
-        // Use Stub with constructorArgs since TestStepExecutor requires TaskContainer
-        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks]) {
+        // Use Stub with constructorArgs since TestStepExecutor requires TaskLookup
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [taskLookup]) {
             execute(_, _) >> updatedContext
         }
         task.setTestStepExecutor(mockExecutor)
@@ -476,8 +508,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "setBuildStepExecutor sets custom executor"() {
         given:
-        // BuildStepExecutor requires TaskContainer in constructor
-        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks])
+        // BuildStepExecutor requires TaskLookup in constructor
+        def mockExecutor = Stub(BuildStepExecutor, constructorArgs: [taskLookup])
 
         when:
         task.setBuildStepExecutor(mockExecutor)
@@ -488,8 +520,8 @@ class PipelineRunTaskTest extends Specification {
 
     def "setTestStepExecutor sets custom executor"() {
         given:
-        // TestStepExecutor requires TaskContainer in constructor
-        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks])
+        // TestStepExecutor requires TaskLookup in constructor
+        def mockExecutor = Stub(TestStepExecutor, constructorArgs: [taskLookup])
 
         when:
         task.setTestStepExecutor(mockExecutor)
@@ -567,12 +599,12 @@ class PipelineRunTaskTest extends Specification {
         def contextAfterTest = contextAfterBuild.withTestResult(testResult)
         def contextAfterConditional = contextAfterTest.withAppliedTags(['success'])
 
-        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks]) {
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [taskLookup]) {
             execute(_, _) >> contextAfterBuild
         }
         task.setBuildStepExecutor(mockBuildExecutor)
 
-        def mockTestExecutor = Stub(TestStepExecutor, constructorArgs: [project.tasks]) {
+        def mockTestExecutor = Stub(TestStepExecutor, constructorArgs: [taskLookup]) {
             execute(_, _) >> contextAfterTest
         }
         task.setTestStepExecutor(mockTestExecutor)
@@ -609,7 +641,7 @@ class PipelineRunTaskTest extends Specification {
         task.pipelineSpec.set(pipelineSpec)
         task.pipelineName.set('failing-test')
 
-        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [project.tasks]) {
+        def mockBuildExecutor = Stub(BuildStepExecutor, constructorArgs: [taskLookup]) {
             execute(_, _) >> { throw new RuntimeException("Build failed") }
         }
         task.setBuildStepExecutor(mockBuildExecutor)

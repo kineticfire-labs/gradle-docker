@@ -16,39 +16,44 @@
 
 package com.kineticfire.gradle.docker.workflow
 
+import com.kineticfire.gradle.docker.service.TaskExecutionService
 import org.gradle.api.Project
 import org.gradle.api.Task
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
 /**
- * Unit tests for TaskLookup interface, TaskLookupFactory, and TaskContainerLookup implementation
+ * Unit tests for TaskLookup interface, TaskLookupFactory, and TaskExecutionServiceLookup implementation
  */
 class TaskLookupTest extends Specification {
 
     Project project
+    TaskExecutionService service
 
     def setup() {
         project = ProjectBuilder.builder().build()
+        // Create a mock TaskExecutionService
+        service = Mock(TaskExecutionService)
     }
 
     // ===== FACTORY METHOD TESTS =====
 
-    def "TaskLookupFactory from creates TaskContainerLookup from TaskContainer"() {
+    def "TaskLookupFactory from creates TaskExecutionServiceLookup from TaskExecutionService"() {
         when:
-        def lookup = TaskLookupFactory.from(project.tasks)
+        def lookup = TaskLookupFactory.from(service)
 
         then:
         lookup != null
-        lookup instanceof TaskContainerLookup
+        lookup instanceof TaskExecutionServiceLookup
     }
 
-    // ===== TASK CONTAINER LOOKUP TESTS =====
+    // ===== TASK EXECUTION SERVICE LOOKUP TESTS =====
 
-    def "TaskContainerLookup findByName returns task when exists"() {
+    def "TaskExecutionServiceLookup findByName delegates to service"() {
         given:
-        def task = project.tasks.create('myTask')
-        def lookup = TaskLookupFactory.from(project.tasks)
+        def task = Mock(Task)
+        service.findTask('myTask') >> task
+        def lookup = TaskLookupFactory.from(service)
 
         when:
         def result = lookup.findByName('myTask')
@@ -57,20 +62,24 @@ class TaskLookupTest extends Specification {
         result == task
     }
 
-    def "TaskContainerLookup findByName returns null when task does not exist"() {
+    def "TaskExecutionServiceLookup findByName returns null when task does not exist"() {
         given:
-        def lookup = TaskLookupFactory.from(project.tasks)
+        service.findTask('nonExistent') >> null
+        def lookup = TaskLookupFactory.from(service)
 
         expect:
         lookup.findByName('nonExistent') == null
     }
 
-    def "TaskContainerLookup findByName works with multiple tasks"() {
+    def "TaskExecutionServiceLookup findByName works with multiple tasks"() {
         given:
-        def task1 = project.tasks.create('task1')
-        def task2 = project.tasks.create('task2')
-        def task3 = project.tasks.create('task3')
-        def lookup = TaskLookupFactory.from(project.tasks)
+        def task1 = Mock(Task)
+        def task2 = Mock(Task)
+        def task3 = Mock(Task)
+        service.findTask('task1') >> task1
+        service.findTask('task2') >> task2
+        service.findTask('task3') >> task3
+        def lookup = TaskLookupFactory.from(service)
 
         expect:
         lookup.findByName('task1') == task1
@@ -78,35 +87,46 @@ class TaskLookupTest extends Specification {
         lookup.findByName('task3') == task3
     }
 
-    // ===== SERIALIZATION TESTS =====
+    // ===== EXECUTE METHOD TESTS =====
 
-    def "TaskContainerLookup is Serializable"() {
+    def "TaskExecutionServiceLookup execute by name delegates to service"() {
         given:
-        def lookup = TaskLookupFactory.from(project.tasks)
+        def lookup = TaskLookupFactory.from(service)
 
-        expect:
-        lookup instanceof Serializable
+        when:
+        lookup.execute('testTask')
+
+        then:
+        1 * service.executeTask('testTask')
     }
 
-    def "TaskContainerLookup has serialVersionUID"() {
-        expect:
-        TaskContainerLookup.serialVersionUID == 1L
+    def "TaskExecutionServiceLookup execute task delegates to service"() {
+        given:
+        def task = Mock(Task)
+        def lookup = TaskLookupFactory.from(service)
+
+        when:
+        lookup.execute(task)
+
+        then:
+        1 * service.executeTask(task)
     }
 
     // ===== INTERFACE IMPLEMENTATION TESTS =====
 
     def "can use TaskLookup interface polymorphically"() {
         given:
-        project.tasks.create('testTask')
-        TaskLookup lookup = TaskLookupFactory.from(project.tasks)
+        def task = Mock(Task)
+        service.findTask('testTask') >> task
+        TaskLookup lookup = TaskLookupFactory.from(service)
 
         expect:
-        lookup.findByName('testTask') != null
+        lookup.findByName('testTask') == task
     }
 
-    def "TaskContainerLookup constructor accepts TaskContainer"() {
+    def "TaskExecutionServiceLookup constructor accepts TaskExecutionService"() {
         when:
-        def lookup = new TaskContainerLookup(project.tasks)
+        def lookup = new TaskExecutionServiceLookup(service)
 
         then:
         lookup != null
@@ -114,17 +134,10 @@ class TaskLookupTest extends Specification {
 
     // ===== EDGE CASE TESTS =====
 
-    def "TaskContainerLookup handles empty task container"() {
+    def "TaskExecutionServiceLookup handles null task name"() {
         given:
-        def lookup = TaskLookupFactory.from(project.tasks)
-
-        expect:
-        lookup.findByName('anyTask') == null
-    }
-
-    def "TaskContainerLookup handles null task name"() {
-        given:
-        def lookup = TaskLookupFactory.from(project.tasks)
+        service.findTask(null) >> null
+        def lookup = TaskLookupFactory.from(service)
 
         when:
         def result = lookup.findByName(null)
@@ -133,9 +146,10 @@ class TaskLookupTest extends Specification {
         result == null
     }
 
-    def "TaskContainerLookup handles empty string task name"() {
+    def "TaskExecutionServiceLookup handles empty string task name"() {
         given:
-        def lookup = TaskLookupFactory.from(project.tasks)
+        service.findTask('') >> null
+        def lookup = TaskLookupFactory.from(service)
 
         expect:
         lookup.findByName('') == null

@@ -16,65 +16,96 @@
 
 package com.kineticfire.gradle.docker.workflow
 
+import com.kineticfire.gradle.docker.service.TaskExecutionService
 import org.gradle.api.Task
 import org.gradle.api.tasks.TaskContainer
 
 /**
- * Interface for task lookup operations
+ * Interface for task lookup and execution operations.
  *
- * This abstraction allows executors to look up tasks without holding a reference
- * to the Project, which is required for configuration cache compatibility.
+ * This abstraction allows executors to look up and execute tasks without holding
+ * direct references to TaskContainer or Project, which supports configuration cache
+ * compatibility patterns.
  *
- * The interface is implemented as a simple wrapper around TaskContainer,
- * which can be safely captured during configuration time and used during execution.
- *
- * Use TaskLookupFactory.from() to create instances.
+ * Implementations:
+ * - TaskExecutionServiceLookup: Uses TaskExecutionService BuildService (production)
+ * - Test implementations can mock this interface for unit testing
  */
 interface TaskLookup {
 
     /**
-     * Find a task by name
+     * Find a task by name.
      *
      * @param taskName The name of the task to find
      * @return The task if found, null otherwise
      */
     Task findByName(String taskName)
+
+    /**
+     * Execute a task by name.
+     *
+     * @param taskName The name of the task to execute
+     * @throws IllegalArgumentException if task is not found
+     */
+    void execute(String taskName)
+
+    /**
+     * Execute a task.
+     *
+     * @param task The task to execute
+     */
+    void execute(Task task)
 }
 
 /**
- * Factory for creating TaskLookup instances
+ * Factory for creating TaskLookup instances.
  */
 class TaskLookupFactory {
 
     private TaskLookupFactory() {}
 
     /**
-     * Create a TaskLookup from a TaskContainer
+     * Create a TaskLookup from a TaskExecutionService.
      *
-     * TaskContainer can be safely serialized for configuration cache.
+     * This is the preferred production method as it uses Gradle's BuildService
+     * pattern for configuration cache compatibility.
      *
-     * @param tasks The TaskContainer to wrap
+     * @param service The TaskExecutionService
+     * @return A TaskLookup that delegates to the service
+     */
+    static TaskLookup from(TaskExecutionService service) {
+        return new TaskExecutionServiceLookup(service)
+    }
+
+    /**
+     * Create a TaskLookup from a TaskContainer.
+     *
+     * This method is provided for testing and non-configuration-cache scenarios.
+     * For production use with configuration cache, prefer using the TaskExecutionService
+     * variant via {@link #from(TaskExecutionService)}.
+     *
+     * @param taskContainer The TaskContainer to wrap
      * @return A TaskLookup that delegates to the TaskContainer
      */
-    static TaskLookup from(TaskContainer tasks) {
-        return new TaskContainerLookup(tasks)
+    static TaskLookup fromTaskContainer(TaskContainer taskContainer) {
+        return new TaskContainerLookup(taskContainer)
     }
 }
 
 /**
- * TaskLookup implementation that wraps a TaskContainer
+ * TaskLookup implementation that wraps a TaskExecutionService.
  *
- * TaskContainer is configuration cache compatible when captured
- * at configuration time, unlike the Project reference.
+ * This implementation is configuration-cache friendly because:
+ * 1. It doesn't store TaskContainer directly
+ * 2. TaskExecutionService is a BuildService which handles its own lifecycle
+ * 3. The executors receive this lookup at execution time, not configuration time
  */
-class TaskContainerLookup implements TaskLookup, Serializable {
+class TaskExecutionServiceLookup implements TaskLookup {
 
-    private static final long serialVersionUID = 1L
+    private final TaskExecutionService service
 
-    private final TaskContainer tasks
-
-    TaskContainerLookup(TaskContainer tasks) {
-        this.tasks = tasks
+    TaskExecutionServiceLookup(TaskExecutionService service) {
+        this.service = service
     }
 
     @Override
@@ -82,6 +113,55 @@ class TaskContainerLookup implements TaskLookup, Serializable {
         if (taskName == null) {
             return null
         }
-        return tasks.findByName(taskName)
+        return service.findTask(taskName)
+    }
+
+    @Override
+    void execute(String taskName) {
+        service.executeTask(taskName)
+    }
+
+    @Override
+    void execute(Task task) {
+        service.executeTask(task)
+    }
+}
+
+/**
+ * TaskLookup implementation that wraps a TaskContainer.
+ *
+ * This implementation is provided for testing and non-configuration-cache scenarios.
+ * For production use with configuration cache, use TaskExecutionServiceLookup instead.
+ */
+class TaskContainerLookup implements TaskLookup {
+
+    private final TaskContainer taskContainer
+
+    TaskContainerLookup(TaskContainer taskContainer) {
+        this.taskContainer = taskContainer
+    }
+
+    @Override
+    Task findByName(String taskName) {
+        if (taskName == null) {
+            return null
+        }
+        return taskContainer.findByName(taskName)
+    }
+
+    @Override
+    void execute(String taskName) {
+        Task task = findByName(taskName)
+        if (task == null) {
+            throw new IllegalArgumentException("Task '${taskName}' not found")
+        }
+        execute(task)
+    }
+
+    @Override
+    void execute(Task task) {
+        task.actions.each { action ->
+            action.execute(task)
+        }
     }
 }

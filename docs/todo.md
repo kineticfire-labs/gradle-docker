@@ -10,68 +10,72 @@ Phase 5:
       5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom - DONE
    30 +  6. `README.md` - Documentation of scenarios
 
+User DSL:
+dockerProject {
+    image {
+        name.set('my-app')
+        tags.set(['latest', '1.0.0'])
+        jarFrom.set(':app:jar')
+        buildArgs.put('VERSION', '1.0.0')
+        labels.put('title', 'My App')
+    }
 
-> Task :dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline
-Successfully applied tags: [hooks-verified]
-HOOK: afterSuccess executed - marker created
-Success path completed for pipeline: hooksPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: hooksPipeline
-Cleanup completed for pipeline: hooksPipeline
-Pipeline hooksPipeline completed successfully
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app'])
+        timeoutSeconds.set(60)
+        testTaskName.set('integrationTest')
+    }
 
-3 problems were found storing the configuration cache.
-- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.internal.tasks.DefaultTaskContainer', a subtype of 'org.gradle.api.tasks.TaskContainer', as these are not supported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:disallowed_types
-- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.tasks.Copy', a subtype of 'org.gradle.api.Task', as these are not supported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:task_access
-- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/85m3p6i069i6z87ntu2ef5kka/3b6rxjnr4ec4utjnfsm4ff6or/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline
-Successfully applied tags: [prod, release]
-Success path completed for pipeline: prodPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: prodPipeline
-Cleanup completed for pipeline: prodPipeline
-Pipeline prodPipeline completed successfully
-
-5 problems were found storing the configuration cache.
-- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.internal.tasks.DefaultTaskContainer', a subtype of 'org.gradle.api.tasks.TaskContainer', as these are not supported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:disallowed_types
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: cannot serialize object of type 'org.gradle.api.tasks.Copy', a subtype of 'org.gradle.api.Task', as these are not supported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:task_access
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/8n5kvq9wy3hcs8sfd1d0kl27j/eeapxhkgg1hbcar92z846s7er/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
+    onSuccess {
+        additionalTags.set(['tested', 'stable'])
+        saveFile.set('build/images/my-app.tar.gz')
+        publishRegistry.set('localhost:5000')
+        publishNamespace.set('myorg')
+        publishTags.set(['latest', 'tested'])
+    }
+}
 
 
+Help me understand the overall usage for our proposed 'dockerProject' DSL.  Start with this outline:
+dockerProject {
+
+      image {
+          ...
+      }
+
+      test {
+          ...
+      }
+
+      onSuccess {
+          ...
+      }
+}
+
+And the purpose would be show normal usage examples and add comments for options.
+
+Taking these one block at time:
+
+dockerProject.image:
+- can use a simple 'name' for image name, or Image Name Mode (registry, namespace, imageName, tags), or Repository Mode (registry, repository, tags)
+- for a java project
+    - if just need a jar:  would use jarFrom.  and optionally rename with jarName.
+    - if need jar and other files, would use contextTask
+    - if a non-java project like a python ML project, then would use contextTask.  and would depend on if there is a dependent subproject on if that dependency is needed.
+- the dockerfile is assumed to be a path and name by convention: if a different name, use dockerfileName.set("CustomDockerFile") and if a different path use dockerfile.set(file("path/to/CustomDockerfile"))
+- optional buildArgs and labels
+- and if the image is already available locally, then don't need to build it.  just sourceRef or its component forms.
 
 
-1. in image DSL: name.set('project-scenario1-app')
-   1. what about repository or component parts?
-1. in image DSL: jarFrom.set(':app:jar')
-   1. allow for rename from app.jar?
-   1. what about for none-java projects?
-      1. mainly, one or more directories
-1. in image DSL: can we still specify Dockerfile? 
-1. in test DSL: do we have 'waitForRunning'?
-1. in onSuccess DSL: 
-   1. can only publish to one registry?
-   1. authentication example? 
+
+
+
+1. dockerOrch mentions "suite" lifecycle
+   1. check the whole project to remove "suite" 
+2. rename dockerOrch to dockerTest?
+
+
 
 ## Clean-up
 

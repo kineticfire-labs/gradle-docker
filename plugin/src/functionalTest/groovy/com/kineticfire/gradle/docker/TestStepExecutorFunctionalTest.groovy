@@ -53,10 +53,12 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 
             task verifyTaskNames {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     assert executor.computeComposeUpTaskName('myStack') == 'composeUpMyStack'
                     assert executor.computeComposeUpTaskName('testStack') == 'composeUpTestStack'
@@ -92,13 +94,15 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
             import com.kineticfire.gradle.docker.spec.ComposeStackSpec
             import org.gradle.api.GradleException
 
             task verifyValidation {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     // Test null spec
                     try {
@@ -159,6 +163,7 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
             import com.kineticfire.gradle.docker.spec.ComposeStackSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -186,7 +191,8 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyHooks {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     // Create ComposeStackSpec
                     def stackSpec = project.objects.newInstance(
@@ -244,6 +250,7 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
             import com.kineticfire.gradle.docker.spec.ComposeStackSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -269,7 +276,8 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyContextUpdate {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,
@@ -321,6 +329,7 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
             import com.kineticfire.gradle.docker.spec.ComposeStackSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -336,7 +345,8 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyMissingTaskFailure {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,
@@ -384,6 +394,7 @@ class TestStepExecutorFunctionalTest extends Specification {
             }
 
             import com.kineticfire.gradle.docker.workflow.executor.TestStepExecutor
+            import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
             import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
             import com.kineticfire.gradle.docker.spec.ComposeStackSpec
             import com.kineticfire.gradle.docker.workflow.PipelineContext
@@ -412,7 +423,8 @@ class TestStepExecutorFunctionalTest extends Specification {
 
             task verifyComposeDownOnFailure {
                 doLast {
-                    def executor = new TestStepExecutor(project.tasks)
+                    def taskLookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+                    def executor = new TestStepExecutor(taskLookup)
 
                     def stackSpec = project.objects.newInstance(
                         ComposeStackSpec,

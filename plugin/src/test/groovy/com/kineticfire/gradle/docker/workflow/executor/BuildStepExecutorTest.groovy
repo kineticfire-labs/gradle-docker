@@ -20,7 +20,6 @@ import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
-import com.kineticfire.gradle.docker.workflow.TaskLookupFactory
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Project
@@ -37,10 +36,13 @@ class BuildStepExecutorTest extends Specification {
     BuildStepExecutor executor
     ImageSpec imageSpec
     BuildStepSpec buildStepSpec
+    TaskLookup taskLookup
 
     def setup() {
         project = ProjectBuilder.builder().build()
-        executor = new BuildStepExecutor(project.tasks)
+        // Create a test TaskLookup that wraps the real project.tasks
+        taskLookup = createTaskLookup(project)
+        executor = new BuildStepExecutor(taskLookup)
 
         imageSpec = project.objects.newInstance(
             ImageSpec,
@@ -54,19 +56,38 @@ class BuildStepExecutorTest extends Specification {
         buildStepSpec.image.set(imageSpec)
     }
 
-    // ===== CONSTRUCTOR TESTS =====
+    /**
+     * Create a TaskLookup for testing that wraps a project's TaskContainer.
+     */
+    private TaskLookup createTaskLookup(Project project) {
+        return new TaskLookup() {
+            @Override
+            Task findByName(String taskName) {
+                return project.tasks.findByName(taskName)
+            }
 
-    def "constructor accepts TaskContainer"() {
-        when:
-        def exec = new BuildStepExecutor(project.tasks)
+            @Override
+            void execute(String taskName) {
+                def task = findByName(taskName)
+                if (task != null) {
+                    execute(task)
+                }
+            }
 
-        then:
-        exec != null
+            @Override
+            void execute(Task task) {
+                task.actions.each { action ->
+                    action.execute(task)
+                }
+            }
+        }
     }
+
+    // ===== CONSTRUCTOR TESTS =====
 
     def "constructor accepts TaskLookup"() {
         when:
-        def exec = new BuildStepExecutor(TaskLookupFactory.from(project.tasks))
+        def exec = new BuildStepExecutor(taskLookup)
 
         then:
         exec != null
