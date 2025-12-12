@@ -1,5 +1,8 @@
 # Implementation Plan: Workflow Support for Test Lifecycle (Option D)
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Status:** Complete
 **Date:** 2025-11-28
 **Completion Date:** 2025-11-29

@@ -1,5 +1,8 @@
 # DockerOrch Examples README Cleanup Plan
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Created:** 2025-11-16
 **Status:** TODO
 **Priority:** HIGH

@@ -1,5 +1,8 @@
 # Functional Test Coverage Improvement Plan (Corrected)
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Date Created**: 2025-11-14
 **Date Corrected**: 2025-11-14
 **Date Updated**: 2025-11-15

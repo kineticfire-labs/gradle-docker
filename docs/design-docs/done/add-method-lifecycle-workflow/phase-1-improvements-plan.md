@@ -1,5 +1,8 @@
 # Phase 1 Improvements Plan: Better Error Messages and Documentation
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Status:** PLANNED
 **Date:** 2025-12-06
 **Author:** Development Team

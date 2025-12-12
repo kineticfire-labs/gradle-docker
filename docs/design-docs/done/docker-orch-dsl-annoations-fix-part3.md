@@ -1,5 +1,8 @@
 # Plan: Address Flaky Test and Coverage Documentation (Part 3)
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Status**: Ready for Implementation
 **Priority**: Medium
 **Estimated Effort**: 3-4 hours

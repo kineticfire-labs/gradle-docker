@@ -82,7 +82,7 @@ the-application-project/
    ├─ docs/                                # (optional) runbooks, diagrams for tests
    └─ build/                               # outputs: transcripts, logs, saved tars, state JSON, etc.
       ├─ docker/                           # image tars (from dockerSave*)
-      ├─ compose-logs/                     # compose logs by task/suite
+      ├─ compose-logs/                     # compose logs by task/class
       └─ compose/                          # compose state files (JSON) per stack
 ```
 
@@ -107,7 +107,7 @@ The Docker Compose orchestration functionality will be implemented in phases:
 - Wait for `healthy` service state
 - JSON state file generation for service connectivity info
 - Test task integration with `usesCompose`
-- Basic lifecycle management (suite/class level)
+- Basic lifecycle management (class level) [Note: "suite" was consolidated into "class" lifecycle]
 
 ### Phase 3: Advanced Orchestration
 - Method-level lifecycle management

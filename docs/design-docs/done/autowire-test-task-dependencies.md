@@ -1,5 +1,8 @@
 # Auto-Wire Test Task Dependencies for usesCompose()
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 ## Status
 **COMPLETE** - Successfully implemented
 **Completeness**: 100%

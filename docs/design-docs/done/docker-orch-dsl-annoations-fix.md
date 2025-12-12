@@ -1,5 +1,8 @@
 # Plan: Fix Configuration Duplication Between dockerOrch DSL and Test Annotations
 
+> **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
+> There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
+
 **Status**: Not Started
 **Priority**: High
 **Estimated Effort**: 11-15 hours

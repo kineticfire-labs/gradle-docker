@@ -40,7 +40,7 @@ business needs, user experiences, and features like inputs, processing, and outp
 | uc-7        | fr-27          | fs-27            | The plugin shall wait for services to reach `healthy` state with configurable timeout                                    | Draft  |
 | uc-7        | fr-28          | fs-28            | The plugin shall generate JSON state file with service connectivity information                                          | Draft  |
 | uc-7        | fr-29          | fs-29            | The plugin shall integrate with Gradle Test tasks using `usesCompose` configuration                                      | Draft  |
-| uc-7        | fr-30          | fs-30            | The plugin shall support test lifecycle management (suite, class, method levels)                                         | Draft  |
+| uc-7        | fr-30          | fs-30            | The plugin shall support test lifecycle management (class, method levels) [Note: "suite" was consolidated into "class" lifecycle] | Draft  |
 | uc-7        | fr-31          | fs-31            | The plugin shall capture and store Docker Compose logs                                                                   | Draft  |
 | uc-3, uc-7  | fr-32          | fs-32            | The plugin shall use the exec library from https://github.com/kineticfire-labs/exec for Docker Compose command execution | Draft  |
 

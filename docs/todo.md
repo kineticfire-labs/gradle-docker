@@ -71,16 +71,15 @@ dockerProject.image:
 
 
 
-1. dockerOrch mentions "suite" lifecycle
-   1. check the whole project to remove "suite" 
 2. rename dockerOrch to dockerTest?
 
 
 
-lifeceycle cleanup
-- phase 1
-- phase 2
-- phase 3 9working
+
+
+
+
+
 
 ## Clean-up
 
