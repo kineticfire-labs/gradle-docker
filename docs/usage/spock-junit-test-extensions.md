@@ -215,7 +215,7 @@ and annotation (stackName=differentStack). Use EITHER build.gradle OR annotation
 - When you want clean, minimal test code
 
 **When to Use Gradle Tasks:**
-- Suite lifecycle (containers run for entire test suite)
+- Class lifecycle (containers run for entire test class)
 - Manual container management in CI/CD pipelines
 - Custom orchestration logic outside test frameworks
 

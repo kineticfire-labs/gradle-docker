@@ -18,8 +18,8 @@ building, testing, and conditional post-test actions.
   - [test Step](#test-step)
   - [onTestSuccess Step](#ontestsuccess-step)
 - [Lifecycle Options](#lifecycle-options)
-  - [Suite Lifecycle (Default)](#suite-lifecycle-default)
-  - [Class Lifecycle](#class-lifecycle)
+  - [Class Lifecycle (Default)](#class-lifecycle-default)
+  - [Class Lifecycle (Delegated)](#class-lifecycle-delegated)
   - [Method Lifecycle](#method-lifecycle)
 - [Delegated Stack Management](#delegated-stack-management)
 - [Combining dockerWorkflows with testIntegration](#combining-dockerworkflows-with-testintegration)
@@ -64,7 +64,7 @@ Use `dockerWorkflows` when you need:
 | Method-level container lifecycle | ✅ Use `dockerWorkflows` with `lifecycle = METHOD` |
 | CI/CD pipeline orchestration | ✅ Use `dockerWorkflows` |
 
-**All lifecycle modes are supported:** Suite (default), Class, and Method. See
+**All lifecycle modes are supported:** Class (default) and Method. See
 [Lifecycle Options](#lifecycle-options) for details.
 
 ---
@@ -230,10 +230,10 @@ onTestSuccess {
 
 The `lifecycle` property in the test step controls when containers are started and stopped during test execution.
 
-### Suite Lifecycle (Default)
+### Class Lifecycle (Default)
 
-With `lifecycle = WorkflowLifecycle.CLASS` (the default), containers start once before all tests and stop after
-all tests complete. This is the fastest option when test isolation is not required.
+With `lifecycle = WorkflowLifecycle.CLASS` (the default), containers start once before all tests in a class and stop
+after all tests complete. This is the fastest option when test isolation is not required.
 
 ```groovy
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
@@ -266,11 +266,10 @@ dockerWorkflows {
 4. Stop compose stack (once)
 5. Apply tags on success
 
-### Class Lifecycle
+### Class Lifecycle (Delegated)
 
-Class lifecycle behaves the same as suite lifecycle when using `dockerWorkflows` directly. For true per-class
-container restarts, use `delegateStackManagement = true` with `testIntegration.usesCompose()`. See
-[Delegated Stack Management](#delegated-stack-management).
+Class lifecycle (delegated) provides per-class container restarts. Use `delegateStackManagement = true` with
+`testIntegration.usesCompose()`. See [Delegated Stack Management](#delegated-stack-management).
 
 ### Method Lifecycle
 
@@ -475,7 +474,7 @@ See [Method Lifecycle](#method-lifecycle) for details.
 
 | Lifecycle | dockerWorkflows | How to Configure |
 |-----------|-----------------|------------------|
-| **Suite/Class** | ✅ Supported | `lifecycle = WorkflowLifecycle.CLASS` (default) |
+| **Class** | ✅ Supported | `lifecycle = WorkflowLifecycle.CLASS` (default) |
 | **Class (delegated)** | ✅ Supported | `delegateStackManagement = true` with `testIntegration` |
 | **Method** | ✅ Supported | `lifecycle = WorkflowLifecycle.METHOD` with `@ComposeUp` |
 
@@ -486,7 +485,7 @@ publish on success).
 
 ## Complete Examples
 
-### Example 1: Basic Pipeline (Suite Lifecycle)
+### Example 1: Basic Pipeline (Class Lifecycle)
 
 ```groovy
 dockerWorkflows {

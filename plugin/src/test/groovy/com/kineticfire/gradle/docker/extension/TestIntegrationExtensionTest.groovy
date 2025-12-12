@@ -123,7 +123,7 @@ class TestIntegrationExtensionTest extends Specification {
 
     // ===== USES COMPOSE TESTS =====
 
-    def "usesCompose configures suite lifecycle correctly"() {
+    def "usesCompose configures class lifecycle correctly"() {
         given:
         // Apply plugin to get full setup
         project.pluginManager.apply('com.kineticfire.gradle.docker')

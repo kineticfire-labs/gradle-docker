@@ -187,7 +187,7 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('Method lifecycle: method')
     }
 
-    def "suite lifecycle configures without error"() {
+    def "class lifecycle configures without error"() {
         given:
         buildFile << """
             plugins {
@@ -197,37 +197,37 @@ class TestExtensionFunctionalTest extends Specification {
 
             dockerOrch {
                 composeStacks {
-                    suiteStack {
-                        files.from('suite-compose.yml')
+                    classStack {
+                        files.from('class-compose.yml')
                     }
                 }
             }
 
-            tasks.register('suiteTest', Test) {
-                usesCompose stack: 'suiteStack', lifecycle: 'class'
+            tasks.register('classTest', Test) {
+                usesCompose stack: 'classStack', lifecycle: 'class'
             }
 
-            task verifySuiteLifecycle {
+            task verifyClassLifecycle {
                 doLast {
-                    def testTask = tasks.getByName('suiteTest')
+                    def testTask = tasks.getByName('classTest')
                     // Verify task exists and was configured
                     assert testTask != null
-                    println "Suite lifecycle test task configured successfully"
+                    println "Class lifecycle test task configured successfully"
                 }
             }
         """
 
-        testProjectDir.resolve('suite-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
+        testProjectDir.resolve('class-compose.yml').toFile() << "services:\n  test:\n    image: alpine"
 
         when:
         def result = GradleRunner.create()
             .withProjectDir(testProjectDir.toFile())
             .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
-            .withArguments('verifySuiteLifecycle')
+            .withArguments('verifyClassLifecycle')
             .build()
 
         then:
-        result.output.contains('Suite lifecycle test task configured successfully')
+        result.output.contains('Class lifecycle test task configured successfully')
     }
 
     def "method lifecycle configures without error"() {
@@ -317,7 +317,7 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('Custom test task configured successfully')
     }
 
-    def "test task depends on composeUp with suite lifecycle"() {
+    def "test task depends on composeUp with class lifecycle"() {
         given:
         buildFile << """
             plugins {
@@ -360,7 +360,7 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('composeUpDepStack')
     }
 
-    def "test task finalizedBy composeDown with suite lifecycle"() {
+    def "test task finalizedBy composeDown with class lifecycle"() {
         given:
         buildFile << """
             plugins {

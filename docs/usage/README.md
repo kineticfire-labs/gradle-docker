@@ -41,7 +41,7 @@ Complete guide to testing Docker images using Docker Compose orchestration with 
 
 **Key topics:**
 - Docker Compose orchestration for tests
-- Container lifecycle management (class, method, suite)
+- Container lifecycle management (class, method)
 - Health checks and readiness waiting
 - Spock and JUnit 5 test framework integration
 - Integration test source set convention

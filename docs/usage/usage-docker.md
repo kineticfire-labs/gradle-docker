@@ -44,7 +44,7 @@ the-application-project/                  # a project that (1) builds an applica
    ├─ docs/                                # (optional) runbooks, diagrams for tests
    └─ build/                               # outputs: transcripts, logs, saved tars, state JSON, etc.
       ├─ docker/                           # image tars (from dockerSave*)
-      ├─ compose-logs/                     # compose logs by task/suite
+      ├─ compose-logs/                     # compose logs by task/class
       └─ compose/                          # compose state files (JSON) per stack
 ```
 

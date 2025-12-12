@@ -77,6 +77,11 @@ dockerProject.image:
 
 
 
+lifeceycle cleanup
+- phase 1
+- phase 2
+- phase 3 9working
+
 ## Clean-up
 
 ### Phase 1 Improvements (Recommended)

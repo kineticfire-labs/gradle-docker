@@ -91,7 +91,7 @@ the-application-project/                  # a project that (1) builds an applica
    ├─ docs/                                # (optional) runbooks, diagrams for tests
    └─ build/                               # outputs: transcripts, logs, saved tars, state JSON, etc.
       ├─ docker/                           # image tars (from dockerSave*)
-      ├─ compose-logs/                     # compose logs by task/suite
+      ├─ compose-logs/                     # compose logs by task/class
       └─ compose/                          # compose state files (JSON) per stack
 ```
 
@@ -126,10 +126,10 @@ Use **Spock or JUnit 5 extensions** to automatically manage container lifecycles
 
 ### 2. Gradle Tasks (OPTIONAL)
 
-Use **Gradle tasks** (`composeUp*` / `composeDown*`) for suite-level orchestration or when you need manual control.
+Use **Gradle tasks** (`composeUp*` / `composeDown*`) for class-level orchestration or when you need manual control.
 
 **Use Cases:**
-- Suite lifecycle (containers run for entire test suite)
+- Class lifecycle (containers run for entire test class)
 - Manual container management in CI/CD pipelines
 - Custom orchestration scenarios
 - Non-test-framework integrations
@@ -228,7 +228,7 @@ tasks.named('integrationTest') {
 **Lifecycles that auto-wire:**
 - **class** lifecycle: compose up/down dependencies automatically added
 - **method** lifecycle: compose up/down dependencies automatically added
-- **suite** lifecycle: MANUAL wiring required (for backward compatibility)
+- **class** lifecycle (via Gradle tasks): MANUAL wiring required (for backward compatibility)
 
 **Why auto-wire?**
 - Eliminates 3-5 lines of boilerplate per test task
@@ -1279,16 +1279,16 @@ For more information: docs/usage/usage-docker-orch.md
 **Note:** The annotation alone doesn't specify lifecycle - that's configured in `build.gradle` via
 `usesCompose(stack: "name", lifecycle: "class")`. The annotation simply enables the extension.
 
-## Gradle Tasks (Optional - Suite Lifecycle)
+## Gradle Tasks (Optional - Class Lifecycle)
 
-Gradle tasks provide suite-level orchestration using `composeUp*` and `composeDown*` tasks. Use this approach when:
-- You need containers to run for the entire test suite (CLASS lifecycle with manual Gradle task orchestration)
+Gradle tasks provide class-level orchestration using `composeUp*` and `composeDown*` tasks. Use this approach when:
+- You need containers to run for the entire test class (CLASS lifecycle with manual Gradle task orchestration)
 - You're orchestrating containers manually in CI/CD pipelines
 - You need custom orchestration logic outside test frameworks
 
 **Note:** Gradle tasks only support **CLASS lifecycle**. For automatic CLASS or METHOD lifecycle management, use test framework extensions.
 
-### Basic Suite Configuration
+### Basic Class Lifecycle Configuration
 
 ```gradle
 // build.gradle
@@ -1717,7 +1717,7 @@ See [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md) 
 
 ### 1. Choose the Right Lifecycle
 
-- **CLASS/Suite:** For tests that build on each other (workflow: register → login → update), read-only tests, or when
+- **CLASS:** For tests that build on each other (workflow: register → login → update), read-only tests, or when
   performance matters
 - **METHOD:** For tests that need complete isolation, fresh database state, or independent/idempotent execution
 
