@@ -112,16 +112,12 @@ class TestResultCapture {
 
     /**
      * Find the JUnit XML reports directory for a test task
+     *
+     * CONFIGURATION CACHE NOTE: We cannot access testTask.project at execution time.
+     * Instead, we use the Test task's reports configuration which is already available.
      */
     File findJUnitReportsDir(Test testTask) {
-        // Standard location: build/test-results/{taskName}
-        def buildDir = testTask.project.layout.buildDirectory.asFile.get()
-        def standardDir = new File(buildDir, "test-results/${testTask.name}")
-        if (standardDir.exists()) {
-            return standardDir
-        }
-
-        // Try the reports.junitXml.outputLocation if configured
+        // Try the reports.junitXml.outputLocation first (configuration-cache safe)
         try {
             def junitXmlDir = testTask.reports.junitXml.outputLocation.asFile.orNull
             if (junitXmlDir?.exists()) {
@@ -129,6 +125,25 @@ class TestResultCapture {
             }
         } catch (Exception e) {
             LOGGER.debug("Could not access junitXml output location: {}", e.message)
+        }
+
+        // Fallback: derive build directory from the junitXml destination
+        // This avoids accessing testTask.project at execution time
+        try {
+            def junitXmlDir = testTask.reports.junitXml.outputLocation.asFile.orNull
+            if (junitXmlDir != null) {
+                // junitXml is typically in build/test-results/{taskName}
+                // So build dir is parent.parent of that
+                def buildDir = junitXmlDir.parentFile?.parentFile
+                if (buildDir != null) {
+                    def standardDir = new File(buildDir, "test-results/${testTask.name}")
+                    if (standardDir.exists()) {
+                        return standardDir
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOGGER.debug("Could not derive build directory: {}", e.message)
         }
 
         return null

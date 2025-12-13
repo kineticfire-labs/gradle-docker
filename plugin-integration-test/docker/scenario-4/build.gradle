@@ -20,7 +20,6 @@
  *       - number of images = 1
  *       - build image + follow-on publish
  *       - naming style: Image Name Mode: namespace, imageName, 1 tag
- *       - build args = number of build args w/ putAll = 1
  *       - labels = number of labels w/ putAll = 1
  *       - dockerfile = default
  *   - Tag Features
@@ -96,11 +95,8 @@ docker {
                 }
             }
 
-            buildArgs.putAll(providers.provider {
-              [
-                      'JAR_FILE': "app-${project.version}.jar"
-              ]
-            })
+            // Note: buildArgs removed - Dockerfile uses wildcard pattern (COPY app-*.jar)
+            // instead of ARG/COPY ${JAR_FILE}, so passing JAR_FILE caused unused build-arg warning
 
             labels.putAll(providers.provider {
               [
@@ -156,8 +152,7 @@ registerVerifySavedImagesTask(project, ['build/docker-images/scenario4-time-serv
 registerVerifyRegistryImagesTask(project, ['localhost:5041/scenario4/inheritance-test:latest'])
 
 // Register build args verification for this integration test
-// Note: Even though buildArgs are configured, the Dockerfile doesn't use ARG instructions,
-// so build args won't appear in docker history. Verify zero build args.
+// No build args configured in this scenario - verify zero build args
 registerVerifyBuildArgsTask(project, [
     'scenario4/inheritance-test:latest': [:]  // Empty map = expect zero build args
 ])

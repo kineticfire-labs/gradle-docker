@@ -76,10 +76,6 @@ Phases 1 - 8
 4
 
 
-Starting a Gradle Daemon, 1 incompatible and 5 stopped Daemons could not be reused, use --status for details
-Calculating task graph as no cached configuration is available for tasks: cleanAll integrationTest
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
-
 
 
 > Task :docker:scenario-4:cleanDockerImages
@@ -87,21 +83,14 @@ Docker build: [Warning] One or more build-args [JAR_FILE] were not consumed
 
 
 
+Now, the configuration cache warnings are a different issue. These warnings are expected for PipelineRunTask because:
+
+1. PipelineRunTask is already marked as notCompatibleWithConfigurationCache
+2. When it executes test tasks programmatically at runtime, those tasks (Test from GroovyBasePlugin/JavaBasePlugin) access .project internally
+3. This is inherent to the pipeline workflow design - we can't avoid it without completely redesigning how pipelines work
 
 
 
-
-> Task :dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline
-State file generated: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerWorkflows/scenario-3-failed-tests/app-image/build/compose-state/failedTest-state.json
-ComposeUp task composeUpFailedTest completed successfully
-Test task failed with exception: There are test sources present and no filters are applied, but the test task did not discover any tests to execute. This is likely due to a misconfiguration. Please check your test configuration. If this is not a misconfiguration, this error can be disabled by setting the 'failOnNoDiscoveredTests' property to false.
-Stopping Docker Compose stack: failedTest (project: workflow-scenario3-test)
-Successfully stopped compose stack 'failedTest'
-ComposeDown task composeDownFailedTest completed successfully
-Pipeline failingPipeline failed: Test execution failed: There are test sources present and no filters are applied, but the test task did not discover any tests to execute. This is likely due to a misconfiguration. Please check your test configuration. If this is not a misconfiguration, this error can be disabled by setting the 'failOnNoDiscoveredTests' property to false.
-Executing always (cleanup) step
-Executing cleanup for pipeline: failingPipeline
-Cleanup completed for pipeline: failingPipeline
 
 > Task :dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline FAILED
 
@@ -122,171 +111,6 @@ FAILURE: Build failed with an exception.
 * What went wrong:
   Execution failed for task ':dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline'.
 > Pipeline 'failingPipeline' failed: Test execution failed: There are test sources present and no filters are applied, but the test task did not discover any tests to execute. This is likely due to a misconfiguration. Please check your test configuration. If this is not a misconfiguration, this error can be disabled by setting the 'failOnNoDiscoveredTests' property to false.
-
-
-
-
-
-
-
-> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline
-3 problems were found storing the configuration cache.
-- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runDevPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/cwcf1443r8a0na7vof3xydo6v/2t9xeo7u68k6ako3gvquxu6kf/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-
-
-> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline
-Successfully applied tags: [staging]
-Success path completed for pipeline: stagingPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: stagingPipeline
-Cleanup completed for pipeline: stagingPipeline
-Pipeline stagingPipeline completed successfully
-
-3 problems were found storing the configuration cache.
-- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runStagingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/f1ms6bolx16nk908t98s6qqki/2gzv3kbo9e01ogle9lq2r97y/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-
-==========================================
-TEST 3: Production Pipeline (adds 'prod' and 'release' tags)
-==========================================
-Calculating task graph as no cached configuration is available for tasks: :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
-
-
-
-
-
-
-
-
-> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline
-Successfully applied tags: [prod, release]
-Success path completed for pipeline: prodPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: prodPipeline
-Cleanup completed for pipeline: prodPipeline
-Pipeline prodPipeline completed successfully
-
-3 problems were found storing the configuration cache.
-- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-4-multiple-pipelines:app-image:runProdPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/8n5kvq9wy3hcs8sfd1d0kl27j/8wtv10tdrqn26jvy2dwb09j1b/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-
-
-
-
-
-
-> Task :dockerWorkflows:scenario-5-complex-success:app-image:runComplexSuccessPipeline
-Successfully applied tags: [verified, stable]
-Success path completed for pipeline: complexSuccessPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: complexSuccessPipeline
-Cleanup completed for pipeline: complexSuccessPipeline
-Pipeline complexSuccessPipeline completed successfully
-
-1 problem was found storing the configuration cache.
-- Task `:dockerWorkflows:scenario-5-complex-success:app-image:runComplexSuccessPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-5-complex-success:app-image:runComplexSuccessPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/agl36opz42tmzkvp68hl0r8qt/54rvi5drokvn76sg87rld1kzk/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-==========================================
-RUNNING: Hooks Pipeline
-==========================================
-Calculating task graph as no cached configuration is available for tasks: :dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
-
-
-
-
-
-> Task :dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline
-Successfully applied tags: [hooks-verified]
-HOOK: afterSuccess executed - marker created
-Success path completed for pipeline: hooksPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: hooksPipeline
-Cleanup completed for pipeline: hooksPipeline
-Pipeline hooksPipeline completed successfully
-
-1 problem was found storing the configuration cache.
-- Task `:dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-6-hooks:app-image:runHooksPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/85m3p6i069i6z87ntu2ef5kka/7kcfo8b1aexd494pihxr4hnvm/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-> Task :dockerWorkflows:scenario-7-save-publish:app-image:runSavePublishPipeline
-Successfully saved image to: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerWorkflows/scenario-7-save-publish/app-image/build/images/workflow-scenario7-app.tar.gz
-Success path completed for pipeline: savePublishPipeline
-Executing always (cleanup) step
-Executing cleanup for pipeline: savePublishPipeline
-Cleanup completed for pipeline: savePublishPipeline
-Pipeline savePublishPipeline completed successfully
-
-1 problem was found storing the configuration cache.
-- Task `:dockerWorkflows:scenario-7-save-publish:app-image:runSavePublishPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-7-save-publish:app-image:runSavePublishPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/x83kvek5l592yvl2q10xc7h4/2uz8bh03f5u73fwfompi5jc0z/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-
-
-2 problems were found storing the configuration cache.
-- Task `:dockerProject:scenario-4-method-lifecycle:app-image:runProjectscenario4appPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerProject:scenario-4-method-lifecycle:app-image:runProjectscenario4appPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-8-method-lifecycle:app-image:runMethodLifecyclePipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-8-method-lifecycle:app-image:runMethodLifecyclePipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/8krf09rpiilg3f8k24u02d0k2/avw97jj7y9np2dbb0oilr8qq4/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
 
 
 

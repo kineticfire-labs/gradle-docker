@@ -178,6 +178,8 @@ afterEvaluate {
     }
 
     tasks.named('failingIntegrationTest') {
+        // Ensure tests are compiled before running
+        dependsOn tasks.named('integrationTestClasses')
         dependsOn tasks.named('composeUpFailedTest')
         finalizedBy tasks.named('composeDownFailedTest')
     }
