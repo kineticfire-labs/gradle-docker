@@ -415,22 +415,25 @@ class DockerProjectTranslator {
             if (testSpec.compose.isPresent()) {
                 // Configure test step
                 pipeline.test { testStep ->
-                    testStep.stack.set(dockerTestExt.composeStacks.getByName(stackName))
                     testStep.testTaskName.set(testSpec.testTaskName.getOrElse('integrationTest'))
 
                     def lifecycleValue = parseLifecycle(testSpec.lifecycle.getOrElse('class'))
                     testStep.lifecycle.set(lifecycleValue)
 
                     // When METHOD lifecycle, delegate stack management to test framework extension
+                    // Don't set stack since the test framework extension handles compose lifecycle
                     if (lifecycleValue == WorkflowLifecycle.METHOD) {
                         testStep.delegateStackManagement.set(true)
 
-                        project.logger.warn(
+                        project.logger.lifecycle(
                             "dockerProject: Using METHOD lifecycle for pipeline '${pipelineName}'. " +
                             "Ensure test task '${testSpec.testTaskName.getOrElse('integrationTest')}' " +
                             "has maxParallelForks = 1 and test classes use @ComposeUp (Spock) or " +
                             "@ExtendWith(DockerComposeMethodExtension.class) (JUnit 5)."
                         )
+                    } else {
+                        // Only set stack for CLASS or SUITE lifecycle where pipeline manages compose
+                        testStep.stack.set(dockerTestExt.composeStacks.getByName(stackName))
                     }
                 }
             }
