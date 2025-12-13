@@ -512,6 +512,10 @@ class DockerProjectTranslator {
             def composeDownTaskName = "composeDown${capitalizedStack}"
             def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
 
+            // Determine if this is METHOD lifecycle (test framework handles compose)
+            def lifecycleValue = testSpec.lifecycle.getOrElse('class')
+            def isMethodLifecycle = lifecycleValue.toLowerCase() == 'method'
+
             // Check if required tasks exist before configuring dependencies
             // In production, these tasks exist because this runs after afterEvaluate
             // In unit tests, these tasks may not exist
@@ -521,12 +525,73 @@ class DockerProjectTranslator {
                 }
             }
 
-            if (project.tasks.findByName(testTaskName) != null &&
-                project.tasks.findByName(composeUpTaskName) != null) {
+            if (project.tasks.findByName(testTaskName) != null) {
                 project.tasks.named(testTaskName).configure { task ->
-                    task.dependsOn(composeUpTaskName)
-                    task.finalizedBy(composeDownTaskName)
+                    if (isMethodLifecycle) {
+                        // METHOD lifecycle: test framework handles compose via @ComposeUp
+                        // Configure system properties so @ComposeUp can read compose configuration
+                        configureTestTaskSystemProperties(task, stackName, testSpec)
+                        // Test task still depends on image being built
+                        task.dependsOn(dockerBuildTaskName)
+                    } else if (project.tasks.findByName(composeUpTaskName) != null) {
+                        // CLASS lifecycle: pipeline handles compose up/down
+                        task.dependsOn(composeUpTaskName)
+                        task.finalizedBy(composeDownTaskName)
+                    }
                 }
+            }
+        }
+    }
+
+    /**
+     * Configures system properties on the test task for @ComposeUp annotation to read.
+     * Required for METHOD lifecycle where the test framework extension manages compose.
+     *
+     * @param task The test task to configure
+     * @param stackName The compose stack name
+     * @param testSpec The project test specification containing compose settings
+     */
+    private void configureTestTaskSystemProperties(def task, String stackName, ProjectTestSpec testSpec) {
+        // Import needed for Test task type check
+        if (task instanceof org.gradle.api.tasks.testing.Test) {
+            def testTask = task as org.gradle.api.tasks.testing.Test
+
+            // docker.compose.stack - stack name
+            testTask.systemProperty('docker.compose.stack', stackName)
+
+            // docker.compose.files - compose file paths (comma-separated)
+            def composePath = testSpec.compose.get()
+            testTask.systemProperty('docker.compose.files', composePath)
+
+            // docker.compose.lifecycle - lifecycle mode
+            testTask.systemProperty('docker.compose.lifecycle', 'method')
+
+            // docker.compose.projectName - compose project name
+            def projectName = testSpec.projectName.getOrElse(stackName)
+            testTask.systemProperty('docker.compose.projectName', projectName)
+
+            // docker.compose.waitForHealthy.services - services to wait for healthy
+            if (testSpec.waitForHealthy.isPresent() && !testSpec.waitForHealthy.get().isEmpty()) {
+                def services = testSpec.waitForHealthy.get().join(',')
+                testTask.systemProperty('docker.compose.waitForHealthy.services', services)
+            }
+
+            // docker.compose.waitForRunning.services - services to wait for running
+            if (testSpec.waitForRunning.isPresent() && !testSpec.waitForRunning.get().isEmpty()) {
+                def services = testSpec.waitForRunning.get().join(',')
+                testTask.systemProperty('docker.compose.waitForRunning.services', services)
+            }
+
+            // docker.compose.timeoutSeconds - timeout for wait operations
+            if (testSpec.timeoutSeconds.isPresent()) {
+                testTask.systemProperty('docker.compose.timeoutSeconds',
+                    testSpec.timeoutSeconds.get().toString())
+            }
+
+            // docker.compose.pollSeconds - poll interval for wait operations
+            if (testSpec.pollSeconds.isPresent()) {
+                testTask.systemProperty('docker.compose.pollSeconds',
+                    testSpec.pollSeconds.get().toString())
             }
         }
     }

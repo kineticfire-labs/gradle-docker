@@ -83,8 +83,7 @@ Docker build: [Warning] One or more build-args [JAR_FILE] were not consumed
 
 
 
-Now, the configuration cache warnings are a different issue. These warnings are expected for PipelineRunTask because:
-
+The configuration cache warnings are expected for PipelineRunTask because:
 1. PipelineRunTask is already marked as notCompatibleWithConfigurationCache
 2. When it executes test tasks programmatically at runtime, those tasks (Test from GroovyBasePlugin/JavaBasePlugin) access .project internally
 3. This is inherent to the pipeline workflow design - we can't avoid it without completely redesigning how pipelines work

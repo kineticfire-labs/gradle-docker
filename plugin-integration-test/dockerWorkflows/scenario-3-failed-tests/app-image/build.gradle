@@ -183,6 +183,14 @@ afterEvaluate {
         dependsOn tasks.named('composeUpFailedTest')
         finalizedBy tasks.named('composeDownFailedTest')
     }
+
+    // Disable the auto-created 'integrationTest' task to prevent it from running
+    // the intentionally-failing tests when `./gradlew integrationTest` is executed.
+    // This scenario's tests should only run via 'verifyFailedPipeline' which
+    // expects and validates failure behavior.
+    tasks.named('integrationTest') {
+        enabled = false
+    }
 }
 
 // =============================================================================

@@ -532,6 +532,26 @@ class PipelineValidatorTest extends Specification {
         noExceptionThrown()
     }
 
+    def "validateMethodLifecycleConfiguration passes with delegateStackManagement true and no stack"() {
+        given:
+        project.tasks.create('integrationTest', GradleTestTask) {
+            maxParallelForks = 1
+        }
+
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'delegatedMethodPipeline')
+        def testSpec = pipelineSpec.test.get()
+        testSpec.testTaskName.set('integrationTest')
+        testSpec.delegateStackManagement.set(true)
+        testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+        // No stack configured - valid when delegateStackManagement=true
+
+        when:
+        validator.validateMethodLifecycleConfiguration(pipelineSpec, testSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
     def "validateSequentialTestExecution fails when maxParallelForks greater than 1"() {
         given:
         project.tasks.create('parallelTest', GradleTestTask) {

@@ -498,6 +498,9 @@ services:
                 id 'com.kineticfire.gradle.docker'
             }
 
+            // dockerProject DSL automatically creates the compose stack from the compose path.
+            // For METHOD lifecycle, it sets delegateStackManagement=true and doesn't set stack
+            // on the test step - the test framework extension handles compose lifecycle.
             dockerProject {
                 image {
                     name.set('method-app')
@@ -508,6 +511,7 @@ services:
                 test {
                     compose.set('src/integrationTest/resources/compose/app.yml')
                     lifecycle.set('METHOD')
+                    // No stack.set() needed - dockerProject handles this automatically
                 }
             }
 

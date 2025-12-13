@@ -43,6 +43,15 @@ class TestResultCaptureTest extends Specification {
         capture = new TestResultCapture()
     }
 
+    /**
+     * Helper to configure a Test task's junitXml output location to point to the conventional directory.
+     * This is needed because ProjectBuilder doesn't automatically configure the junitXml report location.
+     * We use project.layout.dir() to properly wrap the File as a Directory provider.
+     */
+    private void configureJUnitXmlOutputLocation(Test testTask, File reportsDir) {
+        testTask.reports.junitXml.outputLocation.set(project.layout.dir(project.provider { reportsDir }))
+    }
+
     // ===== CAPTURE FROM TASK TESTS =====
 
     def "captureFromTask returns fallback result for non-Test task"() {
@@ -77,6 +86,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('test', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         def xmlContent = '''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite tests="10" failures="2" errors="1" skipped="1">
@@ -101,6 +111,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('test', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         def xmlContent = '''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite tests="5" failures="2" errors="0" skipped="0">
@@ -140,6 +151,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('test', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         when:
         def result = capture.findJUnitReportsDir(testTask)
@@ -164,6 +176,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('integrationTest', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/integrationTest")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         when:
         def result = capture.findJUnitReportsDir(testTask)
@@ -203,6 +216,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('test', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         def xml1 = '''<?xml version="1.0" encoding="UTF-8"?>
 <testsuite tests="5" failures="1" errors="0" skipped="0">
@@ -432,6 +446,7 @@ class TestResultCaptureTest extends Specification {
         def testTask = project.tasks.create('test', Test)
         def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
         reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
 
         def xmlFile = new File(reportsDir, 'TEST-Test.xml')
         xmlFile.text = '''<?xml version="1.0" encoding="UTF-8"?>

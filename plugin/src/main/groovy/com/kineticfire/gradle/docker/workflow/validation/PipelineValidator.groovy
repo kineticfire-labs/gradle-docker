@@ -255,9 +255,12 @@ class PipelineValidator {
      */
     void validateMethodLifecycleConfiguration(PipelineSpec pipelineSpec, TestStepSpec testSpec) {
         def testTaskName = testSpec.testTaskName.get()
+        def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
 
-        // Validate that stack is configured for METHOD lifecycle
-        if (!testSpec.stack.isPresent()) {
+        // When delegateStackManagement is true (e.g., from dockerProject DSL with METHOD lifecycle),
+        // the test framework extension manages compose lifecycle, so stack is not required.
+        // Only require stack when NOT delegating stack management.
+        if (!delegateStackManagement && !testSpec.stack.isPresent()) {
             throw new GradleException(
                 "Pipeline '${pipelineSpec.name}' has lifecycle=METHOD but no stack is configured. " +
                 "Method lifecycle requires a stack to configure compose settings.\n" +
