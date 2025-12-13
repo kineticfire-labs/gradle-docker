@@ -1,0 +1,119 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// Get JAR file from app subproject
+def jarFileProvider = project(':dockerTest:verification:lifecycle-method:app').tasks.named('bootJar').flatMap { it.archiveFile }
+
+// Configure docker DSL
+docker {
+    images {
+        stateApp {
+            imageName = 'verification-lifecycle-method-state-app'
+            tags = ['latest', '1.0.0']
+
+            contextTask = tasks.register('prepareStateAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for state app image'
+                into layout.buildDirectory.dir('docker-context/stateApp')
+                from('src/main/docker')
+
+                from(jarFileProvider) {
+                    rename { 'app.jar' }
+                }
+
+                dependsOn project(':dockerTest:verification:lifecycle-method:app').tasks.named('bootJar')
+            }
+        }
+    }
+}
+
+// Configure dockerTest DSL for Docker Compose orchestration
+dockerTest {
+    composeStacks {
+        lifecycleMethodTest {
+            files.from('src/integrationTest/resources/compose/lifecycle-method.yml')
+            projectName = 'verification-lifecycle-method-test'
+
+            waitForHealthy {
+                waitForServices.set(['state-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+// Because we have the java/groovy plugin applied, the gradle-docker plugin
+// automatically provides:
+//   - integrationTest source set (src/integrationTest/groovy, src/integrationTest/resources)
+//   - integrationTest task (runs tests with JUnit Platform)
+//   - integrationTestImplementation and integrationTestRuntimeOnly configurations
+//   - Configuration extensions (integrationTestImplementation extends testImplementation)
+//   - Resource processing (with INCLUDE duplicatesStrategy)
+//
+// BEFORE this convention: ~50 lines of boilerplate per project
+// AFTER this convention: Just add your dependencies and customizations!
+// ============================================================================
+
+// Add buildSrc validators and plugin dependencies
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+
+    // Add plugin classes for @ComposeUp annotation access
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+}
+
+// Customize the convention-created integrationTest task
+// (Convention provides task registration, we only add test-specific customizations)
+tasks.named('integrationTest') {
+    description = 'Runs METHOD lifecycle verification tests using @ComposeUp extension'
+
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration from dockerTest DSL
+    // lifecycle = "method" means containers restart for EACH test method (complete isolation)
+    usesCompose(stack: "lifecycleMethodTest", lifecycle: "method")
+
+    useJUnitPlatform()
+    outputs.cacheIf { false }
+}
+
+// Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
+afterEvaluate {
+    tasks.named('composeUpLifecycleMethodTest') {
+        dependsOn tasks.named('dockerBuildStateApp')
+    }
+}

@@ -98,7 +98,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     webapp {
                         composeFiles('docker-compose.base.yml', 'docker-compose.override.yml')
@@ -167,7 +167,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     complex {
                         composeFiles('base.yml', 'services.yml', 'overrides.yml')
@@ -233,7 +233,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     cache {
                         composeFile = file('single.yml')
@@ -279,7 +279,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     incomplete {
                         composeFiles('existing.yml', 'missing.yml')
@@ -309,7 +309,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     empty {
                         composeFiles()
@@ -358,7 +358,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     listParam {
                         composeFiles(['compose1.yml', 'compose2.yml'])
@@ -411,7 +411,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     fileObjects {
                         composeFiles(file('base-config.yml'), file('prod-config.yml'))
@@ -466,7 +466,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     webApp {
                         composeFiles 'web-base.yml', 'web-prod.yml'
@@ -539,7 +539,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     ordered {
                         composeFiles('00-base.yml', '01-middleware.yml', '02-override.yml')
@@ -600,7 +600,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     production {
                         composeFiles('docker-compose.base.yml', 'docker-compose.prod.yml')
@@ -659,7 +659,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     fullApp {
                         composeFiles('app-base.yml', 'app-config.yml')
@@ -696,7 +696,7 @@ class MultiFileConfigurationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     invalidPath {
                         composeFiles('/invalid/absolute/path.yml', 'relative-missing.yml')

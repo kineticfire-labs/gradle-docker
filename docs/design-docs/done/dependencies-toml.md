@@ -66,10 +66,10 @@ All dependencies correctly use `libs.*` references.
 ### C. Spring Boot Application Modules - ✅ FULLY COMPLIANT
 
 **Affected Files:**
-- `plugin-integration-test/dockerOrch/verification/lifecycle-class/app/build.gradle`
-- `plugin-integration-test/dockerOrch/verification/lifecycle-method/app/build.gradle`
-- `plugin-integration-test/dockerOrch/verification/multi-service/app/build.gradle`
-- `plugin-integration-test/dockerOrch/verification/mixed-wait/app/build.gradle`
+- `plugin-integration-test/dockerTest/verification/lifecycle-class/app/build.gradle`
+- `plugin-integration-test/dockerTest/verification/lifecycle-method/app/build.gradle`
+- `plugin-integration-test/dockerTest/verification/multi-service/app/build.gradle`
+- `plugin-integration-test/dockerTest/verification/mixed-wait/app/build.gradle`
 
 **Current Implementation (AFTER Priority 4 Migration):**
 ```groovy
@@ -105,12 +105,12 @@ implementation libs.logback.classic
 #### REST-assured Dependencies
 
 **Files with version 5.3.0:**
-- `dockerOrch/verification/lifecycle-class/app-image/build.gradle` (lines 81-82)
-- `dockerOrch/verification/lifecycle-method/app-image/build.gradle` (lines 81-82)
-- `dockerOrch/examples/web-app/app-image/build.gradle` (lines 101-102)
-- `dockerOrch/examples/web-app-junit/app-image/build.gradle` (lines 97-98)
-- `dockerOrch/examples/isolated-tests-junit/app-image/build.gradle` (lines 97-98)
-- `dockerOrch/examples/stateful-web-app/app-image/build.gradle` (lines 102-103)
+- `dockerTest/verification/lifecycle-class/app-image/build.gradle` (lines 81-82)
+- `dockerTest/verification/lifecycle-method/app-image/build.gradle` (lines 81-82)
+- `dockerTest/examples/web-app/app-image/build.gradle` (lines 101-102)
+- `dockerTest/examples/web-app-junit/app-image/build.gradle` (lines 97-98)
+- `dockerTest/examples/isolated-tests-junit/app-image/build.gradle` (lines 97-98)
+- `dockerTest/examples/stateful-web-app/app-image/build.gradle` (lines 102-103)
 
 ```groovy
 integrationTestImplementation 'io.rest-assured:rest-assured:5.3.0'
@@ -118,8 +118,8 @@ integrationTestImplementation 'io.rest-assured:json-path:5.3.0'
 ```
 
 **Files with version 5.5.0:**
-- `dockerOrch/examples/database-app/app-image/build.gradle` (lines 64-65)
-- `dockerOrch/examples/isolated-tests/app-image/build.gradle` (lines 87-88)
+- `dockerTest/examples/database-app/app-image/build.gradle` (lines 64-65)
+- `dockerTest/examples/isolated-tests/app-image/build.gradle` (lines 87-88)
 
 ```groovy
 integrationTestImplementation 'io.rest-assured:rest-assured:5.5.0'
@@ -129,8 +129,8 @@ integrationTestImplementation 'io.rest-assured:json-path:5.5.0'
 #### Jackson Dependencies
 
 **Files:**
-- `dockerOrch/examples/web-app-junit/app-image/build.gradle` (line 99)
-- `dockerOrch/examples/isolated-tests-junit/app-image/build.gradle` (line 99)
+- `dockerTest/examples/web-app-junit/app-image/build.gradle` (line 99)
+- `dockerTest/examples/isolated-tests-junit/app-image/build.gradle` (line 99)
 
 ```groovy
 integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
@@ -141,7 +141,7 @@ integrationTestImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.
 #### PostgreSQL Driver
 
 **File:**
-- `dockerOrch/examples/database-app/app-image/build.gradle` (line 66)
+- `dockerTest/examples/database-app/app-image/build.gradle` (line 66)
 
 ```groovy
 integrationTestImplementation 'org.postgresql:postgresql:42.7.2'
@@ -522,14 +522,14 @@ dependencies {
    ```
 
 3. **Files to update:**
-   - `dockerOrch/verification/lifecycle-class/app-image/build.gradle`
-   - `dockerOrch/verification/lifecycle-method/app-image/build.gradle`
-   - `dockerOrch/examples/database-app/app-image/build.gradle`
-   - `dockerOrch/examples/isolated-tests/app-image/build.gradle`
-   - `dockerOrch/examples/web-app/app-image/build.gradle`
-   - `dockerOrch/examples/web-app-junit/app-image/build.gradle`
-   - `dockerOrch/examples/isolated-tests-junit/app-image/build.gradle`
-   - `dockerOrch/examples/stateful-web-app/app-image/build.gradle`
+   - `dockerTest/verification/lifecycle-class/app-image/build.gradle`
+   - `dockerTest/verification/lifecycle-method/app-image/build.gradle`
+   - `dockerTest/examples/database-app/app-image/build.gradle`
+   - `dockerTest/examples/isolated-tests/app-image/build.gradle`
+   - `dockerTest/examples/web-app/app-image/build.gradle`
+   - `dockerTest/examples/web-app-junit/app-image/build.gradle`
+   - `dockerTest/examples/isolated-tests-junit/app-image/build.gradle`
+   - `dockerTest/examples/stateful-web-app/app-image/build.gradle`
    - (Plus any other app-image modules discovered)
 
 ---
@@ -633,10 +633,10 @@ dependencies {
   - `slf4j-api` (NEW)
   - `logback-classic` (NEW)
 - Updated app build files:
-  - `dockerOrch/verification/multi-service/app/build.gradle`
-  - `dockerOrch/verification/lifecycle-class/app/build.gradle`
-  - `dockerOrch/verification/lifecycle-method/app/build.gradle`
-  - `dockerOrch/verification/mixed-wait/app/build.gradle`
+  - `dockerTest/verification/multi-service/app/build.gradle`
+  - `dockerTest/verification/lifecycle-class/app/build.gradle`
+  - `dockerTest/verification/lifecycle-method/app/build.gradle`
+  - `dockerTest/verification/mixed-wait/app/build.gradle`
 - Eliminated PostgreSQL version conflict (42.7.2 → 42.7.1)
 - All apps build successfully with catalog dependencies
 - 100% consistency across all Spring Boot applications

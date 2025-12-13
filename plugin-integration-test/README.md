@@ -26,9 +26,9 @@ To correctly run all integration tests:
 The `integrationTest` task runs integration tests from all subprojects:
 - `plugin-integration-test/docker/*`
    - mid-level aggregator for 'docker' type commands (build, tag, save, publish) for the `docker` task 
-- `plugin-integration-test/dockerOrch/*`
+- `plugin-integration-test/dockerTest/*`
    - mid-level aggregator for 'docker compose' type commands for testing a Docker image using `composeUp`/`composeDown` 
-     for the `dockerOrch` task
+     for the `dockerTest` task
 
 Note that `integrationTest` does NOT run integration tests for publishing to public image repositories, like Docker Hub,
 for the `docker` task.  See 
@@ -39,7 +39,7 @@ for the `docker` task.  See
 ```
 plugin-integration-test/    # all integration tests:  top-level aggregator
 ├── app/                    # Sample Java application (builds JAR for Docker images)
-├── dockerOrch/             # Docker Compose integration tests for `dockerOrch` task: mid-level aggregator
+├── dockerTest/             # Docker Compose integration tests for `dockerTest` task: mid-level aggregator
 │   ├── verification/       # Plugin mechanics validation (for developers)
 │   │   ├── basic/          # Basic up/down, state files, cleanup
 │   │   ├── wait-healthy/   # Wait for healthy functionality
@@ -55,26 +55,26 @@ plugin-integration-test/    # all integration tests:  top-level aggregator
 └── buildSrc/               # Reusable Docker testing library
 ```
 
-## dockerOrch Test Organization
+## dockerTest Test Organization
 
-The `dockerOrch/` tests are organized into two categories:
+The `dockerTest/` tests are organized into two categories:
 
-### Verification Tests (`dockerOrch/verification/`)
+### Verification Tests (`dockerTest/verification/`)
 
 Tests that validate plugin mechanics using internal validators from `buildSrc/`. These tests verify that the plugin
 infrastructure works correctly (container states, state files, cleanup, etc.).
 
-**⚠️ Important**: Do NOT copy these tests for your projects. See `dockerOrch/examples/` for user-facing
+**⚠️ Important**: Do NOT copy these tests for your projects. See `dockerTest/examples/` for user-facing
 demonstrations.
 
-### Example Tests (`dockerOrch/examples/`)
+### Example Tests (`dockerTest/examples/`)
 
 Real-world usage demonstrations showing how to test applications using standard testing libraries (RestAssured, JDBC,
 Kafka client). These are designed to be copied and adapted for your projects.
 
 **✅ Recommended**: Copy and adapt these for your own projects!
 
-**For detailed scenario tracking and documentation**, see [`dockerOrch/README.md`](dockerOrch/README.md).
+**For detailed scenario tracking and documentation**, see [`dockerTest/README.md`](dockerTest/README.md).
 
 ## docker Test Organization
 
@@ -108,20 +108,20 @@ All `docker` related tests (build, tag, save, and publish) are at `docker/`.
 **All commands must be run from `/plugin-integration-test/` directory:**
 
 ```bash
-# Run ALL integration tests (docker + dockerOrch)
+# Run ALL integration tests (docker + dockerTest)
 ./gradlew -Pplugin_version=<version> cleanAll integrationTest
 
 # Run all Docker integration tests (build, tag, save, publish)
 ./gradlew -Pplugin_version=<version> docker:integrationTest
 
-# Run all dockerOrch integration tests (compose up/down)
-./gradlew -Pplugin_version=<version> dockerOrch:integrationTest
+# Run all dockerTest integration tests (compose up/down)
+./gradlew -Pplugin_version=<version> dockerTest:integrationTest
 
-# Run all dockerOrch verification tests (plugin mechanics validation)
-./gradlew -Pplugin_version=<version> dockerOrch:verification:integrationTest
+# Run all dockerTest verification tests (plugin mechanics validation)
+./gradlew -Pplugin_version=<version> dockerTest:verification:integrationTest
 
-# Run all dockerOrch example tests (user-facing demonstrations)
-./gradlew -Pplugin_version=<version> dockerOrch:examples:integrationTest
+# Run all dockerTest example tests (user-facing demonstrations)
+./gradlew -Pplugin_version=<version> dockerTest:examples:integrationTest
 
 # Run specific Docker scenario
 ./gradlew -Pplugin_version=<version> docker:scenario-1:integrationTest
@@ -132,16 +132,16 @@ All `docker` related tests (build, tag, save, and publish) are at `docker/`.
 ./gradlew -Pplugin_version=<version> docker:scenario-6:integrationTest
 ./gradlew -Pplugin_version=<version> docker:scenario-7:integrationTest
 
-# Run specific dockerOrch verification test
-./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:integrationTest
+# Run specific dockerTest verification test
+./gradlew -Pplugin_version=<version> dockerTest:verification:basic:integrationTest
 
-# Run specific dockerOrch example test
-./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:integrationTest
+# Run specific dockerTest example test
+./gradlew -Pplugin_version=<version> dockerTest:examples:web-app:integrationTest
 
 # Run with clean for specific scenario
 ./gradlew -Pplugin_version=<version> docker:scenario-1:clean docker:scenario-1:integrationTest
-./gradlew -Pplugin_version=<version> dockerOrch:verification:basic:clean dockerOrch:verification:basic:integrationTest
-./gradlew -Pplugin_version=<version> dockerOrch:examples:web-app:clean dockerOrch:examples:web-app:integrationTest
+./gradlew -Pplugin_version=<version> dockerTest:verification:basic:clean dockerTest:verification:basic:integrationTest
+./gradlew -Pplugin_version=<version> dockerTest:examples:web-app:clean dockerTest:examples:web-app:integrationTest
 
 # Run all Docker tests with clean
 ./gradlew -Pplugin_version=<version> docker:cleanAll docker:integrationTest
@@ -196,7 +196,7 @@ When using public images (e.g., those from Docker Hub), integration tests must u
   another test uses `haproxy:latest`.  Note that DockerHub images do not have an explicit registry. These must be 
   recorded in the table below to track.
 
-| Registry | Repository | Image Name   | Image Tag | `docker` or `dockerOrch` | Integration Test |
+| Registry | Repository | Image Name   | Image Tag | `docker` or `dockerTest` | Integration Test |
 |----------|------------|--------------|-----------|--------------------------|------------------|
 |          |            | httpd        | latest    | `docker`                 | scenario-5       |
 |          |            | nginx        | latest    | `docker`                 | scenario-9       |
@@ -221,18 +221,18 @@ Registry ports must be chosen from the following convention to ensure uniqueness
      - For `scenario-5`: ports `5050` and `5051`
      - For `scenario-12`: ports `5120` and `5121`
   - Ports `6xxx` are reserved for future `docker` registry integration tests, if needed
-- `dockerOrch` registry  integration tests: use registry ports `7ssr` where `ss` indicates the integration test scenario
+- `dockerTest` registry  integration tests: use registry ports `7ssr` where `ss` indicates the integration test scenario
   number and the `r` is used and allocated by the test itself, usually starting at 0.
   - Example:
     - For `scenario-5`: ports `7050` and `7051`
     - For `scenario-12`: ports `7120` and `7121`
-  - Ports `8xxx` are reserved for future `dockerOrch` registry integration tests, if needed
+  - Ports `8xxx` are reserved for future `dockerTest` registry integration tests, if needed
 
 #### Server/Service Ports - De-conflict
 
-Ports `9ssp` are reserved for servers/services during integration tests for `dockerOrch` (`docker` does not spin-up
+Ports `9ssp` are reserved for servers/services during integration tests for `dockerTest` (`docker` does not spin-up
 servers/services, aside from registries, as part of its tests).
-- `dockerOrch` integration tests using a server/service: use ports `9ssp` where `ss` indicates the integration test 
+- `dockerTest` integration tests using a server/service: use ports `9ssp` where `ss` indicates the integration test 
   scenario number and the `p` is used and allocated by the test itself, usually starting at 0.
   - Example:
     - For `scenario-5`: ports `9050` and `9051`

@@ -132,11 +132,11 @@ class TestIntegrationExtensionTest extends Specification {
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
 
         // Create compose stack
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             testStack {
                 files.from(composeFile)
             }
@@ -162,14 +162,14 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Manually create extensions without applying the full plugin
         def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
-        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension)
-        testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
 
         // Create compose stack
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             testStack {
                 files.from(composeFile)
             }
@@ -193,14 +193,14 @@ class TestIntegrationExtensionTest extends Specification {
         given:
         // Manually create extensions without applying the full plugin
         def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name)
-        def dockerOrchExt = project.objects.newInstance(DockerOrchExtension)
-        testIntegrationExt.setDockerOrchExtension(dockerOrchExt)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
 
         // Create compose stack
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             testStack {
                 files.from(composeFile)
             }
@@ -220,7 +220,7 @@ class TestIntegrationExtensionTest extends Specification {
         testTask.systemProperties['docker.compose.project'] == project.name
     }
 
-    def "usesCompose fails when dockerOrch extension not found"() {
+    def "usesCompose fails when dockerTest extension not found"() {
         given:
         // Do NOT apply the plugin - we want to test the error case
         def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
@@ -230,12 +230,12 @@ class TestIntegrationExtensionTest extends Specification {
 
         then:
         def ex = thrown(IllegalStateException)
-        ex.message.contains("dockerOrch extension not found")
+        ex.message.contains("dockerTest extension not found")
     }
 
     def "usesCompose fails when compose stack not found"() {
         given:
-        // Apply plugin to get dockerOrch extension
+        // Apply plugin to get dockerTest extension
         project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         // Get the extension created by the plugin
@@ -260,11 +260,11 @@ class TestIntegrationExtensionTest extends Specification {
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
 
         // Create compose stack
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             testStack {
                 files.from(composeFile)
             }
@@ -291,11 +291,11 @@ class TestIntegrationExtensionTest extends Specification {
         def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
 
         // Create compose stack
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             testStack {
                 files.from(composeFile)
             }

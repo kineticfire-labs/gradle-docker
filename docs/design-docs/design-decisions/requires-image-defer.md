@@ -21,7 +21,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -47,7 +47,7 @@ afterEvaluate {
 Add a DSL method to auto-wire image dependencies:
 
 ```gradle
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('compose.yml')
@@ -86,7 +86,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         test {
             requiresImage 'postgres'  // ← What task to depend on? NONE exist!
@@ -183,7 +183,7 @@ services:
 ```
 
 ```gradle
-dockerOrch {
+dockerTest {
     composeStacks {
         test {
             files.from('compose.yml')
@@ -213,7 +213,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         test {
             requiresImage 'myApp'  // ← DSL block name? or 'example-app'?

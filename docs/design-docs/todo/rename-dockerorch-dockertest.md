@@ -1,4 +1,4 @@
-# Rename dockerOrch DSL to dockerTest
+# Rename dockerTest DSL to dockerTest
 
 ## Document Metadata
 
@@ -9,21 +9,21 @@
 
 ## Executive Summary
 
-This document proposes renaming the `dockerOrch` DSL to `dockerTest` to better communicate its purpose to users. The
+This document proposes renaming the `dockerTest` DSL to `dockerTest` to better communicate its purpose to users. The
 current name emphasizes implementation details (orchestration) rather than user value (testing Docker images).
 
-**Recommendation**: Rename `dockerOrch` to `dockerTest`.
+**Recommendation**: Rename `dockerTest` to `dockerTest`.
 
 ## Background
 
 ### Current State
 
-The `dockerOrch` DSL was named to reflect its implementation: it **orchestrates** Docker containers via Docker Compose
+The `dockerTest` DSL was named to reflect its implementation: it **orchestrates** Docker containers via Docker Compose
 during integration testing. The name emphasizes the "how" (orchestration) rather than the "what" (testing).
 
 Current DSL usage:
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myAppTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -35,7 +35,7 @@ dockerOrch {
 
 ### The Problem
 
-1. **Name doesn't communicate purpose**: Users must learn that "dockerOrch" means "Docker image testing via
+1. **Name doesn't communicate purpose**: Users must learn that "dockerTest" means "Docker image testing via
    orchestration." The name requires explanation.
 
 2. **Inconsistency with dockerProject**: The `dockerProject` DSL uses `test { }` for its testing configuration, not
@@ -44,12 +44,12 @@ dockerOrch {
 3. **Documentation mismatch**: The `usage-docker-orch.md` documentation describes the DSL's purpose as "Tests Docker
    images using Docker Compose" - the word "test" appears prominently, not "orchestration."
 
-4. **User confusion potential**: New users seeing `dockerOrch` may not immediately understand what it does or when to
+4. **User confusion potential**: New users seeing `dockerTest` may not immediately understand what it does or when to
    use it.
 
 ## Analysis
 
-### What Does dockerOrch Actually Do?
+### What Does dockerTest Actually Do?
 
 Examining `usage-docker-orch.md`, the DSL provides:
 
@@ -94,7 +94,7 @@ Users don't choose this plugin because they want to orchestrate containers - the
 | `dockerImageTest` | Very explicit | Verbose |
 | `dockerIntegrationTest` | Extremely explicit | Very verbose |
 | `composeTest` | Reflects Compose usage | Doesn't mention Docker |
-| `dockerOrch` (current) | Technically accurate | Unclear purpose |
+| `dockerTest` (current) | Technically accurate | Unclear purpose |
 
 **Selected**: `dockerTest`
 
@@ -109,7 +109,7 @@ Rationale:
 ### Before (Current)
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myAppTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -165,7 +165,7 @@ dockerProject {
 
 | Component | Change Required |
 |-----------|-----------------|
-| `DockerOrchExtension` | Rename to `DockerTestExtension` |
+| `DockerTestExtension` | Rename to `DockerTestExtension` |
 | `GradleDockerPlugin` | Update extension registration |
 | `ComposeStackSpec` | No change (internal) |
 | `TestIntegrationExtension` | Update references |
@@ -199,7 +199,7 @@ no external users"), this is a **clean rename** rather than a migration:
 ### 1. Improved User Comprehension
 
 ```
-Before: "What does dockerOrch do?" → "It orchestrates Docker containers..."
+Before: "What does dockerTest do?" → "It orchestrates Docker containers..."
 After:  "What does dockerTest do?" → "It tests Docker images."
 ```
 
@@ -228,7 +228,7 @@ dockerProject {    // Unified: image + test + onSuccess
 
 ### 3. Better Discoverability
 
-Users searching for "how to test Docker images with Gradle" will more easily find `dockerTest` than `dockerOrch`.
+Users searching for "how to test Docker images with Gradle" will more easily find `dockerTest` than `dockerTest`.
 
 ### 4. Alignment with Documentation
 
@@ -237,41 +237,314 @@ and used.
 
 ## Implementation Plan
 
-### Phase 1: Preparation
+### Scope Analysis
 
-1. Create feature branch
-2. Document all files requiring changes
-3. Ensure all tests pass on current codebase
+#### Files to Modify
 
-### Phase 2: Core Rename
+**Plugin Source (6 files)**
+1. `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerTestExtension.groovy` → Rename to
+   `DockerTestExtension.groovy`
+2. `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy` - Update extension registration
+3. `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtension.groovy` - Update references
+4. `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/DockerProjectTranslator.groovy` - Update references
+5. `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/validation/PipelineValidator.groovy` - Update
+   references
+6. `plugin/src/main/groovy/com/kineticfire/gradle/docker/spock/DockerComposeSpockExtension.groovy` - Update error
+   messages
 
-1. Rename `DockerOrchExtension` → `DockerTestExtension`
-2. Update `GradleDockerPlugin` extension registration
-3. Update internal references in plugin source code
-4. Update `dockerWorkflows` references to use new name
+**Unit Tests (3+ files)**
+1. `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerTestExtensionTest.groovy` → Rename to
+   `DockerTestExtensionTest.groovy`
+2. `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtensionTest.groovy` - Update
+   references
+3. `plugin/src/test/groovy/com/kineticfire/gradle/docker/GradleDockerPluginTest.groovy` - Update extension name checks
 
-### Phase 3: Test Updates
+**Functional Tests (10+ files)**
+- All files in `plugin/src/functionalTest/` that use `dockerTest` in build script strings
 
-1. Update unit tests
-2. Update functional tests
-3. Update integration tests (`build.gradle` files)
+**Integration Tests (~60+ files)**
+- Rename directory: `plugin-integration-test/dockerTest/` → `plugin-integration-test/dockerTest/`
+- Update all `build.gradle` files using `dockerTest` DSL
+- Update all `settings.gradle` includes
+- Update all README files
 
-### Phase 4: Documentation
+**Documentation (15+ files)**
+- `docs/usage/usage-docker-orch.md` → Rename to `docs/usage/usage-docker-test.md`
+- `docs/usage/usage-docker-project.md` - Update references
+- `docs/usage/usage-docker-workflows.md` - Update references
+- `docs/usage/spock-junit-test-extensions.md` - Update references
+- `CLAUDE.md` - Update references
+- Various design docs in `docs/design-docs/`
 
-1. Rename `usage-docker-orch.md` → `usage-docker-test.md`
-2. Update all documentation references
-3. Update `CLAUDE.md` references
-4. Update design documents
+---
 
-### Phase 5: Validation
+### Phase 1: Core Plugin Rename (Testable)
 
-1. Run full test suite
-2. Verify documentation builds
-3. Manual smoke test of plugin
+**Goal**: Rename the extension class and update registration. Unit tests should pass after this phase.
+
+#### Step 1.1: Rename Extension Class
+- Rename `DockerTestExtension.groovy` → `DockerTestExtension.groovy`
+- Update class name: `DockerTestExtension` → `DockerTestExtension`
+- Update javadoc: `dockerTest { }` → `dockerTest { }`
+
+#### Step 1.2: Update GradleDockerPlugin.groovy
+- Change extension registration:
+  ```groovy
+  // Before:
+  def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension, project.objects)
+  
+  // After:
+  def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension, project.objects)
+  ```
+- Update ALL variable names from `dockerTestExt` → `dockerTestExt`
+- Update ALL method parameters: `DockerTestExtension dockerTestExt` → `DockerTestExtension dockerTestExt`
+
+#### Step 1.3: Update Internal References
+- `TestIntegrationExtension.groovy`:
+  - Field: `private DockerTestExtension dockerTestExtension` → `private DockerTestExtension dockerTestExtension`
+  - Setter: `setDockerTestExtension` → `setDockerTestExtension`
+  - Error messages: Update all error messages referencing "dockerTest"
+  
+- `DockerProjectTranslator.groovy`:
+  - Parameters: `DockerTestExtension dockerTestExt` → `DockerTestExtension dockerTestExt`
+  - Error messages: Update references
+  
+- `PipelineValidator.groovy`:
+  - Field and constructor parameters: `DockerTestExtension` → `DockerTestExtension`
+  - Error messages: Update "dockerTest" → "dockerTest"
+
+- `DockerComposeSpockExtension.groovy`:
+  - Error messages only (string updates)
+
+**Verification**: Run `./gradlew clean test` - All unit tests should fail at this point due to test file updates needed
+
+---
+
+### Phase 2: Unit Test Updates (Testable)
+
+**Goal**: Update all unit tests. Unit tests should pass after this phase.
+
+#### Step 2.1: Rename Unit Test File
+- Rename `DockerTestExtensionTest.groovy` → `DockerTestExtensionTest.groovy`
+- Update class references and assertions
+
+#### Step 2.2: Update GradleDockerPluginTest.groovy
+- Update extension name assertions: `'dockerTest'` → `'dockerTest'`
+- Update type assertions: `DockerTestExtension` → `DockerTestExtension`
+
+#### Step 2.3: Update TestIntegrationExtensionTest.groovy
+- Update method calls and error message assertions
+
+#### Step 2.4: Update Other Unit Tests
+- Search for `DockerOrch` in all test files and update
+
+**Verification**: Run `./gradlew clean test` - All unit tests should pass
+
+---
+
+### Phase 3: Functional Test Updates (Testable)
+
+**Goal**: Update all functional tests. Functional tests should pass after this phase.
+
+#### Step 3.1: Update Functional Test Build Scripts
+Files with `dockerTest` in inline Groovy strings:
+- `PluginInteractionFunctionalTest.groovy`
+- `ValidationMessagesFunctionalTest.groovy`
+- `SavePublishDslFunctionalTest.groovy`
+- `MultiFileConfigurationFunctionalTest.groovy`
+- `ComposeStackSpecFunctionalTest.groovy`
+- And others (~15 files)
+
+Each file needs `dockerTest` → `dockerTest` in:
+- DSL blocks in build script strings
+- Extension lookup assertions
+- Error message assertions
+
+**Verification**: Run `./gradlew clean functionalTest` - All functional tests should pass
+
+---
+
+### Phase 4: Integration Test Directory Rename (Testable)
+
+**Goal**: Rename the integration test directory structure. Integration tests should pass after this phase.
+
+#### Step 4.1: Rename Directory
+```bash
+git mv plugin-integration-test/dockerTest plugin-integration-test/dockerTest
+```
+
+#### Step 4.2: Update settings.gradle
+Replace all occurrences:
+- `include 'dockerTest'` → `include 'dockerTest'`
+- `include 'dockerTest:verification:basic'` → `include 'dockerTest:verification:basic'`
+- (All 60+ include lines)
+
+#### Step 4.3: Update Top-Level build.gradle
+- Update task names: `dockerTestIntegrationTest` → `dockerTestIntegrationTest`
+- Update dependency paths: `:dockerTest:integrationTest` → `:dockerTest:integrationTest`
+
+#### Step 4.4: Update dockerTest/build.gradle (now dockerTest/build.gradle)
+- Update task dependencies
+- Update log messages
+
+**Verification**: Run `./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal` first, then
+`cd plugin-integration-test && ./gradlew cleanAll dockerTest:integrationTest` on a single scenario to verify paths
+
+---
+
+### Phase 5: Integration Test Content Updates (Testable)
+
+**Goal**: Update all DSL references in integration test `build.gradle` files.
+
+#### Step 5.1: Update Verification Tests (9 directories)
+For each directory in `plugin-integration-test/dockerTest/verification/`:
+- `basic/`, `lifecycle-class/`, `lifecycle-method/`, `wait-healthy/`, `wait-running/`, `mixed-wait/`,
+  `existing-images/`, `logs-capture/`, `multi-service/`
+
+Update each `app-image/build.gradle`:
+- DSL: `dockerTest {` → `dockerTest {`
+- Comments: Update references
+- Project references: `:dockerTest:` → `:dockerTest:`
+
+#### Step 5.2: Update Example Tests (6 directories)
+For each directory in `plugin-integration-test/dockerTest/examples/`:
+- `database-app/`, `isolated-tests/`, `web-app-junit/`, `isolated-tests-junit/`, `web-app/`, `stateful-web-app/`
+
+Update each `build.gradle` file with same changes as above.
+
+#### Step 5.3: Update Integration Test Groovy/Java Files
+Update any comments or string references in:
+- `*.groovy` files in `src/integrationTest/`
+- `*.java` files in `src/integrationTest/`
+
+**Verification**: Run full integration test suite:
+```bash
+cd plugin && ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
+cd ../plugin-integration-test && ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
+```
+
+---
+
+### Phase 6: dockerWorkflows and dockerProject Updates (Testable)
+
+**Goal**: Update related DSLs that reference dockerTest.
+
+#### Step 6.1: Update dockerWorkflows Integration Tests
+Files in `plugin-integration-test/dockerWorkflows/*/build.gradle`:
+- Update `dockerTest {` → `dockerTest {`
+- Update `dockerTest.composeStacks` → `dockerTest.composeStacks`
+
+#### Step 6.2: Update dockerProject Integration Tests
+Files in `plugin-integration-test/dockerProject/*/build.gradle`:
+- Update comments referencing "dockerTest"
+
+**Verification**: Run all integration tests again to ensure full compatibility
+
+---
+
+### Phase 7: Documentation Updates
+
+**Goal**: Update all user-facing documentation.
+
+#### Step 7.1: Rename Main Usage File
+```bash
+git mv docs/usage/usage-docker-orch.md docs/usage/usage-docker-test.md
+```
+
+Update file contents:
+- Title: `# 'dockerTest' DSL Usage Guide` → `# 'dockerTest' DSL Usage Guide`
+- All DSL examples
+- All references to the DSL name
+
+#### Step 7.2: Update Cross-Referenced Documentation
+- `docs/usage/usage-docker-project.md`
+- `docs/usage/usage-docker-workflows.md`
+- `docs/usage/usage-docker.md`
+- `docs/usage/spock-junit-test-extensions.md`
+- `docs/usage/README.md`
+
+#### Step 7.3: Update CLAUDE.md
+- Update DSL references
+- Update directory references
+
+#### Step 7.4: Update Integration Test READMEs
+- `plugin-integration-test/dockerTest/README.md`
+- `plugin-integration-test/dockerTest/verification/README.md`
+- `plugin-integration-test/dockerTest/examples/README.md`
+- Individual example READMEs
+
+#### Step 7.5: Update IDE Templates
+- `docs/ide-templates/gradle-docker-templates.xml`
+- `docs/ide-templates/README.md`
+
+#### Step 7.6: Update Design Documents
+Design documents in `docs/design-docs/` - these are historical records but should be updated for consistency:
+- `docs/design-docs/todo/rename-dockerorch-dockertest.md` → Mark as COMPLETE
+- `docs/design-docs/todo/docker-project-dsl-config-cache.md` → Update all `dockerTest` references to `dockerTest`:
+  - Line 17: `dockerTest` DSL reference
+  - Line 1657: `dockerTest` configuration example
+  - Lines 1701-1706: `dockerTest` block in code example
+  - Line 1726: `dockerTest` reference in explanation
+- Other design docs can have references updated as time permits
+
+**Verification**: Manual review of documentation for consistency
+
+---
+
+### Phase 8: Final Validation and Cleanup
+
+**Goal**: Ensure everything works end-to-end.
+
+#### Step 8.1: Full Build Verification
+```bash
+# Build plugin
+cd plugin && ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
+
+# Run all integration tests
+cd ../plugin-integration-test && ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
+```
+
+#### Step 8.2: Verify No Lingering References
+```bash
+# Search for any remaining 'dockerTest' references
+rg "dockerTest" --type groovy --type java --type md
+rg "DockerOrch" --type groovy --type java
+```
+
+#### Step 8.3: Clean Up Docker Resources
+```bash
+docker ps -a  # Verify no lingering containers
+```
+
+#### Step 8.4: Update Version and Commit
+- Update this document to mark as COMPLETE
+- Create commit with descriptive message
+
+---
+
+### Summary of Changes
+
+| Category | Count | Files/Directories |
+|----------|-------|-------------------|
+| Plugin Source | 6 | Main extension, plugin, translator, validator, test integration, spock extension |
+| Unit Tests | 3+ | Extension test, plugin test, integration test |
+| Functional Tests | 15+ | All tests using dockerTest in build scripts |
+| Integration Test Dir | 1 | dockerTest → dockerTest directory rename |
+| Integration Test Files | 60+ | build.gradle, README, source files |
+| Documentation | 15+ | Usage guides, CLAUDE.md, design docs |
+
+### Risk Mitigation
+
+| Risk | Mitigation |
+|------|------------|
+| Missing references | Use `rg` to exhaustively search before each phase completion |
+| Integration test path errors | Verify settings.gradle includes match directory structure |
+| Functional test string mismatches | Run functional tests after each change |
+| Error message regression | Update all error message assertions in tests |
 
 ## Decision
 
-**Recommendation**: Proceed with renaming `dockerOrch` to `dockerTest`.
+**Recommendation**: Proceed with renaming `dockerTest` to `dockerTest`.
 
 **Rationale Summary**:
 1. Name should communicate user value (testing), not implementation (orchestration)

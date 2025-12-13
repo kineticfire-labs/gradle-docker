@@ -36,8 +36,8 @@ abstract class TestIntegrationExtension {
     private final ProjectLayout layout
     private final Provider<String> projectNameProvider
     private final Logger logger
-    // Store reference to DockerOrchExtension for configuration-time access
-    private DockerOrchExtension dockerOrchExtension
+    // Store reference to DockerTestExtension for configuration-time access
+    private DockerTestExtension dockerTestExtension
 
     @Inject
     TestIntegrationExtension(String projectName, ProjectLayout layout, ProviderFactory providers) {
@@ -48,10 +48,10 @@ abstract class TestIntegrationExtension {
     }
     
     /**
-     * Set the DockerOrchExtension reference (called by plugin during configuration)
+     * Set the DockerTestExtension reference (called by plugin during configuration)
      */
-    void setDockerOrchExtension(DockerOrchExtension extension) {
-        this.dockerOrchExtension = extension
+    void setDockerTestExtension(DockerTestExtension extension) {
+        this.dockerTestExtension = extension
     }
     
     /**
@@ -65,29 +65,29 @@ abstract class TestIntegrationExtension {
             test.name, stackName, lifecycle)
 
         // Find the compose stack configuration
-        if (!dockerOrchExtension) {
+        if (!dockerTestExtension) {
             throw new IllegalStateException(
-                "dockerOrch extension not found. Apply gradle-docker plugin first. " +
+                "dockerTest extension not found. Apply gradle-docker plugin first. " +
                 "Ensure 'id \"com.kineticfire.gradle.docker\"' is in plugins block."
             )
         }
-        def dockerOrchExt = dockerOrchExtension
+        def dockerTestExt = dockerTestExtension
 
-        def stackSpec = dockerOrchExt.composeStacks.findByName(stackName)
+        def stackSpec = dockerTestExt.composeStacks.findByName(stackName)
         if (!stackSpec) {
             // Gather available stack names for helpful error message
-            def availableStacks = dockerOrchExt.composeStacks.collect { it.name }.join(', ')
+            def availableStacks = dockerTestExt.composeStacks.collect { it.name }.join(', ')
             if (availableStacks.isEmpty()) {
                 throw new IllegalArgumentException(
-                    "Compose stack '${stackName}' not found in dockerOrch configuration. " +
+                    "Compose stack '${stackName}' not found in dockerTest configuration. " +
                     "No stacks are defined. " +
-                    "Add stack definitions in dockerOrch { composeStacks { ... } } in build.gradle."
+                    "Add stack definitions in dockerTest { composeStacks { ... } } in build.gradle."
                 )
             } else {
                 throw new IllegalArgumentException(
-                    "Compose stack '${stackName}' not found in dockerOrch configuration. " +
+                    "Compose stack '${stackName}' not found in dockerTest configuration. " +
                     "Available stacks: [${availableStacks}]. " +
-                    "Check dockerOrch { composeStacks { ... } } in build.gradle."
+                    "Check dockerTest { composeStacks { ... } } in build.gradle."
                 )
             }
         }
@@ -124,7 +124,7 @@ abstract class TestIntegrationExtension {
     private void configureClassLifecycle(Test test, String stackName, stackSpec) {
         // Class lifecycle uses test framework extension to manage compose per test class
 
-        // Set comprehensive system properties from dockerOrch DSL
+        // Set comprehensive system properties from dockerTest DSL
         setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
 
         // Auto-wire task dependencies to ensure compose tasks run
@@ -133,7 +133,7 @@ abstract class TestIntegrationExtension {
         // Add listener to provide helpful hints if tests fail due to missing annotation
         addAnnotationHintListener(test, stackName, "class")
 
-        logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
+        logger.info("Test '{}' configured for CLASS lifecycle from dockerTest DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
         logger.info("JUnit 5: Use @ExtendWith(DockerComposeClassExtension.class)")
     }
@@ -141,7 +141,7 @@ abstract class TestIntegrationExtension {
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
         // Method lifecycle uses test framework extension to manage compose per test method
 
-        // Set comprehensive system properties from dockerOrch DSL
+        // Set comprehensive system properties from dockerTest DSL
         setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
 
         // Auto-wire task dependencies to ensure compose tasks run
@@ -150,7 +150,7 @@ abstract class TestIntegrationExtension {
         // Add listener to provide helpful hints if tests fail due to missing annotation
         addAnnotationHintListener(test, stackName, "method")
 
-        logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
+        logger.info("Test '{}' configured for METHOD lifecycle from dockerTest DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
         logger.info("JUnit 5: Use @ExtendWith(DockerComposeMethodExtension.class)")
     }
@@ -199,7 +199,7 @@ abstract class TestIntegrationExtension {
         // State file path
         test.systemProperty("COMPOSE_STATE_FILE", composeStateFileFor(stackName).get())
 
-        logger.debug("Set system properties for test '{}' from dockerOrch stack '{}'", test.name, stackName)
+        logger.debug("Set system properties for test '{}' from dockerTest stack '{}'", test.name, stackName)
     }
 
     /**

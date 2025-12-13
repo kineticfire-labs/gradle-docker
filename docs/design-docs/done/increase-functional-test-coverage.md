@@ -435,7 +435,7 @@ various Gradle environments** (multi-project, configuration cache, different Gra
 - ✅ usesCompose extension configures test task correctly
 
 **Error Scenarios** (2 tests):
-- ✅ Stack name not found in dockerOrch rejected with error
+- ✅ Stack name not found in dockerTest rejected with error
 - ✅ Invalid lifecycle name rejected with error
 
 **File**: Enhanced `TestExtensionFunctionalTest.groovy` ✅ Enhanced from 3 to 12 tests (fixed 4 failing, added 6 new)

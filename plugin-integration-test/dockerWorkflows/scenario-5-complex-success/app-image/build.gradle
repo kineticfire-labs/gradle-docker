@@ -82,7 +82,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         complexSuccessTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -117,7 +117,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.complexSuccessTest
+                stack = dockerTest.composeStacks.complexSuccessTest
                 testTaskName = 'integrationTest'
             }
 

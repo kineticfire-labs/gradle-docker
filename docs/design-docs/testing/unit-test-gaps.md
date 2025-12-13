@@ -295,8 +295,8 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 - State management uses simple data classes (testable)
 
 **Integration Test Coverage:**
-- Test: `plugin-integration-test/dockerOrch/examples/web-app-junit/` - CLASS lifecycle
-- Test: `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/` - CLASS and METHOD lifecycle
+- Test: `plugin-integration-test/dockerTest/examples/web-app-junit/` - CLASS lifecycle
+- Test: `plugin-integration-test/dockerTest/examples/isolated-tests-junit/` - CLASS and METHOD lifecycle
 - Tests verify full extension lifecycle: containers start, tests execute, containers stop
 - Tests verify state file generation and port mapping
 
@@ -347,7 +347,7 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 - State management uses serializable data classes (testable)
 
 **Integration Test Coverage:**
-- All Spock integration tests in `plugin-integration-test/dockerOrch/examples/`
+- All Spock integration tests in `plugin-integration-test/dockerTest/examples/`
 - Tests: `web-app`, `stateful-web-app`, `isolated-tests`, `database-app`
 - Tests verify full annotation processing and container lifecycle
 - Tests verify both CLASS and METHOD lifecycle modes
@@ -414,7 +414,7 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 
 - **2025-11-21**: Added JUnit 5 and Spock extension gap documentation. Updated summary statistics
   to include test framework integration (~350 lines). Total documented gaps now ~740 lines.
-  All gaps covered by integration tests in `plugin-integration-test/dockerOrch/`.
+  All gaps covered by integration tests in `plugin-integration-test/dockerTest/`.
 - **2025-01-30**: Phase 3 completion - Refactored `buildImage()` from 133 lines to 36 lines. Extracted `selectPrimaryTag()` and `prepareBuildConfiguration()` as pure functions (100% tested with 13 comprehensive unit tests). Isolated `executeBuild()` and `applyAdditionalTags()` as minimal external boundaries (~87 lines). Service package coverage improved from 53.8% to 57.2%. Overall coverage now 81.6% instructions, 80.4% branches.
 - **2025-01-29**: Phase 2 completion - Implemented "Impure Shell, Pure Core" pattern. Injected FileOperations and TimeService dependencies, achieving 100% mockability of I/O and time operations. Updated to reflect current architecture with ~390 lines of documented external boundaries.
 - **2025-01-28**: Phase 1 completion - Extracted pure utility functions (ImageReferenceBuilder, ComposeOutputParser, DockerfilePathResolver) with 100% test coverage.

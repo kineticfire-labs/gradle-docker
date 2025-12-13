@@ -84,7 +84,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         failedTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -113,8 +113,10 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.failedTest
-                testTaskName = 'integrationTest'
+                stack = dockerTest.composeStacks.failedTest
+                // Use custom task name to avoid global 'integrationTest' name matching
+                // This ensures these intentionally-failing tests only run via verifyFailedPipeline
+                testTaskName = 'failingIntegrationTest'
             }
 
             // This should NOT be executed because tests fail
@@ -134,15 +136,37 @@ dependencies {
     integrationTestImplementation libs.rest.assured.json.path
 }
 
-// Configure integration test task - these tests are designed to FAIL
-tasks.named('integrationTest') {
+/**
+ * Custom test task for intentionally failing tests.
+ * 
+ * Named 'failingIntegrationTest' instead of 'integrationTest' to avoid being
+ * triggered by Gradle's global task name matching when running `./gradlew integrationTest`
+ * from the root project.
+ * 
+ * This task:
+ * - Runs tests that are DESIGNED TO FAIL (to verify failure path behavior)
+ * - Is invoked by the pipeline via testTaskName = 'failingIntegrationTest'
+ * - Is validated by verifyFailedPipeline which expects failure
+ * - If these tests unexpectedly PASS, verifyFailedPipeline will FAIL the build
+ */
+tasks.register('failingIntegrationTest', Test) {
+    description = 'Run intentionally failing integration tests (expects failure)'
+    group = 'verification'
+    
+    // Use the integrationTest source set created by the plugin
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    
+    // JUnit 5 platform
+    useJUnitPlatform()
+    
     systemProperty 'COMPOSE_STATE_FILE',
         layout.buildDirectory.file('compose-state/failedTest-state.json').get().asFile.absolutePath
     systemProperty 'COMPOSE_PROJECT_NAME', "workflow-scenario3-test"
     systemProperty 'IMAGE_NAME', 'workflow-scenario3-app'
-
-    // Allow the test to fail without stopping the build
-    ignoreFailures = true
+    
+    // Do NOT use ignoreFailures - we want failures to propagate
+    // The verifyFailedPipeline wrapper validates the expected failure
 }
 
 // =============================================================================
@@ -153,7 +177,7 @@ afterEvaluate {
         dependsOn tasks.named('dockerBuildFailedTestApp')
     }
 
-    tasks.named('integrationTest') {
+    tasks.named('failingIntegrationTest') {
         dependsOn tasks.named('composeUpFailedTest')
         finalizedBy tasks.named('composeDownFailedTest')
     }

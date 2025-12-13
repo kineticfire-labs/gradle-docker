@@ -41,7 +41,7 @@ The original approach used direct Groovy code in `build.gradle` with:
 
 This plugin introduces **three DSL layers**:
 1. **`docker` DSL** - Image building, tagging, saving, publishing
-2. **`dockerOrch` DSL** - Compose orchestration and health checks
+2. **`dockerTest` DSL** - Compose orchestration and health checks
 3. **`dockerWorkflows` DSL** - Pipeline orchestration (build → test → conditional operations)
 
 ---
@@ -52,7 +52,7 @@ This plugin introduces **three DSL layers**:
 
 The three DSLs map cleanly to distinct responsibilities:
 - **docker**: Image CRUD operations (build/tag/save/publish)
-- **dockerOrch**: Runtime orchestration (compose up/down, health waiting)
+- **dockerTest**: Runtime orchestration (compose up/down, health waiting)
 - **dockerWorkflows**: Pipeline orchestration (conditional flow based on test results)
 
 ### 2. Configuration Cache Compliance
@@ -89,7 +89,7 @@ The `dockerWorkflows` DSL provides declarative CI/CD patterns:
 
 To use the basic workflow, a user must understand:
 - `docker` DSL for image definition
-- `dockerOrch` DSL for compose stack definition
+- `dockerTest` DSL for compose stack definition
 - `dockerWorkflows` DSL for pipeline definition
 - `contextTask` pattern for build context
 - `usesCompose()` for test task configuration
@@ -203,7 +203,7 @@ are found.
 
 ### 5. Documentation Complexity
 
-The usage docs are comprehensive (1500+ lines for docker, 2100+ lines for dockerOrch) but potentially overwhelming
+The usage docs are comprehensive (1500+ lines for docker, 2100+ lines for dockerTest) but potentially overwhelming
 for new users.
 
 **Recommendation:** Create a "Quick Start" that shows the absolute minimum (~50 lines) with links to detailed docs.
@@ -241,7 +241,7 @@ gradle init --type docker-app --plugin gradle-docker
 
 ### Medium-term (Simplification)
 
-1. Consider a `dockerQuickStart` DSL that generates `docker`, `dockerOrch`, and `dockerWorkflows` internally
+1. Consider a `dockerQuickStart` DSL that generates `docker`, `dockerTest`, and `dockerWorkflows` internally
 2. Auto-infer more task dependencies based on naming conventions
 3. Add `lazy()` convenience methods to reduce Provider API verbosity
 

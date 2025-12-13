@@ -159,7 +159,7 @@ class DockerComposeSpockExtension extends AbstractAnnotationDrivenExtension<Comp
                 "  Then use: @ComposeUp  // zero parameters\n\n" +
                 "Option 2 - Configure in annotation (standalone mode):\n" +
                 "  @ComposeUp(stackName = 'myStack', composeFile = 'path/to/compose.yml')\n\n" +
-                "For more information: docs/usage/usage-docker-orch.md"
+                "For more information: docs/usage/usage-docker-test.md"
             )
         }
         if (!config.composeFiles || (config.composeFiles as List).isEmpty()) {
@@ -167,14 +167,14 @@ class DockerComposeSpockExtension extends AbstractAnnotationDrivenExtension<Comp
                 "Compose file(s) not configured for @ComposeUp test class '${config.className}'.\n\n" +
                 "Configure compose files using one of these approaches:\n\n" +
                 "Option 1 - Configure in build.gradle (RECOMMENDED):\n" +
-                "  dockerOrch {\n" +
+                "  dockerTest {\n" +
                 "      composeStacks {\n" +
                 "          myStack { files.from('src/integrationTest/resources/compose/app.yml') }\n" +
                 "      }\n" +
                 "  }\n\n" +
                 "Option 2 - Configure in annotation:\n" +
                 "  @ComposeUp(stackName = 'myStack', composeFile = 'path/to/compose.yml')\n\n" +
-                "For more information: docs/usage/usage-docker-orch.md"
+                "For more information: docs/usage/usage-docker-test.md"
             )
         }
         if (config.timeoutSeconds <= 0) {

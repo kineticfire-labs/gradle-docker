@@ -367,7 +367,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     stackA {
                         files.from('compose/stack-a.yml')
@@ -436,7 +436,7 @@ class AggregateTaskBehaviorFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     services {
                         files.from('compose/services.yml')

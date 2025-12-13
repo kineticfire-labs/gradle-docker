@@ -16,7 +16,7 @@
 
 package com.kineticfire.gradle.docker
 
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import org.gradle.api.Project
 import org.gradle.api.file.DuplicatesStrategy
 import org.gradle.api.plugins.GroovyPlugin
@@ -65,7 +65,7 @@ class IntegrationTestConventionTest extends Specification {
         project.pluginManager.apply(JavaPlugin)
         plugin.apply(project)
 
-        and: "dockerOrch configured but with no compose stacks"
+        and: "dockerTest configured but with no compose stacks"
         // No stacks configured
 
         when: "project is evaluated"

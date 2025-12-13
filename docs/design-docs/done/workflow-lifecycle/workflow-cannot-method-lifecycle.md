@@ -81,7 +81,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.METHOD  // KEY: Method lifecycle
             }

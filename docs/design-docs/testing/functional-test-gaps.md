@@ -40,13 +40,13 @@ tasks.functionalTest {
 
 **File:** ComposeFunctionalTest.groovy
 **Count:** 6 tests skipped
-**Reason:** Tests validate OBSOLETE `compose {}` DSL that has been replaced with `dockerOrch {}` DSL
+**Reason:** Tests validate OBSOLETE `compose {}` DSL that has been replaced with `dockerTest {}` DSL
 **Status:** Tests marked with @Ignore and clear documentation
-**Coverage:** Current `dockerOrch {}` DSL is fully tested in MultiFileConfigurationFunctionalTest (12 passing tests)
+**Coverage:** Current `dockerTest {}` DSL is fully tested in MultiFileConfigurationFunctionalTest (12 passing tests)
 
 **Example:**
 ```groovy
-@Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerOrch {}'")
+@Ignore("Tests obsolete DSL - old 'compose {}' block no longer supported, replaced with 'dockerTest {}'")
 def "compose up task executes successfully with valid compose file"() {
 ```
 

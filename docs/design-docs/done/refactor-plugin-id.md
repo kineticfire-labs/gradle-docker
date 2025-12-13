@@ -102,7 +102,7 @@ cat build/resources/main/META-INF/gradle-plugins/com.kineticfire.gradle.docker.p
 #### 2.1 Update Unit Test Files
 **Files to update** (2 files):
 1. `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtensionTest.groovy`
-2. `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerOrchExtensionTest.groovy`
+2. `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/DockerTestExtensionTest.groovy`
 
 **Search Strategy**:
 ```bash
@@ -266,8 +266,8 @@ pluginManagement {
 
 **Locations**:
 - `plugin-integration-test/docker/scenario-*/build.gradle` (~13 files)
-- `plugin-integration-test/dockerOrch/verification/*/app-image/build.gradle` (~20 files)
-- `plugin-integration-test/dockerOrch/examples/*/app-image/build.gradle` (~10 files)
+- `plugin-integration-test/dockerTest/verification/*/app-image/build.gradle` (~20 files)
+- `plugin-integration-test/dockerTest/examples/*/app-image/build.gradle` (~10 files)
 - Other scattered build.gradle files across integration test subprojects
 
 **Search Strategy**:
@@ -337,7 +337,7 @@ docker ps -a  # Should show NO containers
 #### 5.1 Update Primary Usage Documentation
 **Files**:
 1. `docs/usage/usage-docker.md` - Primary usage documentation for 'docker' DSL
-2. `docs/usage/usage-docker-orch.md` - Compose orchestration usage for 'dockerOrch' DSL
+2. `docs/usage/usage-docker-orch.md` - Compose orchestration usage for 'dockerTest' DSL
 3. `docs/usage/spock-junit-test-extensions.md` - Test extension documentation
 4. `docs/usage/gradle-9-and-10-compatibility-practices.md` - Compatibility guide
 
@@ -378,11 +378,11 @@ plugins {
 - `plugin-integration-test/README.md` - Top-level integration test guide
 - `plugin-integration-test/docker/README.md` - Docker scenarios documentation
 - `plugin-integration-test/docker/scenario-99/README.md` - Specific scenario documentation
-- `plugin-integration-test/dockerOrch/README.md` - Compose orchestration documentation
-- `plugin-integration-test/dockerOrch/verification/README.md` - Verification tests overview
-- `plugin-integration-test/dockerOrch/verification/*/README.md` - Individual verification scenario docs
-- `plugin-integration-test/dockerOrch/examples/README.md` - Examples overview
-- `plugin-integration-test/dockerOrch/examples/*/README.md` - Individual example scenario docs
+- `plugin-integration-test/dockerTest/README.md` - Compose orchestration documentation
+- `plugin-integration-test/dockerTest/verification/README.md` - Verification tests overview
+- `plugin-integration-test/dockerTest/verification/*/README.md` - Individual verification scenario docs
+- `plugin-integration-test/dockerTest/examples/README.md` - Examples overview
+- `plugin-integration-test/dockerTest/examples/*/README.md` - Individual example scenario docs
 - `plugin-integration-test/buildSrc/README.md` - Reusable testing library documentation
 
 **Search Strategy**:

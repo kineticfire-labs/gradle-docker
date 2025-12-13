@@ -548,7 +548,7 @@ class MultiProjectFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     integration {
                         composeFiles('docker-compose.yml')
@@ -572,7 +572,7 @@ class MultiProjectFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     e2e {
                         composeFiles('docker-compose.yml')

@@ -69,7 +69,7 @@ services:
 
             import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose/app.yml')
@@ -83,7 +83,7 @@ services:
                         description.set('CI pipeline with method lifecycle')
 
                         test {
-                            stack = dockerOrch.composeStacks.testStack
+                            stack = dockerTest.composeStacks.testStack
                             testTaskName = 'integrationTest'
                             lifecycle = WorkflowLifecycle.METHOD
                         }
@@ -257,7 +257,7 @@ services:
 
             import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose/app.yml')
@@ -271,7 +271,7 @@ services:
                         description.set('CI pipeline')
 
                         test {
-                            stack = dockerOrch.composeStacks.testStack
+                            stack = dockerTest.composeStacks.testStack
                             testTaskName = 'integrationTest'
                             lifecycle = WorkflowLifecycle.CLASS
                         }
@@ -354,7 +354,7 @@ services:
 
             import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose/app.yml')
@@ -368,7 +368,7 @@ services:
                         description.set('CI pipeline with full test configuration')
 
                         test {
-                            stack = dockerOrch.composeStacks.testStack
+                            stack = dockerTest.composeStacks.testStack
                             testTaskName = 'integrationTest'
                             lifecycle = WorkflowLifecycle.METHOD
                             timeoutMinutes = 45
@@ -413,7 +413,7 @@ services:
 
             import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose/app.yml')
@@ -425,7 +425,7 @@ services:
                 pipelines {
                     ciPipeline {
                         test {
-                            stack = dockerOrch.composeStacks.testStack
+                            stack = dockerTest.composeStacks.testStack
                             testTaskName = 'integrationTest'
                             lifecycle = WorkflowLifecycle.METHOD
                         }

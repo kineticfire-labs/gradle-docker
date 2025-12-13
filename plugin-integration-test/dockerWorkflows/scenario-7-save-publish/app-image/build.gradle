@@ -86,7 +86,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         savePublishTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -121,7 +121,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.savePublishTest
+                stack = dockerTest.composeStacks.savePublishTest
                 testTaskName = 'integrationTest'
             }
 

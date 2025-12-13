@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
@@ -29,7 +29,7 @@ import org.gradle.api.Project
 import org.gradle.api.tasks.Copy
 
 /**
- * Translates dockerProject spec into docker, dockerOrch, and dockerWorkflows configurations.
+ * Translates dockerProject spec into docker, dockerTest, and dockerWorkflows configurations.
  *
  * This translator implements the "facade pattern" where the simplified dockerProject DSL
  * is translated into the full three-DSL configuration that the plugin already supports.
@@ -54,11 +54,11 @@ class DockerProjectTranslator {
      * @param project The Gradle project (configuration-time only)
      * @param projectSpec The dockerProject specification
      * @param dockerExt The docker extension to configure
-     * @param dockerOrchExt The dockerOrch extension to configure
+     * @param dockerTestExt The dockerTest extension to configure
      * @param dockerWorkflowsExt The dockerWorkflows extension to configure
      */
     void translate(Project project, DockerProjectSpec projectSpec,
-                   DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                   DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                    DockerWorkflowsExtension dockerWorkflowsExt) {
 
         def imageSpec = projectSpec.image.get()
@@ -67,7 +67,7 @@ class DockerProjectTranslator {
         def failureSpec = projectSpec.onFailure.get()
 
         // Validate configuration and extension availability
-        validateSpec(projectSpec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        validateSpec(projectSpec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         // Generate sanitized names for internal use
         def imageName = deriveImageName(imageSpec, project)
@@ -78,13 +78,13 @@ class DockerProjectTranslator {
         // 1. Configure docker.images
         configureDockerImage(project, dockerExt, imageSpec, sanitizedName)
 
-        // 2. Configure dockerOrch.composeStacks (if test block is configured)
+        // 2. Configure dockerTest.composeStacks (if test block is configured)
         if (testSpec.compose.isPresent()) {
-            configureComposeStack(project, dockerOrchExt, testSpec, stackName)
+            configureComposeStack(project, dockerTestExt, testSpec, stackName)
         }
 
         // 3. Configure dockerWorkflows.pipelines
-        configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerOrchExt,
+        configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerTestExt,
                           sanitizedName, stackName, pipelineName, testSpec, successSpec, failureSpec)
 
         // 4. Configure task dependencies using provider-based wiring (no afterEvaluate)
@@ -94,7 +94,7 @@ class DockerProjectTranslator {
     }
 
     private void validateSpec(DockerProjectSpec projectSpec, DockerExtension dockerExt,
-                              DockerOrchExtension dockerOrchExt, DockerWorkflowsExtension dockerWorkflowsExt) {
+                              DockerTestExtension dockerTestExt, DockerWorkflowsExtension dockerWorkflowsExt) {
         // Validate all three extensions are available
         if (dockerExt == null) {
             throw new GradleException(
@@ -102,9 +102,9 @@ class DockerProjectTranslator {
                 "Ensure the com.kineticfire.gradle.docker plugin is applied."
             )
         }
-        if (dockerOrchExt == null) {
+        if (dockerTestExt == null) {
             throw new GradleException(
-                "dockerProject requires the 'dockerOrch' extension to be registered. " +
+                "dockerProject requires the 'dockerTest' extension to be registered. " +
                 "Ensure the com.kineticfire.gradle.docker plugin is applied."
             )
         }
@@ -368,9 +368,9 @@ class DockerProjectTranslator {
         // Note: Task existence is validated lazily by Gradle when tasks.named() is called
     }
 
-    private void configureComposeStack(Project project, DockerOrchExtension dockerOrchExt,
+    private void configureComposeStack(Project project, DockerTestExtension dockerTestExt,
                                         ProjectTestSpec testSpec, String stackName) {
-        dockerOrchExt.composeStacks.create(stackName) { stack ->
+        dockerTestExt.composeStacks.create(stackName) { stack ->
             // Resolve compose file path and add to files collection
             stack.files.from(project.file(testSpec.compose.get()))
 
@@ -400,7 +400,7 @@ class DockerProjectTranslator {
     }
 
     private void configurePipeline(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
-                                    DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                    DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                     String imageName, String stackName, String pipelineName,
                                     ProjectTestSpec testSpec, ProjectSuccessSpec successSpec,
                                     def failureSpec) {
@@ -415,7 +415,7 @@ class DockerProjectTranslator {
             if (testSpec.compose.isPresent()) {
                 // Configure test step
                 pipeline.test { testStep ->
-                    testStep.stack.set(dockerOrchExt.composeStacks.getByName(stackName))
+                    testStep.stack.set(dockerTestExt.composeStacks.getByName(stackName))
                     testStep.testTaskName.set(testSpec.testTaskName.getOrElse('integrationTest'))
 
                     def lifecycleValue = parseLifecycle(testSpec.lifecycle.getOrElse('class'))

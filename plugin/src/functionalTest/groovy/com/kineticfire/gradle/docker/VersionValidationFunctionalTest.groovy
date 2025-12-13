@@ -389,8 +389,8 @@ class VersionValidationFunctionalTest extends Specification {
                     def dockerExt = project.extensions.findByName('docker')
                     assert dockerExt != null
 
-                    def dockerOrchExt = project.extensions.findByName('dockerOrch')
-                    assert dockerOrchExt != null
+                    def dockerTestExt = project.extensions.findByName('dockerTest')
+                    assert dockerTestExt != null
 
                     println "Validation completed before plugin configuration"
                 }

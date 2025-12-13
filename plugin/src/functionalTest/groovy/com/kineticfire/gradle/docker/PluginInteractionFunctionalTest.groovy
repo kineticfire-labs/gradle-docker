@@ -63,11 +63,11 @@ class PluginInteractionFunctionalTest extends Specification {
                 doLast {
                     // Both plugins should be applied
                     def dockerExt = project.extensions.findByName('docker')
-                    def dockerOrchExt = project.extensions.findByName('dockerOrch')
+                    def dockerTestExt = project.extensions.findByName('dockerTest')
                     def sourceSets = project.extensions.findByName('sourceSets')
 
                     assert dockerExt != null
-                    assert dockerOrchExt != null
+                    assert dockerTestExt != null
                     assert sourceSets != null
 
                     // Integration test source set should have been created
@@ -225,11 +225,11 @@ class PluginInteractionFunctionalTest extends Specification {
             task checkExtensionNames {
                 doLast {
                     def dockerExt = project.extensions.findByName('docker')
-                    def dockerOrchExt = project.extensions.findByName('dockerOrch')
+                    def dockerTestExt = project.extensions.findByName('dockerTest')
 
                     // Docker plugin extensions exist
                     assert dockerExt != null
-                    assert dockerOrchExt != null
+                    assert dockerTestExt != null
 
                     // Standard Java extensions also exist
                     def sourceSets = project.extensions.findByName('sourceSets')

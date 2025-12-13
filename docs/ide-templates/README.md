@@ -38,7 +38,7 @@ annotations.
 | `junit5class` | JUnit 5 test with CLASS lifecycle | Java |
 | `junit5method` | JUnit 5 test with METHOD lifecycle | Java |
 | `junit5integration` | Complete JUnit 5 integration test | Java |
-| `dockerorch` | dockerOrch DSL configuration | Gradle |
+| `dockerorch` | dockerTest DSL configuration | Gradle |
 
 ### Usage
 
@@ -94,10 +94,10 @@ Creates a complete JUnit 5 integration test with:
 
 #### `dockerorch` - Gradle Configuration
 
-Creates the complete `dockerOrch` DSL configuration with `usesCompose()`:
+Creates the complete `dockerTest` DSL configuration with `usesCompose()`:
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('src/integrationTest/resources/compose/app.yml')

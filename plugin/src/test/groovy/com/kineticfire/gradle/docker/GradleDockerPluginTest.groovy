@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.model.SaveCompression
 import com.kineticfire.gradle.docker.task.*
 import org.gradle.api.GradleException
@@ -69,15 +69,15 @@ class GradleDockerPluginTest extends Specification {
 
     // ===== EXTENSION CREATION TESTS =====
 
-    def "plugin creates docker and dockerOrch extensions"() {
+    def "plugin creates docker and dockerTest extensions"() {
         when:
         plugin.apply(project)
 
         then:
         project.extensions.findByName('docker') != null
-        project.extensions.findByName('dockerOrch') != null
+        project.extensions.findByName('dockerTest') != null
         project.extensions.findByName('docker') instanceof DockerExtension
-        project.extensions.findByName('dockerOrch') instanceof DockerOrchExtension
+        project.extensions.findByName('dockerTest') instanceof DockerTestExtension
     }
 
     // ===== AGGREGATE TASK CREATION TESTS =====
@@ -224,7 +224,7 @@ class GradleDockerPluginTest extends Specification {
     def "plugin creates per-stack Compose tasks after evaluation"() {
         given:
         plugin.apply(project)
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         
         // Create dummy compose file
         def composeFile = project.file('docker-compose.yml')
@@ -232,7 +232,7 @@ class GradleDockerPluginTest extends Specification {
         composeFile.text = "version: '3'\nservices:\n  web:\n    image: nginx"
         
         // Configure a compose stack
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             webStack {
                 files.from(composeFile)
                 projectName = 'my-web-project'
@@ -259,7 +259,7 @@ class GradleDockerPluginTest extends Specification {
         given:
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         
         // Create dummy files
         def dockerfile = project.file('Dockerfile')
@@ -294,7 +294,7 @@ class GradleDockerPluginTest extends Specification {
             }
         }
         
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             stack1 { files.from(compose1) }
             stack2 { files.from(compose2) }
         }
@@ -454,7 +454,7 @@ class GradleDockerPluginTest extends Specification {
     def "plugin handles multiple compose stack configurations"() {
         given:
         plugin.apply(project)
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         
         // Create dummy compose files
         ['dev', 'prod', 'test'].each { env ->
@@ -462,7 +462,7 @@ class GradleDockerPluginTest extends Specification {
             composeFile.text = "version: '3'\nservices:\n  app:\n    image: myapp-${env}"
         }
         
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             development {
                 files.from(project.file('docker-compose.dev.yml'))
                 projectName = 'myapp-dev'
@@ -639,9 +639,9 @@ class GradleDockerPluginTest extends Specification {
     def "plugin handles invalid compose stack configuration"() {
         given:
         plugin.apply(project)
-        def dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
         
-        dockerOrchExt.composeStacks {
+        dockerTestExt.composeStacks {
             invalidStack {
                 files.from(project.file('nonexistent-compose.yml'))  // Missing file
             }
@@ -771,7 +771,7 @@ class GradleDockerPluginTest extends Specification {
         
         and: "Extensions should be properly configured"
         testProject.extensions.findByType(DockerExtension) != null
-        testProject.extensions.findByType(DockerOrchExtension) != null
+        testProject.extensions.findByType(DockerTestExtension) != null
     }
 
     def "plugin defaults to context/Dockerfile when dockerfile not explicitly set with context directory"() {
@@ -1624,22 +1624,29 @@ class GradleDockerPluginTest extends Specification {
 
     // ===== CONFIGURECONTEXTPATH EDGE CASE TESTS =====
 
-    def "plugin configureContextPath handles contextTaskName property with sourceRef"() {
+    def "plugin configureContextPath handles contextTaskName property in build mode"() {
         given:
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
 
+        // Create source directory with Dockerfile
+        def sourceDir = project.file('src/main/docker')
+        sourceDir.mkdirs()
+        def dockerfile = project.file('src/main/docker/Dockerfile')
+        dockerfile.text = "FROM alpine:latest"
+
         // Create prepare task manually
         project.tasks.register('prepareCustomContext', Copy) {
-            from('src/main/docker')
+            from(sourceDir)
             into(project.layout.buildDirectory.dir('docker-context/custom'))
         }
 
         when:
         dockerExt.images {
             custom {
-                // Use sourceRef mode to bypass build context validation
-                sourceRef.set('alpine:latest')
+                // Use contextTaskName in build mode (no sourceRef)
+                imageName = 'custom'
+                version = '1.0.0'
                 contextTaskName.set('prepareCustomContext')
                 tags = ['latest']
             }
@@ -1647,7 +1654,9 @@ class GradleDockerPluginTest extends Specification {
         project.evaluate()
 
         then:
-        // Task should be created despite sourceRef mode
+        // Build task should be created when using contextTaskName
+        def buildTask = project.tasks.findByName('dockerBuildCustom')
+        buildTask != null
         def tagTask = project.tasks.findByName('dockerTagCustom')
         tagTask != null
     }
@@ -1676,7 +1685,7 @@ class GradleDockerPluginTest extends Specification {
 
     // ===== CONFIGUREDOCKERFILE EDGE CASE TESTS =====
 
-    def "plugin configureDockerfile handles contextTaskName with dockerfileName in sourceRef mode"() {
+    def "plugin configureDockerfile handles contextTaskName with dockerfileName in build mode"() {
         given:
         plugin.apply(project)
         def dockerExt = project.extensions.getByType(DockerExtension)
@@ -1696,16 +1705,20 @@ class GradleDockerPluginTest extends Specification {
         when:
         dockerExt.images {
             testApp {
-                // Use sourceRef mode to bypass build context validation
-                sourceRef.set('openjdk:21')
+                // Use contextTaskName with custom dockerfile in build mode
+                imageName = 'testapp'
+                version = '1.0.0'
                 contextTaskName.set('prepareDockerfileContext')
+                dockerfileName.set('Dockerfile.custom')
                 tags = ['latest']
             }
         }
         project.evaluate()
 
         then:
-        // Should succeed with sourceRef mode
+        // Build task should be created when using contextTaskName
+        def buildTask = project.tasks.findByName('dockerBuildTestApp')
+        buildTask != null
         def tagTask = project.tasks.findByName('dockerTagTestApp')
         tagTask != null
     }

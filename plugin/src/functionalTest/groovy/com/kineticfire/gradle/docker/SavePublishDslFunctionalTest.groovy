@@ -65,7 +65,7 @@ class SavePublishDslFunctionalTest extends Specification {
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myTest {
                         files.from('compose/app.yml')
@@ -83,7 +83,7 @@ class SavePublishDslFunctionalTest extends Specification {
                         }
 
                         test {
-                            stack = dockerOrch.composeStacks.myTest
+                            stack = dockerTest.composeStacks.myTest
                             testTaskName = 'integrationTest'
                         }
 
@@ -151,7 +151,7 @@ services:
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myTest {
                         files.from('compose/app.yml')
@@ -169,7 +169,7 @@ services:
                         }
 
                         test {
-                            stack = dockerOrch.composeStacks.myTest
+                            stack = dockerTest.composeStacks.myTest
                             testTaskName = 'integrationTest'
                         }
 
@@ -233,7 +233,7 @@ services:
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myTest {
                         files.from('compose/app.yml')
@@ -251,7 +251,7 @@ services:
                         }
 
                         test {
-                            stack = dockerOrch.composeStacks.myTest
+                            stack = dockerTest.composeStacks.myTest
                             testTaskName = 'integrationTest'
                         }
 
@@ -331,7 +331,7 @@ services:
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myTest {
                         files.from('compose/app.yml')
@@ -343,7 +343,7 @@ services:
                 pipelines {
                     gzipPipeline {
                         build { image = docker.images.myApp }
-                        test { stack = dockerOrch.composeStacks.myTest; testTaskName = 'integrationTest' }
+                        test { stack = dockerTest.composeStacks.myTest; testTaskName = 'integrationTest' }
                         onTestSuccess {
                             save {
                                 compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
@@ -352,7 +352,7 @@ services:
                     }
                     bzip2Pipeline {
                         build { image = docker.images.myApp }
-                        test { stack = dockerOrch.composeStacks.myTest; testTaskName = 'integrationTest' }
+                        test { stack = dockerTest.composeStacks.myTest; testTaskName = 'integrationTest' }
                         onTestSuccess {
                             save {
                                 compression.set(com.kineticfire.gradle.docker.model.SaveCompression.BZIP2)
@@ -361,7 +361,7 @@ services:
                     }
                     nonePipeline {
                         build { image = docker.images.myApp }
-                        test { stack = dockerOrch.composeStacks.myTest; testTaskName = 'integrationTest' }
+                        test { stack = dockerTest.composeStacks.myTest; testTaskName = 'integrationTest' }
                         onTestSuccess {
                             save {
                                 compression.set(com.kineticfire.gradle.docker.model.SaveCompression.NONE)
@@ -427,7 +427,7 @@ services:
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myTest {
                         files.from('compose/app.yml')
@@ -445,7 +445,7 @@ services:
                         }
 
                         test {
-                            stack = dockerOrch.composeStacks.myTest
+                            stack = dockerTest.composeStacks.myTest
                             testTaskName = 'integrationTest'
                         }
 

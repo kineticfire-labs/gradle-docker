@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.workflow.validation
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
@@ -44,7 +44,7 @@ class PipelineValidatorTest extends Specification {
 
     Project project
     DockerExtension dockerExtension
-    DockerOrchExtension dockerOrchExtension
+    DockerTestExtension dockerTestExtension
     PipelineValidator validator
 
     def setup() {
@@ -52,15 +52,15 @@ class PipelineValidatorTest extends Specification {
             .withProjectDir(tempDir.toFile())
             .build()
         dockerExtension = project.objects.newInstance(DockerExtension, project.objects, project.providers, project.layout)
-        dockerOrchExtension = project.objects.newInstance(DockerOrchExtension)
-        validator = new PipelineValidator(project, dockerExtension, dockerOrchExtension)
+        dockerTestExtension = project.objects.newInstance(DockerTestExtension)
+        validator = new PipelineValidator(project, dockerExtension, dockerTestExtension)
     }
 
     // ===== CONSTRUCTOR TESTS =====
 
     def "constructor accepts all parameters"() {
         when:
-        def v = new PipelineValidator(project, dockerExtension, dockerOrchExtension)
+        def v = new PipelineValidator(project, dockerExtension, dockerTestExtension)
 
         then:
         v != null
@@ -208,7 +208,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateImageReference fails when docker extension is null"() {
         given:
-        def validatorWithNull = new PipelineValidator(project, null, dockerOrchExtension)
+        def validatorWithNull = new PipelineValidator(project, null, dockerTestExtension)
 
         when:
         validatorWithNull.validateImageReference('testPipeline', 'anyImage')
@@ -318,7 +318,7 @@ class PipelineValidatorTest extends Specification {
     def "validateStackReference passes for existing stack"() {
         given:
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'validStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.stack.set(stackSpec)
@@ -333,7 +333,7 @@ class PipelineValidatorTest extends Specification {
     def "validateStackReference fails for missing stack"() {
         given:
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'missingStack')
-        // NOT adding to dockerOrchExtension.composeStacks
+        // NOT adding to dockerTestExtension.composeStacks
 
         def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.stack.set(stackSpec)
@@ -347,7 +347,7 @@ class PipelineValidatorTest extends Specification {
         e.message.contains("testPipeline")
     }
 
-    def "validateStackReference fails when dockerOrch extension is null"() {
+    def "validateStackReference fails when dockerTest extension is null"() {
         given:
         def validatorWithNull = new PipelineValidator(project, dockerExtension, null)
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'anyStack')
@@ -359,7 +359,7 @@ class PipelineValidatorTest extends Specification {
 
         then:
         def e = thrown(GradleException)
-        e.message.contains("dockerOrch extension is not available")
+        e.message.contains("dockerTest extension is not available")
     }
 
     def "validateStackReference passes when delegateStackManagement true and no stack"() {
@@ -379,7 +379,7 @@ class PipelineValidatorTest extends Specification {
     def "validateStackReference passes when delegateStackManagement true and stack is set"() {
         given:
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'ignoredStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def testSpec = project.objects.newInstance(TestStepSpec)
         testSpec.delegateStackManagement.set(true)
@@ -396,7 +396,7 @@ class PipelineValidatorTest extends Specification {
 
     def "validateStackReference skips stack validation when delegateStackManagement true"() {
         given:
-        // Stack exists but is NOT added to dockerOrchExtension - normally this would fail
+        // Stack exists but is NOT added to dockerTestExtension - normally this would fail
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'nonExistentStack')
 
         def testSpec = project.objects.newInstance(TestStepSpec)
@@ -507,7 +507,7 @@ class PipelineValidatorTest extends Specification {
         then:
         def e = thrown(GradleException)
         e.message.contains("lifecycle=METHOD but no stack is configured")
-        e.message.contains("Add: stack = dockerOrch.composeStacks")
+        e.message.contains("Add: stack = dockerTest.composeStacks")
     }
 
     def "validateMethodLifecycleConfiguration passes with valid configuration"() {
@@ -517,7 +517,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'methodPipeline')
         def testSpec = pipelineSpec.test.get()
@@ -607,7 +607,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'methodPipeline')
         def testSpec = pipelineSpec.test.get()
@@ -631,7 +631,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'classPipeline')
         def testSpec = pipelineSpec.test.get()
@@ -654,7 +654,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'defaultPipeline')
         def testSpec = pipelineSpec.test.get()
@@ -696,7 +696,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'badMethodPipeline')
         def testSpec = pipelineSpec.test.get()
@@ -719,7 +719,7 @@ class PipelineValidatorTest extends Specification {
         }
 
         def stackSpec = project.objects.newInstance(ComposeStackSpec, 'testStack')
-        dockerOrchExtension.composeStacks.add(stackSpec)
+        dockerTestExtension.composeStacks.add(stackSpec)
 
         def pipelineSpec = project.objects.newInstance(PipelineSpec, 'validMethodPipeline')
         def testSpec = pipelineSpec.test.get()

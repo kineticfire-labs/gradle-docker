@@ -103,8 +103,17 @@ abstract class ImageSpec {
     @Optional
     abstract DirectoryProperty getContext()
     
+    /**
+     * Reference to the context preparation task.
+     *
+     * CONFIGURATION CACHE NOTE: This field is marked transient to prevent serialization issues.
+     * The configuration cache cannot serialize Task references. Use contextTaskName property
+     * instead for configuration-cache-compatible task dependency resolution.
+     *
+     * @deprecated Use contextTaskName property for configuration cache compatibility.
+     */
     @Internal
-    TaskProvider<Task> contextTask
+    transient TaskProvider<Task> contextTask
     
     // Configuration cache safe alternatives to contextTask
     @Input
@@ -359,7 +368,9 @@ abstract class ImageSpec {
     }
     
     private boolean hasBuildContext() {
+        // Check both contextTask and contextTaskName for configuration cache compatibility
         return contextTask != null ||
+               (contextTaskName.isPresent() && !contextTaskName.get().isEmpty()) ||
                (context.isPresent() && context.get().asFile.exists())
     }
     

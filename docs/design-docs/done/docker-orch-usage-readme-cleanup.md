@@ -70,7 +70,7 @@ The `usage-docker-orch.md` document is **90% complete** after the annotation fix
 **Location**: "Complete Examples" section
 
 **Problem**:
-- `database-app` example exists at `plugin-integration-test/dockerOrch/examples/database-app/`
+- `database-app` example exists at `plugin-integration-test/dockerTest/examples/database-app/`
 - Shows critical **multi-service pattern** (app + PostgreSQL database)
 - Demonstrates **dual validation** (REST API + direct database access with JDBC)
 - **NOT mentioned** in usage-docker-orch.md
@@ -79,14 +79,14 @@ The `usage-docker-orch.md` document is **90% complete** after the annotation fix
 
 ```markdown
 - **Spock Examples**:
-  - CLASS lifecycle (basic): `plugin-integration-test/dockerOrch/examples/web-app/`
-  - CLASS lifecycle (multi-service): `plugin-integration-test/dockerOrch/examples/database-app/`
-  - CLASS lifecycle (stateful): `plugin-integration-test/dockerOrch/examples/stateful-web-app/`
-  - METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests/`
+  - CLASS lifecycle (basic): `plugin-integration-test/dockerTest/examples/web-app/`
+  - CLASS lifecycle (multi-service): `plugin-integration-test/dockerTest/examples/database-app/`
+  - CLASS lifecycle (stateful): `plugin-integration-test/dockerTest/examples/stateful-web-app/`
+  - METHOD lifecycle: `plugin-integration-test/dockerTest/examples/isolated-tests/`
 
 - **JUnit 5 Examples**:
-  - CLASS lifecycle: `plugin-integration-test/dockerOrch/examples/web-app-junit/`
-  - METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/`
+  - CLASS lifecycle: `plugin-integration-test/dockerTest/examples/web-app-junit/`
+  - METHOD lifecycle: `plugin-integration-test/dockerTest/examples/isolated-tests-junit/`
 ```
 
 **Additional context to add**:
@@ -102,7 +102,7 @@ The `database-app` example demonstrates:
 
 **build.gradle configuration:**
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         databaseAppTest {
             files.from('src/integrationTest/resources/compose/database-app.yml')
@@ -151,7 +151,7 @@ class DatabaseAppExampleIT extends Specification {
 }
 ```
 
-See `plugin-integration-test/dockerOrch/examples/database-app/README.md` for complete example.
+See `plugin-integration-test/dockerTest/examples/database-app/README.md` for complete example.
 ```
 
 **Acceptance criteria**:
@@ -189,7 +189,7 @@ preventing flaky tests caused by containers that aren't fully started.
 - **Requirement**: Health check must be defined in compose file
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('compose.yml')
@@ -221,7 +221,7 @@ services:
 - **Requirement**: None
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         simpleTest {
             files.from('compose.yml')
@@ -265,7 +265,7 @@ dockerOrch {
 ```markdown
 ## TL;DR (Quick Start)
 
-**What is dockerOrch?**
+**What is dockerTest?**
 - Tests Docker images using Docker Compose
 - Images can come from: `docker` DSL, registries, or any build tool
 - Automatic container lifecycle management via test framework extensions
@@ -274,7 +274,7 @@ dockerOrch {
 
 **Step 1: Configure compose stack in build.gradle**
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -335,7 +335,7 @@ Testing an app that depends on a database:
 
 **build.gradle:**
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         appWithDbTest {
             files.from('src/integrationTest/resources/compose/app-with-db.yml')
@@ -431,7 +431,7 @@ class AppWithDbIT extends Specification {
 **What Conflict Detection Does** (from annotation fix plan Part 1):
 ```groovy
 // build.gradle - Configuration source #1
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('compose.yml')
@@ -642,4 +642,4 @@ After making changes, verify:
 - Source document: `docs/usage/usage-docker-orch.md`
 - Related document: `docs/usage/usage-docker.md`
 - Annotation fix plan: `docs/design-docs/todo/docker-orch-dsl-annoations-fix.md`
-- Examples: `plugin-integration-test/dockerOrch/examples/`
+- Examples: `plugin-integration-test/dockerTest/examples/`

@@ -45,14 +45,14 @@ Docker Compose container lifecycles during your integration tests.
 annotations. This eliminates duplication and provides a single source of truth.
 
 **3-Step Configuration:**
-1. **Configure stack in `build.gradle`** using `dockerOrch.composeStacks { }`
+1. **Configure stack in `build.gradle`** using `dockerTest.composeStacks { }`
 2. **Use `usesCompose()`** in your test task to pass configuration via system properties
 3. **Use zero-parameter annotation** in your test class (`@ComposeUp` or `@ExtendWith`)
 
 **Example `build.gradle`:**
 
 ```gradle
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             projectName = 'example-web-app-test'
@@ -106,7 +106,7 @@ properties:
 
 | System Property | Value | Description |
 |----------------|-------|-------------|
-| `docker.compose.stack` | `webAppTest` | Stack name from dockerOrch DSL |
+| `docker.compose.stack` | `webAppTest` | Stack name from dockerTest DSL |
 | `docker.compose.files` | `src/integrationTest/resources/compose/web-app.yml` | Compose file path(s) |
 | `docker.compose.lifecycle` | `class` | Lifecycle mode (class or method) |
 | `docker.compose.waitForHealthy.services` | `web-app` | Services to wait for |
@@ -147,7 +147,7 @@ For JUnit 5, you must set system properties manually in the test task:
 tasks.named('integrationTest') {
     systemProperty 'docker.compose.stack', 'webAppTest'
     systemProperty 'docker.compose.project', 'example-web-app-test'
-    // Additional configuration in dockerOrch DSL
+    // Additional configuration in dockerTest DSL
 }
 ```
 
@@ -744,7 +744,7 @@ class IsolatedTestsJUnit5MethodIT {
 
 Both Spock and JUnit 5 extensions require:
 
-1. **dockerOrch DSL** in build.gradle defining the stack
+1. **dockerTest DSL** in build.gradle defining the stack
 2. **System properties** in the test task
 3. **Extension annotation** on the test class
 
@@ -777,8 +777,8 @@ dependencies {
     testImplementation 'com.fasterxml.jackson.core:jackson-databind:2.15.2'
 }
 
-// Configure dockerOrch DSL
-dockerOrch {
+// Configure dockerTest DSL
+dockerTest {
     stacks {
         webAppTest {
             projectName = 'web-app-test'
@@ -847,7 +847,7 @@ afterEvaluate {
 
 The extensions require these system properties:
 
-- **`docker.compose.stack`** (required): Stack name from dockerOrch DSL
+- **`docker.compose.stack`** (required): Stack name from dockerTest DSL
 - **`docker.compose.project`** (required): Project name base (used for unique project names)
 - **`COMPOSE_STATE_FILE`** (auto-generated): Path to state file - set automatically by extension
 
@@ -949,13 +949,13 @@ Both Spock and JUnit 5 extensions follow a similar pattern:
 
 1. **Extension Initialization**: Test framework loads extension via annotation
 2. **Read Configuration**: Extension reads system properties (`docker.compose.stack`, `docker.compose.project`)
-3. **Resolve Compose File**: Extension resolves compose file path from dockerOrch DSL
+3. **Resolve Compose File**: Extension resolves compose file path from dockerTest DSL
 4. **Generate Unique Project Name**: Creates timestamp-based unique project name
 5. **Start Containers**: Calls `docker compose up` with health/readiness waiting
 6. **Generate State File**: Creates JSON state file with service info
 7. **Set System Property**: Sets `COMPOSE_STATE_FILE` to state file path
 8. **Run Tests**: Test framework executes test methods
-9. **Capture Logs**: Captures container logs (if configured in dockerOrch DSL)
+9. **Capture Logs**: Captures container logs (if configured in dockerTest DSL)
 10. **Stop Containers**: Calls `docker compose down` to clean up
 
 ### Timing
@@ -1002,9 +1002,9 @@ This ensures consistent behavior between extensions and Gradle tasks.
    systemProperty 'docker.compose.project', 'example-web-app-test'
    ```
 
-3. Verify dockerOrch DSL has matching stack name:
+3. Verify dockerTest DSL has matching stack name:
    ```gradle
-   dockerOrch {
+   dockerTest {
        stacks {
            webAppTest {  // Must match system property
                // ...
@@ -1022,7 +1022,7 @@ This ensures consistent behavior between extensions and Gradle tasks.
 **Solutions:**
 1. Ensure extension annotation is present
 2. Verify compose up completed successfully (check test output)
-3. Check that stack configuration in dockerOrch DSL is correct
+3. Check that stack configuration in dockerTest DSL is correct
 
 ### Containers Not Stopping
 
@@ -1041,7 +1041,7 @@ This ensures consistent behavior between extensions and Gradle tasks.
 **Symptom:** Tests fail with "Service did not become healthy within timeout"
 
 **Solutions:**
-1. Increase timeout in dockerOrch DSL:
+1. Increase timeout in dockerTest DSL:
    ```gradle
    wait {
        services = ['web-app']
@@ -1204,13 +1204,13 @@ This helps identify containers in `docker ps` and prevents conflicts.
 ### Working Examples in Repository
 
 **Spock Examples:**
-- CLASS lifecycle: `plugin-integration-test/dockerOrch/examples/web-app/`
-- METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests/`
-- Verification tests: `plugin-integration-test/dockerOrch/verification/lifecycle-class/`, `lifecycle-method/`
+- CLASS lifecycle: `plugin-integration-test/dockerTest/examples/web-app/`
+- METHOD lifecycle: `plugin-integration-test/dockerTest/examples/isolated-tests/`
+- Verification tests: `plugin-integration-test/dockerTest/verification/lifecycle-class/`, `lifecycle-method/`
 
 **JUnit 5 Examples:**
-- CLASS lifecycle: `plugin-integration-test/dockerOrch/examples/web-app-junit/`
-- METHOD lifecycle: `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/`
+- CLASS lifecycle: `plugin-integration-test/dockerTest/examples/web-app-junit/`
+- METHOD lifecycle: `plugin-integration-test/dockerTest/examples/isolated-tests-junit/`
 
 ### Running Examples
 
@@ -1218,21 +1218,21 @@ This helps identify containers in `docker ps` and prevents conflicts.
 # From plugin-integration-test directory
 
 # Run Spock CLASS lifecycle example
-./gradlew :dockerOrch:examples:web-app:integrationTest
+./gradlew :dockerTest:examples:web-app:integrationTest
 
 # Run Spock METHOD lifecycle example
-./gradlew :dockerOrch:examples:isolated-tests:integrationTest
+./gradlew :dockerTest:examples:isolated-tests:integrationTest
 
 # Run JUnit 5 CLASS lifecycle example
-./gradlew :dockerOrch:examples:web-app-junit:integrationTest
+./gradlew :dockerTest:examples:web-app-junit:integrationTest
 
 # Run JUnit 5 METHOD lifecycle example
-./gradlew :dockerOrch:examples:isolated-tests-junit:integrationTest
+./gradlew :dockerTest:examples:isolated-tests-junit:integrationTest
 ```
 
 ## Additional Resources
 
-- [dockerOrch DSL Usage Guide](usage-docker-orch.md) - Complete guide to Docker Compose orchestration
+- [dockerTest DSL Usage Guide](usage-docker-orch.md) - Complete guide to Docker Compose orchestration
 - [Gradle 9 and 10 Compatibility](gradle-9-and-10-compatibility-practices.md) - Best practices for Gradle 9/10
 - [Spock Framework Documentation](https://spockframework.org/) - Official Spock docs
 - [JUnit 5 User Guide](https://junit.org/junit5/docs/current/user-guide/) - Official JUnit 5 docs

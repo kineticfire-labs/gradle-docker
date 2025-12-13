@@ -37,7 +37,7 @@ package com.kineticfire.gradle.docker.spec.workflow
  *     pipelines {
  *         ciPipeline {
  *             test {
- *                 stack = dockerOrch.composeStacks.testStack
+ *                 stack = dockerTest.composeStacks.testStack
  *                 testTaskName = 'integrationTest'
  *                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test method
  *             }

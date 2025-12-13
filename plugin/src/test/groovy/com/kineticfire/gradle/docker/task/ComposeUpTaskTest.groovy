@@ -370,8 +370,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension
-        project.extensions.getByName('dockerOrch').composeStacks {
+        // Configure dockerTest extension
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
@@ -409,8 +409,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension
-        project.extensions.getByName('dockerOrch').composeStacks {
+        // Configure dockerTest extension
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
@@ -447,8 +447,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension with both healthy and running
-        project.extensions.getByName('dockerOrch').composeStacks {
+        // Configure dockerTest extension with both healthy and running
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
@@ -490,8 +490,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension without wait
-        project.extensions.getByName('dockerOrch').composeStacks {
+        // Configure dockerTest extension without wait
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
@@ -521,8 +521,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension with services explicitly set
-        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        // Configure dockerTest extension with services explicitly set
+        def stackSpec = project.extensions.getByName('dockerTest').composeStacks.create('testStack')
         stackSpec.files.from(composeFile)
         stackSpec.projectName = 'test-project'
 
@@ -567,8 +567,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension with services explicitly set
-        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        // Configure dockerTest extension with services explicitly set
+        def stackSpec = project.extensions.getByName('dockerTest').composeStacks.create('testStack')
         stackSpec.files.from(composeFile)
         stackSpec.projectName = 'test-project'
 
@@ -611,8 +611,8 @@ class ComposeUpTaskTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerOrch extension with both wait specs having services
-        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        // Configure dockerTest extension with both wait specs having services
+        def stackSpec = project.extensions.getByName('dockerTest').composeStacks.create('testStack')
         stackSpec.files.from(composeFile)
         stackSpec.projectName = 'test-project'
 
@@ -670,7 +670,7 @@ class ComposeUpTaskTest extends Specification {
         composeFile.createNewFile()
 
         // Configure wait with services
-        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        def stackSpec = project.extensions.getByName('dockerTest').composeStacks.create('testStack')
         stackSpec.files.from(composeFile)
         stackSpec.projectName = 'test-project'
 

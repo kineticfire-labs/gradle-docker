@@ -149,7 +149,7 @@ class DockerPluginFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     integration {
                         composeFile.set(file('docker-compose.yml'))
@@ -262,7 +262,7 @@ class DockerPluginFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     devEnv {
                         composeFile.set(file('docker-compose.dev.yml'))

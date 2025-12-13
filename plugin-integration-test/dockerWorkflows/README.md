@@ -7,7 +7,7 @@ build-test-publish pipelines using real Docker operations.
 
 The `dockerWorkflows` DSL provides a high-level orchestration layer that combines:
 - **docker** DSL: Building and tagging Docker images
-- **dockerOrch** DSL: Managing Docker Compose stacks for testing
+- **dockerTest** DSL: Managing Docker Compose stacks for testing
 - **Conditional logic**: Executing different operations based on test results
 
 ## Test Scenarios
@@ -97,7 +97,7 @@ dockerWorkflows {
                 image = docker.images.myApp
             }
             test {
-                stack = dockerOrch.composeStacks.myTest
+                stack = dockerTest.composeStacks.myTest
                 testTaskName = 'integrationTest'
             }
             onTestSuccess {
@@ -174,7 +174,7 @@ dockerWorkflows {
                 image = docker.images.myApp
             }
             test {
-                stack = dockerOrch.composeStacks.myTest
+                stack = dockerTest.composeStacks.myTest
                 testTaskName = 'integrationTest'
             }
             onTestSuccess {
@@ -226,7 +226,7 @@ dockerWorkflows {
                 image = docker.images.myApp
             }
             test {
-                stack = dockerOrch.composeStacks.myTest
+                stack = dockerTest.composeStacks.myTest
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test method
             }
@@ -354,4 +354,4 @@ Run with `--info` for detailed pipeline execution logs:
 
 - [dockerWorkflows Usage Guide](../../docs/usage/usage-docker-workflows.md) (pending)
 - [docker DSL Usage](../../docs/usage/usage-docker.md)
-- [dockerOrch DSL Usage](../../docs/usage/usage-docker-orch.md)
+- [dockerTest DSL Usage](../../docs/usage/usage-docker-orch.md)

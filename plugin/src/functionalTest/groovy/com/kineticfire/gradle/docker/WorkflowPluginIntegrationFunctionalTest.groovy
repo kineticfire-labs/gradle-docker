@@ -219,7 +219,7 @@ class WorkflowPluginIntegrationFunctionalTest extends Specification {
 
     // ===== COMPLETE DSL TESTS =====
 
-    def "complete DSL with docker, dockerOrch, and dockerWorkflows works"() {
+    def "complete DSL with docker, dockerTest, and dockerWorkflows works"() {
         given:
         // Create a minimal docker context
         def contextDir = testProjectDir.resolve('docker-context').toFile()
@@ -250,7 +250,7 @@ services:
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose.yml')
@@ -266,7 +266,7 @@ services:
                             image.set(docker.images.myImage)
                         }
                         test {
-                            stack.set(dockerOrch.composeStacks.testStack)
+                            stack.set(dockerTest.composeStacks.testStack)
                         }
                     }
                 }
@@ -402,7 +402,7 @@ services:
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('compose.yml')
@@ -414,7 +414,7 @@ services:
                 pipelines {
                     myPipeline {
                         test {
-                            stack.set(dockerOrch.composeStacks.testStack)
+                            stack.set(dockerTest.composeStacks.testStack)
                         }
                     }
                 }
@@ -547,7 +547,7 @@ services:
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     appStack {
                         files.from('compose.yml')

@@ -111,9 +111,9 @@ The following files contain "suite" but in acceptable contexts:
 
 3. **`TestResultTest.groovy`** - Uses "test suite" as generic term for test collection (acceptable)
 
-4. **`plugin-integration-test/dockerOrch/examples/README.md`** - Uses "test suites" as generic term (acceptable)
+4. **`plugin-integration-test/dockerTest/examples/README.md`** - Uses "test suites" as generic term (acceptable)
 
-5. **`plugin-integration-test/dockerOrch/examples/web-app/.../WebAppExampleIT.groovy`** - Uses "test suites" as generic
+5. **`plugin-integration-test/dockerTest/examples/web-app/.../WebAppExampleIT.groovy`** - Uses "test suites" as generic
    term (acceptable)
 
 6. **Historical docs in `docs/design-docs/done/`** - These are completed design documents; no changes needed

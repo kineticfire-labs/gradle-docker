@@ -41,7 +41,7 @@ The plugin follows the **"Impure Shell / Pure Core"** architectural pattern to m
 │  └───────────────────────────────────────────────────┘    │
 │  ┌───────────────────────────────────────────────────┐    │
 │  │  Extension Layer                                  │    │
-│  │  DockerExtension, DockerOrchExtension             │    │
+│  │  DockerExtension, DockerTestExtension             │    │
 │  └───────────────────────────────────────────────────┘    │
 │  ┌───────────────────────────────────────────────────┐    │
 │  │  Model Layer                                      │    │
@@ -272,7 +272,7 @@ plugin/src/test/groovy/com/kineticfire/gradle/docker/
 │   └── SaveSpecTest.groovy
 ├── extension/          # Gradle extension tests (80% coverage)
 │   ├── DockerExtensionTest.groovy
-│   └── DockerOrchExtensionTest.groovy
+│   └── DockerTestExtensionTest.groovy
 ├── task/               # Gradle task tests (90% coverage)
 │   ├── DockerBuildTaskTest.groovy
 │   ├── DockerPublishTaskTest.groovy

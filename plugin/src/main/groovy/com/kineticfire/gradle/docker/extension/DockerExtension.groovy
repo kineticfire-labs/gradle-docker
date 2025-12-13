@@ -89,7 +89,9 @@ abstract class DockerExtension {
     }
     
     void validateImageSpec(ImageSpec imageSpec) {
-        def hasContextTask = imageSpec.contextTask != null
+        // Check both contextTask and contextTaskName for configuration cache compatibility
+        def hasContextTask = imageSpec.contextTask != null ||
+            (imageSpec.contextTaskName.isPresent() && !imageSpec.contextTaskName.get().isEmpty())
         def hasSourceRef = (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) ||
             (imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty()) ||
             (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) ||

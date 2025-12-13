@@ -87,7 +87,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         methodTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -118,7 +118,7 @@ dockerWorkflows {
 
             // Test step: use METHOD lifecycle
             test {
-                stack = dockerOrch.composeStacks.methodTest
+                stack = dockerTest.composeStacks.methodTest
                 testTaskName = 'integrationTest'
                 // KEY: METHOD lifecycle means containers start/stop per test method
                 // The test framework extension (@ComposeUp) handles the lifecycle

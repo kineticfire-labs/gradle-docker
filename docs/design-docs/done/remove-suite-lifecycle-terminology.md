@@ -27,7 +27,7 @@ initial publication. No backward compatibility or migration guide is needed.
 - Recently completed: `update-docker-orch-readme.md` (removed suite lifecycle from integration test README)
 - Active documentation: `docs/usage/usage-docker-orch.md`, `docs/usage/spock-junit-test-extensions.md`
 - Plugin code: `TestIntegrationExtension.groovy`, `GradleDockerPlugin.groovy`, `ComposeUpTask.groovy`
-- Integration test documentation: `plugin-integration-test/dockerOrch/verification/logs-capture/README.md`
+- Integration test documentation: `plugin-integration-test/dockerTest/verification/logs-capture/README.md`
 
 ---
 
@@ -94,7 +94,7 @@ initial publication. No backward compatibility or migration guide is needed.
 
 ### MEDIUM PRIORITY: Integration Test Documentation
 
-**1. plugin-integration-test/dockerOrch/verification/logs-capture/README.md** (2 references)
+**1. plugin-integration-test/dockerTest/verification/logs-capture/README.md** (2 references)
 - Line 4: `**Lifecycle**: SUITE (composeUp before tests, composeDown after tests)`
 - Line 380: `lifecycle = 'SUITE'` in code example
 
@@ -395,7 +395,7 @@ Line 207: Correct description of Gradle task limitation
 
 **Task 4.1: Update logs-capture README**
 
-**File:** `plugin-integration-test/dockerOrch/verification/logs-capture/README.md`
+**File:** `plugin-integration-test/dockerTest/verification/logs-capture/README.md`
 
 **Changes:**
 1. Line 4: Update lifecycle description
@@ -414,7 +414,7 @@ Line 207: Correct description of Gradle task limitation
 
    <!-- NEW: -->
    // Lifecycle managed by Gradle tasks (CLASS lifecycle via composeUp/composeDown dependencies)
-   // No lifecycle parameter needed in dockerOrch DSL when using Gradle task orchestration
+   // No lifecycle parameter needed in dockerTest DSL when using Gradle task orchestration
    ```
 
 **Rationale:** Integration test documentation should demonstrate correct patterns.

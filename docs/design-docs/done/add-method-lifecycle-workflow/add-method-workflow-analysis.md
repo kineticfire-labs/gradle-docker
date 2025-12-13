@@ -66,7 +66,7 @@ test task execution.
 Users wanting per-method container isolation AND conditional post-test actions (tag/save/publish on success) are caught
 between two incomplete solutions:
 
-| Feature | dockerOrch + testIntegration | dockerWorkflows |
+| Feature | dockerTest + testIntegration | dockerWorkflows |
 |---------|------------------------------|-----------------|
 | Method lifecycle | ✅ | ❌ |
 | Class lifecycle | ✅ | ✅ (with delegateStackManagement) |
@@ -426,7 +426,7 @@ set the correct system property - the extension already knows what to do with it
            throw new GradleException(
                "Pipeline '${pipeline.name}' has lifecycle=METHOD but no stack is configured. " +
                "Method lifecycle requires a stack to configure compose settings. " +
-               "Add: stack = dockerOrch.composeStacks.<yourStack>"
+               "Add: stack = dockerTest.composeStacks.<yourStack>"
            )
        }
    }
@@ -503,7 +503,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.testStack
+                stack = dockerTest.composeStacks.testStack
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.METHOD  // Type-safe enum
             }

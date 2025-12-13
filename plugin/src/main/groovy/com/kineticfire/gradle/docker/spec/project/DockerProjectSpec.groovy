@@ -30,7 +30,7 @@ import javax.inject.Inject
  * Top-level specification for the dockerProject { } simplified DSL.
  *
  * This spec collects simplified configuration and is later translated
- * into docker, dockerOrch, and dockerWorkflows configurations.
+ * into docker, dockerTest, and dockerWorkflows configurations.
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: This class uses @Inject for service injection.
  * Gradle's ObjectFactory will inject ObjectFactory, ProviderFactory, and ProjectLayout

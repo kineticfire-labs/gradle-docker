@@ -285,7 +285,7 @@ This plugin has been refactored for full Gradle 9/10 configuration cache compati
 **Changes Made:**
 - Refactored `ImageSpec`, `ComposeStackSpec`, `PublishSpec`, `SaveSpec`, and `AuthSpec` to use `ObjectFactory` pattern
 - Removed direct `Project` references; replaced with injected services (`ObjectFactory`, `ProviderFactory`)
-- Updated `DockerExtension` and `DockerOrchExtension` to properly inject dependencies
+- Updated `DockerExtension` and `DockerTestExtension` to properly inject dependencies
 - Fixed `ImageSpec` version convention to avoid referencing `project.version` (configuration cache incompatible)
 - Updated `ComposeStackSpec` to use provider-based `projectName` instead of eager evaluation
 

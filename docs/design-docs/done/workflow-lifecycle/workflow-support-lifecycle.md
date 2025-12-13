@@ -26,7 +26,7 @@ The existing `testIntegration` extension already supports these lifecycles, but 
 
 ## Problem Statement
 
-| Feature | dockerOrch + testIntegration | dockerWorkflows |
+| Feature | dockerTest + testIntegration | dockerWorkflows |
 |---------|------------------------------|-----------------|
 | Method lifecycle | ✅ | ❌ |
 | Class lifecycle | ✅ | ❌ (suite-level only) |
@@ -357,7 +357,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         delegatedTest {
             files.from('src/integrationTest/resources/compose/app.yml')

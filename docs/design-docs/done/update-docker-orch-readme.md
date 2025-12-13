@@ -1,4 +1,4 @@
-# Plan: Update dockerOrch Integration Test README for Consistency
+# Plan: Update dockerTest Integration Test README for Consistency
 
 **Status:** ✅ Completed
 **Created:** 2025-11-23
@@ -11,11 +11,11 @@
 
 ## Context
 
-The `plugin-integration-test/dockerOrch/README.md` is missing critical plugin features and troubleshooting guidance that are well-documented in `docs/usage/usage-docker-orch.md`. This plan addresses consistency gaps to improve the integration test developer experience.
+The `plugin-integration-test/dockerTest/README.md` is missing critical plugin features and troubleshooting guidance that are well-documented in `docs/usage/usage-docker-orch.md`. This plan addresses consistency gaps to improve the integration test developer experience.
 
 **Related Documents:**
-- `plugin-integration-test/dockerOrch/README.md` - Integration test documentation
-- `docs/usage/usage-docker-orch.md` - Usage guide for dockerOrch DSL
+- `plugin-integration-test/dockerTest/README.md` - Integration test documentation
+- `docs/usage/usage-docker-orch.md` - Usage guide for dockerTest DSL
 - `docs/usage/spock-junit-test-extensions.md` - Test framework extensions guide
 
 ---
@@ -45,7 +45,7 @@ The `plugin-integration-test/dockerOrch/README.md` is missing critical plugin fe
 
 ### Task 1: Add Cross-Reference to Usage Documentation
 
-**File:** `plugin-integration-test/dockerOrch/README.md`
+**File:** `plugin-integration-test/dockerTest/README.md`
 **Location:** After line 13 (Purpose section)
 **Action:** Add prominent forward reference to usage documentation
 
@@ -53,7 +53,7 @@ The `plugin-integration-test/dockerOrch/README.md` is missing critical plugin fe
 
 ```markdown
 **For comprehensive usage documentation**, see:
-- [dockerOrch DSL Usage Guide](../../docs/usage/usage-docker-orch.md) - Complete guide with all examples and patterns
+- [dockerTest DSL Usage Guide](../../docs/usage/usage-docker-orch.md) - Complete guide with all examples and patterns
 - [Spock and JUnit Test Extensions Guide](../../docs/usage/spock-junit-test-extensions.md) - Detailed extension documentation
 
 This README focuses on the integration test structure and organization. For complete DSL usage, configuration patterns, and detailed examples, refer to the usage guides above.
@@ -65,7 +65,7 @@ This README focuses on the integration test structure and organization. For comp
 
 ### Task 2: Add Key Plugin Features Section
 
-**File:** `plugin-integration-test/dockerOrch/README.md`
+**File:** `plugin-integration-test/dockerTest/README.md`
 **Location:** After "Test Organization" section (after line 91)
 **Action:** Add new section highlighting major plugin features with references
 
@@ -204,7 +204,7 @@ Choose the appropriate wait mechanism for your services:
 
 ### Task 3: Add Troubleshooting Section
 
-**File:** `plugin-integration-test/dockerOrch/README.md`
+**File:** `plugin-integration-test/dockerTest/README.md`
 **Location:** Before "Validation Infrastructure" section (before line 139)
 **Action:** Add troubleshooting section with forward reference
 
@@ -217,7 +217,7 @@ Choose the appropriate wait mechanism for your services:
 
 **Containers not starting:**
 1. Check test output for error messages during setup
-2. Verify `usesCompose()` matches stack name in dockerOrch DSL
+2. Verify `usesCompose()` matches stack name in dockerTest DSL
 3. Ensure compose file exists at expected path
 4. Check Docker daemon is running: `docker info`
 
@@ -227,7 +227,7 @@ Choose the appropriate wait mechanism for your services:
 3. Force remove: `docker ps -aq --filter name=<project-name> | xargs -r docker rm -f`
 
 **Health checks timing out:**
-1. Increase timeout in dockerOrch DSL: `timeoutSeconds.set(120)`
+1. Increase timeout in dockerTest DSL: `timeoutSeconds.set(120)`
 2. Use `waitForRunning` instead of `waitForHealthy` (faster but less reliable)
 3. Check service logs: `docker compose -p <project-name> logs <service-name>`
 
@@ -239,7 +239,7 @@ Choose the appropriate wait mechanism for your services:
 **State file not found:**
 1. Ensure extension annotation is present on test class
 2. Verify compose up completed successfully (check test output)
-3. Check dockerOrch DSL configuration matches system properties
+3. Check dockerTest DSL configuration matches system properties
 
 **Configuration conflicts (Spock):**
 1. Use EITHER `usesCompose()` in build.gradle OR annotation parameters, not both
@@ -250,7 +250,7 @@ Choose the appropriate wait mechanism for your services:
 ### Comprehensive Troubleshooting Guide
 
 For complete troubleshooting with detailed solutions, see:
-- [dockerOrch Troubleshooting Guide](../../docs/usage/usage-docker-orch.md#troubleshooting-guide) -
+- [dockerTest Troubleshooting Guide](../../docs/usage/usage-docker-orch.md#troubleshooting-guide) -
   Covers 8 common issues including containers not stopping, health check timeouts, port conflicts,
   configuration conflicts, configuration cache issues, and more
 
@@ -272,7 +272,7 @@ Each issue includes:
 
 ### Task 4: Correct Lifecycle Terminology Throughout
 
-**File:** `plugin-integration-test/dockerOrch/README.md`
+**File:** `plugin-integration-test/dockerTest/README.md`
 **Action:** Review entire document and correct any references to "suite lifecycle"
 
 **Changes Required:**

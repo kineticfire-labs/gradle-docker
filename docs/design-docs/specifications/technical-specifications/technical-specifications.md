@@ -77,7 +77,7 @@ Common usage patterns:
 
 The plugin integrates with Gradle through standard extension mechanisms and provides two main DSL entry points:
 - `docker { }` - For Docker image operations (build, tag, save, publish)
-- `dockerOrch { }` - For Docker Compose orchestration and testing
+- `dockerTest { }` - For Docker Compose orchestration and testing
 
 **Component Interaction Flow:**
 1. User configures DSL in `build.gradle`
@@ -91,7 +91,7 @@ The plugin integrates with Gradle through standard extension mechanisms and prov
 #### Plugin Core
 - **GradleDockerPlugin**: Main plugin class implementing `Plugin<Project>`
 - **DockerExtension**: Provides `docker { }` DSL
-- **DockerOrchExtension**: Provides `dockerOrch { }` DSL
+- **DockerTestExtension**: Provides `dockerTest { }` DSL
 - **Task Registration**: Dynamic task creation based on configuration
 
 #### DSL Layer
@@ -267,7 +267,7 @@ abstract class PublishSpec {
 
 **DSL Structure**:
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         stack("dbOnly") {
             files = [file("compose-db.yml")]
@@ -921,7 +921,7 @@ class GradleDockerPluginFunctionalSpec extends Specification {
 | DockerExtension | Docker DSL | fs-11, fs-12, fs-13, fs-14 | Core Docker tasks |
 | ImageSpec | Multi-image support | fs-15, fs-16, fs-17, fs-18, fs-19, fs-20, fs-21, fs-22 | Image configuration |
 | ImageSpec | Multi-context support | fs-33, fs-34, fs-35, fs-36 | Enhanced context assembly |
-| DockerOrchExtension | Compose DSL | fs-23, fs-24, fs-25 | Compose orchestration |
+| DockerTestExtension | Compose DSL | fs-23, fs-24, fs-25 | Compose orchestration |
 | ComposeStackSpec | Service management | fs-26, fs-27, fs-28 | State and health checking |
 | Test Integration | usesCompose | fs-29, fs-30, fs-31 | Test lifecycle |
 | Service Abstractions | Library usage | fs-8, fs-9, fs-10, fs-32 | External library integration |
@@ -1058,7 +1058,7 @@ plugin/
 │   │   │   ├── GradleDockerPlugin.groovy           # Main plugin
 │   │   │   ├── extensions/
 │   │   │   │   ├── DockerExtension.groovy          # docker { } DSL
-│   │   │   │   └── DockerOrchExtension.groovy      # dockerOrch { } DSL
+│   │   │   │   └── DockerTestExtension.groovy      # dockerTest { } DSL
 │   │   │   ├── tasks/
 │   │   │   │   ├── DockerBuildTask.groovy
 │   │   │   │   ├── DockerSaveTask.groovy
@@ -1385,13 +1385,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project)
-        def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects, project)
+        def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension, project.objects, project)
         
         // Register task creation rules
-        registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
+        registerTaskCreationRules(project, dockerExt, dockerTestExt, dockerService, composeService, jsonService)
         
         // Configure validation and dependency resolution
-        configureAfterEvaluation(project, dockerExt, dockerOrchExt)
+        configureAfterEvaluation(project, dockerExt, dockerTestExt)
         
         // Setup cleanup hooks
         configureCleanupHooks(project, dockerService, composeService)
@@ -1439,7 +1439,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+    private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                          Provider<DockerService> dockerService, Provider<ComposeService> composeService, 
                                          Provider<JsonService> jsonService) {
         
@@ -1449,7 +1449,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Register per-image tasks after evaluation
         project.afterEvaluate {
             registerDockerImageTasks(project, dockerExt, dockerService)
-            registerComposeStackTasks(project, dockerOrchExt, composeService, jsonService)
+            registerComposeStackTasks(project, dockerTestExt, composeService, jsonService)
         }
     }
     
@@ -1517,9 +1517,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void registerComposeStackTasks(Project project, DockerOrchExtension dockerOrchExt, 
+    private void registerComposeStackTasks(Project project, DockerTestExtension dockerTestExt, 
                                          Provider<ComposeService> composeService, Provider<JsonService> jsonService) {
-        dockerOrchExt.composeStacks.all { stackSpec ->
+        dockerTestExt.composeStacks.all { stackSpec ->
             def stackName = stackSpec.name
             def capitalizedName = stackName.capitalize()
             
@@ -1535,15 +1535,15 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt) {
         project.afterEvaluate {
             try {
                 // Validate configurations
                 dockerExt.validate()
-                dockerOrchExt.validate()
+                dockerTestExt.validate()
                 
                 // Configure task dependencies
-                configureTaskDependencies(project, dockerExt, dockerOrchExt)
+                configureTaskDependencies(project, dockerExt, dockerTestExt)
                 
                 project.logger.info("gradle-docker plugin configuration completed successfully")
                 
@@ -1553,7 +1553,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+    private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt) {
         // Configure per-image task dependencies
         dockerExt.images.all { imageSpec ->
             def imageName = imageSpec.name
@@ -1588,11 +1588,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Configure compose aggregate dependencies
         project.tasks.named('composeUp') {
-            dependsOn dockerOrchExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
+            dependsOn dockerTestExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
         }
         
         project.tasks.named('composeDown') {
-            dependsOn dockerOrchExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
+            dependsOn dockerTestExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
         }
     }
     
@@ -1970,11 +1970,11 @@ class GradleDockerPlugin implements Plugin<Project> {
         
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension)
-        def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension)
+        def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension)
         
         // Register tasks with service injection
         registerDockerTasks(project, dockerExt, dockerService, jsonService)
-        registerComposeTasks(project, dockerOrchExt, composeService, jsonService)
+        registerComposeTasks(project, dockerTestExt, composeService, jsonService)
         
         // Configure task dependencies
         configureDependencies(project, dockerExt)
@@ -2180,15 +2180,15 @@ abstract class ImageSpec {
 }
 ```
 
-**DockerOrchExtension Implementation**:
+**DockerTestExtension Implementation**:
 ```groovy
-abstract class DockerOrchExtension {
+abstract class DockerTestExtension {
     private final NamedDomainObjectContainer<ComposeStackSpec> composeStacks
     private final ObjectFactory objectFactory
     private final Project project
     
     @Inject
-    DockerOrchExtension(ObjectFactory objectFactory, Project project) {
+    DockerTestExtension(ObjectFactory objectFactory, Project project) {
         this.objectFactory = objectFactory
         this.project = project
         this.composeStacks = objectFactory.domainObjectContainer(ComposeStackSpec) { name ->
@@ -2258,20 +2258,20 @@ abstract class DockerOrchExtension {
 void apply(Project project) {
     // Create extensions with proper injection
     def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project)
-    def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects, project)
+    def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension, project.objects, project)
     
     // Validation hook
     project.afterEvaluate {
         try {
             dockerExt.validate()
-            dockerOrchExt.validate()
+            dockerTestExt.validate()
         } catch (Exception e) {
             throw new GradleException("Configuration validation failed: ${e.message}", e)
         }
     }
     
     // Register task creation hooks
-    registerTaskCreationRules(project, dockerExt, dockerOrchExt)
+    registerTaskCreationRules(project, dockerExt, dockerTestExt)
 }
 ```
 
@@ -2416,7 +2416,7 @@ See Use Case documentation:
 
 **Core Extensions**:
 - `DockerExtension`: Provides `docker { }` DSL
-- `DockerOrchExtension`: Provides `dockerOrch { }` DSL
+- `DockerTestExtension`: Provides `dockerTest { }` DSL
 
 **Task Types**:
 - `DockerBuildTask`, `DockerSaveTask`, `DockerTagTask`, `DockerPublishTask`

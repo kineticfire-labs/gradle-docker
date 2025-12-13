@@ -29,7 +29,7 @@
  * - Complete build -> test -> save -> publish workflow via dockerProject DSL
  * - Save file compression inference from filename (.tar.gz -> GZIP)
  * - Publish to private registry without authentication
- * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
  *
  * Port allocation (per README conventions):
  * - Service: 9302 (dockerProject scenario 3)
@@ -56,7 +56,7 @@ dependencies {
 // DOCKER PROJECT DSL: Save and Publish on Success
 // =============================================================================
 // This scenario demonstrates the full onSuccess capabilities including save and publish.
-// The dockerProject DSL translates these into the underlying docker/dockerOrch/dockerWorkflows
+// The dockerProject DSL translates these into the underlying docker/dockerTest/dockerWorkflows
 // configurations automatically.
 dockerProject {
     // image block: Define the Docker image to build

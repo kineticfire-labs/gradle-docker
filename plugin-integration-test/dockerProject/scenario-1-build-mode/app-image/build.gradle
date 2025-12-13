@@ -25,7 +25,7 @@
  * - jarFrom property for JAR-based builds
  * - test block with compose and waitForHealthy
  * - onSuccess block with additionalTags
- * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
  *
  * Port allocation (per README conventions):
  * - Service: 9300 (dockerProject scenario 1)
@@ -51,7 +51,7 @@ dependencies {
 // DOCKER PROJECT DSL: Simplified single-block configuration
 // =============================================================================
 // This is the simplified dockerProject DSL that replaces the three-DSL approach
-// (docker + dockerOrch + dockerWorkflows) for common single-image workflows.
+// (docker + dockerTest + dockerWorkflows) for common single-image workflows.
 dockerProject {
     // image block: Define the Docker image to build
     image {

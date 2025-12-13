@@ -19,7 +19,7 @@ package com.kineticfire.gradle.docker
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 import com.kineticfire.gradle.docker.model.CompressionType
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
 import com.kineticfire.gradle.docker.service.*
@@ -58,8 +58,8 @@ class GradleDockerPlugin implements Plugin<Project> {
 
         // Create extensions
         def dockerExt = project.extensions.create('docker', DockerExtension, project.objects, project.providers, project.layout)
-        def dockerOrchExt = project.extensions.create('dockerOrch', DockerOrchExtension, project.objects)
-        dockerOrchExt.configureProjectNames(project.name)
+        def dockerTestExt = project.extensions.create('dockerTest', DockerTestExtension, project.objects)
+        dockerTestExt.configureProjectNames(project.name)
         def dockerWorkflowsExt = project.extensions.create('dockerWorkflows', DockerWorkflowsExtension, project.objects)
 
         // Create dockerProject extension (simplified facade)
@@ -71,15 +71,15 @@ class GradleDockerPlugin implements Plugin<Project> {
         )
 
         // Register task creation rules
-        registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerWorkflowsExt, dockerProjectExt,
+        registerTaskCreationRules(project, dockerExt, dockerTestExt, dockerWorkflowsExt, dockerProjectExt,
                                   dockerService, composeService, jsonService)
 
         // Register workflow pipeline tasks
-        registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerOrchExt,
+        registerWorkflowTasks(project, dockerWorkflowsExt, dockerExt, dockerTestExt,
                               dockerService, composeService, taskExecutionService)
 
         // Configure validation and dependency resolution
-        configureAfterEvaluation(project, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        configureAfterEvaluation(project, dockerExt, dockerTestExt, dockerWorkflowsExt)
         
         // Setup cleanup hooks
         configureCleanupHooks(project, dockerService, composeService)
@@ -88,8 +88,8 @@ class GradleDockerPlugin implements Plugin<Project> {
         setupTestIntegration(project)
 
         // Setup integration test source set conventions
-        // Applied automatically when dockerOrch.composeStacks is configured
-        setupIntegrationTestSourceSet(project, dockerOrchExt)
+        // Applied automatically when dockerTest.composeStacks is configured
+        setupIntegrationTestSourceSet(project, dockerTestExt)
     }
     
     private void validateRequirements(Project project) {
@@ -180,7 +180,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         return provider
     }
     
-    private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+    private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                            DockerWorkflowsExtension dockerWorkflowsExt,
                                            DockerProjectExtension dockerProjectExt,
                                            Provider<DockerService> dockerService, Provider<ComposeService> composeService,
@@ -196,7 +196,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         // This plugin uses afterEvaluate for dynamic task registration based on user DSL configuration.
         // This pattern is configuration cache safe because:
         //
-        // 1. Tasks are created based on dockerExt.images and dockerOrchExt.composeStacks containers
+        // 1. Tasks are created based on dockerExt.images and dockerTestExt.composeStacks containers
         //    populated by the user in their build.gradle
         // 2. Cannot create tasks before user finishes configuring the DSL (images, stacks, etc.)
         // 3. No Project references are captured in this closure - all values passed as parameters
@@ -219,13 +219,13 @@ class GradleDockerPlugin implements Plugin<Project> {
             // This adds images/stacks/pipelines to the existing containers before task registration
             if (dockerProjectExt.spec.isConfigured()) {
                 def translator = new DockerProjectTranslator()
-                translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+                translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
             }
 
             // STEP 2: Now register tasks for ALL images (including translator-created ones)
             // The .all { } callback will fire for both pre-existing AND newly-added items
             registerDockerImageTasks(project, dockerExt, dockerService)
-            registerComposeStackTasks(project, dockerOrchExt, composeService, jsonService)
+            registerComposeStackTasks(project, dockerTestExt, composeService, jsonService)
         }
     }
     
@@ -320,9 +320,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         }
     }
     
-    private void registerComposeStackTasks(Project project, DockerOrchExtension dockerOrchExt, 
+    private void registerComposeStackTasks(Project project, DockerTestExtension dockerTestExt, 
                                          Provider<ComposeService> composeService, Provider<JsonService> jsonService) {
-        dockerOrchExt.composeStacks.all { stackSpec ->
+        dockerTestExt.composeStacks.all { stackSpec ->
             def stackName = stackSpec.name
             def capitalizedName = stackName.capitalize()
             
@@ -345,7 +345,7 @@ class GradleDockerPlugin implements Plugin<Project> {
      * Tasks are named 'run{PipelineName}' (e.g., 'runCiPipeline').
      */
     private void registerWorkflowTasks(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
-                                       DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                       DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                        Provider<DockerService> dockerService, Provider<ComposeService> composeService,
                                        Provider<TaskExecutionService> taskExecutionService) {
         // Register an aggregate task for running all pipelines
@@ -398,7 +398,7 @@ class GradleDockerPlugin implements Plugin<Project> {
         task.setDockerServiceProvider(dockerService)
     }
 
-    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+    private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                            DockerWorkflowsExtension dockerWorkflowsExt) {
         // GRADLE 9/10 COMPATIBILITY NOTE: afterEvaluate usage
         //
@@ -426,13 +426,13 @@ class GradleDockerPlugin implements Plugin<Project> {
             try {
                 // Validate configurations
                 dockerExt.validate()
-                dockerOrchExt.validate()
+                dockerTestExt.validate()
 
                 // Validate pipeline configurations (cross-DSL references)
-                validatePipelines(project, dockerWorkflowsExt, dockerExt, dockerOrchExt)
+                validatePipelines(project, dockerWorkflowsExt, dockerExt, dockerTestExt)
 
                 // Configure task dependencies
-                configureTaskDependencies(project, dockerExt, dockerOrchExt)
+                configureTaskDependencies(project, dockerExt, dockerTestExt)
 
                 project.logger.info("gradle-docker plugin configuration completed successfully")
 
@@ -446,19 +446,19 @@ class GradleDockerPlugin implements Plugin<Project> {
      * Validate all pipeline specifications
      */
     private void validatePipelines(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
-                                   DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+                                   DockerExtension dockerExt, DockerTestExtension dockerTestExt) {
         if (dockerWorkflowsExt.pipelines.isEmpty()) {
             project.logger.debug("No pipelines configured - skipping workflow validation")
             return
         }
 
-        def validator = new PipelineValidator(project, dockerExt, dockerOrchExt)
+        def validator = new PipelineValidator(project, dockerExt, dockerTestExt)
         validator.validateAll(dockerWorkflowsExt.pipelines)
         project.logger.info("Pipeline validation completed: {} pipeline(s) validated",
             dockerWorkflowsExt.pipelines.size())
     }
     
-    private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt) {
+    private void configureTaskDependencies(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt) {
         // Configure per-image task dependencies using configuration cache compatible approach
         dockerExt.images.all { imageSpec ->
             def imageName = imageSpec.name
@@ -515,13 +515,13 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Configure compose aggregate dependencies
         project.tasks.named('composeUp').configure { aggregateTask ->
             aggregateTask.dependsOn(project.provider {
-                dockerOrchExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
+                dockerTestExt.composeStacks.names.collect { "composeUp${it.capitalize()}" }
             })
         }
 
         project.tasks.named('composeDown').configure { aggregateTask ->
             aggregateTask.dependsOn(project.provider {
-                dockerOrchExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
+                dockerTestExt.composeStacks.names.collect { "composeDown${it.capitalize()}" }
             })
         }
 
@@ -928,9 +928,9 @@ class GradleDockerPlugin implements Plugin<Project> {
         // Register the extension so tests can retrieve it
         project.extensions.add(TestIntegrationExtension, 'testIntegration', testIntegration)
 
-        // Wire the dockerOrchExtension reference
-        def dockerOrchExt = project.extensions.findByType(DockerOrchExtension)
-        testIntegration.setDockerOrchExtension(dockerOrchExt)
+        // Wire the dockerTestExtension reference
+        def dockerTestExt = project.extensions.findByType(DockerTestExtension)
+        testIntegration.setDockerTestExtension(dockerTestExt)
         
         // Add extension methods to all Test tasks
         project.tasks.withType(Test) { test ->
@@ -962,9 +962,9 @@ class GradleDockerPlugin implements Plugin<Project> {
      * whether the user needs it or not - similar to how 'test' source set works.
      *
      * @param project The Gradle project
-     * @param dockerOrchExt The DockerOrchExtension instance (unused, kept for signature compatibility)
+     * @param dockerTestExt The DockerTestExtension instance (unused, kept for signature compatibility)
      */
-    private void setupIntegrationTestSourceSet(Project project, DockerOrchExtension dockerOrchExt) {
+    private void setupIntegrationTestSourceSet(Project project, DockerTestExtension dockerTestExt) {
         // Create source set immediately when java plugin is present
         // This ensures configurations are available for the dependencies block
         project.plugins.withId('java') {

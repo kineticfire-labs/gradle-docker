@@ -20,7 +20,7 @@ only-- there are no unit tests or functional tests.
 - **Phase 3**: Advanced Orchestration (CLASS/METHOD lifecycles) - COMPLETE
 
 **Key Features Implemented:**
-- `dockerOrch.composeStacks { }` DSL for defining compose stacks
+- `dockerTest.composeStacks { }` DSL for defining compose stacks
 - `usesCompose(stack: "name", lifecycle: "class|method")` for passing configuration to test tasks
 - Spock extension (`@ComposeUp`) with zero-parameter annotation support
 - JUnit 5 extensions (`@ExtendWith(DockerComposeClassExtension.class)` and `DockerComposeMethodExtension.class`)
@@ -191,7 +191,7 @@ configurations {
 }
 
 // --- Define multiple compose stacks once ---
-dockerOrch {
+dockerTest {
   composeStacks {
     stack("dbOnly") {
       files       = [file("compose-db.yml")]

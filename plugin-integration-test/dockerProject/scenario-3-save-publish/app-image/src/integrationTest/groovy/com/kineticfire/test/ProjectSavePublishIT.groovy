@@ -28,7 +28,7 @@ import static org.hamcrest.Matchers.*
  * This test validates that the containerized TimeServerApp is running correctly.
  * The test is executed as part of the dockerProject pipeline to verify the app works.
  *
- * The dockerProject DSL simplifies the three-DSL approach (docker + dockerOrch + dockerWorkflows)
+ * The dockerProject DSL simplifies the three-DSL approach (docker + dockerTest + dockerWorkflows)
  * into a single block configuration. This scenario specifically tests:
  *
  * - saveFile: Save the image to a tar.gz archive after tests pass

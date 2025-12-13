@@ -17,7 +17,7 @@ plugins {
 
 ## Recommended Directory Layout
 
-Includes references to the use of the `dockerOrch` DSL for testing a Linux image; see `usage-docker-orch.md` for more
+Includes references to the use of the `dockerTest` DSL for testing a Linux image; see `usage-docker-orch.md` for more
 information.
 
 ```
@@ -1020,13 +1020,13 @@ This pattern is common when:
 - Copying artifacts from multi-project builds
 - Coordinating build order across projects
 
-## Integration with dockerOrch DSL
+## Integration with dockerTest DSL
 
-The `docker` and `dockerOrch` DSLs are **independent** but commonly used together:
+The `docker` and `dockerTest` DSLs are **independent** but commonly used together:
 - **docker DSL**: Build, tag, save, and publish Docker images
-- **dockerOrch DSL**: Test images using Docker Compose orchestration
+- **dockerTest DSL**: Test images using Docker Compose orchestration
 
-They are **mutually exclusive in purpose** - use `docker` DSL for image operations, `dockerOrch` DSL for testing.
+They are **mutually exclusive in purpose** - use `docker` DSL for image operations, `dockerTest` DSL for testing.
 
 ### Common Pattern: Build then Test
 
@@ -1045,8 +1045,8 @@ docker {
     }
 }
 
-// Test image with dockerOrch DSL
-dockerOrch {
+// Test image with dockerTest DSL
+dockerTest {
     composeStacks {
         myTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -1068,7 +1068,7 @@ afterEvaluate {
 }
 ```
 
-**Note**: See `docs/usage/usage-docker-orch.md` for complete `dockerOrch` DSL documentation.
+**Note**: See `docs/usage/usage-docker-orch.md` for complete `dockerTest` DSL documentation.
 
 ## Key Benefits
 

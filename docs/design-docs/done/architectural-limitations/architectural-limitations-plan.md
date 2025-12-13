@@ -111,7 +111,7 @@
   - **Actual LOC: 64**
 
 - [x] **Step 2.2**: Create `TestStepSpec.groovy`
-  - Add `Property<ComposeStackSpec> stack` for reference to dockerOrch.composeStacks.*
+  - Add `Property<ComposeStackSpec> stack` for reference to dockerTest.composeStacks.*
   - Add `Property<Task> testTask` for test task reference
   - Add `Property<Integer> timeoutMinutes`
   - Add `Property<Action<Void>> beforeTest` and `Property<Action<TestResult>> afterTest` hooks
@@ -180,7 +180,7 @@
 
 - [✓] **Step 2.9**: Write functional tests for DSL parsing
   - Test complete DSL configuration
-  - Test cross-references to docker and dockerOrch DSLs
+  - Test cross-references to docker and dockerTest DSLs
   - Test validation (missing required fields)
   - Location: `plugin/src/functionalTest/groovy/DockerWorkflowsExtensionFunctionalTest.groovy`
   - Estimated LOC: 200
@@ -884,7 +884,7 @@
   - **Actual LOC: 15 (lines 60-74)**
 
 - [x] **Step 10.2**: Create task registration method
-  - Add `registerWorkflowTasks(Project, DockerWorkflowsExtension, DockerExtension, DockerOrchExtension)`
+  - Add `registerWorkflowTasks(Project, DockerWorkflowsExtension, DockerExtension, DockerTestExtension)`
   - Implement pipeline iteration: `workflowExt.pipelines.all { pipelineSpec -> ... }`
   - Register `runMyPipeline` task for each pipeline
   - Wire PipelineSpec to task
@@ -1137,7 +1137,7 @@ scenarios in the broader integration test suite. The scenarios below reflect the
 
 **Goal:** Create comprehensive documentation and usage examples.
 
-**Context:** Users need clear documentation on how to use the workflow DSL, when to use it vs. direct docker/dockerOrch DSLs, and best practices.
+**Context:** Users need clear documentation on how to use the workflow DSL, when to use it vs. direct docker/dockerTest DSLs, and best practices.
 
 **Sub-steps:**
 
@@ -1180,7 +1180,7 @@ scenarios in the broader integration test suite. The scenarios below reflect the
 
 - [ ] **Step 13.6**: Create decision guide
   - When to use docker DSL alone
-  - When to use dockerOrch DSL alone
+  - When to use dockerTest DSL alone
   - When to use dockerWorkflows DSL
   - Comparison table
   - Location: `docs/guides/choosing-the-right-dsl.md`
@@ -1217,13 +1217,13 @@ scenarios in the broader integration test suite. The scenarios below reflect the
 
 - [ ] **Step 14.2**: Create backward compatibility tests
   - Test that 1.x build.gradle files work unchanged
-  - Test that docker and dockerOrch DSLs are unaffected
+  - Test that docker and dockerTest DSLs are unaffected
   - Test mixing old and new approaches
   - Location: `plugin/src/functionalTest/groovy/BackwardCompatibilityFunctionalTest.groovy`
   - Estimated LOC: 200
 
 - [ ] **Step 14.3**: Document deprecation policy
-  - Clarify that docker and dockerOrch DSLs are NOT deprecated
+  - Clarify that docker and dockerTest DSLs are NOT deprecated
   - Explain when to use each approach
   - Document long-term support plan
   - Location: `docs/deprecation-policy.md`

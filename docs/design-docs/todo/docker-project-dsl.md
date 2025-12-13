@@ -37,7 +37,7 @@ This feature was identified as a recommendation in the project review conducted 
 See: `docs/design-docs/project-reviews/2025-12-06-project-review.md`
 
 The review identified that while the plugin architecture is sound, the three-DSL approach
-(`docker`, `dockerOrch`, `dockerWorkflows`) creates a high cognitive load for users.
+(`docker`, `dockerTest`, `dockerWorkflows`) creates a high cognitive load for users.
 The `dockerProject` simplified facade addresses the "80% use case" recommendation from
 that review.
 
@@ -46,7 +46,7 @@ that review.
 ## Overview
 
 The `dockerProject` DSL is a **high-level abstraction** that internally generates the lower-level `docker`,
-`dockerOrch`, and `dockerWorkflows` configurations. It targets the 80% use case of:
+`dockerTest`, and `dockerWorkflows` configurations. It targets the 80% use case of:
 **build image -> test with compose -> tag/save/publish on success**.
 
 ---
@@ -123,7 +123,7 @@ dockerProject {
 }
 ```
 
-This replaces 100+ lines of `docker { }`, `dockerOrch { }`, `dockerWorkflows { }`, and wiring code with ~20 lines.
+This replaces 100+ lines of `docker { }`, `dockerTest { }`, `dockerWorkflows { }`, and wiring code with ~20 lines.
 
 ---
 
@@ -134,7 +134,7 @@ This replaces 100+ lines of `docker { }`, `dockerOrch { }`, `dockerWorkflows { }
 The `dockerProject` DSL doesn't introduce new runtime behavior. It is a **configuration translator** that:
 
 1. Collects simplified configuration at configuration time
-2. Translates into equivalent `docker`, `dockerOrch`, `dockerWorkflows` configurations
+2. Translates into equivalent `docker`, `dockerTest`, `dockerWorkflows` configurations
 3. Lets the existing infrastructure do all the work
 
 This has several advantages:
@@ -252,7 +252,7 @@ import javax.inject.Inject
  * Top-level specification for the dockerProject { } simplified DSL.
  *
  * This spec collects simplified configuration and is later translated
- * into docker, dockerOrch, and dockerWorkflows configurations.
+ * into docker, dockerTest, and dockerWorkflows configurations.
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: This class uses @Inject for service injection.
  * Gradle's ObjectFactory will inject ObjectFactory, ProviderFactory, and ProjectLayout
@@ -957,7 +957,7 @@ import javax.inject.Inject
  * Extension providing the dockerProject { } simplified DSL.
  *
  * This extension provides a high-level facade that internally translates
- * to docker, dockerOrch, and dockerWorkflows configurations.
+ * to docker, dockerTest, and dockerWorkflows configurations.
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: Uses ObjectFactory.newInstance() for spec creation,
  * allowing Gradle to inject services automatically. The nested specs are initialized
@@ -1027,7 +1027,7 @@ abstract class DockerProjectExtension {
 This is the **key class** that does the heavy lifting. It reads the simplified spec and configures:
 
 1. `docker.images { }` with appropriate ImageSpec
-2. `dockerOrch.composeStacks { }` with appropriate ComposeStackSpec
+2. `dockerTest.composeStacks { }` with appropriate ComposeStackSpec
 3. `dockerWorkflows.pipelines { }` with appropriate PipelineSpec
 4. Creates the `contextTask` (Copy task) if `jarFrom` is specified
 5. Wires task dependencies automatically
@@ -1038,7 +1038,7 @@ This is the **key class** that does the heavy lifting. It reads the simplified s
 package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
@@ -1051,7 +1051,7 @@ import org.gradle.api.file.ProjectLayout
 import org.gradle.api.tasks.Copy
 
 /**
- * Translates dockerProject spec into docker, dockerOrch, and dockerWorkflows configurations.
+ * Translates dockerProject spec into docker, dockerTest, and dockerWorkflows configurations.
  *
  * This translator implements the "facade pattern" where the simplified dockerProject DSL
  * is translated into the full three-DSL configuration that the plugin already supports.
@@ -1076,11 +1076,11 @@ class DockerProjectTranslator {
      * @param project The Gradle project (configuration-time only)
      * @param projectSpec The dockerProject specification
      * @param dockerExt The docker extension to configure
-     * @param dockerOrchExt The dockerOrch extension to configure
+     * @param dockerTestExt The dockerTest extension to configure
      * @param dockerWorkflowsExt The dockerWorkflows extension to configure
      */
     void translate(Project project, DockerProjectSpec projectSpec,
-                   DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                   DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                    DockerWorkflowsExtension dockerWorkflowsExt) {
 
         def imageSpec = projectSpec.image.get()
@@ -1089,7 +1089,7 @@ class DockerProjectTranslator {
         def failureSpec = projectSpec.onFailure.get()
 
         // Validate configuration and extension availability
-        validateSpec(projectSpec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        validateSpec(projectSpec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         // Generate sanitized names for internal use
         def imageName = deriveImageName(imageSpec, project)
@@ -1100,13 +1100,13 @@ class DockerProjectTranslator {
         // 1. Configure docker.images
         configureDockerImage(project, dockerExt, imageSpec, sanitizedName)
 
-        // 2. Configure dockerOrch.composeStacks (if test block is configured)
+        // 2. Configure dockerTest.composeStacks (if test block is configured)
         if (testSpec.compose.isPresent()) {
-            configureComposeStack(project, dockerOrchExt, testSpec, stackName)
+            configureComposeStack(project, dockerTestExt, testSpec, stackName)
         }
 
         // 3. Configure dockerWorkflows.pipelines
-        configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerOrchExt,
+        configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerTestExt,
                           sanitizedName, stackName, pipelineName, testSpec, successSpec, failureSpec)
 
         // 4. Configure task dependencies using provider-based wiring (no afterEvaluate)
@@ -1116,7 +1116,7 @@ class DockerProjectTranslator {
     }
 
     private void validateSpec(DockerProjectSpec projectSpec, DockerExtension dockerExt,
-                              DockerOrchExtension dockerOrchExt, DockerWorkflowsExtension dockerWorkflowsExt) {
+                              DockerTestExtension dockerTestExt, DockerWorkflowsExtension dockerWorkflowsExt) {
         // Validate all three extensions are available
         // This should always be true since the plugin registers all three, but defensive coding
         if (dockerExt == null) {
@@ -1125,9 +1125,9 @@ class DockerProjectTranslator {
                 "Ensure the com.kineticfire.gradle.docker plugin is applied."
             )
         }
-        if (dockerOrchExt == null) {
+        if (dockerTestExt == null) {
             throw new GradleException(
-                "dockerProject requires the 'dockerOrch' extension to be registered. " +
+                "dockerProject requires the 'dockerTest' extension to be registered. " +
                 "Ensure the com.kineticfire.gradle.docker plugin is applied."
             )
         }
@@ -1404,9 +1404,9 @@ class DockerProjectTranslator {
         // Note: Task existence is validated lazily by Gradle when tasks.named() is called
     }
 
-    private void configureComposeStack(Project project, DockerOrchExtension dockerOrchExt,
+    private void configureComposeStack(Project project, DockerTestExtension dockerTestExt,
                                         ProjectTestSpec testSpec, String stackName) {
-        dockerOrchExt.composeStacks.create(stackName) { stack ->
+        dockerTestExt.composeStacks.create(stackName) { stack ->
             // Resolve compose file path and add to files collection
             stack.files.from(project.file(testSpec.compose.get()))
 
@@ -1441,7 +1441,7 @@ class DockerProjectTranslator {
     }
 
     private void configurePipeline(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
-                                    DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+                                    DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                     String imageName, String stackName, String pipelineName,
                                     ProjectTestSpec testSpec, ProjectSuccessSpec successSpec,
                                     def failureSpec) {
@@ -1471,7 +1471,7 @@ class DockerProjectTranslator {
             if (testSpec.compose.isPresent()) {
                 // Configure test step - use .set() for Property<T> types
                 pipeline.test { testStep ->
-                    testStep.stack.set(dockerOrchExt.composeStacks.getByName(stackName))
+                    testStep.stack.set(dockerTestExt.composeStacks.getByName(stackName))
                     testStep.testTaskName.set(testSpec.testTaskName.getOrElse('integrationTest'))
                     
                     def lifecycleValue = parseLifecycle(testSpec.lifecycle.getOrElse('class'))
@@ -1593,11 +1593,11 @@ a distinct purpose. Understanding this structure is essential for correct integr
 apply() method:
 ├── validateRequirements()
 ├── registerDockerService/ComposeService/JsonService
-├── Create extensions: docker, dockerOrch, dockerWorkflows
+├── Create extensions: docker, dockerTest, dockerWorkflows
 ├── registerTaskCreationRules()  ← Contains FIRST afterEvaluate (line 174)
 │   └── afterEvaluate {
 │       ├── registerDockerImageTasks()     // Iterates dockerExt.images.all { }
-│       └── registerComposeStackTasks()    // Iterates dockerOrchExt.composeStacks.all { }
+│       └── registerComposeStackTasks()    // Iterates dockerTestExt.composeStacks.all { }
 │   }
 ├── registerWorkflowTasks()  ← Contains SECOND afterEvaluate (line 305)
 │   └── afterEvaluate {
@@ -1606,7 +1606,7 @@ apply() method:
 ├── configureAfterEvaluation()  ← Contains THIRD afterEvaluate (line 371)
 │   └── afterEvaluate {
 │       ├── dockerExt.validate()
-│       ├── dockerOrchExt.validate()
+│       ├── dockerTestExt.validate()
 │       ├── validatePipelines()
 │       └── configureTaskDependencies()
 │   }
@@ -1639,14 +1639,14 @@ def dockerProjectExt = project.extensions.create(
 
 The current method signature (line 142):
 ```groovy
-private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                      Provider<DockerService> dockerService, Provider<ComposeService> composeService,
                                      Provider<JsonService> jsonService)
 ```
 
 **Change to** (add two parameters):
 ```groovy
-private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerOrchExtension dockerOrchExt,
+private void registerTaskCreationRules(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                        DockerWorkflowsExtension dockerWorkflowsExt,  // ADD: needed for translator
                                        DockerProjectExtension dockerProjectExt,       // ADD: the new extension
                                        Provider<DockerService> dockerService, Provider<ComposeService> composeService,
@@ -1657,12 +1657,12 @@ private void registerTaskCreationRules(Project project, DockerExtension dockerEx
 
 Change the call at line 64 from:
 ```groovy
-registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerService, composeService, jsonService)
+registerTaskCreationRules(project, dockerExt, dockerTestExt, dockerService, composeService, jsonService)
 ```
 
 **To:**
 ```groovy
-registerTaskCreationRules(project, dockerExt, dockerOrchExt, dockerWorkflowsExt, dockerProjectExt,
+registerTaskCreationRules(project, dockerExt, dockerTestExt, dockerWorkflowsExt, dockerProjectExt,
                           dockerService, composeService, jsonService)
 ```
 
@@ -1676,13 +1676,13 @@ project.afterEvaluate {
     // This adds images/stacks/pipelines to the existing containers before task registration
     if (dockerProjectExt.spec.isConfigured()) {
         def translator = new DockerProjectTranslator()
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
     }
 
     // STEP 2: Now register tasks for ALL images (including translator-created ones)
     // The .all { } callback will fire for both pre-existing AND newly-added items
     registerDockerImageTasks(project, dockerExt, dockerService)
-    registerComposeStackTasks(project, dockerOrchExt, composeService, jsonService)
+    registerComposeStackTasks(project, dockerTestExt, composeService, jsonService)
 }
 ```
 
@@ -1700,10 +1700,10 @@ import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 
 2. **First afterEvaluate** (in `registerTaskCreationRules`):
    - Translator runs FIRST, adding images to `dockerExt.images` container
-   - Translator also adds stacks to `dockerOrchExt.composeStacks` container
+   - Translator also adds stacks to `dockerTestExt.composeStacks` container
    - Translator also adds pipelines to `dockerWorkflowsExt.pipelines` container
    - `registerDockerImageTasks()` then iterates `dockerExt.images.all { }` - sees ALL images
-   - `registerComposeStackTasks()` then iterates `dockerOrchExt.composeStacks.all { }` - sees ALL stacks
+   - `registerComposeStackTasks()` then iterates `dockerTestExt.composeStacks.all { }` - sees ALL stacks
 
 3. **Second afterEvaluate** (in `registerWorkflowTasks`):
    - Iterates `dockerWorkflowsExt.pipelines.all { }` - sees translator-created pipelines
@@ -1711,7 +1711,7 @@ import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 
 4. **Third afterEvaluate** (in `configureAfterEvaluation`):
    - `dockerExt.validate()` validates ALL images including translator-created ones
-   - `dockerOrchExt.validate()` validates ALL stacks including translator-created ones
+   - `dockerTestExt.validate()` validates ALL stacks including translator-created ones
    - `validatePipelines()` validates ALL pipelines including translator-created ones
    - `configureTaskDependencies()` wires dependencies for ALL tasks
 
@@ -1760,7 +1760,7 @@ creates images dynamically, and validation runs afterwards in `configureAfterEva
 Integration tests follow the existing project structure convention established in `plugin-integration-test/`.
 The existing conventions are:
 - `plugin-integration-test/docker/scenario-<number>/` for docker tasks (build, tag, save, publish)
-- `plugin-integration-test/dockerOrch/` for dockerOrch tasks (composeUp, composeDown)
+- `plugin-integration-test/dockerTest/` for dockerTest tasks (composeUp, composeDown)
 - `plugin-integration-test/dockerWorkflows/` for dockerWorkflows pipelines
 
 For `dockerProject` tests, we create a new directory to match this pattern:
@@ -1775,7 +1775,7 @@ For `dockerProject` tests, we create a new directory to match this pattern:
 
 **NOTE:** A README.md file should be created at `plugin-integration-test/dockerProject/README.md` to document
 the scenarios, following the pattern of existing README files in `plugin-integration-test/docker/README.md`
-and `plugin-integration-test/dockerOrch/README.md`.
+and `plugin-integration-test/dockerTest/README.md`.
 
 ##### Scenario 2: SourceRef Mode with Component Properties
 
@@ -1929,7 +1929,7 @@ This scenario verifies that `contextDir` works as an alternative to `jarFrom` fo
 1. **Translator Pattern**: The `dockerProject` DSL is purely a configuration translator. It does not introduce
    new runtime behavior, tasks, or services.
 
-2. **Optional Facade**: Users can still use `docker { }`, `dockerOrch { }`, and `dockerWorkflows { }` directly.
+2. **Optional Facade**: Users can still use `docker { }`, `dockerTest { }`, and `dockerWorkflows { }` directly.
    The `dockerProject` DSL is additive.
 
 3. **Mutual Exclusivity**: If `dockerProject { }` is configured, it should be the only way to configure that
@@ -2205,7 +2205,7 @@ The following additional corrections were applied based on detailed codebase ana
 6. **Integration Test Directory Convention**: Changed from `app-image/integrationTest/dockerProject/`
    to `plugin-integration-test/dockerProject/` to match existing conventions:
    - `plugin-integration-test/docker/scenario-X/` for docker tasks
-   - `plugin-integration-test/dockerOrch/scenario-X/` for dockerOrch tasks
+   - `plugin-integration-test/dockerTest/scenario-X/` for dockerTest tasks
    - `plugin-integration-test/dockerProject/scenario-X/` for dockerProject (new)
    Added note to create `README.md` for scenario documentation.
 
@@ -2281,9 +2281,9 @@ The following additional corrections were applied based on comprehensive codebas
 ### Corrections Applied
 
 1. **Integration Test Directory Convention Fixed**: Changed incorrect directory references:
-   - Changed `plugin-integration-test/compose/scenario-<number>/` to `plugin-integration-test/dockerOrch/`
+   - Changed `plugin-integration-test/compose/scenario-<number>/` to `plugin-integration-test/dockerTest/`
    - Added reference to `plugin-integration-test/dockerWorkflows/` directory
-   - The actual codebase uses `dockerOrch/` not `compose/` for Docker Compose integration tests
+   - The actual codebase uses `dockerTest/` not `compose/` for Docker Compose integration tests
 
 2. **DockerWorkflowsExtension Parameter Added**: Fixed the `registerTaskCreationRules()` method signature
    to include `DockerWorkflowsExtension dockerWorkflowsExt` parameter. The original plan referenced
@@ -2404,7 +2404,7 @@ The following corrections were applied based on implementation readiness verific
 
 3. **Extension Availability Validation Added**: Enhanced `validateSpec()` to validate all three
    extensions are available before translation:
-   - Updated method signature to accept `dockerOrchExt` and `dockerWorkflowsExt` parameters
+   - Updated method signature to accept `dockerTestExt` and `dockerWorkflowsExt` parameters
    - Added null checks with clear error messages for each extension
    - This is defensive coding since the plugin always registers all three extensions
    - Provides clear guidance if the plugin is partially applied or misconfigured
@@ -2485,12 +2485,12 @@ All recommendations have been applied. The plan now includes:
    rather than overriding with a potentially conflicting value.
 
 2. **Integration Test Directory Corrections**: Fixed remaining references to use the correct directory names:
-   - Changed `plugin-integration-test/compose/README.md` to `plugin-integration-test/dockerOrch/README.md`
-   - Changed `plugin-integration-test/compose/scenario-X/` to `plugin-integration-test/dockerOrch/scenario-X/`
+   - Changed `plugin-integration-test/compose/README.md` to `plugin-integration-test/dockerTest/README.md`
+   - Changed `plugin-integration-test/compose/scenario-X/` to `plugin-integration-test/dockerTest/scenario-X/`
    
    The actual directory structure is:
    - `plugin-integration-test/docker/` - for docker build/tag/save/publish tasks
-   - `plugin-integration-test/dockerOrch/` - for compose-based testing tasks
+   - `plugin-integration-test/dockerTest/` - for compose-based testing tasks
    - `plugin-integration-test/dockerWorkflows/` - for workflow tasks
    - `plugin-integration-test/dockerProject/` - for the new dockerProject DSL (to be created)
 

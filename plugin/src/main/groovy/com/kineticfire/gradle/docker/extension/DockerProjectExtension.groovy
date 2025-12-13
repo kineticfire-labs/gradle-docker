@@ -32,7 +32,7 @@ import javax.inject.Inject
  * Extension providing the dockerProject { } simplified DSL.
  *
  * This extension provides a high-level facade that internally translates
- * to docker, dockerOrch, and dockerWorkflows configurations.
+ * to docker, dockerTest, and dockerWorkflows configurations.
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: Uses ObjectFactory.newInstance() for spec creation,
  * allowing Gradle to inject services automatically. The nested specs are initialized

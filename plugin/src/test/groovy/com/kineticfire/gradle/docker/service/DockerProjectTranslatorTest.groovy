@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
@@ -35,7 +35,7 @@ class DockerProjectTranslatorTest extends Specification {
 
     Project project
     DockerExtension dockerExt
-    DockerOrchExtension dockerOrchExt
+    DockerTestExtension dockerTestExt
     DockerWorkflowsExtension dockerWorkflowsExt
     DockerProjectExtension dockerProjectExt
     DockerProjectTranslator translator
@@ -49,7 +49,7 @@ class DockerProjectTranslatorTest extends Specification {
         project.pluginManager.apply('com.kineticfire.gradle.docker')
 
         dockerExt = project.extensions.getByType(DockerExtension)
-        dockerOrchExt = project.extensions.getByType(DockerOrchExtension)
+        dockerTestExt = project.extensions.getByType(DockerTestExtension)
         dockerWorkflowsExt = project.extensions.getByType(DockerWorkflowsExtension)
         dockerProjectExt = project.objects.newInstance(DockerProjectExtension)
 
@@ -135,14 +135,14 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, null, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, null, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def e = thrown(GradleException)
         e.message.contains("dockerProject requires the 'docker' extension")
     }
 
-    def "validation fails when dockerOrch extension is null"() {
+    def "validation fails when dockerTest extension is null"() {
         given:
         dockerProjectExt.image {
             jarFrom.set('jar')
@@ -153,7 +153,7 @@ services:
 
         then:
         def e = thrown(GradleException)
-        e.message.contains("dockerProject requires the 'dockerOrch' extension")
+        e.message.contains("dockerProject requires the 'dockerTest' extension")
     }
 
     def "validation fails when dockerWorkflows extension is null"() {
@@ -163,7 +163,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, null)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, null)
 
         then:
         def e = thrown(GradleException)
@@ -178,7 +178,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def e = thrown(GradleException)
@@ -193,7 +193,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def e = thrown(GradleException)
@@ -209,7 +209,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def e = thrown(GradleException)
@@ -231,7 +231,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def e = thrown(GradleException)
@@ -324,7 +324,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         dockerExt.images.findByName('myservice') != null
@@ -351,7 +351,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         dockerExt.images.findByName('nginx') != null
@@ -376,7 +376,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         dockerExt.images.findByName(project.name) != null
@@ -401,7 +401,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('privateimage')
@@ -427,13 +427,13 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
-        dockerOrchExt.composeStacks.findByName('myappTest') != null
+        dockerTestExt.composeStacks.findByName('myappTest') != null
 
         and:
-        def stack = dockerOrchExt.composeStacks.getByName('myappTest')
+        def stack = dockerTestExt.composeStacks.getByName('myappTest')
         stack.files.files.any { it.name == 'app.yml' }
         // Docker Compose project names must be lowercase
         stack.projectName.get() == "${project.name}-myappTest".toLowerCase()
@@ -450,10 +450,10 @@ services:
         // No test block configured
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
-        dockerOrchExt.composeStacks.size() == 0
+        dockerTestExt.composeStacks.size() == 0
     }
 
     def "translate creates compose stack with custom project name"() {
@@ -469,10 +469,10 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
-        def stack = dockerOrchExt.composeStacks.getByName('myappTest')
+        def stack = dockerTestExt.composeStacks.getByName('myappTest')
         stack.projectName.get() == 'custom-project'
     }
 
@@ -489,10 +489,10 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
-        def stack = dockerOrchExt.composeStacks.getByName('myappTest')
+        def stack = dockerTestExt.composeStacks.getByName('myappTest')
         stack.waitForRunning.get().waitForServices.get() == ['app']
     }
 
@@ -511,7 +511,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         dockerWorkflowsExt.pipelines.findByName('myappPipeline') != null
@@ -520,7 +520,7 @@ services:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
         pipeline.description.get().contains('myapp')
         pipeline.build.get().image.get() == dockerExt.images.getByName('myapp')
-        pipeline.test.get().stack.get() == dockerOrchExt.composeStacks.getByName('myappTest')
+        pipeline.test.get().stack.get() == dockerTestExt.composeStacks.getByName('myappTest')
         pipeline.test.get().testTaskName.get() == 'integrationTest'
     }
 
@@ -537,7 +537,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -560,7 +560,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -582,7 +582,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -607,7 +607,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -633,7 +633,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -657,7 +657,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         noExceptionThrown()
@@ -680,7 +680,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -700,7 +700,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
@@ -723,7 +723,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('myapp')
@@ -744,7 +744,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('myapp')
@@ -767,7 +767,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('myapp')
@@ -788,7 +788,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('myapp')
@@ -811,7 +811,7 @@ services:
         }
 
         when:
-        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerOrchExt, dockerWorkflowsExt)
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
         def image = dockerExt.images.getByName('myapp')

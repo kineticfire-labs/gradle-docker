@@ -83,7 +83,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         delegatedTest {
             files.from('src/integrationTest/resources/compose/app.yml')

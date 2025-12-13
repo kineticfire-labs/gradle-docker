@@ -213,7 +213,7 @@ class TestStepExecutor {
         def task = lookupTask(taskName)
         if (task == null) {
             throw new GradleException("ComposeUp task '${taskName}' not found. " +
-                "Ensure the stack is configured in dockerOrch.composeStacks DSL.")
+                "Ensure the stack is configured in dockerTest.composeStacks DSL.")
         }
 
         LOGGER.info("Executing composeUp task: {}", taskName)

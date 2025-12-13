@@ -161,10 +161,10 @@ private void configureClassLifecycle(Test test, String stackName, stackSpec) {
     // Class lifecycle uses test framework extension to manage compose per test class
     // DO NOT add task dependencies - let extension handle lifecycle
 
-    // Set comprehensive system properties from dockerOrch DSL
+    // Set comprehensive system properties from dockerTest DSL
     setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
 
-    logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
+    logger.info("Test '{}' configured for CLASS lifecycle from dockerTest DSL", test.name)
     logger.info("Spock: Use @ComposeUp (zero parameters)")
     logger.info("JUnit 5: Use @ExtendWith(DockerComposeClassExtension.class)")
 }
@@ -175,13 +175,13 @@ private void configureClassLifecycle(Test test, String stackName, stackSpec) {
 private void configureClassLifecycle(Test test, String stackName, stackSpec) {
     // Class lifecycle uses test framework extension to manage compose per test class
 
-    // Set comprehensive system properties from dockerOrch DSL
+    // Set comprehensive system properties from dockerTest DSL
     setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
 
     // NEW: Auto-wire task dependencies
     autoWireComposeDependencies(test, stackName)
 
-    logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
+    logger.info("Test '{}' configured for CLASS lifecycle from dockerTest DSL", test.name)
     logger.info("Spock: Use @ComposeUp (zero parameters)")
     logger.info("JUnit 5: Use @ExtendWith(DockerComposeClassExtension.class)")
 }
@@ -197,10 +197,10 @@ private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
     // Method lifecycle uses test framework extension to manage compose per test method
     // DO NOT add task dependencies - let extension handle lifecycle
 
-    // Set comprehensive system properties from dockerOrch DSL
+    // Set comprehensive system properties from dockerTest DSL
     setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
 
-    logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
+    logger.info("Test '{}' configured for METHOD lifecycle from dockerTest DSL", test.name)
     logger.info("Spock: Use @ComposeUp (zero parameters)")
     logger.info("JUnit 5: Use @ExtendWith(DockerComposeMethodExtension.class)")
 }
@@ -211,13 +211,13 @@ private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
 private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
     // Method lifecycle uses test framework extension to manage compose per test method
 
-    // Set comprehensive system properties from dockerOrch DSL
+    // Set comprehensive system properties from dockerTest DSL
     setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
 
     // NEW: Auto-wire task dependencies
     autoWireComposeDependencies(test, stackName)
 
-    logger.info("Test '{}' configured for METHOD lifecycle from dockerOrch DSL", test.name)
+    logger.info("Test '{}' configured for METHOD lifecycle from dockerTest DSL", test.name)
     logger.info("Spock: Use @ComposeUp (zero parameters)")
     logger.info("JUnit 5: Use @ExtendWith(DockerComposeMethodExtension.class)")
 }
@@ -254,14 +254,14 @@ private void autoWireComposeDependencies(Test test, String stackName) {
         if (!composeUpTask) {
             throw new GradleException(
                 "Task '${composeUpTaskName}' not found. " +
-                "Ensure dockerOrch.composeStacks.${stackName} is configured in build.gradle."
+                "Ensure dockerTest.composeStacks.${stackName} is configured in build.gradle."
             )
         }
 
         if (!composeDownTask) {
             throw new GradleException(
                 "Task '${composeDownTaskName}' not found. " +
-                "Ensure dockerOrch.composeStacks.${stackName} is configured in build.gradle."
+                "Ensure dockerTest.composeStacks.${stackName} is configured in build.gradle."
             )
         }
 
@@ -304,7 +304,7 @@ tasks.named('integrationTest') {
 
 **Case 2: Compose tasks don't exist**
 ```gradle
-dockerOrch {
+dockerTest {
     composeStacks {
         myStack { /* ... */ }
     }
@@ -361,7 +361,7 @@ method is tested in integration tests as it requires full plugin setup."
 
 **Decision:** Continue pattern of NOT unit testing `usesCompose()` directly. The method requires:
 - Full plugin application
-- DockerOrchExtension setup
+- DockerTestExtension setup
 - Compose stack configuration
 - Task graph evaluation
 
@@ -410,7 +410,7 @@ class UsesComposeAutoWireFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('src/integrationTest/resources/compose/test.yml')
@@ -449,7 +449,7 @@ class UsesComposeAutoWireFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('src/integrationTest/resources/compose/test.yml')
@@ -483,7 +483,7 @@ class UsesComposeAutoWireFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('src/integrationTest/resources/compose/test.yml')
@@ -517,7 +517,7 @@ class UsesComposeAutoWireFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     existingStack {
                         files.from('src/integrationTest/resources/compose/test.yml')
@@ -550,7 +550,7 @@ class UsesComposeAutoWireFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('src/integrationTest/resources/compose/test.yml')
@@ -596,7 +596,7 @@ def "auto-wiring works with existing manual wiring (backward compatibility)"() {
             id 'com.kineticfire.gradle.docker'
         }
 
-        dockerOrch {
+        dockerTest {
             composeStacks {
                 test {
                     files.from('src/integrationTest/resources/compose/test.yml')
@@ -633,14 +633,14 @@ def "auto-wiring works with existing manual wiring (backward compatibility)"() {
 
 ### Integration Tests
 
-**Scope:** 41 `build.gradle` files in `plugin-integration-test/dockerOrch/`
+**Scope:** 41 `build.gradle` files in `plugin-integration-test/dockerTest/`
 
 #### **Step 1: Identify Files to Modify**
 
 **Search pattern:**
 ```bash
 # Find all build.gradle files with usesCompose + class/method lifecycle
-cd plugin-integration-test/dockerOrch
+cd plugin-integration-test/dockerTest
 find . -name "build.gradle" -exec grep -l "usesCompose.*lifecycle.*class\|method" {} \;
 
 # Find all build.gradle files with manual afterEvaluate wiring
@@ -680,7 +680,7 @@ afterEvaluate {
 
 #### **Example Transformation**
 
-**File:** `plugin-integration-test/dockerOrch/examples/web-app/app-image/build.gradle`
+**File:** `plugin-integration-test/dockerTest/examples/web-app/app-image/build.gradle`
 
 **BEFORE (lines 119-143):**
 ```gradle
@@ -768,7 +768,7 @@ diff /tmp/before.txt /tmp/after.txt
 
 Generate with:
 ```bash
-cd plugin-integration-test/dockerOrch
+cd plugin-integration-test/dockerTest
 find . -type f -name "build.gradle" | sort > /tmp/all-builds.txt
 ```
 
@@ -1007,7 +1007,7 @@ This design leaves room for future improvements:
 - [x] Verify all tests pass
 
 ### Phase 3: Integration Tests (3-4 hours) ✅ COMPLETE
-- [x] Generate file list: `find plugin-integration-test/dockerOrch -name "build.gradle"`
+- [x] Generate file list: `find plugin-integration-test/dockerTest -name "build.gradle"`
 - [x] Identify files with manual wiring (grep search)
 - [x] Create baseline: Run integration tests, capture results
 - [x] Update 8 build.gradle files (remove manual wiring)

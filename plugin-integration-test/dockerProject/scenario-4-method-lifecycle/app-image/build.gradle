@@ -25,7 +25,7 @@
  * - jarFrom property for JAR-based builds
  * - test block with compose, waitForHealthy, and lifecycle='method'
  * - @ComposeUp annotation for Spock tests (method-level container management)
- * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
  *
  * Key characteristics of METHOD lifecycle:
  * - Containers start fresh before each test method

@@ -25,7 +25,7 @@
  * - dockerProject single-block configuration with contextDir
  * - Pre-existing Docker context directory (vs jarFrom auto-generation)
  * - test block with compose and waitForHealthy
- * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
  *
  * Key differences from jarFrom mode:
  * - contextDir: User provides a directory containing Dockerfile and all files

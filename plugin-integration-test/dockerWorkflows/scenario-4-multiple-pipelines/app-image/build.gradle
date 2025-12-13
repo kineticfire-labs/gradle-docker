@@ -84,7 +84,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         multiPipelineTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -118,7 +118,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.multiPipelineTest
+                stack = dockerTest.composeStacks.multiPipelineTest
                 testTaskName = 'integrationTest'
             }
 
@@ -139,7 +139,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.multiPipelineTest
+                stack = dockerTest.composeStacks.multiPipelineTest
                 testTaskName = 'integrationTest'
             }
 
@@ -162,7 +162,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.multiPipelineTest
+                stack = dockerTest.composeStacks.multiPipelineTest
                 testTaskName = 'integrationTest'
             }
 

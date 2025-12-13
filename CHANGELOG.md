@@ -19,7 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     pattern
   - Removed direct `Project` references from spec classes; replaced with injected services (`ObjectFactory`,
     `ProviderFactory`)
-  - Updated `DockerExtension` and `DockerOrchExtension` to properly inject dependencies into specs
+  - Updated `DockerExtension` and `DockerTestExtension` to properly inject dependencies into specs
   - Changed `ImageSpec` version convention to avoid referencing `project.version` (configuration cache incompatible)
   - Updated `ComposeStackSpec` to use provider-based `projectName` instead of eager evaluation
   - Registered `TestIntegrationExtension` as a project extension in `GradleDockerPlugin`

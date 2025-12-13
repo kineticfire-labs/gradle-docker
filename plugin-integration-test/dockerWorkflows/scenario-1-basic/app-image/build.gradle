@@ -81,7 +81,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         workflowTest {
             files.from('src/integrationTest/resources/compose/workflow-app.yml')
@@ -112,7 +112,7 @@ dockerWorkflows {
 
             // Test step: run integration tests against the containerized app
             test {
-                stack = dockerOrch.composeStacks.workflowTest
+                stack = dockerTest.composeStacks.workflowTest
                 testTaskName = 'integrationTest'
             }
 

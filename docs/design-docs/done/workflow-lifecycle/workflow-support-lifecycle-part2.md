@@ -61,7 +61,7 @@ technical explanation of why method lifecycle is impossible with `dockerWorkflow
 1. **Overview**
    - What is `dockerWorkflows`?
    - When to use it vs. manual task orchestration
-   - Relationship to `docker`, `dockerOrch`, and `testIntegration` DSLs
+   - Relationship to `docker`, `dockerTest`, and `testIntegration` DSLs
 
 2. **Quick Start**
    - Minimal pipeline configuration example

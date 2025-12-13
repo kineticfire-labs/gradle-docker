@@ -20,7 +20,7 @@
  * This project orchestrates all integration tests that demonstrate real usage patterns
  * of the gradle-docker plugin including:
  * - Docker operations (build, tag, save, publish) in docker/ subproject
- * - Docker Compose orchestration in dockerOrch/ subproject
+ * - Docker Compose orchestration in dockerTest/ subproject
  * - Application JAR building in app/ subproject (shared dependency)
  *
  * Each major subproject represents a category of integration tests.
@@ -40,7 +40,7 @@ tasks.register('integrationTest') {
     // Ensure app is built first, then run all integration test categories
     dependsOn ':app:build'
     dependsOn ':docker:integrationTest'
-    dependsOn ':dockerOrch:integrationTest'
+    dependsOn ':dockerTest:integrationTest'
     dependsOn ':dockerWorkflows:integrationTest'
     dependsOn ':dockerProject:integrationTest'
 }
@@ -54,13 +54,13 @@ tasks.register('dockerIntegrationTest') {
     dependsOn ':docker:integrationTest'
 }
 
-// Task to run only dockerOrch integration tests
-tasks.register('dockerOrchIntegrationTest') {
-    description = 'Run dockerOrch integration tests only'
+// Task to run only dockerTest integration tests
+tasks.register('dockerTestIntegrationTest') {
+    description = 'Run dockerTest integration tests only'
     group = 'verification'
 
     dependsOn ':app:build'
-    dependsOn ':dockerOrch:integrationTest'
+    dependsOn ':dockerTest:integrationTest'
 }
 
 // Task to run only dockerWorkflows integration tests
@@ -88,7 +88,7 @@ tasks.register('cleanAll') {
 
     dependsOn ':app:clean'
     dependsOn ':docker:cleanAll'
-    dependsOn ':dockerOrch:clean'
+    dependsOn ':dockerTest:clean'
     dependsOn ':dockerWorkflows:cleanAll'
     dependsOn ':dockerProject:cleanAll'
 }

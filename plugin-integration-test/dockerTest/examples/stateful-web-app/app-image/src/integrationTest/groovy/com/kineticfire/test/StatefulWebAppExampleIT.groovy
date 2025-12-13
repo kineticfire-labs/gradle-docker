@@ -1,0 +1,242 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package com.kineticfire.test
+
+import com.kineticfire.gradle.docker.spock.ComposeUp
+import spock.lang.Specification
+import spock.lang.Shared
+import groovy.json.JsonSlurper
+import io.restassured.RestAssured
+import static io.restassured.RestAssured.given
+
+/**
+ * Example: Testing Stateful Workflows with CLASS Lifecycle
+ *
+ * This example demonstrates **when and why to use CLASS lifecycle with stateful testing patterns**.
+ *
+ * CONFIGURATION PATTERN (RECOMMENDED):
+ * ====================================
+ * ✅ Configure Docker Compose in build.gradle (dockerTest.composeStacks)
+ * ✅ Use usesCompose() in integrationTest task to pass configuration
+ * ✅ Use zero-parameter @ComposeUp annotation in test class
+ *
+ * WHY THIS PATTERN?
+ * ================
+ * - Single source of truth: All compose config in build.gradle
+ * - No duplication: Configuration defined once, used everywhere
+ * - Gradle integration: Full access to Gradle providers and properties
+ * - Maintainability: Change config in one place, all tests updated
+ *
+ * CLASS LIFECYCLE BEHAVIOR:
+ * =========================
+ * - CLASS lifecycle: Containers start ONCE, all tests share the same containers
+ * - Stateful testing: Tests intentionally build on each other
+ * - State persistence: sessionId carried from test 2 → tests 3, 4, 5
+ * - Workflow testing: Models real user journeys (register → login → update → logout)
+ * - Fast execution: Containers start once instead of 5 times
+ *
+ * CLASS lifecycle means:
+ * - Containers start ONCE before all tests (via @ComposeUp extension)
+ * - All test methods run against the SAME containers
+ * - Containers stop ONCE after all tests complete
+ * - State PERSISTS between test methods
+ *
+ * This example tests a session management API where:
+ * 1. Test 1: Register a new user account (idempotent - handles existing users)
+ * 2. Test 2: Login and get a sessionId
+ * 3. Test 3: Update profile using the sessionId from test 2
+ * 4. Test 4: Get profile data using the sessionId
+ * 5. Test 5: Logout using the sessionId
+ *
+ * WHEN TO USE:
+ * ===========
+ * ✅ Testing workflows where steps depend on each other
+ * ✅ Carrying state (sessionId, authToken) between test methods
+ * ✅ Testing session management or multi-step processes
+ * ✅ Performance matters and complete isolation isn't required
+ *
+ * WHEN NOT TO USE (use METHOD lifecycle instead):
+ * ================================================
+ * ❌ When tests must be completely independent and isolated
+ * ❌ When each test requires a clean database or fresh state
+ * ❌ When testing idempotency (tests must run in any order)
+ * → For these cases, see the isolated-tests example with METHOD lifecycle
+ *
+ * IMPORTANT - Idempotent Test Design:
+ * ===================================
+ * - Test 1 accepts both 200 (new user) and 409 (user exists) responses
+ * - This makes tests repeatable even when containers persist state from previous runs
+ * - This is a best practice for real-world integration testing
+ *
+ * The @ComposeUp annotation has NO parameters - all config comes from build.gradle!
+ *
+ * Copy and adapt this example for your own stateful testing scenarios!
+ */
+@ComposeUp  // No parameters! All configuration comes from build.gradle via usesCompose()
+class StatefulWebAppExampleIT extends Specification {
+
+    @Shared String baseUrl
+
+    // Session state carried across tests
+    static String sessionId
+    @Shared String username = "alice"
+    @Shared String password = "secret123"
+
+    def setupSpec() {
+        // Extension provides COMPOSE_STATE_FILE system property
+        def stateFilePath = System.getProperty('COMPOSE_STATE_FILE')
+        def stateFile = new File(stateFilePath)
+        def stateData = new JsonSlurper().parse(stateFile)
+
+        // Extract the host port for the stateful-web-app service
+        def port = stateData.services['stateful-web-app'].publishedPorts[0].host
+        baseUrl = "http://localhost:${port}"
+
+        println "=== Testing Stateful Web App at ${baseUrl} ==="
+        println "=== Using CLASS lifecycle - state persists across tests ==="
+
+        // Configure RestAssured
+        RestAssured.baseURI = baseUrl
+    }
+
+    // Test 1: Register a new user (idempotent - handles existing users)
+    def "step 1: should register a new user account"() {
+        when: "we register a new user"
+        def response = given()
+            .contentType("application/json")
+            .body("""{"username":"${username}","password":"${password}"}""")
+            .post("/register")
+
+        then: "registration succeeds OR user already exists"
+        response.statusCode() in [200, 409]
+
+        and: "response confirms registration or existing user"
+        if (response.statusCode() == 200) {
+            response.jsonPath().getString("status") == "registered"
+            response.jsonPath().getString("username") == username
+            println "✓ User '${username}' registered successfully"
+        } else {
+            response.jsonPath().getString("error") == "user already exists"
+            println "✓ User '${username}' already exists (from previous run)"
+        }
+    }
+
+    // Test 2: Login and get sessionId
+    def "step 2: should login and receive a session ID"() {
+        when: "we login with valid credentials"
+        def response = given()
+            .contentType("application/json")
+            .body("""{"username":"${username}","password":"${password}"}""")
+            .post("/login")
+
+        // Extract sessionId for subsequent tests
+        sessionId = response.jsonPath().getString("sessionId")
+
+        then: "login succeeds"
+        response.statusCode() == 200
+
+        and: "we receive a session ID"
+        response.jsonPath().getString("status") == "logged_in"
+        sessionId != null
+        response.jsonPath().getString("username") == username
+
+        println "✓ User '${username}' logged in, sessionId: ${sessionId}"
+    }
+
+    // Test 3: Update profile using sessionId from Test 2
+    def "step 3: should update user profile with active session"() {
+        when: "we update profile using the sessionId from login"
+        def response = given()
+            .contentType("application/json")
+            .body("""
+                {
+                    "sessionId":"${sessionId}",
+                    "email":"alice@example.com",
+                    "fullName":"Alice Smith"
+                }
+            """)
+            .put("/profile")
+
+        then: "profile update succeeds"
+        response.statusCode() == 200
+
+        and: "response confirms update"
+        response.jsonPath().getString("status") == "updated"
+        response.jsonPath().getString("username") == username
+
+        println "✓ Profile updated for user '${username}'"
+    }
+
+    // Test 4: Get profile using sessionId
+    def "step 4: should retrieve user profile with active session"() {
+        when: "we get profile using the sessionId"
+        def response = given()
+            .get("/profile/${sessionId}")
+
+        then: "profile retrieval succeeds"
+        response.statusCode() == 200
+
+        and: "profile contains data from previous test"
+        response.jsonPath().getString("username") == username
+        response.jsonPath().getString("email") == "alice@example.com"
+        response.jsonPath().getString("fullName") == "Alice Smith"
+
+        println "✓ Profile retrieved: ${response.jsonPath().prettify()}"
+    }
+
+    // Test 5: Logout
+    def "step 5: should logout and invalidate session"() {
+        when: "we logout using the sessionId"
+        def response = given()
+            .delete("/logout/${sessionId}")
+
+        then: "logout succeeds"
+        response.statusCode() == 200
+
+        and: "response confirms logout"
+        response.jsonPath().getString("status") == "logged_out"
+        response.jsonPath().getString("username") == username
+
+        println "✓ User '${username}' logged out successfully"
+    }
+
+    // Test 6: Verify session is invalidated
+    def "step 6: should reject requests with invalidated session"() {
+        when: "we try to access profile with the logged-out sessionId"
+        def response = given()
+            .get("/profile/${sessionId}")
+
+        then: "request is rejected"
+        response.statusCode() == 401
+
+        and: "error indicates invalid session"
+        response.jsonPath().getString("error") == "invalid or expired session"
+
+        println "✓ Session properly invalidated after logout"
+    }
+
+    // Additional test: Health check
+    def "should respond to health check endpoint"() {
+        when: "we call the /health endpoint"
+        def response = given()
+            .get("/health")
+
+        then: "app is healthy"
+        response.statusCode() == 200
+        response.jsonPath().getString("status") == "UP"
+    }
+}

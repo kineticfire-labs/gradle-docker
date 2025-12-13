@@ -46,7 +46,7 @@ abstract class TestStepSpec {
     }
 
     /**
-     * Reference to the ComposeStackSpec from dockerOrch.composeStacks that should be started
+     * Reference to the ComposeStackSpec from dockerTest.composeStacks that should be started
      */
     abstract Property<ComposeStackSpec> getStack()
 
@@ -118,7 +118,7 @@ abstract class TestStepSpec {
      *     pipelines {
      *         ci {
      *             test {
-     *                 stack = dockerOrch.composeStacks.testStack
+     *                 stack = dockerTest.composeStacks.testStack
      *                 testTaskName = 'integrationTest'
      *                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test method
      *             }

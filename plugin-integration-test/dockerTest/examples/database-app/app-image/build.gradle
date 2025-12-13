@@ -1,0 +1,103 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+// Get JAR file from app subproject using Provider API
+def jarFileProvider = project(':dockerTest:examples:database-app:app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Configure docker DSL
+docker {
+    images {
+        databaseApp {
+            imageName = 'example-database-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareDatabaseAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for database app image'
+                into layout.buildDirectory.dir('docker-context/databaseApp')
+                from('src/main/docker')
+
+                // Copy JAR from app project
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':dockerTest:examples:database-app:app').tasks.named('bootJar')
+            }
+        }
+    }
+}
+
+// Configure dockerTest DSL for Docker Compose orchestration
+dockerTest {
+    composeStacks {
+        databaseAppTest {
+            files.from('src/integrationTest/resources/compose/database-app.yml')
+            projectName = 'example-database-app-test'
+
+            waitForHealthy {
+                waitForServices.set(['app', 'postgres'])
+                timeoutSeconds.set(90)
+                pollSeconds.set(3)
+            }
+        }
+    }
+}
+
+// Plugin automatically creates integrationTest source set
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+
+    integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${project.findProperty('plugin_version')}"
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+    integrationTestImplementation libs.postgresql
+}
+
+// Configure integration test task
+tasks.named('integrationTest') {
+    description = 'Runs database integration tests with PostgreSQL'
+    group = 'verification'
+
+    // RECOMMENDED PATTERN: Use usesCompose() to pass stack configuration
+    usesCompose(stack: "databaseAppTest", lifecycle: "class")
+
+    useJUnitPlatform()
+    outputs.cacheIf { false }
+}
+
+// NORMAL PLUGIN USERS NEED: Ensure compose up waits for image build
+// Note: integrationTest dependencies (composeUp/Down) are now auto-wired by usesCompose()
+afterEvaluate {
+    tasks.named('composeUpDatabaseAppTest') {
+        dependsOn tasks.named('dockerBuildDatabaseApp')
+    }
+}

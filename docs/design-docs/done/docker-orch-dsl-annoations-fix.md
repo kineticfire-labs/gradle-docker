@@ -1,4 +1,4 @@
-# Plan: Fix Configuration Duplication Between dockerOrch DSL and Test Annotations
+# Plan: Fix Configuration Duplication Between dockerTest DSL and Test Annotations
 
 > **Note:** This document references "suite lifecycle" which has since been consolidated into "class lifecycle".
 > There is no separate "suite" lifecycle - it is simply "class" lifecycle managed via Gradle tasks.
@@ -29,9 +29,9 @@
 
 Users must duplicate Docker Compose configuration in **two places**:
 
-1. **build.gradle** (dockerOrch DSL):
+1. **build.gradle** (dockerTest DSL):
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -68,10 +68,10 @@ class WebAppIT extends Specification { }
 ### Root Cause
 
 Test framework extensions (Spock @ComposeUp, JUnit @ExtendWith) were implemented to read configuration
-from **annotations only**, never from the dockerOrch DSL. This diverged from the original design vision.
+from **annotations only**, never from the dockerTest DSL. This diverged from the original design vision.
 
 **Original Design** (from uc-7-proj-dev-compose-orchestration.md):
-- All configuration in build.gradle via dockerOrch DSL
+- All configuration in build.gradle via dockerTest DSL
 - `usesCompose` method wires test tasks to compose stacks
 - Extensions read configuration from system properties set by `usesCompose`
 
@@ -83,7 +83,7 @@ from **annotations only**, never from the dockerOrch DSL. This diverged from the
 
 ## Goal
 
-**Complete the original vision**: Make test framework extensions read configuration from dockerOrch DSL
+**Complete the original vision**: Make test framework extensions read configuration from dockerTest DSL
 via system properties, eliminating the need for duplicate configuration in annotations.
 
 **Single Source of Truth**: All Docker Compose configuration defined once in build.gradle.
@@ -104,7 +104,7 @@ via system properties, eliminating the need for duplicate configuration in annot
 ┌─────────────────────────────────────────────────────────────────────┐
 │ build.gradle (SINGLE SOURCE OF TRUTH)                               │
 │                                                                      │
-│ dockerOrch {                                                         │
+│ dockerTest {                                                         │
 │     composeStacks {                                                  │
 │         webAppTest {                                                 │
 │             files.from('compose.yml')                                │
@@ -122,7 +122,7 @@ via system properties, eliminating the need for duplicate configuration in annot
                               ▼
 ┌─────────────────────────────────────────────────────────────────────┐
 │ TestIntegrationExtension.usesCompose()                              │
-│ - Reads configuration from dockerOrch DSL                           │
+│ - Reads configuration from dockerTest DSL                           │
 │ - Sets comprehensive system properties:                             │
 │   * COMPOSE_STATE_FILE                                              │
 │   * docker.compose.stack                                            │
@@ -207,7 +207,7 @@ via system properties, eliminating the need for duplicate configuration in annot
 ### Both Frameworks Use Identical build.gradle
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('compose.yml')
@@ -239,7 +239,7 @@ tasks.named('integrationTest') {
 - Does NOT pass compose file paths, wait settings, etc.
 
 **Required Changes**:
-1. Read ALL configuration from ComposeStackSpec (from dockerOrch DSL)
+1. Read ALL configuration from ComposeStackSpec (from dockerTest DSL)
 2. Set comprehensive system properties for extensions to consume:
    - `docker.compose.files` - comma-separated list of compose file paths
    - `docker.compose.projectName` - Docker Compose project name
@@ -255,7 +255,7 @@ tasks.named('integrationTest') {
 **Example Implementation**:
 ```groovy
 private void configureClassLifecycle(Test test, String stackName, stackSpec) {
-    // Set system properties from dockerOrch DSL
+    // Set system properties from dockerTest DSL
     test.systemProperty("docker.compose.stack", stackName)
     test.systemProperty("docker.compose.lifecycle", "class")
     test.systemProperty("docker.compose.projectName", stackSpec.projectName.getOrElse(""))
@@ -287,7 +287,7 @@ private void configureClassLifecycle(Test test, String stackName, stackSpec) {
     // State file path
     test.systemProperty("COMPOSE_STATE_FILE", composeStateFileFor(stackName).get())
 
-    logger.info("Test '{}' configured for CLASS lifecycle from dockerOrch DSL", test.name)
+    logger.info("Test '{}' configured for CLASS lifecycle from dockerTest DSL", test.name)
 }
 ```
 
@@ -298,12 +298,12 @@ private void configureClassLifecycle(Test test, String stackName, stackSpec) {
 - Test with paths containing: spaces, commas, special characters
 
 **Error Handling**:
-- If stackName not found in dockerOrch.composeStacks:
+- If stackName not found in dockerTest.composeStacks:
   ```groovy
   throw new IllegalArgumentException(
-      "Compose stack '${stackName}' not found in dockerOrch configuration. " +
-      "Available stacks: ${dockerOrchExt.composeStacks*.name}. " +
-      "Check dockerOrch { composeStacks { ... } } in build.gradle."
+      "Compose stack '${stackName}' not found in dockerTest configuration. " +
+      "Available stacks: ${dockerTestExt.composeStacks*.name}. " +
+      "Check dockerTest { composeStacks { ... } } in build.gradle."
   )
   ```
 
@@ -562,16 +562,16 @@ This means:
 #### Task 3.1: Update web-app Example to Use usesCompose
 
 **Files**:
-- `plugin-integration-test/dockerOrch/examples/web-app/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/WebAppExampleIT.groovy`
+- `plugin-integration-test/dockerTest/examples/web-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/WebAppExampleIT.groovy`
 
-**Current State**: Has BOTH dockerOrch DSL and @ComposeUp annotation (duplication)
+**Current State**: Has BOTH dockerTest DSL and @ComposeUp annotation (duplication)
 
 **Required Changes**:
 
 **build.gradle** - Add usesCompose:
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -608,8 +608,8 @@ class WebAppExampleIT extends Specification {
 #### Task 3.2: Update stateful-web-app Example
 
 **Files**:
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy`
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy`
 
 **Apply same pattern as web-app example.**
 
@@ -621,15 +621,15 @@ class WebAppExampleIT extends Specification {
 #### Task 3.3: Update isolated-tests Example
 
 **Files**:
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
 
-**Current State**: Has @ComposeUp annotation ONLY, no dockerOrch DSL
+**Current State**: Has @ComposeUp annotation ONLY, no dockerTest DSL
 
-**Required Changes**: Add dockerOrch DSL, use usesCompose, simplify annotation
+**Required Changes**: Add dockerTest DSL, use usesCompose, simplify annotation
 
 **Acceptance Criteria**:
-- [ ] dockerOrch DSL added
+- [ ] dockerTest DSL added
 - [ ] usesCompose configured
 - [ ] @ComposeUp annotation has NO parameters
 - [ ] Integration test passes
@@ -637,8 +637,8 @@ class WebAppExampleIT extends Specification {
 #### Task 3.4: Update database-app Example
 
 **Files**:
-- `plugin-integration-test/dockerOrch/examples/database-app/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/database-app/app-image/src/integrationTest/groovy/com/kineticfire/test/DatabaseAppExampleIT.groovy`
+- `plugin-integration-test/dockerTest/examples/database-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/database-app/app-image/src/integrationTest/groovy/com/kineticfire/test/DatabaseAppExampleIT.groovy`
 
 **Apply same pattern.**
 
@@ -650,9 +650,9 @@ class WebAppExampleIT extends Specification {
 #### Task 3.5: Verify JUnit 5 Examples
 
 **Files**:
-- `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5ClassIT.java`
-- `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5MethodIT.java`
+- `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5ClassIT.java`
+- `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5MethodIT.java`
 - Any other JUnit 5 example files
 
 **Current State**: JUnit 5 examples already use parameter-less extensions (`@ExtendWith`)
@@ -672,7 +672,7 @@ class WebAppExampleIT extends Specification {
 
 #### Task 3.6: Update Main Examples README
 
-**File**: `plugin-integration-test/dockerOrch/examples/README.md`
+**File**: `plugin-integration-test/dockerTest/examples/README.md`
 
 **Current State**: Main examples README may not clearly explain the usesCompose pattern or framework comparison
 
@@ -726,7 +726,7 @@ class WebAppExampleIT extends Specification {
 ```markdown
 ### Choosing a Test Framework: Java/JUnit 5 vs Groovy/Spock
 
-The dockerOrch plugin supports both Java with JUnit 5 and Groovy with Spock for integration testing.
+The dockerTest plugin supports both Java with JUnit 5 and Groovy with Spock for integration testing.
 Both frameworks use **identical build.gradle configuration** but differ in test code syntax.
 
 #### Framework Comparison
@@ -809,7 +809,7 @@ class WebAppIT {
 **Regardless of framework choice**, all configuration goes in build.gradle:
 
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -835,7 +835,7 @@ and use `usesCompose` to wire test tasks:
 
 **build.gradle:**
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -888,7 +888,7 @@ class WebAppIT extends Specification { }
 ```
 
 **Configuration Priority:**
-1. System properties (set by `usesCompose` from dockerOrch DSL) - HIGHEST
+1. System properties (set by `usesCompose` from dockerTest DSL) - HIGHEST
 2. Annotation parameters - FALLBACK
 3. Error if neither is specified - FAIL FAST
 
@@ -938,7 +938,7 @@ configure in test code.
    - [ ] Compose file paths serialized correctly
    - [ ] Edge case: File paths with spaces
    - [ ] Edge case: Service names with special characters
-   - [ ] Error handling: Stack name not found in dockerOrch.composeStacks
+   - [ ] Error handling: Stack name not found in dockerTest.composeStacks
    - [ ] Error handling: Clear error message lists available stacks
 
 2. **DockerComposeSpockExtension**:
@@ -1011,7 +1011,7 @@ configure in test code.
 
 5. **Error Cases**:
    - [ ] Clear error when no configuration provided (neither DSL nor annotation)
-   - [ ] Clear error when stack name not found in dockerOrch.composeStacks
+   - [ ] Clear error when stack name not found in dockerTest.composeStacks
    - [ ] Error message lists available stack names
    - [ ] Clear error when required compose files not specified
 
@@ -1082,27 +1082,27 @@ configure in test code.
 8. `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/TestExtensionFunctionalTest.groovy`
 
 ### Integration Test Examples - Spock
-9. `plugin-integration-test/dockerOrch/examples/web-app/app-image/build.gradle`
-10. `plugin-integration-test/dockerOrch/examples/web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/WebAppExampleIT.groovy`
-11. `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/build.gradle`
-12. `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy`
-13. `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle`
-14. `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
-15. `plugin-integration-test/dockerOrch/examples/database-app/app-image/build.gradle`
-16. `plugin-integration-test/dockerOrch/examples/database-app/app-image/src/integrationTest/groovy/com/kineticfire/test/DatabaseAppExampleIT.groovy`
+9. `plugin-integration-test/dockerTest/examples/web-app/app-image/build.gradle`
+10. `plugin-integration-test/dockerTest/examples/web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/WebAppExampleIT.groovy`
+11. `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/build.gradle`
+12. `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy`
+13. `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle`
+14. `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
+15. `plugin-integration-test/dockerTest/examples/database-app/app-image/build.gradle`
+16. `plugin-integration-test/dockerTest/examples/database-app/app-image/src/integrationTest/groovy/com/kineticfire/test/DatabaseAppExampleIT.groovy`
 
 ### Integration Test Examples - JUnit 5
-17. `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/build.gradle` (verify only)
-18. `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5ClassIT.java` (verify only)
-19. `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5MethodIT.java` (verify only)
+17. `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/build.gradle` (verify only)
+18. `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5ClassIT.java` (verify only)
+19. `plugin-integration-test/dockerTest/examples/isolated-tests-junit/app-image/src/integrationTest/java/com/kineticfire/test/IsolatedTestsJUnit5MethodIT.java` (verify only)
 
 ### Example Documentation
-20. `plugin-integration-test/dockerOrch/examples/README.md` (add framework comparison)
-21. `plugin-integration-test/dockerOrch/examples/web-app/README.md`
-22. `plugin-integration-test/dockerOrch/examples/stateful-web-app/README.md`
-23. `plugin-integration-test/dockerOrch/examples/isolated-tests/README.md`
-24. `plugin-integration-test/dockerOrch/examples/database-app/README.md`
-25. `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/README.md` (verify and update if needed)
+20. `plugin-integration-test/dockerTest/examples/README.md` (add framework comparison)
+21. `plugin-integration-test/dockerTest/examples/web-app/README.md`
+22. `plugin-integration-test/dockerTest/examples/stateful-web-app/README.md`
+23. `plugin-integration-test/dockerTest/examples/isolated-tests/README.md`
+24. `plugin-integration-test/dockerTest/examples/database-app/README.md`
+25. `plugin-integration-test/dockerTest/examples/isolated-tests-junit/README.md` (verify and update if needed)
 
 ### Usage Documentation
 26. `docs/usage/usage-docker-orch.md`
@@ -1113,7 +1113,7 @@ configure in test code.
 ### Functional Requirements
 
 **Configuration in build.gradle**:
-- [ ] All Docker Compose configuration can be defined in build.gradle via dockerOrch DSL
+- [ ] All Docker Compose configuration can be defined in build.gradle via dockerTest DSL
   - [ ] Compose file paths (single or multiple)
   - [ ] Project name
   - [ ] Wait for healthy settings (services, timeout, poll interval)
@@ -1158,7 +1158,7 @@ configure in test code.
 - [ ] Fallback to annotation parameters when system properties not set (backward compatibility)
 
 **Error Handling**:
-- [ ] Clear error message when stack name not found in dockerOrch.composeStacks
+- [ ] Clear error message when stack name not found in dockerTest.composeStacks
 - [ ] Error message lists available stack names
 - [ ] Clear error message when required configuration missing from both sources
 - [ ] Clear error message when compose files not specified
@@ -1208,7 +1208,7 @@ configure in test code.
 
 ```groovy
 // build.gradle
-dockerOrch {
+dockerTest {
     composeStacks {
         myApp { files.from('compose.yml') }
     }
@@ -1228,7 +1228,7 @@ class MyAppIT extends Specification { }
 
 ```groovy
 // build.gradle - ALL configuration here
-dockerOrch {
+dockerTest {
     composeStacks {
         myApp {
             files.from('compose.yml')
@@ -1251,7 +1251,7 @@ class MyAppIT extends Specification { }
 
 ### Migration Steps
 
-1. Move all configuration from @ComposeUp annotation to dockerOrch DSL in build.gradle
+1. Move all configuration from @ComposeUp annotation to dockerTest DSL in build.gradle
 2. Add `usesCompose stack: "stackName", lifecycle: "class"` to test task
 3. Remove ALL parameters from @ComposeUp annotation (leave just `@ComposeUp`)
 4. Verify tests still pass
@@ -1395,7 +1395,7 @@ Expected:
 **User Migration Path** (optional, not required):
 1. Users can keep using annotation-only configuration (works forever)
 2. Users can migrate incrementally:
-   - Add dockerOrch DSL in build.gradle
+   - Add dockerTest DSL in build.gradle
    - Add usesCompose to test task
    - Remove annotation parameters one-by-one
    - Verify tests pass after each change

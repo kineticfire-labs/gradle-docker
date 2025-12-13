@@ -17,7 +17,7 @@
 package com.kineticfire.gradle.docker.workflow.validation
 
 import com.kineticfire.gradle.docker.extension.DockerExtension
-import com.kineticfire.gradle.docker.extension.DockerOrchExtension
+import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
@@ -32,7 +32,7 @@ import org.gradle.api.tasks.testing.Test
 /**
  * Validator for pipeline specifications
  *
- * Validates cross-DSL references between dockerWorkflows, docker, and dockerOrch DSLs.
+ * Validates cross-DSL references between dockerWorkflows, docker, and dockerTest DSLs.
  * Ensures that referenced images, compose stacks, and test tasks exist.
  */
 class PipelineValidator {
@@ -41,12 +41,12 @@ class PipelineValidator {
 
     private final Project project
     private final DockerExtension dockerExtension
-    private final DockerOrchExtension dockerOrchExtension
+    private final DockerTestExtension dockerTestExtension
 
-    PipelineValidator(Project project, DockerExtension dockerExtension, DockerOrchExtension dockerOrchExtension) {
+    PipelineValidator(Project project, DockerExtension dockerExtension, DockerTestExtension dockerTestExtension) {
         this.project = project
         this.dockerExtension = dockerExtension
-        this.dockerOrchExtension = dockerOrchExtension
+        this.dockerTestExtension = dockerTestExtension
     }
 
     /**
@@ -160,7 +160,7 @@ class PipelineValidator {
     }
 
     /**
-     * Validate that the referenced compose stack exists in dockerOrch.composeStacks
+     * Validate that the referenced compose stack exists in dockerTest.composeStacks
      *
      * When delegateStackManagement is true and stack is also set, logs a warning since
      * the stack property will be ignored (lifecycle managed by testIntegration).
@@ -192,22 +192,22 @@ class PipelineValidator {
             return
         }
 
-        if (dockerOrchExtension == null) {
+        if (dockerTestExtension == null) {
             throw new GradleException(
                 "Pipeline '${pipelineName}' references compose stack '${stackName}', " +
-                "but dockerOrch extension is not available. " +
+                "but dockerTest extension is not available. " +
                 "Ensure the plugin is applied correctly."
             )
         }
 
-        def foundStack = dockerOrchExtension.composeStacks.findByName(stackName)
+        def foundStack = dockerTestExtension.composeStacks.findByName(stackName)
         if (foundStack == null) {
-            def availableStacks = dockerOrchExtension.composeStacks.names.join(', ')
+            def availableStacks = dockerTestExtension.composeStacks.names.join(', ')
             throw new GradleException(
                 "Pipeline '${pipelineName}' references compose stack '${stackName}', " +
-                "but no such stack is defined in dockerOrch.composeStacks. " +
+                "but no such stack is defined in dockerTest.composeStacks. " +
                 "Available stacks: [${availableStacks}]\n" +
-                "Suggestion: Add the stack to dockerOrch.composeStacks { ${stackName} { ... } }"
+                "Suggestion: Add the stack to dockerTest.composeStacks { ${stackName} { ... } }"
             )
         }
 
@@ -261,7 +261,7 @@ class PipelineValidator {
             throw new GradleException(
                 "Pipeline '${pipelineSpec.name}' has lifecycle=METHOD but no stack is configured. " +
                 "Method lifecycle requires a stack to configure compose settings.\n" +
-                "Add: stack = dockerOrch.composeStacks.<yourStack>"
+                "Add: stack = dockerTest.composeStacks.<yourStack>"
             )
         }
 

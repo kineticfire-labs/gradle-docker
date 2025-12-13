@@ -251,7 +251,7 @@ class BuildStepSpec {
 
 // Test step configuration
 class TestStepSpec {
-    Property<ComposeStackSpec> stack  // Reference to dockerOrch.composeStacks.*
+    Property<ComposeStackSpec> stack  // Reference to dockerTest.composeStacks.*
     Property<Task> testTask  // Reference to test task
     Property<Integer> timeoutMinutes
     Property<Integer> retryOnFailure
@@ -273,7 +273,7 @@ class SuccessStepSpec {
 
 **Complexity factors:**
 - Multiple nested DSL levels (pipelines → steps → operations)
-- Cross-references to existing DSLs (docker.images, dockerOrch.composeStacks)
+- Cross-references to existing DSLs (docker.images, dockerTest.composeStacks)
 - Provider API throughout for Gradle 9/10 compatibility
 
 **Decomposition strategy:**
@@ -281,7 +281,7 @@ class SuccessStepSpec {
 2. **Add DSL parsing** - Configure specs from user input (200 LOC)
 3. **Add validation** - Ensure references are valid (150 LOC)
 4. **Add hooks** - beforeBuild, afterTest, etc. (100 LOC)
-5. **Wire to existing DSLs** - Connect to docker/dockerOrch (250 LOC)
+5. **Wire to existing DSLs** - Connect to docker/dockerTest (250 LOC)
 
 **Testing strategy:**
 - Unit tests for each spec class (50 tests, ~1000 LOC)
@@ -491,7 +491,7 @@ class GradleDockerPlugin {
 
         // Register workflow task creation rules
         project.afterEvaluate {
-            registerWorkflowTasks(project, workflowExt, dockerExt, dockerOrchExt)
+            registerWorkflowTasks(project, workflowExt, dockerExt, dockerTestExt)
         }
     }
 
@@ -499,7 +499,7 @@ class GradleDockerPlugin {
         Project project,
         DockerWorkflowsExtension workflowExt,
         DockerExtension dockerExt,
-        DockerOrchExtension dockerOrchExt
+        DockerTestExtension dockerTestExt
     ) {
         workflowExt.pipelines.all { pipelineSpec ->
             def pipelineName = pipelineSpec.name
@@ -507,7 +507,7 @@ class GradleDockerPlugin {
 
             // Register master pipeline task
             project.tasks.register("run${capitalizedName}", PipelineRunTask) { task ->
-                configurePipelineTask(task, pipelineSpec, dockerExt, dockerOrchExt)
+                configurePipelineTask(task, pipelineSpec, dockerExt, dockerTestExt)
             }
 
             // Register step tasks (for manual invocation)
@@ -533,7 +533,7 @@ class GradleDockerPlugin {
 **Decomposition strategy:**
 1. **Extension registration** - Create dockerWorkflows (100 LOC)
 2. **Task registration** - Create workflow tasks (150 LOC)
-3. **Cross-DSL wiring** - Connect to docker/dockerOrch (100 LOC)
+3. **Cross-DSL wiring** - Connect to docker/dockerTest (100 LOC)
 4. **Validation** - Ensure valid references (50 LOC)
 
 **Testing strategy:**
@@ -570,7 +570,7 @@ class GradleDockerPlugin {
 
 #### Phase 3: Test Step (Week 3)
 - TestStepSpec implementation
-- Reference dockerOrch.composeStacks
+- Reference dockerTest.composeStacks
 - Invoke compose + test tasks
 - Capture test results
 
@@ -1006,7 +1006,7 @@ def "complete workflow with passing tests"() {
         dockerWorkflows {
             testPipeline {
                 build { image = docker.images.myApp }
-                test { stack = dockerOrch.composeStacks.myTest }
+                test { stack = dockerTest.composeStacks.myTest }
                 onTestSuccess {
                     additionalTags = ['stable']
                     save { compression.set(GZIP) }
@@ -1125,7 +1125,7 @@ Docker / Docker Compose (execution)
 
 **Phase 3 (Week 3): Test Step**
 - Implement TestStepSpec
-- Wire to dockerOrch.composeStacks
+- Wire to dockerTest.composeStacks
 - Capture test results
 
 **Phase 4 (Week 4): Conditional Execution**

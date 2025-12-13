@@ -200,8 +200,8 @@ gaps in test framework integration packages that are **not yet documented**:
 - State management uses simple data classes (testable)
 
 **Integration Test Coverage:**
-- Test: `plugin-integration-test/dockerOrch/examples/web-app-junit/` - CLASS lifecycle
-- Test: `plugin-integration-test/dockerOrch/examples/isolated-tests-junit/` - CLASS and METHOD lifecycle
+- Test: `plugin-integration-test/dockerTest/examples/web-app-junit/` - CLASS lifecycle
+- Test: `plugin-integration-test/dockerTest/examples/isolated-tests-junit/` - CLASS and METHOD lifecycle
 - Tests verify full extension lifecycle: containers start, tests execute, containers stop
 - Tests verify state file generation and port mapping
 
@@ -260,7 +260,7 @@ gaps in test framework integration packages that are **not yet documented**:
 - State management uses serializable data classes (testable)
 
 **Integration Test Coverage:**
-- All Spock integration tests in `plugin-integration-test/dockerOrch/examples/`
+- All Spock integration tests in `plugin-integration-test/dockerTest/examples/`
 - Tests: `web-app`, `stateful-web-app`, `isolated-tests`, `database-app`
 - Tests verify full annotation processing and container lifecycle
 - Tests verify both CLASS and METHOD lifecycle modes
@@ -330,7 +330,7 @@ gaps in test framework integration packages that are **not yet documented**:
 ```markdown
 - **2025-11-21**: Added JUnit 5 and Spock extension gap documentation. Updated summary statistics
   to include test framework integration (~350 lines). Total documented gaps now ~740 lines.
-  All gaps covered by integration tests in `plugin-integration-test/dockerOrch/`.
+  All gaps covered by integration tests in `plugin-integration-test/dockerTest/`.
 ```
 
 ---

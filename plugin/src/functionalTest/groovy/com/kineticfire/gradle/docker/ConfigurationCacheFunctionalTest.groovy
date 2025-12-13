@@ -234,7 +234,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     webapp {
                         composeFiles('docker-compose.yml')
@@ -523,7 +523,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     multiFile {
                         composeFiles('docker-compose.yml', 'docker-compose.override.yml')
@@ -702,7 +702,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     stack1 {
                         composeFiles('compose1.yml')
@@ -784,7 +784,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     integration {
                         composeFiles('docker-compose.yml')
@@ -942,7 +942,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 }
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     integrationTest {
                         composeFiles('docker-compose.yml')
@@ -996,7 +996,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testDb {
                         composeFiles('docker-compose.yml')

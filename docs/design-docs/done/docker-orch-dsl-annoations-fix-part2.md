@@ -10,7 +10,7 @@
 
 ## Purpose
 
-This document tracks the continuation of the plan to fix configuration duplication between dockerOrch DSL and test
+This document tracks the continuation of the plan to fix configuration duplication between dockerTest DSL and test
 annotations. This is Part 2, documenting progress made on 2025-11-19 and remaining work.
 
 ---
@@ -21,10 +21,10 @@ annotations. This is Part 2, documenting progress made on 2025-11-19 and remaini
 
 #### ✅ Task 3.3: Updated isolated-tests Example (Spock)
 **Files Modified:**
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle`
-  - Added `dockerOrch` DSL configuration with `isolatedTestsTest` stack
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle`
+  - Added `dockerTest` DSL configuration with `isolatedTestsTest` stack
   - Added `usesCompose(stack: "isolatedTestsTest", lifecycle: "method")` to integrationTest task
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
   - Removed all parameters from `@ComposeUp` annotation (now just `@ComposeUp`)
   - Removed unused `LifecycleMode` import
   - Updated documentation to explain all config comes from build.gradle
@@ -37,15 +37,15 @@ annotations. This is Part 2, documenting progress made on 2025-11-19 and remaini
 
 #### ✅ Fixed Verification Test: lifecycle-class
 **Files Modified:**
-- `plugin-integration-test/dockerOrch/verification/lifecycle-class/app-image/build.gradle`
-  - Added `dockerOrch` DSL configuration with `lifecycleClassTest` stack
+- `plugin-integration-test/dockerTest/verification/lifecycle-class/app-image/build.gradle`
+  - Added `dockerTest` DSL configuration with `lifecycleClassTest` stack
   - Added `usesCompose(stack: "lifecycleClassTest", lifecycle: "class")` to integrationTest task
-- `plugin-integration-test/dockerOrch/verification/lifecycle-class/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleClassIT.groovy`
+- `plugin-integration-test/dockerTest/verification/lifecycle-class/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleClassIT.groovy`
   - Removed unused `LifecycleMode` import
   - Updated documentation
 
 **Issue Found**: Test was failing with `IllegalArgumentException` because `@ComposeUp` had no parameters but build.gradle
-had no `dockerOrch` DSL configuration and no `usesCompose()` call.
+had no `dockerTest` DSL configuration and no `usesCompose()` call.
 
 **Result**: ✅ Test passes
 
@@ -53,10 +53,10 @@ had no `dockerOrch` DSL configuration and no `usesCompose()` call.
 
 #### ✅ Fixed Verification Test: lifecycle-method
 **Files Modified:**
-- `plugin-integration-test/dockerOrch/verification/lifecycle-method/app-image/build.gradle`
-  - Added `dockerOrch` DSL configuration with `lifecycleMethodTest` stack
+- `plugin-integration-test/dockerTest/verification/lifecycle-method/app-image/build.gradle`
+  - Added `dockerTest` DSL configuration with `lifecycleMethodTest` stack
   - Added `usesCompose(stack: "lifecycleMethodTest", lifecycle: "method")` to integrationTest task
-- `plugin-integration-test/dockerOrch/verification/lifecycle-method/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleMethodIT.groovy`
+- `plugin-integration-test/dockerTest/verification/lifecycle-method/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleMethodIT.groovy`
   - Removed unused `LifecycleMode` import
   - Updated documentation
 
@@ -243,7 +243,7 @@ Update in this order (by complexity):
 3. **database-app** (CLASS lifecycle, multi-service with postgres)
 
 Each needs:
-- Add `dockerOrch.composeStacks { ... }` configuration
+- Add `dockerTest.composeStacks { ... }` configuration
 - Add `usesCompose(stack: "...", lifecycle: "class")` to integrationTest task
 - Remove all parameters from `@ComposeUp` annotation
 - Remove unused `LifecycleMode` import
@@ -259,7 +259,7 @@ Check all JUnit 5 examples:
 - Any others
 
 Verify each has:
-- `dockerOrch.composeStacks { ... }` configuration in build.gradle
+- `dockerTest.composeStacks { ... }` configuration in build.gradle
 - `usesCompose(stack: "...", lifecycle: "...")` in integrationTest task
 - Parameter-less `@ExtendWith(DockerComposeClassExtension.class)` or `@ExtendWith(DockerComposeMethodExtension.class)`
 - All tests pass
@@ -302,7 +302,7 @@ After all examples work, update documentation:
 Before declaring plan complete, verify ALL acceptance criteria (lines 1108-1201):
 
 **Functional Requirements:**
-- [ ] All Docker Compose configuration can be defined in build.gradle via dockerOrch DSL
+- [ ] All Docker Compose configuration can be defined in build.gradle via dockerTest DSL
 - [ ] usesCompose method works for CLASS and METHOD lifecycles
 - [ ] All @ComposeUp annotation parameters are optional (can use zero parameters)
 - [ ] JUnit 5 @ExtendWith annotations remain parameter-less
@@ -355,10 +355,10 @@ docker ps -a > containers-after-tests.txt
 
 #### Step 2: Fix Spock Examples (2-3 hours)
 **For each of: web-app, stateful-web-app, database-app**
-1. Add `dockerOrch` DSL configuration
+1. Add `dockerTest` DSL configuration
 2. Add `usesCompose()` to integrationTest task
 3. Update test file (remove annotation parameters, update comments)
-4. Run test to verify: `./gradlew -Pplugin_version=1.0.0 :dockerOrch:examples:<name>:app-image:integrationTest`
+4. Run test to verify: `./gradlew -Pplugin_version=1.0.0 :dockerTest:examples:<name>:app-image:integrationTest`
 5. Verify no containers remain: `docker ps -a`
 
 **Estimated time**: 30-45 minutes per example
@@ -392,7 +392,7 @@ docker ps -a > containers-after-tests.txt
    - Add framework comparison section
    - Update all examples to show usesCompose
    - Document backward compatibility
-2. Update `plugin-integration-test/dockerOrch/examples/README.md`
+2. Update `plugin-integration-test/dockerTest/examples/README.md`
 3. Update individual example READMEs (4-6 files)
 4. Update design documents
 
@@ -464,8 +464,8 @@ docker ps -a > containers-after-tests.txt
 
 ### Key Files Modified:
 - `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/ComposeDownTask.groovy` - @UntrackedTask fix
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/build.gradle` - usesCompose
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy` - zero-param @ComposeUp
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/build.gradle` - usesCompose
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/src/integrationTest/groovy/com/kineticfire/test/StatefulWebAppExampleIT.groovy` - zero-param @ComposeUp
 - `docs/usage/usage-docker-orch.md` - comprehensive updates
 - `docs/design-docs/requirements/use-cases/uc-7-proj-dev-compose-orchestration.md` - implementation status
 
@@ -490,7 +490,7 @@ The following pattern has been successfully applied to fix failing tests:
 
 **Before (fails with IllegalArgumentException):**
 ```groovy
-// build.gradle - NO dockerOrch DSL
+// build.gradle - NO dockerTest DSL
 tasks.named('integrationTest') {
     // NO usesCompose call
 }
@@ -502,8 +502,8 @@ class MyTest extends Specification { }
 
 **After (passes):**
 ```groovy
-// build.gradle - ADD dockerOrch DSL
-dockerOrch {
+// build.gradle - ADD dockerTest DSL
+dockerTest {
     composeStacks {
         myTestStack {
             files.from('src/integrationTest/resources/compose/my-test.yml')
@@ -533,12 +533,12 @@ This pattern should be applied to all remaining examples and tests.
 
 ## Files Modified in This Session
 
-1. `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle`
-2. `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
-3. `plugin-integration-test/dockerOrch/verification/lifecycle-class/app-image/build.gradle`
-4. `plugin-integration-test/dockerOrch/verification/lifecycle-class/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleClassIT.groovy`
-5. `plugin-integration-test/dockerOrch/verification/lifecycle-method/app-image/build.gradle`
-6. `plugin-integration-test/dockerOrch/verification/lifecycle-method/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleMethodIT.groovy`
+1. `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle`
+2. `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/src/integrationTest/groovy/com/kineticfire/test/IsolatedTestsExampleIT.groovy`
+3. `plugin-integration-test/dockerTest/verification/lifecycle-class/app-image/build.gradle`
+4. `plugin-integration-test/dockerTest/verification/lifecycle-class/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleClassIT.groovy`
+5. `plugin-integration-test/dockerTest/verification/lifecycle-method/app-image/build.gradle`
+6. `plugin-integration-test/dockerTest/verification/lifecycle-method/app-image/src/integrationTest/groovy/com/kineticfire/test/LifecycleMethodIT.groovy`
 
 ---
 

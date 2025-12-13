@@ -26,7 +26,7 @@ import java.nio.file.Path
  * Functional tests for the dockerProject simplified DSL using Gradle TestKit.
  *
  * These tests verify that the dockerProject DSL is properly parsed and translated
- * into the underlying docker, dockerOrch, and dockerWorkflows configurations.
+ * into the underlying docker, dockerTest, and dockerWorkflows configurations.
  */
 class DockerProjectFunctionalTest extends Specification {
 

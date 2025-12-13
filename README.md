@@ -20,7 +20,7 @@ todo
 See ??? for `docker` DSL to build a new image or reference a previously built image then optionally tag, save, and 
 publish an image.
 
-See ??? for `dockerOrch` DSL to test an image.
+See ??? for `dockerTest` DSL to test an image.
 
 ## Installation
 

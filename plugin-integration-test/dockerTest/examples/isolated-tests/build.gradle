@@ -1,0 +1,89 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Integration test that tests:
+ *   - Build app JAR with Spring Boot
+ *   - Build Docker image from JAR
+ *   - Start container with composeUp
+ *   - Wait for HEALTHY status
+ *   - Run integration tests against live container
+ *   - Generate and consume state file
+ *   - Clean up with composeDown
+ */
+
+// ============================================================================
+// NOTE: NORMAL PLUGIN USERS DO NOT NEED THIS FILE
+// ============================================================================
+// This is a test infrastructure coordinator that aggregates multi-project test scenarios.
+// Normal plugin users would work in a single project or organize their multi-project
+// builds using standard Gradle patterns. See the app-image/build.gradle for the actual
+// plugin usage example that users need.
+// ============================================================================
+
+// Scenario 1 aggregator - coordinates app and app-image subprojects
+
+plugins {
+    id 'base'
+}
+
+// ========================================
+// Safety Check: Ensure run from top-level
+// ========================================
+if (rootProject.name != 'plugin-integration-test') {
+    tasks.register('integrationTest') {
+        description = 'Integration test must be run from top-level directory'
+        group = 'verification'
+        doFirst {
+            throw new GradleException("""
+❌ DockerOrch isolated-tests integration test must be run from the top-level directory.
+
+✅ SOLUTION:
+   cd ${file('../..').canonicalPath}
+   ./gradlew dockerTest:examples:isolated-tests:integrationTest
+
+ℹ️  This ensures access to the shared buildSrc functionality.
+""")
+        }
+    }
+    return
+}
+
+// ========================================
+// Task: integrationTest
+// Run this example's integration test
+// ========================================
+tasks.register('integrationTest') {
+    group = 'verification'
+    description = 'Run isolated-tests integration test'
+
+    // Depends on the full workflow in app-image
+    dependsOn ':dockerTest:examples:isolated-tests:app-image:integrationTest'
+
+    doLast {
+        logger.lifecycle("✅ Isolated-tests integration test complete")
+    }
+}
+
+// ========================================
+// Task: clean
+// Clean this example
+// (Note: 'clean' task provided by 'base' plugin)
+// ========================================
+tasks.named('clean') {
+    dependsOn ':dockerTest:examples:isolated-tests:app:clean'
+    dependsOn ':dockerTest:examples:isolated-tests:app-image:clean'
+}

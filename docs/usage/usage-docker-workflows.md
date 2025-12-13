@@ -35,7 +35,7 @@ building, testing, and conditional post-test actions.
 The `dockerWorkflows` DSL provides a high-level abstraction for defining CI/CD pipelines that:
 
 1. **Build** Docker images using the `docker` DSL
-2. **Test** images using Docker Compose stacks from the `dockerOrch` DSL
+2. **Test** images using Docker Compose stacks from the `dockerTest` DSL
 3. **Conditionally execute actions** based on test results (e.g., tag or publish on success)
 
 A typical workflow follows this pattern:
@@ -48,7 +48,7 @@ build → test → (on success) tag/publish
 - Single pipeline definition orchestrates multiple Gradle tasks
 - Conditional tagging: apply tags only when tests pass
 - Conditional publishing: push images only when tests pass
-- Integrates with `docker`, `dockerOrch`, and `testIntegration` DSLs
+- Integrates with `docker`, `dockerTest`, and `testIntegration` DSLs
 
 ---
 
@@ -58,7 +58,7 @@ Use `dockerWorkflows` when you need:
 
 | Use Case | Recommendation |
 |----------|----------------|
-| Simple integration testing | Use `dockerOrch` directly with `testIntegration` |
+| Simple integration testing | Use `dockerTest` directly with `testIntegration` |
 | Conditional tag on test success | ✅ Use `dockerWorkflows` |
 | Conditional publish on test success | ✅ Use `dockerWorkflows` |
 | Method-level container lifecycle | ✅ Use `dockerWorkflows` with `lifecycle = METHOD` |
@@ -91,7 +91,7 @@ docker {
 }
 
 // Define the compose stack for testing
-dockerOrch {
+dockerTest {
     composeStacks {
         appTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -116,7 +116,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
 
@@ -188,7 +188,7 @@ The `test` step configures testing:
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
 
 test {
-    stack = dockerOrch.composeStacks.appTest  // Compose stack
+    stack = dockerTest.composeStacks.appTest  // Compose stack
     testTaskName = 'integrationTest'          // Name of the test task to run
     lifecycle = WorkflowLifecycle.CLASS       // Container lifecycle (default: CLASS)
     delegateStackManagement = false           // Default: false
@@ -246,7 +246,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.CLASS  // Default - can be omitted
             }
@@ -289,7 +289,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test
             }
@@ -419,7 +419,7 @@ docker {
 }
 
 // 2. Define the compose stack
-dockerOrch {
+dockerTest {
     composeStacks {
         appTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -498,7 +498,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
 
@@ -566,7 +566,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
 
@@ -594,7 +594,7 @@ dockerWorkflows {
             }
 
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
                 lifecycle = WorkflowLifecycle.METHOD  // Fresh containers per test
             }

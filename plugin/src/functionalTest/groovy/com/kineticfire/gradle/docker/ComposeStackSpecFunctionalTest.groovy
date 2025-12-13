@@ -97,7 +97,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     webapp {
                         composeFiles('docker-compose.yml', 'docker-compose.override.yml')
@@ -147,7 +147,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     fullstack {
                         composeFiles = ['base.yml', 'services.yml']
@@ -196,7 +196,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     networked {
                         composeFiles(file('network.yml'), file('service.yml'))
@@ -244,7 +244,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     combined {
                         composeFiles('main.yml', 'extra.yml')
@@ -295,7 +295,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     webdb {
                         composeFiles('web.yml', 'db.yml')
@@ -336,7 +336,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     partial {
                         composeFiles('exists.yml', 'missing.yml')
@@ -375,7 +375,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     legacy {
                         composeFile = file('docker-compose.yml')
@@ -432,7 +432,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     singleStack {
                         composeFile = file('simple.yml')
@@ -489,7 +489,7 @@ class ComposeStackSpecFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     migrated {
                         // Migration: was composeFile = 'base.yml'

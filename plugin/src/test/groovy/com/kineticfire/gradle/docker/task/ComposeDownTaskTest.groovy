@@ -421,7 +421,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/test.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -466,7 +466,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/web-only.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -511,7 +511,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/follow.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -553,7 +553,7 @@ class ComposeDownTaskTest extends Specification {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
 
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -593,7 +593,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/error.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -631,7 +631,7 @@ class ComposeDownTaskTest extends Specification {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
 
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -653,9 +653,9 @@ class ComposeDownTaskTest extends Specification {
         noExceptionThrown()
     }
 
-    def "composeDown does not capture logs when dockerOrch extension not found"() {
+    def "composeDown does not capture logs when dockerTest extension not found"() {
         given:
-        // No GradleDockerPlugin applied - no dockerOrch extension
+        // No GradleDockerPlugin applied - no dockerTest extension
         task.projectName.set('test-project')
         task.stackName.set('test-stack')
 
@@ -674,7 +674,7 @@ class ComposeDownTaskTest extends Specification {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
 
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             otherStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'other-project'
@@ -700,7 +700,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/deeply/nested/logs/test.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -740,7 +740,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/default.log')
-        project.extensions.getByName('dockerOrch').composeStacks {
+        project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(project.file('docker-compose.yml'))
                 projectName = 'test-project'
@@ -782,7 +782,7 @@ class ComposeDownTaskTest extends Specification {
         project.pluginManager.apply(GradleDockerPlugin)
 
         def logFile = project.file('build/logs/no-services.log')
-        def stackSpec = project.extensions.getByName('dockerOrch').composeStacks.create('testStack')
+        def stackSpec = project.extensions.getByName('dockerTest').composeStacks.create('testStack')
         stackSpec.files.from(project.file('docker-compose.yml'))
         stackSpec.projectName = 'test-project'
 

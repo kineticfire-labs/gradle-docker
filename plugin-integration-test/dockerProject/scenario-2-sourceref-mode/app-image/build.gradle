@@ -26,7 +26,7 @@
  * - pullIfMissing behavior for pulling images from Docker Hub
  * - test block with compose and waitForRunning (nginx has no health check)
  * - onSuccess block with additionalTags
- * - Automatic translation to docker/dockerOrch/dockerWorkflows DSLs
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
  *
  * Key differences from Build Mode (Scenario 1):
  * - No jarFrom/contextDir/dockerfile properties

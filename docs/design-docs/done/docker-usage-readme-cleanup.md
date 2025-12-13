@@ -12,7 +12,7 @@ test usage patterns. Key issues:
 1. **Property assignment style mismatch** - docs show `.set()` but tests use simple assignment
 2. **Missing multi-project JAR provider pattern** - critical real-world pattern not documented
 3. **Missing minimal example** - all examples are "comprehensive" with many optional properties
-4. **Missing task dependency wiring** - docker + dockerOrch integration not shown
+4. **Missing task dependency wiring** - docker + dockerTest integration not shown
 5. **Build context convention not documented** - directory structure pattern unclear
 
 ## Analysis Results
@@ -58,7 +58,7 @@ tags.set(["latest", "1.0.0"])
 **Every integration test uses this pattern:**
 ```groovy
 // Get JAR file from app subproject using Provider API (Gradle 9/10)
-def jarFileProvider = project(':dockerOrch:examples:web-app:app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileProvider = project(':dockerTest:examples:web-app:app').tasks.named('bootJar').flatMap { it.archiveFile }
 def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
 
 docker {
@@ -68,7 +68,7 @@ docker {
                 from(jarFileProvider) {
                     rename { jarFileNameProvider.get() }
                 }
-                dependsOn project(':dockerOrch:examples:web-app:app').tasks.named('bootJar')
+                dependsOn project(':dockerTest:examples:web-app:app').tasks.named('bootJar')
             }
             buildArgs.put('JAR_FILE', jarFileNameProvider)
         }
@@ -135,7 +135,7 @@ docker {
 
 ---
 
-### 🚨 CRITICAL ISSUE #4: Task Dependency Wiring Missing (docker + dockerOrch Integration)
+### 🚨 CRITICAL ISSUE #4: Task Dependency Wiring Missing (docker + dockerTest Integration)
 
 **Integration tests show:**
 ```groovy
@@ -151,14 +151,14 @@ afterEvaluate {
 }
 ```
 
-**Current docs**: No mention of how docker and dockerOrch DSLs work together.
+**Current docs**: No mention of how docker and dockerTest DSLs work together.
 
 **Recommendation**: Add brief section at the end:
 ```markdown
-## Integration with dockerOrch DSL
+## Integration with dockerTest DSL
 
-The docker and dockerOrch DSLs are independent but commonly used together. Build an image with docker DSL,
-then test it with dockerOrch DSL:
+The docker and dockerTest DSLs are independent but commonly used together. Build an image with docker DSL,
+then test it with dockerTest DSL:
 
 ```groovy
 docker {
@@ -171,7 +171,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -188,11 +188,11 @@ afterEvaluate {
 }
 ```
 
-**Note**: The docker and dockerOrch DSLs can be used independently and are mutually exclusive in purpose.
-See docs/usage/usage-docker-orch.md for dockerOrch details.
+**Note**: The docker and dockerTest DSLs can be used independently and are mutually exclusive in purpose.
+See docs/usage/usage-docker-orch.md for dockerTest details.
 ```
 
-**Fix Location**: Add new section "Integration with dockerOrch DSL" near the end
+**Fix Location**: Add new section "Integration with dockerTest DSL" near the end
 
 ---
 
@@ -377,20 +377,20 @@ necessary.
 
 ## Consistency Check with Examples
 
-Based on `plugin-integration-test/dockerOrch/examples/README.md`, the integration tests focus on:
-- `dockerOrch` DSL for testing (CLASS and METHOD lifecycles)
+Based on `plugin-integration-test/dockerTest/examples/README.md`, the integration tests focus on:
+- `dockerTest` DSL for testing (CLASS and METHOD lifecycles)
 - Test framework extensions (Spock `@ComposeUp`, JUnit 5 `@ExtendWith`)
 - Multi-service stacks (app + database)
 
-**Finding**: The integration test examples in `plugin-integration-test/dockerOrch/examples/` appear to focus primarily
-on **testing** (dockerOrch DSL), not building (docker DSL). However, they DO provide real-world examples of using the
+**Finding**: The integration test examples in `plugin-integration-test/dockerTest/examples/` appear to focus primarily
+on **testing** (dockerTest DSL), not building (docker DSL). However, they DO provide real-world examples of using the
 `docker` DSL for building images before testing.
 
 **Sources reviewed**:
-- `plugin-integration-test/dockerOrch/examples/web-app/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/database-app/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle`
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/web-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/database-app/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle`
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/build.gradle`
 
 ---
 
@@ -449,8 +449,8 @@ on **testing** (dockerOrch DSL), not building (docker DSL). However, they DO pro
 ## Key API Properties
 [Existing content - enhance with required vs optional table]
 
-## Integration with dockerOrch DSL
-[NEW - Brief note on wiring docker + dockerOrch tasks]
+## Integration with dockerTest DSL
+[NEW - Brief note on wiring docker + dockerTest tasks]
 
 ## Running Generated Tasks
 [Existing content]
@@ -477,7 +477,7 @@ on **testing** (dockerOrch DSL), not building (docker DSL). However, they DO pro
 1. ✅ **Add "Minimal Example" section** at the top (imageName + tags + contextTask only)
 2. ✅ **Document property assignment styles** (simple assignment vs `.set()`)
 3. ✅ **Add multi-project JAR provider pattern** (critical for real-world usage)
-4. ✅ **Add task dependency wiring example** (docker + dockerOrch integration with `afterEvaluate`)
+4. ✅ **Add task dependency wiring example** (docker + dockerTest integration with `afterEvaluate`)
 5. ✅ **Document build context directory convention** (docker-context/<imageName>)
 6. ✅ **Clarify contextTask purpose and relationship to Dockerfile location**
 
@@ -485,7 +485,7 @@ on **testing** (dockerOrch DSL), not building (docker DSL). However, they DO pro
 
 7. ✅ **Add Provider API composition patterns** (.flatMap(), .map() chains)
 8. ✅ **Simplify comprehensive examples** - move optional properties to separate sections
-9. ✅ **Add "docker vs dockerOrch" relationship note** (independent, mutually exclusive purpose)
+9. ✅ **Add "docker vs dockerTest" relationship note** (independent, mutually exclusive purpose)
 10. ✅ **Document `dependsOn` pattern for multi-project builds**
 11. ✅ **Add Build Mode vs SourceRef Mode decision guide**
 12. ✅ **Clarify when `version.set()` is needed vs optional**
@@ -525,7 +525,7 @@ provider pattern prominently featured.**
 
 2. **Phase 2 (Important)**: Enhance existing content
    - Provider API patterns section
-   - docker + dockerOrch integration note
+   - docker + dockerTest integration note
    - Decision guides
    - Simplify comprehensive examples
 
@@ -547,6 +547,6 @@ provider pattern prominently featured.**
 - [ ] Multi-project JAR provider pattern is prominently featured
 - [ ] Build context convention is clearly documented
 - [ ] Property assignment styles (simple vs .set()) are explained
-- [ ] Task dependency wiring (docker + dockerOrch) is shown
+- [ ] Task dependency wiring (docker + dockerTest) is shown
 - [ ] Document follows 120-character line limit
 - [ ] Examples match integration test usage patterns

@@ -5,7 +5,7 @@ This document provides documentation and a feature matrix for the `dockerProject
 ## Overview
 
 The `dockerProject` DSL provides a simplified, single-block configuration for common Docker workflows. It serves as a
-facade over the three underlying DSLs (`docker`, `dockerOrch`, `dockerWorkflows`), automatically translating the
+facade over the three underlying DSLs (`docker`, `dockerTest`, `dockerWorkflows`), automatically translating the
 simplified configuration into the full three-DSL setup.
 
 ### When to Use dockerProject
@@ -299,7 +299,7 @@ dockerProject {           →  docker {
     onSuccess { ... }          }
 }                          }
                            
-                           dockerOrch {
+                           dockerTest {
                                composeStacks {
                                    <sanitizedName>Test { ... }
                                }

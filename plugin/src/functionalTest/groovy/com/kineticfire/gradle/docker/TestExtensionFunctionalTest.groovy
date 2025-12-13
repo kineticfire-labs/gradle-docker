@@ -52,7 +52,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('test-compose.yml')
@@ -136,7 +136,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     classStack {
                         files.from('class-compose.yml')
@@ -195,7 +195,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     classStack {
                         files.from('class-compose.yml')
@@ -238,7 +238,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     methodStack {
                         files.from('method-compose.yml')
@@ -281,7 +281,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     customStack {
                         files.from('custom-compose.yml')
@@ -325,7 +325,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     depStack {
                         files.from('dep-compose.yml')
@@ -368,7 +368,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     finStack {
                         files.from('fin-compose.yml')
@@ -411,7 +411,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     propStack {
                         files.from('prop-compose.yml')
@@ -454,7 +454,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     errStack {
                         files.from('err-compose.yml')
@@ -480,7 +480,7 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('invalid') || result.output.contains('lifecycle')
     }
 
-    def "stack name not found in dockerOrch rejected with error"() {
+    def "stack name not found in dockerTest rejected with error"() {
         given:
         buildFile << """
             plugins {
@@ -488,7 +488,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     existingStack {
                         files.from('existing-compose.yml')
@@ -550,7 +550,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     classAutoWireStack {
                         files.from('class-auto-compose.yml')
@@ -593,7 +593,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     classFinStack {
                         files.from('class-fin-compose.yml')
@@ -636,7 +636,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     methodAutoWireStack {
                         files.from('method-auto-compose.yml')
@@ -679,7 +679,7 @@ class TestExtensionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     methodFinStack {
                         files.from('method-fin-compose.yml')

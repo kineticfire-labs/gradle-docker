@@ -48,7 +48,7 @@ for their specific Docker workflow requirements with confidence and efficiency
 - **CI/CD Integration**: Using plugin in continuous integration pipelines
 
 **Configuration Reference**:
-- **DSL Documentation**: Complete reference for `docker` and `dockerOrch` configuration blocks
+- **DSL Documentation**: Complete reference for `docker` and `dockerTest` configuration blocks
 - **Task Reference**: Detailed documentation for all plugin tasks with parameters and examples
 - **Convention Documentation**: Default behaviors, directory structures, and naming conventions
 - **Extension Points**: How to customize and extend plugin behavior for specific needs

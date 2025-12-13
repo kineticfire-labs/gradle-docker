@@ -1,9 +1,9 @@
-# Architectural Limitations Analysis: docker vs dockerOrch DSL Separation
+# Architectural Limitations Analysis: docker vs dockerTest DSL Separation
 
 ## Executive Summary
 
 This document analyzes a fundamental architectural limitation in the current plugin design: the separation of `docker`
-and `dockerOrch` DSLs prevents natural test-driven workflows where images are tested before publication operations.
+and `dockerTest` DSLs prevents natural test-driven workflows where images are tested before publication operations.
 This affects the plugin's usability for common CI/CD patterns.
 
 **Status**: Analysis complete, awaiting design decision
@@ -25,7 +25,7 @@ The plugin uses **two independent DSLs** with distinct responsibilities:
 - **Generated Tasks**: `dockerBuild*`, `dockerTag*`, `dockerSave*`, `dockerPublish*`, `dockerImage*`
 - **Lifecycle**: Build-time operations on images
 
-**2. `dockerOrch` DSL** (DockerOrchExtension)
+**2. `dockerTest` DSL** (DockerTestExtension)
 - **Purpose**: Docker Compose orchestration for testing
 - **Capabilities**: composeUp, composeDown, health checking, log capture
 - **Container**: `NamedDomainObjectContainer<ComposeStackSpec>`
@@ -35,7 +35,7 @@ The plugin uses **two independent DSLs** with distinct responsibilities:
 ### Current Relationship
 
 ```
-docker DSL (ImageSpec) ──────────────X NO CONNECTION X────────────────> dockerOrch DSL (ComposeStackSpec)
+docker DSL (ImageSpec) ──────────────X NO CONNECTION X────────────────> dockerTest DSL (ComposeStackSpec)
      │                                                                           │
      ├─ dockerBuild*                                                            ├─ composeUp*
      ├─ dockerTag*                                                              └─ composeDown*
@@ -61,7 +61,7 @@ The typical CI/CD workflow for containerized applications:
    └─ docker: build + initial tags
           ↓
 2. TEST IMAGE
-   └─ dockerOrch: compose up → run tests → compose down
+   └─ dockerTest: compose up → run tests → compose down
           ↓
 3. IF TESTS PASS:
    ├─ docker: add additional tags (e.g., 'stable', 'production')
@@ -88,7 +88,7 @@ docker {
 
 // Option B: Build + test (separate DSL)
 docker { images { myApp { /* build only */ } } }
-dockerOrch { composeStacks { test { /* test */ } } }
+dockerTest { composeStacks { test { /* test */ } } }
 ```
 
 **Current Design CANNOT Support:**
@@ -164,7 +164,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {  // << Completely separate definition >>
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -199,7 +199,7 @@ The two DSLs are **architecturally isolated**:
 Tasks are generated **independently**:
 ```groovy
 // GradleDockerPlugin.groovy (conceptual)
-registerTaskCreationRules(project, dockerExt, dockerOrchExt, ...)
+registerTaskCreationRules(project, dockerExt, dockerTestExt, ...)
 
 // Two separate registration paths:
 dockerExt.images.all { image ->
@@ -209,7 +209,7 @@ dockerExt.images.all { image ->
     registerDockerPublishTask(image)
 }
 
-dockerOrchExt.composeStacks.all { stack ->
+dockerTestExt.composeStacks.all { stack ->
     registerComposeUpTask(stack)
     registerComposeDownTask(stack)
 }
@@ -221,13 +221,13 @@ dockerOrchExt.composeStacks.all { stack ->
 
 Even the **naming is disconnected**:
 - `docker.images.webApp` → generates `dockerBuildWebApp`
-- `dockerOrch.composeStacks.webAppTest` → generates `composeUpWebAppTest`
+- `dockerTest.composeStacks.webAppTest` → generates `composeUpWebAppTest`
 
 The user must **manually infer and wire** the relationship:
 ```groovy
 // User must know:
 // 1. webApp (docker) → dockerBuildWebApp task
-// 2. webAppTest (dockerOrch) → composeUpWebAppTest task
+// 2. webAppTest (dockerTest) → composeUpWebAppTest task
 // 3. These should be related somehow
 // 4. Manual dependency wiring required
 
@@ -254,16 +254,16 @@ All operations in `docker.images.myApp` are **unconditionally executed** when th
 All integration test examples show the **same workaround pattern**:
 
 1. Define image in `docker` DSL
-2. Define test stack in `dockerOrch` DSL (completely separate)
+2. Define test stack in `dockerTest` DSL (completely separate)
 3. Manually wire `composeUp` to depend on `dockerBuild`
 4. Manually wire `integrationTest` to depend on `composeUp`
 5. Use test framework extensions (@ComposeUp) for lifecycle management
 
 **Evidence from examples:**
-- `plugin-integration-test/dockerOrch/examples/web-app/app-image/build.gradle:133-137`
-- `plugin-integration-test/dockerOrch/examples/database-app/app-image/build.gradle:100-102`
-- `plugin-integration-test/dockerOrch/examples/stateful-web-app/app-image/build.gradle:136-140`
-- `plugin-integration-test/dockerOrch/examples/isolated-tests/app-image/build.gradle` (same pattern)
+- `plugin-integration-test/dockerTest/examples/web-app/app-image/build.gradle:133-137`
+- `plugin-integration-test/dockerTest/examples/database-app/app-image/build.gradle:100-102`
+- `plugin-integration-test/dockerTest/examples/stateful-web-app/app-image/build.gradle:136-140`
+- `plugin-integration-test/dockerTest/examples/isolated-tests/app-image/build.gradle` (same pattern)
 
 ### User Pain Points
 
@@ -282,7 +282,7 @@ All integration test examples show the **same workaround pattern**:
 
 The **separation of concerns** is architecturally sound:
 - `docker` → Image lifecycle (build, distribute)
-- `dockerOrch` → Container lifecycle (test, orchestrate)
+- `dockerTest` → Container lifecycle (test, orchestrate)
 
 This follows **SOLID principles** (Single Responsibility Principle).
 
@@ -360,7 +360,7 @@ docker {
 
 ### Option B: Add Cross-Reference Support (Moderate Integration)
 
-**Description**: Link `docker` and `dockerOrch` DSLs with explicit references.
+**Description**: Link `docker` and `dockerTest` DSLs with explicit references.
 
 **Example DSL:**
 ```groovy
@@ -372,12 +372,12 @@ docker {
             contextTask = tasks.register('prepareContext', Copy) { /* ... */ }
 
             // Link to test stack
-            testStack = dockerOrch.composeStacks.getByName('myAppTest')
+            testStack = dockerTest.composeStacks.getByName('myAppTest')
         }
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         myAppTest {
             files.from('compose.yml')
@@ -417,7 +417,7 @@ dockerWorkflows {
 
         // Step 2: Test
         test {
-            stack = dockerOrch.composeStacks.myAppTest
+            stack = dockerTest.composeStacks.myAppTest
         }
 
         // Step 3: Conditional operations
@@ -433,7 +433,7 @@ dockerWorkflows {
 **Benefits:**
 - ✅ Explicit workflow modeling
 - ✅ Clear build → test → publish pipeline
-- ✅ Maintains separation of docker and dockerOrch
+- ✅ Maintains separation of docker and dockerTest
 - ✅ Extensible for other workflow patterns
 
 **Challenges:**
@@ -458,7 +458,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         myApp {  // << Same name! Plugin auto-wires
             files.from('compose.yml')
@@ -535,10 +535,10 @@ between build and publish in modern CI/CD.
 
 ## References
 
-- **Integration Test Examples**: `plugin-integration-test/dockerOrch/examples/`
+- **Integration Test Examples**: `plugin-integration-test/dockerTest/examples/`
 - **Current Workarounds**: Every example's `build.gradle` file
 - **DockerExtension**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerExtension.groovy`
-- **DockerOrchExtension**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerOrchExtension.groovy`
+- **DockerTestExtension**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/DockerTestExtension.groovy`
 - **GradleDockerPlugin**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy`
 
 ## Related Issues

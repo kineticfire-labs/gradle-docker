@@ -35,7 +35,7 @@ docker {
 ---
 
 ### [Docker Orchestration Guide](usage-docker-orch.md)
-Complete guide to testing Docker images using Docker Compose orchestration with the `dockerOrch` DSL.
+Complete guide to testing Docker images using Docker Compose orchestration with the `dockerTest` DSL.
 
 **Use this when:** You need to run integration tests against Docker containers.
 
@@ -48,7 +48,7 @@ Complete guide to testing Docker images using Docker Compose orchestration with 
 
 **Quick example:**
 ```groovy
-dockerOrch {
+dockerTest {
     composeStacks {
         myTest {
             files.from('src/integrationTest/resources/compose/app.yml')

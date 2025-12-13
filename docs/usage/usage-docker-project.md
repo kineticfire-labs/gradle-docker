@@ -1,7 +1,7 @@
 # dockerProject DSL
 
 The `dockerProject` DSL provides a simplified, single-block configuration for common Docker workflows. It combines the
-capabilities of `docker { }`, `dockerOrch { }`, and `dockerWorkflows { }` into one streamlined configuration.
+capabilities of `docker { }`, `dockerTest { }`, and `dockerWorkflows { }` into one streamlined configuration.
 
 ## When to Use dockerProject vs the Three-DSL Approach
 
@@ -10,7 +10,7 @@ Use **`dockerProject`** when you have a simple, single-image workflow:
 - Standard build-test-publish pipeline
 - Default conventions are acceptable
 
-Use the **three-DSL approach** (`docker { }`, `dockerOrch { }`, `dockerWorkflows { }`) when:
+Use the **three-DSL approach** (`docker { }`, `dockerTest { }`, `dockerWorkflows { }`) when:
 - You have multiple images with complex relationships
 - You need fine-grained control over task dependencies
 - You need custom pipeline steps or non-standard workflows
@@ -266,7 +266,7 @@ docker {
     }
 }
 
-dockerOrch {
+dockerTest {
     composeStacks {
         myServiceTest {
             composeFile.set(file('src/integrationTest/resources/compose/app.yml'))
@@ -284,7 +284,7 @@ dockerWorkflows {
                 image.set(docker.images.myService)
             }
             test {
-                stack.set(dockerOrch.composeStacks.myServiceTest)
+                stack.set(dockerTest.composeStacks.myServiceTest)
                 testTaskName.set('integrationTest')
             }
             onTestSuccess {
@@ -390,5 +390,5 @@ dockerProject {
 ## See Also
 
 - [docker DSL Usage](usage-docker.md) - For fine-grained image control
-- [dockerOrch DSL Usage](usage-docker-orch.md) - For compose stack management
+- [dockerTest DSL Usage](usage-docker-orch.md) - For compose stack management
 - [dockerWorkflows DSL Usage](usage-docker-workflows.md) - For custom pipelines

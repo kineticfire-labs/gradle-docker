@@ -13,7 +13,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 
 ### Plugin Core Structure
 - **Main Plugin**: `GradleDockerPlugin` - Entry point, validates requirements, registers services and extensions
-- **Extensions**: `DockerExtension` (`docker` DSL), `DockerOrchExtension` (`dockerOrch` DSL), `TestIntegrationExtension`
+- **Extensions**: `DockerExtension` (`docker` DSL), `DockerTestExtension` (`dockerTest` DSL), `TestIntegrationExtension`
 - **Service Layer**: abstract external dependencies via interfaces - `DockerService`, `ComposeService`, `JsonService`
 - **Task Layer**: implement Gradle tasks (`DockerBuildTask`, `DockerSaveTask`, `DockerPublishTask`, etc.)
 
@@ -45,7 +45,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
   - **Build file for 'plugin-integration-test' subproject**: `plugin-integration-test/build.gradle`
   - **Example executable (used in image under test)**: `plugin-integration-test/app/`
   - **Integration tests for `docker` task**: `plugin-integration-test/app-image/integrationTest/docker/`
-  - **Integration tests for `dockerOrch` task**: `plugin-integration-test/app-image/integrationTest/dockerOrch/`
+  - **Integration tests for `dockerTest` task**: `plugin-integration-test/app-image/integrationTest/dockerTest/`
 - **Re-usable Integration Test Verification Functionality**
   - **buildSrc**: `plugin-integration-test/buildSrc/`
 
@@ -87,7 +87,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ### Adhere to Plugin Usage
 - Follow plugin usage:
    - for 'docker' DSL (e.g., tasks for build, tag, save, publish): `docs/usage/usage-docker.md`.
-   - for 'dockerOrch' DSL (e.g., using 'docker compose' for image testing): `docs/usage/usage-docker-orch.md`.
+   - for 'dockerTest' DSL (e.g., using 'docker compose' for image testing): `docs/usage/usage-docker-orch.md`.
 - If necessary to modify the usage, then update these documents.
 
 ### Follow Development Workflow
@@ -222,7 +222,7 @@ internals here.
 - For 'docker compose' type tasks (using `composeUp` and `composeDown`) that test Docker images:
    - Follow the [README](plugin-integration-test/compose/README.md) for tracking integration test scenarios for the
      `dockerORch` task against the plugin aspects tested
-  - Write integration test scenarios for the `dockerOrch` task at `plugin-integration-test/docker/scenario-<number>/`
+  - Write integration test scenarios for the `dockerTest` task at `plugin-integration-test/docker/scenario-<number>/`
 - **Integration Test Source Set Convention**: The plugin automatically creates the `integrationTest` source set when
   the java or groovy plugin is present. Do NOT manually create source set boilerplate.
   - Put integration tests in `src/integrationTest/java` or `src/integrationTest/groovy`
@@ -232,7 +232,7 @@ internals here.
   - Only add customization if needed (overrides convention)
 - **Example minimal setup**:
   ```groovy
-  dockerOrch {
+  dockerTest {
       composeStacks {
           myTest { files.from('src/integrationTest/resources/compose/app.yml') }
       }

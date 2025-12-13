@@ -9,7 +9,7 @@
 
 ## Executive Summary
 
-The `plugin-integration-test/dockerOrch/examples/README.md` and individual example READMEs contain critical inconsistencies
+The `plugin-integration-test/dockerTest/examples/README.md` and individual example READMEs contain critical inconsistencies
 and missing documentation. The main README describes examples as using test framework extensions (`@ComposeUp`,
 `@ExtendWith`), but some examples don't use these extensions, and individual READMEs describe an obsolete Gradle tasks
 approach that contradicts the actual implementation.
@@ -39,7 +39,7 @@ approach that contradicts the actual implementation.
   )
   ```
 
-**Location:** `plugin-integration-test/dockerOrch/examples/database-app/`
+**Location:** `plugin-integration-test/dockerTest/examples/database-app/`
 
 **Impact:** Users looking for database integration testing examples won't find this valuable resource.
 
@@ -84,7 +84,7 @@ approach that contradicts the actual implementation.
 
 3. **Individual README files** (web-app, isolated-tests, stateful-web-app):
    - Describe the **old Gradle tasks approach** with `composeUpWebAppTest`/`composeDownWebAppTest`
-   - Show `dockerOrch { composeStacks { ... } }` DSL configuration
+   - Show `dockerTest { composeStacks { ... } }` DSL configuration
    - Explain manual task dependency wiring
    - **BUT:** Tests using `@ComposeUp` annotation don't need any of this!
 
@@ -101,7 +101,7 @@ approach that contradicts the actual implementation.
 2. Update `stateful-web-app` to use `@ComposeUp(lifecycle = LifecycleMode.CLASS)` annotation
 3. Remove manual cleanup code from both tests
 4. Update individual READMEs to document annotation-based approach
-5. Remove references to Gradle tasks and `dockerOrch.composeStacks` DSL
+5. Remove references to Gradle tasks and `dockerTest.composeStacks` DSL
 
 **Option B:** Update Documentation to Match Current Implementation
 1. Update main README to accurately describe web-app and stateful-web-app as NOT using extensions
@@ -166,9 +166,9 @@ approach, but tests using `@ComposeUp` annotation don't need this complexity.
 
 **What individual READMEs currently show:**
 
-1. **dockerOrch DSL configuration:**
+1. **dockerTest DSL configuration:**
    ```groovy
-   dockerOrch {
+   dockerTest {
        composeStacks {
            isolatedTestsTest {
                files.from('src/integrationTest/resources/compose/isolated-tests.yml')
@@ -201,7 +201,7 @@ approach, but tests using `@ComposeUp` annotation don't need this complexity.
     pollSeconds = 2
 )
 
-// In build.gradle - NO dockerOrch DSL needed!
+// In build.gradle - NO dockerTest DSL needed!
 dependencies {
     integrationTestImplementation "com.kineticfire.gradle:gradle-docker:${plugin_version}"
     integrationTestImplementation libs.rest.assured
@@ -322,7 +322,7 @@ tasks.named('integrationTest') {
 
 ## Summary of Changes by File
 
-### Main README (`plugin-integration-test/dockerOrch/examples/README.md`)
+### Main README (`plugin-integration-test/dockerTest/examples/README.md`)
 
 **Sections to Add:**
 - Supported Lifecycle Types (at top of document) - define METHOD and CLASS lifecycles
@@ -364,17 +364,17 @@ After making changes, verify:
 1. **All examples still pass:**
    ```bash
    cd plugin-integration-test/
-   ./gradlew -Pplugin_version=1.0.0 dockerOrch:examples:integrationTest
+   ./gradlew -Pplugin_version=1.0.0 dockerTest:examples:integrationTest
    ```
 
 2. **Individual examples pass:**
    ```bash
-   ./gradlew :dockerOrch:examples:database-app:integrationTest
-   ./gradlew :dockerOrch:examples:web-app:integrationTest
-   ./gradlew :dockerOrch:examples:web-app-junit:integrationTest
-   ./gradlew :dockerOrch:examples:isolated-tests:integrationTest
-   ./gradlew :dockerOrch:examples:isolated-tests-junit:integrationTest
-   ./gradlew :dockerOrch:examples:stateful-web-app:integrationTest
+   ./gradlew :dockerTest:examples:database-app:integrationTest
+   ./gradlew :dockerTest:examples:web-app:integrationTest
+   ./gradlew :dockerTest:examples:web-app-junit:integrationTest
+   ./gradlew :dockerTest:examples:isolated-tests:integrationTest
+   ./gradlew :dockerTest:examples:isolated-tests-junit:integrationTest
+   ./gradlew :dockerTest:examples:stateful-web-app:integrationTest
    ```
 
 3. **No lingering containers:**

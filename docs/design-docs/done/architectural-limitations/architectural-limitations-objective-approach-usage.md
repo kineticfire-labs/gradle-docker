@@ -16,14 +16,14 @@ limitations identified in `architectural-limitations-analysis.md`.
 The solution introduces a **third DSL** (`dockerWorkflows`) that orchestrates the existing two:
 
 1. **`docker` DSL** - Image definition (build configuration) - **EXISTING**
-2. **`dockerOrch` DSL** - Test stack definition (compose configuration) - **EXISTING**
+2. **`dockerTest` DSL** - Test stack definition (compose configuration) - **EXISTING**
 3. **`dockerWorkflows` DSL** - Pipeline orchestration - **NEW**
 
 ### Reuse Pattern
 
 **The workflow DSL references existing DSLs:**
 - `build { image = docker.images.webApp }` → reuses docker DSL definition
-- `test { stack = dockerOrch.composeStacks.webAppTest }` → reuses dockerOrch DSL definition
+- `test { stack = dockerTest.composeStacks.webAppTest }` → reuses dockerTest DSL definition
 
 **The workflow DSL replicates conditional APIs:**
 - `addTags()` - mirrors `docker` tag API
@@ -85,7 +85,7 @@ pipeline: build → test → conditional publish.
 
 ### Key Concepts
 
-- **Separation of Concerns**: `docker`, `dockerOrch`, and `dockerWorkflows` remain independent
+- **Separation of Concerns**: `docker`, `dockerTest`, and `dockerWorkflows` remain independent
 - **Declarative**: Express "what" not "how"
 - **Conditional Logic**: Built-in support for "only if tests pass"
 - **Multiple Pipelines**: Support dev, staging, production in one build file
@@ -96,7 +96,7 @@ pipeline: build → test → conditional publish.
 ```
 docker DSL          →  Defines what to build (image configuration)
       ↓
-dockerOrch DSL      →  Defines what to test (test stack configuration)
+dockerTest DSL      →  Defines what to test (test stack configuration)
       ↓
 dockerWorkflows DSL →  Defines how to orchestrate (pipeline execution)
 ```
@@ -128,7 +128,7 @@ docker {
 }
 
 // STEP 2: Define test stack
-dockerOrch {
+dockerTest {
     composeStacks {
         myAppTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -147,7 +147,7 @@ dockerWorkflows {
         }
 
         test {
-            stack = dockerOrch.composeStacks.myAppTest
+            stack = dockerTest.composeStacks.myAppTest
             testTask = tasks.named('integrationTest')
         }
 
@@ -227,7 +227,7 @@ docker {
 // ============================================================================
 // STEP 2: Define Test Stack (Testing Configuration)
 // ============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         webAppTest {
             files.from('src/integrationTest/resources/compose/web-app.yml')
@@ -271,7 +271,7 @@ dockerWorkflows {
 
         // Step 2: Test the image
         test {
-            stack = dockerOrch.composeStacks.webAppTest
+            stack = dockerTest.composeStacks.webAppTest
             testTask = tasks.named('integrationTest')
 
             // Optional: Custom test behavior
@@ -485,7 +485,7 @@ dockerWorkflows {
         }
 
         test {
-            stack = dockerOrch.composeStacks.webAppTest
+            stack = dockerTest.composeStacks.webAppTest
             testTask = tasks.named('integrationTest')
         }
 
@@ -510,7 +510,7 @@ dockerWorkflows {
         }
 
         test {
-            stack = dockerOrch.composeStacks.webAppTest
+            stack = dockerTest.composeStacks.webAppTest
             testTask = tasks.named('integrationTest')
         }
 
@@ -548,7 +548,7 @@ dockerWorkflows {
         }
 
         test {
-            stack = dockerOrch.composeStacks.webAppTest
+            stack = dockerTest.composeStacks.webAppTest
             testTask = tasks.named('integrationTest')
             timeoutMinutes = 20
         }
@@ -701,7 +701,7 @@ dockerWorkflows {
         // ====================================================================
         test {
             // Required: Stack reference
-            stack = dockerOrch.composeStacks.myTest
+            stack = dockerTest.composeStacks.myTest
 
             // Required: Test task
             testTask = tasks.named('integrationTest')
@@ -1027,7 +1027,7 @@ afterEvaluate {
 dockerWorkflows {
     pipeline {
         build { image = docker.images.myApp }
-        test { stack = dockerOrch.composeStacks.myTest }
+        test { stack = dockerTest.composeStacks.myTest }
         onTestSuccess {
             publish { to('prod') { /* ... */ } }
         }
@@ -1042,7 +1042,7 @@ Each DSL has a clear responsibility:
 | DSL | Responsibility | Answers |
 |-----|----------------|---------|
 | `docker` | Image definition | What to build? |
-| `dockerOrch` | Test stack definition | What to test? |
+| `dockerTest` | Test stack definition | What to test? |
 | `dockerWorkflows` | Pipeline orchestration | How to orchestrate? |
 
 ### 4. Conditional Logic Built-In
@@ -1090,7 +1090,7 @@ dockerWorkflows {
 
 ### 7. Backward Compatible
 
-Existing `docker` and `dockerOrch` DSLs remain unchanged. Users can:
+Existing `docker` and `dockerTest` DSLs remain unchanged. Users can:
 - Keep using current approach
 - Migrate incrementally to workflows
 - Mix both approaches
@@ -1138,7 +1138,7 @@ All pipeline configuration must be compatible with Gradle's configuration cache:
 
 - **Analysis**: `docs/design-docs/todo/architectural-limitations-analysis.md`
 - **Current Usage**: `docs/usage/usage-docker.md`, `docs/usage/usage-docker-orch.md`
-- **Integration Examples**: `plugin-integration-test/dockerOrch/examples/`
+- **Integration Examples**: `plugin-integration-test/dockerTest/examples/`
 
 ## Version Information
 

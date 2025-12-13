@@ -383,7 +383,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         composeFile.set(file('compose.yml'))
@@ -431,7 +431,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         composeFile.set(file('compose.yml'))
@@ -479,7 +479,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myStack {
                         composeFile.set(file('compose.yml'))
@@ -574,7 +574,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         composeFile.set(file('compose.yml'))
@@ -622,7 +622,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myStack {
                         composeFile.set(file('compose.yml'))
@@ -667,7 +667,7 @@ class ConventionFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     mixedStack {
                         composeFile.set(file('compose.yml'))

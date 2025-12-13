@@ -1,0 +1,171 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()  // Plugin must be in Maven local
+    mavenCentral()
+}
+
+// Get JAR file from app subproject using Provider API (Gradle 9/10)
+def jarFileProvider = project(':dockerTest:verification:wait-running:app').tasks.named('bootJar').flatMap { it.archiveFile }
+def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
+
+// Configure docker DSL
+docker {
+    images {
+        waitRunningApp {
+            imageName = 'verification-wait-running-app'
+            tags = ['latest', '1.0.0']
+
+            // Build context task
+            contextTask = tasks.register('prepareWaitRunningAppContext', Copy) {
+                group = 'docker'
+                description = 'Prepare Docker build context for wait-running app image'
+                into layout.buildDirectory.dir('docker-context/waitRunningApp')
+                from('src/main/docker')
+
+                // Copy JAR from app project
+                from(jarFileProvider) {
+                    rename { jarFileNameProvider.get() }
+                }
+
+                // Ensure JAR is built first
+                dependsOn project(':dockerTest:verification:wait-running:app').tasks.named('bootJar')
+            }
+
+            // Pass JAR file name as build arg (lazy)
+            buildArgs.put('JAR_FILE', jarFileNameProvider)
+        }
+    }
+}
+
+// Configure dockerTest DSL - CRITICAL: Use waitForRunning (NOT waitForHealthy)
+dockerTest {
+    composeStacks {
+        waitRunningTest {
+            files.from('src/integrationTest/resources/compose/wait-running.yml')
+            projectName = "verification-wait-running-test"
+
+            // Wait for container to reach RUNNING state (not healthy)
+            waitForRunning {
+                waitForServices.set(['wait-running-app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// CONVENTION MAGIC: The plugin automatically creates the integrationTest source set!
+// ============================================================================
+// Because we configured dockerTest.composeStacks above (or have java/groovy plugin), the gradle-docker plugin
+// automatically provides:
+//   - integrationTest source set (src/integrationTest/groovy, src/integrationTest/resources)
+//   - integrationTest task (runs tests with JUnit Platform)
+//   - integrationTestImplementation and integrationTestRuntimeOnly configurations
+//   - Configuration extensions (integrationTestImplementation extends testImplementation)
+//   - Resource processing (with INCLUDE duplicatesStrategy)
+//
+// BEFORE this convention: ~50 lines of boilerplate per project
+// AFTER this convention: Just add your dependencies and customizations!
+// ============================================================================
+
+dependencies {
+    // Testing dependencies from version catalog
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+
+    // Add buildSrc classes to integration test classpath
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+}
+
+// Register integration test task (Gradle 9/10 style)
+tasks.named('integrationTest') {
+    description = 'Runs integration tests against Docker Compose stack'
+    group = 'verification'
+
+    // Pass state file location to tests (lazy)
+    systemProperty 'COMPOSE_STATE_FILE',
+        layout.buildDirectory.file('compose-state/waitRunningTest-state.json').get().asFile.absolutePath
+
+    // Pass project name for validators
+    systemProperty 'COMPOSE_PROJECT_NAME', "verification-wait-running-test"
+}
+
+// Ensure compose up waits for image build
+afterEvaluate {
+    tasks.named('composeUpWaitRunningTest') {
+        dependsOn tasks.named('dockerBuildWaitRunningApp')
+    }
+
+    // Ensure integrationTest has full workflow
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpWaitRunningTest')
+        finalizedBy tasks.named('composeDownWaitRunningTest')
+    }
+}
+
+// Full integration test workflow
+tasks.register('runIntegrationTest') {
+        description = 'Full integration test: build image -> up -> test -> down'
+        group = 'verification'
+
+        // Build image first (lazy)
+        dependsOn tasks.named('dockerBuildWaitRunningApp')
+
+        // Then compose up
+        dependsOn tasks.named('composeUpWaitRunningTest')
+
+        // Then run tests
+        dependsOn tasks.named('integrationTest')
+
+        // Always tear down
+        finalizedBy tasks.named('composeDownWaitRunningTest')
+
+        doLast {
+            logger.lifecycle("Integration test complete for verification:wait-running")
+    }
+}
+
+// Cleanup task
+tasks.register('cleanupContainers') {
+    description = 'Force cleanup of any lingering containers'
+    group = 'verification'
+
+    doLast {
+        def projectName = "verification-wait-running-test"
+        def result = exec {
+            commandLine 'docker', 'ps', '-a', '-q', '--filter', "name=${projectName}"
+            standardOutput = new ByteArrayOutputStream()
+            ignoreExitValue = true
+        }
+
+        def containerIds = result.standardOutput.toString().trim()
+        if (containerIds) {
+            exec {
+                commandLine 'docker', 'rm', '-f'
+                args containerIds.split('\n')
+            }
+        }
+    }
+}

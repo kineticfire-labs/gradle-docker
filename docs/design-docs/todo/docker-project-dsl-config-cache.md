@@ -14,7 +14,7 @@ This document outlines the plan to make the `dockerProject` DSL fully compatible
 
 ## Current `dockerProject` DSL (User-Facing)
 
-The `dockerProject` DSL is a self-contained, multi-image workflow DSL. Users configure everything inline without needing separate `docker` or `dockerOrch` blocks.
+The `dockerProject` DSL is a self-contained, multi-image workflow DSL. Users configure everything inline without needing separate `docker` or `dockerTest` blocks.
 
 ### Multiple Image Support
 
@@ -1654,7 +1654,7 @@ Since the plugin has no external users, this is a **clean replacement** rather t
 16. Create `com.kineticfire.gradle.docker.Lifecycle` enum
    - Values: `CLASS`, `METHOD`
    - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/Lifecycle.groovy`
-   - This enum is shared between `dockerProject` and `dockerOrch` DSLs
+   - This enum is shared between `dockerProject` and `dockerTest` DSLs
 
 **Tasks for PullPolicy Enum (Shared)**:
 17. Create `com.kineticfire.gradle.docker.PullPolicy` enum
@@ -1698,7 +1698,7 @@ Since the plugin has no external users, this is a **clean replacement** rather t
     - For `Lifecycle.CLASS`: Standard composeUp → tests → composeDown flow
     - For `Lifecycle.METHOD`: Register JUnit extension that manages compose per test method
 
-**Tasks for dockerOrch Migration**:
+**Tasks for dockerTest Migration**:
 27. Update `TestIntegrationExtension.usesCompose()` to accept `Lifecycle` enum
     - Change `String lifecycle` parameter to `Lifecycle lifecycle`
     - Remove string validation logic (no longer needed with enum)
@@ -1723,7 +1723,7 @@ Since the plugin has no external users, this is a **clean replacement** rather t
     - Pass auth credentials to Docker login before push
 
 **Deliverables**:
-- New `Lifecycle` enum shared by `dockerProject` and `dockerOrch` DSLs
+- New `Lifecycle` enum shared by `dockerProject` and `dockerTest` DSLs
 - New `PullPolicy` enum shared by `dockerProject` and `docker` DSLs
   - Values: `NEVER` (default), `IF_MISSING`, `ALWAYS`
   - Location: `plugin/src/main/groovy/com/kineticfire/gradle/docker/PullPolicy.groovy`
@@ -2132,7 +2132,7 @@ Tests are required at three levels:
 | `PullPolicy.valueOf() works for IF_MISSING` | Verify string-to-enum conversion |
 | `PullPolicy.valueOf() works for ALWAYS` | Verify string-to-enum conversion |
 
-#### 8. `TestIntegrationExtension` Tests (dockerOrch Enum Migration)
+#### 8. `TestIntegrationExtension` Tests (dockerTest Enum Migration)
 
 **File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtensionTest.groovy`
 
@@ -2330,13 +2330,13 @@ Tests are required at three levels:
 | `dockerProject DSL configures JUnit extension for Lifecycle.METHOD` | Extension wired for METHOD |
 | `dockerProject DSL configures task dependencies for Lifecycle.CLASS` | composeUp/Down wired |
 
-#### dockerOrch Lifecycle Tests (Enum Migration)
+#### dockerTest Lifecycle Tests (Enum Migration)
 
 | Test | Description |
 |------|-------------|
-| `dockerOrch usesCompose accepts Lifecycle.CLASS` | Enum value in dockerOrch DSL |
-| `dockerOrch usesCompose accepts Lifecycle.METHOD` | Enum value in dockerOrch DSL |
-| `dockerOrch lifecycle configures correctly with enum` | Verify enum-based configuration |
+| `dockerTest usesCompose accepts Lifecycle.CLASS` | Enum value in dockerTest DSL |
+| `dockerTest usesCompose accepts Lifecycle.METHOD` | Enum value in dockerTest DSL |
+| `dockerTest lifecycle configures correctly with enum` | Verify enum-based configuration |
 
 #### Multiple Test Configurations Tests
 
@@ -3217,7 +3217,7 @@ dockerProject {
 | Functional | DSL parsing | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
 | Functional | Validation | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | N/A |
 | Functional | Task graph | ✅ | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ | N/A | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) | ✅ (NEW) |
-| Functional | dockerOrch lifecycle | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A | N/A |
+| Functional | dockerTest lifecycle | N/A | N/A | N/A | N/A | N/A | N/A | N/A | ✅ (UPDATE) | N/A | N/A | N/A | N/A |
 | Integration | scenario-1 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
 | Integration | scenario-2 | - | - | ✅ (existing) | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
 | Integration | scenario-3 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
@@ -3234,9 +3234,9 @@ dockerProject {
 
 ---
 
-## dockerOrch Lifecycle Enum Migration
+## dockerTest Lifecycle Enum Migration
 
-The `Lifecycle` enum is shared between `dockerProject` and `dockerOrch` DSLs. This section details the migration of `dockerOrch`'s `TestIntegrationExtension` from string-based lifecycle to enum-based lifecycle.
+The `Lifecycle` enum is shared between `dockerProject` and `dockerTest` DSLs. This section details the migration of `dockerTest`'s `TestIntegrationExtension` from string-based lifecycle to enum-based lifecycle.
 
 ### Current Implementation (Strings)
 
@@ -3304,14 +3304,14 @@ testIntegration {
 | `Lifecycle.groovy` (NEW) | Create shared enum in `com.kineticfire.gradle.docker` |
 | `TestIntegrationExtension.groovy` | Change `String lifecycle` to `Lifecycle lifecycle`, remove validation |
 | `TestIntegrationExtensionTest.groovy` | Update tests to use `Lifecycle` enum |
-| Functional tests using dockerOrch lifecycle | Update to use `Lifecycle` enum |
-| Integration tests using dockerOrch lifecycle | Update to use `Lifecycle` enum |
+| Functional tests using dockerTest lifecycle | Update to use `Lifecycle` enum |
+| Integration tests using dockerTest lifecycle | Update to use `Lifecycle` enum |
 
 ### Benefits
 
 1. **Type Safety**: Compiler catches invalid values; no runtime validation needed
 2. **IDE Support**: Autocomplete for `Lifecycle.CLASS` and `Lifecycle.METHOD`
-3. **Consistency**: Same enum used across `dockerProject` and `dockerOrch` DSLs
+3. **Consistency**: Same enum used across `dockerProject` and `dockerTest` DSLs
 4. **Reduced Code**: No string validation, normalization, or case-insensitive matching
 
 ---

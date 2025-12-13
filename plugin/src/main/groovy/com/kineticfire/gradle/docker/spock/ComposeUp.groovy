@@ -35,7 +35,7 @@ import java.lang.annotation.Target
  * <p><b>build.gradle:</b></p>
  * <pre>
  * {@code
- * dockerOrch {
+ * dockerTest {
  *     composeStacks {
  *         myApp {
  *             files.from('src/integrationTest/resources/compose/app.yml')

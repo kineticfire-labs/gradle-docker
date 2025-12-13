@@ -89,7 +89,7 @@ class PluginIntegrationFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
             
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     testStack {
                         files.from('test-compose.yml')

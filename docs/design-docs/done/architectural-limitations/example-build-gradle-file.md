@@ -65,7 +65,7 @@ docker {
 // =============================================================================
 // DOCKER ORCH DSL: Define the compose stack for testing
 // =============================================================================
-dockerOrch {
+dockerTest {
     composeStacks {
         appTest {
             files.from('src/integrationTest/resources/compose/app.yml')
@@ -95,7 +95,7 @@ dockerWorkflows {
 
             // Test step: run integration tests against the containerized app
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
 
@@ -253,7 +253,7 @@ dockerWorkflows {
         devPipeline {
             build { image = docker.images.myApp }
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
             // No onTestSuccess - just build and test
@@ -262,7 +262,7 @@ dockerWorkflows {
         releasePipeline {
             build { image = docker.images.myApp }
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
             }
             onTestSuccess {
@@ -315,7 +315,7 @@ dockerWorkflows {
                 afterBuild = { println "Build complete!" }
             }
             test {
-                stack = dockerOrch.composeStacks.appTest
+                stack = dockerTest.composeStacks.appTest
                 testTaskName = 'integrationTest'
                 beforeTest = { println "Starting tests..." }
                 afterTest = { result -> println "Tests ${result.success ? 'passed' : 'failed'}!" }

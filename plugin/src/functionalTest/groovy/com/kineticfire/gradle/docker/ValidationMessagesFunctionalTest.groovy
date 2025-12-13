@@ -213,7 +213,7 @@ class ValidationMessagesFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myStack {
                         // Missing: files configuration
@@ -241,7 +241,7 @@ class ValidationMessagesFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myStack {
                         files.from('nonexistent-compose.yml')
@@ -269,7 +269,7 @@ class ValidationMessagesFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     validStack {
                         files.from('compose.yml')
@@ -304,7 +304,7 @@ class ValidationMessagesFunctionalTest extends Specification {
                 id 'com.kineticfire.gradle.docker'
             }
 
-            dockerOrch {
+            dockerTest {
                 composeStacks {
                     myStack {
                         files.from('compose.yml')
