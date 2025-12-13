@@ -87,29 +87,6 @@ Docker build: [Warning] One or more build-args [JAR_FILE] were not consumed
 
 
 
-> Task :dockerWorkflows:scenario-3-failed-tests:app-image:verifyFailedPipeline
-==========================================
-Step 0: Build the Docker image first
-==========================================
-Starting a Gradle Daemon, 1 busy and 1 incompatible and 5 stopped Daemons could not be reused, use --status for details
-Calculating task graph as configuration cache cannot be reused because file 'settings.gradle' has changed.
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
-
-
-
-
-
-
-
-> Task :dockerWorkflows:scenario-3-failed-tests:app-image:dockerBuildFailedTestApp
-Docker client connected to: unix:///var/run/docker.sock
-DockerService initialized successfully
-Step 1: Run the pipeline (expecting failure)
-==========================================
-Calculating task graph as no cached configuration is available for tasks: :dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
-
-
 
 
 
@@ -149,13 +126,6 @@ FAILURE: Build failed with an exception.
 
 
 
-
-
-
-> Task :dockerWorkflows:scenario-4-multiple-pipelines:app-image:dockerBuildMultiPipelineApp
-Compiling integration test classes...
-Calculating task graph as configuration cache cannot be reused because file 'settings.gradle' has changed.
-Caught exception: Already watching path: /home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/dockerTest/examples/web-app-junit/app
 
 
 
@@ -284,15 +254,6 @@ Pipeline hooksPipeline completed successfully
 See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/85m3p6i069i6z87ntu2ef5kka/7kcfo8b1aexd494pihxr4hnvm/configuration-cache-report.html
 
 [Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-
-
-
-> Configure project :dockerProject:scenario-4-method-lifecycle:app-image
-Integration test convention applied: source set, configurations, and task created
-dockerProject: Using METHOD lifecycle for pipeline 'projectscenario4appPipeline'. Ensure test task 'integrationTest' has maxParallelForks = 1 and test classes use @ComposeUp (Spock) or @ExtendWith(DockerComposeMethodExtension.class) (JUnit 5).
-dockerProject: Configured image 'project-scenario4-app' with pipeline 'projectscenario4appPipeline'
-Pipeline 'projectscenario4appPipeline' has delegateStackManagement=true but also sets stack='projectscenario4appTest'. The stack property will be ignored since testIntegration manages the compose lifecycle. Consider removing the stack configuration to avoid confusion.
 
 
 
