@@ -1,14 +1,23 @@
-# Docker Project DSL - Configuration Cache Compatibility Plan
+# Configuration Cache Compatibility Plan: dockerProject and dockerWorkflows DSLs
 
 ## Status: TODO
 
-## Overview
+## Executive Summary
 
-This document outlines the plan to make the `dockerProject` DSL fully compatible with Gradle's configuration cache, ensuring compliance with Gradle 9 and 10 requirements as specified in `docs/design-docs/gradle-9-and-10-compatibility.md`.
+This document outlines the plan to:
+1. add new features to `dockerProject` DSL
+2. make both the `dockerProject` and `dockerWorkflows` DSLs fully compatible with  Gradle's configuration cache, 
+   ensuring compliance with Gradle 9 and 10 requirements as specified in `docs/design-docs/gradle-9-and-10-compatibility.md`.
 
-**Important**: Since the plugin is not yet published and has no external users, backward compatibility is NOT required. The current non-compliant implementation will be **replaced entirely** with a configuration-cache-compatible architecture.
+Both DSLs suffer from the same fundamental configuration cache incompatibility (dynamic task execution at runtime) and
+will share common infrastructure for the solution.
 
-**Key Principle**: The user-facing `dockerProject` DSL syntax remains **unchanged**. Only the internal implementation changes.
+**Key Principles:**
+1. **No backward compatibility concerns** - plugin not yet published
+2. **Separate DSLs** - `dockerProject` and `dockerWorkflows` remain distinct
+3. **Shared infrastructure** - Common `TaskGraphGenerator` base and utilities
+4. **Single implementation phase** - Both DSLs refactored together
+5. **User-facing DSL syntax remains unchanged** - Only internal implementation changes
 
 ---
 
@@ -1289,9 +1298,58 @@ dockerProject {
 
 ---
 
-## Current State
+## Current State Analysis
 
-The `DockerProjectRunTask` (which powers the `dockerProject` DSL) is currently marked as `notCompatibleWithConfigurationCache()`. This is **unacceptable** for a plugin that must be Gradle 9 and 10 compliant. The current implementation must be replaced.
+### Shared Problems
+
+Both `DockerProjectRunTask` (powering `dockerProject` DSL) and `PipelineRunTask` (powering `dockerWorkflows` DSL) are
+currently marked as `notCompatibleWithConfigurationCache()`. This is **unacceptable** for a plugin that must be Gradle 9
+and 10 compliant. Both implementations must be replaced.
+
+Both run tasks have identical configuration cache violations:
+
+| Issue | `DockerProjectRunTask` | `PipelineRunTask` |
+|-------|------------------------|-------------------|
+| Dynamic task lookup | Yes - via TaskLookup | Yes - via TaskLookup |
+| Dynamic task execution | Yes - `TaskLookup.execute()` | Yes - `TaskLookup.execute()` |
+| `Task.project` access | Yes - at execution time | Yes - at execution time |
+| Non-serializable nested specs | `DockerProjectSpec` | `PipelineSpec` |
+| Marked `notCompatibleWithConfigurationCache()` | Yes | Yes |
+
+### Root Cause
+
+The configuration cache violation occurs because both run tasks **dynamically execute other tasks at runtime** via
+`TaskExecutionService.executeTask()`:
+
+```groovy
+// TaskExecutionService.groovy:118-123
+void executeTask(Task task) {
+    LOGGER.info("Executing task: {}", task.name)
+    task.actions.each { action ->
+        action.execute(task)  // ← This triggers Task.project access in executed tasks
+    }
+}
+```
+
+When `task.actions.each { action.execute(task) }` runs test tasks (like `integrationTest`), those tasks internally call
+`Task.project` which violates Gradle's golden rule:
+> "No `Project` at execution time - Inside `@TaskAction`, never call `task.project` or any `Project` APIs."
+
+### Shared Infrastructure to Remove
+
+| Component | Location | Issue |
+|-----------|----------|-------|
+| `TaskExecutionService` | `service/TaskExecutionService.groovy` | Holds TaskContainer, enables dynamic execution |
+| `TaskLookup` interface | `workflow/TaskLookup.groovy` | Abstracts dynamic lookup/execution |
+| `TaskLookupFactory` | `workflow/TaskLookup.groovy` | Creates TaskLookup instances |
+| `TaskExecutionServiceLookup` | `workflow/TaskLookup.groovy` | Implements dynamic execution |
+| `TaskContainerLookup` | `workflow/TaskLookup.groovy` | Implements dynamic execution |
+| `BuildStepExecutor` | `workflow/executor/` | Uses TaskLookup for dynamic execution |
+| `TestStepExecutor` | `workflow/executor/` | Uses TaskLookup for dynamic execution |
+| `ConditionalExecutor` | `workflow/executor/` | Runtime conditional logic |
+| `AlwaysStepExecutor` | `workflow/executor/` | Uses TaskLookup for dynamic execution |
+| `SuccessStepExecutor` | `workflow/executor/` | Uses TaskLookup for dynamic execution |
+| `FailureStepExecutor` | `workflow/executor/` | Uses TaskLookup for dynamic execution |
 
 ---
 
@@ -1348,7 +1406,7 @@ This violates the golden rule:
 
 | Issue | Location | Gradle Rule Violated |
 |-------|----------|---------------------|
-| Non-serializable nested specs | `DockerProjectRunTask` | Cannot serialize complex object graphs |
+| Non-serializable nested specs | `DockerProjectRunTask`, `PipelineRunTask` | Cannot serialize complex object graphs |
 | Dynamic task lookup | Runtime task execution | No cross-task execution at runtime |
 | Dynamic task execution | `TaskLookup.execute()` | Wire via dependencies, not runtime calls |
 | `Task.project` access | `TaskExecutionService` internals | No Project at execution time |
@@ -1366,12 +1424,36 @@ Eliminate dynamic task execution entirely and instead generate a graph of Gradle
 ```
 User DSL
     ↓
-DockerProjectExtension (holds nested spec objects)
+Extension (DockerProjectExtension / DockerWorkflowsExtension)
     ↓
-DockerProjectRunTask (@TaskAction)
-    ├── Holds Property<DockerProjectSpec> with nested objects
+RunTask (@TaskAction) - DockerProjectRunTask / PipelineRunTask
+    ├── Holds Property<Spec> with nested objects
     ├── Dynamically executes tasks at runtime via TaskLookup
     └── Marked: notCompatibleWithConfigurationCache()
+```
+
+### Solution Overview: Shared Infrastructure
+
+Both DSLs will use shared infrastructure for task graph generation:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                         SHARED INFRASTRUCTURE                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│  TaskGraphGenerator (abstract base)                                          │
+│    ├── PipelineStateFile (JSON state communication)                          │
+│    ├── TaskNamingUtils (standardized task naming)                            │
+│    └── TestResultCapture (file-based test results)                           │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                              │
+│   DockerProjectTaskGenerator        │     WorkflowTaskGenerator              │
+│   (extends TaskGraphGenerator)      │     (extends TaskGraphGenerator)       │
+│                                     │                                        │
+│   Generates tasks for:              │     Generates tasks for:               │
+│   - dockerProject DSL               │     - dockerWorkflows DSL              │
+│   - runDockerProject lifecycle      │     - run{PipelineName} lifecycle      │
+│                                     │                                        │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### New Architecture (Configuration Cache Compatible)
@@ -1379,23 +1461,24 @@ DockerProjectRunTask (@TaskAction)
 ```
 User DSL
     ↓
-DockerProjectExtension (holds nested spec objects) ← UNCHANGED
+Extension (DockerProjectExtension / DockerWorkflowsExtension) ← UNCHANGED
     ↓
-DockerProjectTaskGenerator (at configuration time)
+TaskGenerator (at configuration time)
     ├── Reads specs and generates task dependency graph
     ├── Creates individual tasks with flattened, serializable inputs
     └── Wires dependencies via dependsOn/finalizedBy
     ↓
 Generated Task Graph (all standard Gradle tasks)
-    ├── dockerBuildMyApp (existing task type)
-    ├── composeUpMyAppTest (existing task type)
+    ├── dockerBuild* (existing task types)
+    ├── composeUp* / composeDown* (existing task types)
     ├── integrationTest (user's test task)
-    ├── composeDownMyAppTest (existing task type)
-    ├── dockerProjectTagOnSuccess (new lightweight task)
-    ├── dockerSaveMyApp (existing task type)
-    └── dockerPublishMyApp (existing task type)
+    ├── *TagOnSuccess (new lightweight task)
+    ├── *Save (existing task type)
+    ├── *Publish (existing task type)
+    └── *Cleanup (new lightweight task)
     ↓
-runDockerProject (lifecycle task, dependsOn the graph)
+Lifecycle Task (runDockerProject / run{PipelineName})
+    └── dependsOn the generated graph
 ```
 
 ### Key Design Principles
@@ -1498,6 +1581,8 @@ abstract class DockerProjectTagOnSuccessTask extends DefaultTask {
 
 ## What Changes vs What Stays
 
+### dockerProject DSL
+
 | Component | Current | New | Change? |
 |-----------|---------|-----|---------|
 | User DSL syntax | `dockerProject { image { ... } }` | `dockerProject { images { name { ... } } }` | **Multi-image container** |
@@ -1509,9 +1594,39 @@ abstract class DockerProjectTagOnSuccessTask extends DefaultTask {
 | Task generation | In `DockerProjectRunTask` | `DockerProjectTaskGenerator` | **New** |
 | Task wiring | Runtime dynamic | Configuration-time dependencies | **New** |
 
+### dockerWorkflows DSL
+
+| Component | Current | New | Change? |
+|-----------|---------|-----|---------|
+| User DSL syntax | `dockerWorkflows { pipelines { ... } }` | Same | **No change** |
+| `DockerWorkflowsExtension` | Holds pipeline specs | Same | **No change** |
+| `PipelineSpec` | Has nested step specs | Add flattened property accessors | **Minor additions** |
+| `BuildStepSpec` | Nested spec | Add flattened properties | **Minor additions** |
+| `TestStepSpec` | Nested spec | Add flattened properties | **Minor additions** |
+| `SuccessStepSpec` / `FailureStepSpec` | Nested specs | Add flattened properties | **Minor additions** |
+| `AlwaysStepSpec` | Nested spec | Add flattened cleanup properties | **Minor additions** |
+| `PipelineRunTask` | Orchestrates at runtime | **DELETE** | **Removed** |
+| Task generation | In `PipelineRunTask` | `WorkflowTaskGenerator` | **New** |
+| Task wiring | Runtime dynamic | Configuration-time dependencies | **New** |
+
+### Shared Infrastructure (Both DSLs)
+
+| Component | Current | New | Change? |
+|-----------|---------|-----|---------|
+| `TaskExecutionService` | Enables dynamic execution | **DELETE** | **Removed** |
+| `TaskLookup` + implementations | Dynamic task lookup | **DELETE** | **Removed** |
+| All executor classes | Dynamic task execution | **DELETE** | **Removed** |
+| `TaskGraphGenerator` | N/A | Abstract base for generators | **New** |
+| `PipelineStateFile` | N/A | JSON state communication | **New** |
+| `TaskNamingUtils` | N/A | Standardized task naming | **New** |
+| `TagOnSuccessTask` | N/A | Shared conditional tagging | **New** |
+| `CleanupTask` | N/A | Shared cleanup operations | **New** |
+
 ---
 
-## Generated Task Graph Example
+## Generated Task Graph Examples
+
+### dockerProject DSL Task Graph
 
 For a full scenario (build → test → tag → save → publish), the generator creates:
 
@@ -1543,11 +1658,132 @@ dockerBuildMyApp
     └── dependsOn: prepareDockerContext (from jarFrom)
 ```
 
+### dockerWorkflows DSL Task Graph
+
+For a pipeline named `myPipeline` with build → test → success → cleanup:
+
+```
+runMyPipeline  (e.g., runFailingPipeline)
+    └── dependsOn: workflowMyPipelinePublish (if configured)
+            └── dependsOn: workflowMyPipelineSave (if configured)
+                    └── dependsOn: workflowMyPipelineTagOnSuccess (if configured)
+                            ├── dependsOn: {testTaskName}
+                            └── onlyIf: testsPassed
+
+{testTaskName}  (e.g., integrationTest)
+    ├── dependsOn: composeUp{StackName}
+    ├── dependsOn: dockerBuild{ImageName} (if build step configured)
+    ├── finalizedBy: composeDown{StackName}
+    ├── finalizedBy: workflowMyPipelineCleanup (always step)
+    └── outputs: test-result.json
+
+composeUp{StackName}
+    └── dependsOn: dockerBuild{ImageName} (if build step configured)
+```
+
+**Key Patterns:**
+- Both DSLs use `onlyIf` predicates for conditional task execution
+- Both DSLs use `finalizedBy` for cleanup/composeDown to ensure execution regardless of test outcome
+- Both DSLs output test results to JSON files for downstream conditional tasks to read
+
 ---
 
 ## Implementation Plan
 
 Since the plugin has no external users, this is a **clean replacement** rather than a migration. The current non-compliant implementation will be removed entirely.
+
+### Phase 0: Create Shared Infrastructure
+
+**Goal**: Create common utilities shared by both `dockerProject` and `dockerWorkflows` task generators.
+
+**New Files**:
+
+#### 1. `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/TaskGraphGenerator.groovy`
+
+Abstract base class for task graph generation.
+
+**Common Methods**:
+- `registerConditionalTask(Project, String taskName, Class taskType, Closure config)` - register task with onlyIf based
+  on file input
+- `wireTaskDependency(Project, String dependentTask, String dependsOnTask)` - safe task dependency wiring
+- `wireFinalizedBy(Project, String task, String finalizer)` - safe finalizedBy wiring
+- `getOrCreateLifecycleTask(Project, String taskName, String group, String description)` - create/get lifecycle tasks
+- `configureTestResultOutput(Project, TaskProvider testTask, String stateDir)` - add doLast to capture test results
+
+#### 2. `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/PipelineStateFile.groovy`
+
+JSON-based state communication between tasks.
+
+**Methods**:
+- `writeTestResult(File file, boolean success, String message, long timestamp)`
+- `readTestResult(File file): TestResultData`
+- `isTestSuccessful(File file): boolean`
+- `writeBuildResult(File file, String imageName, List<String> tags)`
+- `readBuildResult(File file): BuildResultData`
+
+**Nested Data Classes**:
+- `TestResultData` - success (boolean), message (String), timestamp (long)
+- `BuildResultData` - imageName (String), tags (List<String>), timestamp (long)
+
+#### 3. `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/TaskNamingUtils.groovy`
+
+Standardized task naming utilities.
+
+**Methods**:
+- `capitalize(String name): String`
+- `buildTaskName(String imageName): String` → `dockerBuild{ImageName}`
+- `composeUpTaskName(String stackName): String` → `composeUp{StackName}`
+- `composeDownTaskName(String stackName): String` → `composeDown{StackName}`
+- `tagOnSuccessTaskName(String prefix): String` → `{prefix}TagOnSuccess`
+- `saveTaskName(String prefix): String` → `{prefix}Save`
+- `publishTaskName(String prefix, String target): String` → `{prefix}Publish{Target}`
+- `cleanupTaskName(String prefix): String` → `{prefix}Cleanup`
+- `lifecycleTaskName(String prefix): String` → `run{Prefix}`
+
+#### 4. `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/TagOnSuccessTask.groovy`
+
+Shared task for conditional tagging (used by both DSLs).
+
+**Flattened `@Input` Properties** (configuration cache safe):
+- `Property<String> imageName`
+- `ListProperty<String> additionalTags`
+- `RegularFileProperty testResultFile`
+
+**Injected Services**:
+- `@Inject Provider<DockerService> dockerService`
+
+**Behavior**:
+- `onlyIf` predicate reads test result file via `PipelineStateFile.isTestSuccessful()`
+- If tests passed, applies each tag via `dockerService.get().tag(imageName, tag)`
+
+#### 5. `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/CleanupTask.groovy`
+
+Shared task for cleanup operations (runs regardless of success/failure).
+
+**Flattened `@Input` Properties**:
+- `Property<Boolean> removeContainers` (convention: false)
+- `Property<Boolean> removeNetworks` (convention: false)
+- `Property<Boolean> removeImages` (convention: false)
+- `ListProperty<String> imageNames` (convention: empty list)
+- `Property<String> stackName` (for compose cleanup)
+
+**Injected Services**:
+- `@Inject Provider<DockerService> dockerService`
+- `@Inject Provider<ComposeService> composeService`
+
+**Behavior**:
+- Always runs (no onlyIf) - cleanup must happen regardless of test results
+- Catches and logs exceptions rather than failing (cleanup is best-effort)
+
+**Deliverables**:
+- Abstract `TaskGraphGenerator` base class
+- `PipelineStateFile` utility
+- `TaskNamingUtils` utility
+- `TagOnSuccessTask` shared task
+- `CleanupTask` shared task
+- Unit tests for all shared components (100% coverage)
+
+---
 
 ### Phase 1: Add New Properties to Spec Classes
 
@@ -1722,7 +1958,7 @@ Since the plugin has no external users, this is a **clean replacement** rather t
     - Wire all publish tasks as dependencies of `runDockerProject`
     - Pass auth credentials to Docker login before push
 
-**Deliverables**:
+**Deliverables (dockerProject)**:
 - New `Lifecycle` enum shared by `dockerProject` and `dockerTest` DSLs
 - New `PullPolicy` enum shared by `dockerProject` and `docker` DSLs
   - Values: `NEVER` (default), `IF_MISSING`, `ALWAYS`
@@ -1756,26 +1992,237 @@ Since the plugin has no external users, this is a **clean replacement** rather t
 - Validation logic for mutual exclusivity (no lifecycle validation needed - enum is type-safe)
 - Unit tests for new properties, DSL helpers, Lifecycle enum, PullPolicy enum, pullPolicy property, multi-image support, and publish target specs
 
-### Phase 2: Create Task Generator Infrastructure
+#### dockerWorkflows Spec Updates (NEW)
 
-**Goal**: Create the generator that produces configuration-cache-compatible task graphs.
+**1. Update `BuildStepSpec`** - Add flattened properties for config cache:
 
-**Tasks**:
-1. Create `DockerProjectTaskGenerator` class with methods:
-   - `generate(Project project, DockerProjectExtension extension)`
-   - `registerBuildTask(Project project, ProjectImageSpec imageSpec)`
-   - `registerComposeUpTask(Project project, ProjectTestSpec testSpec)`
-   - `registerComposeDownTask(Project project, ProjectTestSpec testSpec)`
-   - `registerTagOnSuccessTask(Project project, DockerProjectExtension extension)`
-   - `registerSaveTask(Project project, DockerProjectExtension extension)`
-   - `registerPublishTask(Project project, DockerProjectExtension extension)`
-   - `wireTestTaskDependencies(Project project, DockerProjectExtension extension)`
-2. Handle both Image Name Mode and Repository Mode when generating task names
-3. Wire task generation into `GradleDockerPlugin.configureDockerProject()`
+| Property | Type | Purpose |
+|----------|------|---------|
+| `imageNameFlat` | `Property<String>` | Extracted from nested ImageSpec for cache serialization |
+| `tagsFlat` | `ListProperty<String>` | Extracted from nested ImageSpec for cache serialization |
+
+**2. Update `TestStepSpec`** - Add flattened properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `stackNameFlat` | `Property<String>` | Extracted from ComposeStackSpec for cache serialization |
+| `testTaskNameFlat` | `Property<String>` | Already exists, ensure marked `@Input` |
+
+**3. Update `SuccessStepSpec`** - Add flattened properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `additionalTagsFlat` | `ListProperty<String>` | Tags to apply on success |
+| `publishRegistryFlat` | `Property<String>` | Registry for publishing |
+| `publishTagsFlat` | `ListProperty<String>` | Tags to publish |
+
+**4. Update `FailureStepSpec`** - Add flattened properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `failFast` | `Property<Boolean>` | Whether to fail immediately |
+| `notifyMessage` | `Property<String>` | Failure notification message |
+
+**5. Update `AlwaysStepSpec`** - Add flattened cleanup properties:
+
+| Property | Type | Purpose |
+|----------|------|---------|
+| `removeContainers` | `Property<Boolean>` | Remove containers on cleanup |
+| `removeNetworks` | `Property<Boolean>` | Remove networks on cleanup |
+| `removeImages` | `Property<Boolean>` | Remove images on cleanup |
+
+**Deliverables (dockerWorkflows)**:
+- All workflow spec classes updated with flattened properties
+- Unit tests for all new properties and validation (100% coverage)
+
+---
+
+### Phase 2: Create Task Generators
+
+**Goal**: Create configuration-cache-compatible task generators for both DSLs.
+
+#### 2A: DockerProjectTaskGenerator
+
+**File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/DockerProjectTaskGenerator.groovy`
+
+Extends `TaskGraphGenerator`.
+
+**Methods**:
+- `generate(Project project, DockerProjectExtension extension)` - Main entry point
+- `registerBuildTasks(Project project, NamedDomainObjectContainer<ProjectImageSpec> images)` - For each image
+- `registerComposeUpTask(Project project, ProjectTestSpec testSpec)` - Compose up task
+- `registerComposeDownTask(Project project, ProjectTestSpec testSpec)` - Compose down task
+- `registerTagOnSuccessTask(Project project, DockerProjectExtension extension)` - Conditional tagging
+- `registerSaveTask(Project project, DockerProjectExtension extension)` - Optional save
+- `registerPublishTasks(Project project, DockerProjectExtension extension)` - For each publish target
+- `wireTestTaskDependencies(Project project, DockerProjectExtension extension)` - Wire test task
+- `wireLifecycleTask(Project project)` - Creates `runDockerProject`
+
+**Task Generation Flow**:
+```groovy
+void generate(Project project, DockerProjectExtension extension) {
+    if (!extension.isConfigured()) {
+        return  // Nothing to generate
+    }
+
+    def stateDir = "docker-project"
+
+    // Register build tasks for each image
+    extension.images.each { imageSpec ->
+        if (imageSpec.isBuildMode()) {
+            registerBuildTask(project, imageSpec)
+        }
+    }
+
+    // Register test infrastructure
+    if (extension.test.isPresent()) {
+        registerComposeUpTask(project, extension.test.get())
+        registerComposeDownTask(project, extension.test.get())
+    }
+
+    // Register conditional tasks
+    if (extension.onSuccess.isPresent()) {
+        registerTagOnSuccessTask(project, extension)
+        if (extension.onSuccess.get().saveFile.isPresent()) {
+            registerSaveTask(project, extension)
+        }
+        registerPublishTasks(project, extension)
+    }
+
+    // Wire dependencies
+    wireTestTaskDependencies(project, extension)
+    wireLifecycleTask(project)
+}
+```
+
+#### 2B: WorkflowTaskGenerator (NEW)
+
+**File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/WorkflowTaskGenerator.groovy`
+
+Extends `TaskGraphGenerator`.
+
+**Methods**:
+- `generate(Project project, DockerWorkflowsExtension extension)` - Main entry point
+- `generatePipelineTasks(Project project, PipelineSpec pipelineSpec)` - Per-pipeline generation
+- `registerBuildStepDependency(Project project, PipelineSpec spec)` - Links to docker.images build tasks
+- `registerTestStepTasks(Project project, PipelineSpec spec)` - composeUp, test config, composeDown
+- `registerConditionalTasks(Project project, PipelineSpec spec)` - onSuccess/onFailure
+- `registerAlwaysTask(Project project, PipelineSpec spec)` - cleanup
+- `wirePipelineDependencies(Project project, PipelineSpec spec)` - Wire full pipeline
+- `wireLifecycleTask(Project project, String pipelineName)` - Creates `run{PipelineName}`
+
+**Task Generation Flow**:
+```groovy
+void generate(Project project, DockerWorkflowsExtension extension) {
+    extension.pipelines.each { pipelineSpec ->
+        generatePipelineTasks(project, pipelineSpec)
+    }
+
+    // Create aggregate task that runs all pipelines
+    project.tasks.named('runPipelines') {
+        extension.pipelines.each { pipelineSpec ->
+            dependsOn("run${pipelineSpec.name.capitalize()}")
+        }
+    }
+}
+
+void generatePipelineTasks(Project project, PipelineSpec pipelineSpec) {
+    def pipelineName = pipelineSpec.name
+    def stateDir = "workflow/${pipelineName}"
+
+    // Build step - just wire dependency to existing docker.images task
+    if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
+        // No new task - just dependency wiring later
+    }
+
+    // Test step - configure test task and compose lifecycle
+    if (pipelineSpec.test.isPresent()) {
+        registerTestStepTasks(project, pipelineSpec)
+    }
+
+    // Conditional tasks
+    if (pipelineSpec.onSuccess.isPresent() || pipelineSpec.onTestSuccess.isPresent()) {
+        registerTagOnSuccessTask(project, pipelineSpec, stateDir)
+    }
+
+    // Always/cleanup task
+    if (pipelineSpec.always.isPresent()) {
+        registerAlwaysTask(project, pipelineSpec)
+    }
+
+    // Wire dependencies
+    wirePipelineDependencies(project, pipelineSpec)
+    wireLifecycleTask(project, pipelineName)
+}
+```
+
+**Dependency Wiring Pattern**:
+```groovy
+void wirePipelineDependencies(Project project, PipelineSpec pipelineSpec) {
+    def pipelineName = pipelineSpec.name
+    def testSpec = pipelineSpec.test.get()
+    def testTaskName = testSpec.testTaskName.get()
+    def stackName = testSpec.stack.get().name
+
+    // composeUp depends on build (if build step configured)
+    if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
+        def imageName = pipelineSpec.build.get().image.get().name
+        def buildTaskName = TaskNamingUtils.buildTaskName(imageName)
+        project.tasks.named(TaskNamingUtils.composeUpTaskName(stackName)) {
+            dependsOn(buildTaskName)
+        }
+    }
+
+    // Test depends on composeUp, finalizedBy composeDown and cleanup
+    project.tasks.named(testTaskName) {
+        dependsOn(TaskNamingUtils.composeUpTaskName(stackName))
+        finalizedBy(TaskNamingUtils.composeDownTaskName(stackName))
+        if (pipelineSpec.always.isPresent()) {
+            finalizedBy(TaskNamingUtils.cleanupTaskName("workflow${pipelineName.capitalize()}"))
+        }
+
+        // Output test result to file
+        def resultFile = project.layout.buildDirectory.file("workflow/${pipelineName}/test-result.json")
+        outputs.file(resultFile)
+        doLast {
+            PipelineStateFile.writeTestResult(
+                resultFile.get().asFile,
+                !state.failure,
+                state.failure?.message ?: "",
+                System.currentTimeMillis()
+            )
+        }
+    }
+
+    // Tag on success depends on test
+    def tagTaskName = TaskNamingUtils.tagOnSuccessTaskName("workflow${pipelineName.capitalize()}")
+    if (project.tasks.findByName(tagTaskName) != null) {
+        project.tasks.named(tagTaskName) {
+            dependsOn(testTaskName)
+        }
+    }
+
+    // Lifecycle task depends on final step in chain
+    def lifecycleTaskName = "run${pipelineName.capitalize()}"
+    project.tasks.named(lifecycleTaskName) {
+        // Depend on the last task in the chain
+        if (/* publish configured */) {
+            dependsOn(publishTaskName)
+        } else if (/* save configured */) {
+            dependsOn(saveTaskName)
+        } else if (/* tag on success configured */) {
+            dependsOn(tagTaskName)
+        } else {
+            dependsOn(testTaskName)
+        }
+    }
+}
+```
 
 **Deliverables**:
 - `DockerProjectTaskGenerator` class
-- Unit tests for task generation logic
+- `WorkflowTaskGenerator` class
+- Unit tests for both generators (100% coverage)
 
 ### Phase 3: Create Lightweight Conditional Tasks
 
@@ -2186,6 +2633,90 @@ Tests are required at three levels:
 | `each publish target can have different auth` | Verify per-target auth |
 | `each publish target can have different tags` | Verify per-target tags |
 
+#### 12. `WorkflowTaskGenerator` Tests (dockerWorkflows)
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/generator/WorkflowTaskGeneratorTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `generates lifecycle task for each pipeline` | `runMyPipeline` task created |
+| `generates build step dependency when configured` | Links to dockerBuild task |
+| `generates test step compose up task` | composeUp task wired |
+| `generates test step compose down task` | composeDown task wired |
+| `generates tag on success task` | Conditional tagging |
+| `generates cleanup task from always spec` | Always runs cleanup |
+| `wires dependencies correctly for full pipeline` | Complete dependency graph |
+| `handles pipeline without build step` | Skip build, start with test |
+| `handles pipeline without test step` | Skip test, just build |
+| `handles pipeline without onSuccess` | No conditional tasks |
+| `handles pipeline with only always step` | Cleanup only |
+| `handles multiple pipelines independently` | Independent task graphs |
+| `aggregate runPipelines task depends on all pipeline tasks` | Aggregation |
+| `configures test task to output result file` | doLast added |
+| `test result file path uses pipeline name` | Isolation |
+
+#### 13. Shared Infrastructure Tests
+
+**Shared infrastructure tests** (created in Phase 0):
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/generator/TaskGraphGeneratorTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `registerConditionalTask creates task with onlyIf` | onlyIf based on file input |
+| `wireTaskDependency wires dependsOn safely` | Safe dependency wiring |
+| `wireFinalizedBy wires finalizedBy safely` | Safe finalizedBy wiring |
+| `getOrCreateLifecycleTask creates lifecycle task` | Lifecycle task creation |
+| `configureTestResultOutput adds doLast to capture results` | Test result capture |
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/generator/PipelineStateFileTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `writeTestResult writes JSON to file` | JSON output format |
+| `readTestResult parses JSON from file` | JSON parsing |
+| `isTestSuccessful returns true for success` | Success detection |
+| `isTestSuccessful returns false for failure` | Failure detection |
+| `isTestSuccessful returns false for missing file` | Missing file handling |
+| `writeBuildResult writes image name and tags` | Build result format |
+| `readBuildResult parses build result` | Build result parsing |
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/generator/TaskNamingUtilsTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `capitalize capitalizes first letter` | Basic capitalization |
+| `capitalize handles empty string` | Edge case |
+| `buildTaskName returns dockerBuild{ImageName}` | Build task naming |
+| `composeUpTaskName returns composeUp{StackName}` | Compose up naming |
+| `composeDownTaskName returns composeDown{StackName}` | Compose down naming |
+| `tagOnSuccessTaskName returns {prefix}TagOnSuccess` | Tag task naming |
+| `saveTaskName returns {prefix}Save` | Save task naming |
+| `publishTaskName returns {prefix}Publish{Target}` | Publish task naming |
+| `cleanupTaskName returns {prefix}Cleanup` | Cleanup task naming |
+| `lifecycleTaskName returns run{Prefix}` | Lifecycle task naming |
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/TagOnSuccessTaskTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `applies tags when test result indicates success` | Docker tag commands executed |
+| `skips tagging when test result indicates failure` | No docker commands |
+| `throws exception when test result file is missing` | Error handling |
+| `handles empty additional tags list` | No-op when empty |
+| `onlyIf predicate reads from testResultFile` | File-based conditional |
+
+**File**: `plugin/src/test/groovy/com/kineticfire/gradle/docker/task/CleanupTaskTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `removes containers when removeContainers is true` | Container cleanup |
+| `removes networks when removeNetworks is true` | Network cleanup |
+| `removes images when removeImages is true` | Image cleanup |
+| `catches and logs exceptions instead of failing` | Best-effort cleanup |
+| `always runs regardless of test result` | No onlyIf |
+| `uses stackName for compose cleanup` | Compose-aware cleanup |
+
 ### Functional Tests
 
 **File**: `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/DockerProjectDslFunctionalTest.groovy`
@@ -2383,6 +2914,28 @@ Tests are required at three levels:
 |------|-------------|
 | `dockerProject DSL is configuration cache compatible` | Verify cache reuse |
 | `dockerProject DSL with repository mode is configuration cache compatible` | Repository mode cache |
+
+#### dockerWorkflows DSL Functional Tests
+
+**File**: `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/DockerWorkflowsDslFunctionalTest.groovy`
+
+| Test | Description |
+|------|-------------|
+| `dockerWorkflows DSL creates pipeline lifecycle task` | Task registration |
+| `dockerWorkflows DSL accepts build step with image reference` | DSL parsing |
+| `dockerWorkflows DSL accepts test step with stack and testTaskName` | DSL parsing |
+| `dockerWorkflows DSL accepts onSuccess configuration` | DSL parsing |
+| `dockerWorkflows DSL accepts onTestSuccess configuration` | DSL parsing |
+| `dockerWorkflows DSL accepts onFailure configuration` | DSL parsing |
+| `dockerWorkflows DSL accepts onTestFailure configuration` | DSL parsing |
+| `dockerWorkflows DSL accepts always configuration` | DSL parsing |
+| `dockerWorkflows pipeline task has correct dependencies` | Graph verification |
+| `dockerWorkflows generates composeUp task` | Task exists |
+| `dockerWorkflows generates composeDown task` | Task exists |
+| `dockerWorkflows generates cleanup task when always configured` | Conditional task |
+| `dockerWorkflows is configuration cache compatible` | Cache reuse on second run |
+| `multiple pipelines create independent task graphs` | Isolation verification |
+| `runPipelines aggregates all pipeline tasks` | Aggregation |
 
 ### Integration Tests
 
@@ -3198,6 +3751,153 @@ dockerProject {
 - Referenced images can be used in compose stacks
 - `onSuccess` tags work with source reference images
 
+#### dockerWorkflows Integration Test Scenarios
+
+**Location**: `plugin-integration-test/dockerWorkflows/`
+
+##### Scenario 14: Workflow Basic Pipeline with Config Cache
+
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-14-workflow-config-cache-basic/`
+
+**Purpose**: Basic workflow pipeline with configuration cache verification
+
+**Configuration**:
+```groovy
+dockerWorkflows {
+    pipelines {
+        basicPipeline {
+            build {
+                image.set(docker.images.myApp)
+            }
+            test {
+                stack.set(dockerTest.composeStacks.myAppStack)
+                testTaskName.set('integrationTest')
+            }
+            onTestSuccess {
+                additionalTags.set(['tested'])
+            }
+        }
+    }
+}
+```
+
+**Verifications**:
+1. `runBasicPipeline` task is generated
+2. Build → composeUp → test → composeDown → tagOnSuccess workflow completes
+3. Configuration cache is stored on first run
+4. Configuration cache is reused on second run
+5. No configuration cache warnings or errors
+6. Cleanup removes all containers and images
+
+##### Scenario 15: Workflow Full Pipeline with Config Cache
+
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-15-workflow-config-cache-full/`
+
+**Purpose**: Full workflow pipeline with all steps (build, test, tag, save, publish)
+
+**Configuration**:
+```groovy
+dockerWorkflows {
+    pipelines {
+        fullPipeline {
+            build {
+                image.set(docker.images.myApp)
+            }
+            test {
+                stack.set(dockerTest.composeStacks.myAppStack)
+                testTaskName.set('integrationTest')
+            }
+            onTestSuccess {
+                additionalTags.set(['tested', 'stable'])
+                save {
+                    file.set(layout.buildDirectory.file('images/myapp.tar.gz'))
+                }
+                publish {
+                    registry.set('localhost:5150')
+                    tags.set(['latest', 'tested'])
+                }
+            }
+            always {
+                removeContainers.set(true)
+            }
+        }
+    }
+}
+```
+
+**Verifications**:
+1. Full pipeline executes: build → test → tag → save → publish
+2. Save file is created
+3. Image is pushed to registry
+4. Cleanup runs regardless of success/failure
+5. Configuration cache compatible
+
+##### Scenario 16: Multiple Independent Pipelines
+
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-16-workflow-multiple-pipelines/`
+
+**Purpose**: Multiple independent pipelines with configuration cache
+
+**Configuration**:
+```groovy
+dockerWorkflows {
+    pipelines {
+        apiPipeline {
+            build { image.set(docker.images.api) }
+            test {
+                stack.set(dockerTest.composeStacks.apiStack)
+                testTaskName.set('apiIntegrationTest')
+            }
+            onTestSuccess { additionalTags.set(['api-tested']) }
+        }
+
+        workerPipeline {
+            build { image.set(docker.images.worker) }
+            test {
+                stack.set(dockerTest.composeStacks.workerStack)
+                testTaskName.set('workerIntegrationTest')
+            }
+            onTestSuccess { additionalTags.set(['worker-tested']) }
+        }
+    }
+}
+```
+
+**Verifications**:
+1. `runApiPipeline` and `runWorkerPipeline` tasks are generated
+2. `runPipelines` aggregates both pipeline tasks
+3. Each pipeline has independent task graph
+4. Both pipelines can run (sequentially or in parallel)
+5. Configuration cache compatible
+
+##### Scenario 17: Workflow with Existing Failed Tests Scenario Update
+
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-3-failed-tests/` (existing, update)
+
+**Purpose**: Verify that the existing `scenario-3-failed-tests` workflow now works with configuration cache
+
+**Updates**:
+- Add `--configuration-cache` flag to test command
+- Verify configuration cache reuse on second run
+- Verify onTestFailure behavior works with config cache
+
+**Verifications**:
+1. Pipeline handles test failure correctly
+2. `onTestFailure` step executes (if configured)
+3. `always` cleanup step executes despite test failure
+4. Configuration cache compatible
+5. No configuration cache warnings
+
+##### Integration Test Verification Checklist (Workflows)
+
+- [ ] First run completes successfully (or with expected failures for failure scenario)
+- [ ] Second run reuses configuration cache ("Reusing configuration cache")
+- [ ] No configuration cache warnings or errors
+- [ ] `docker ps -a` shows no lingering containers
+- [ ] All expected images/tags exist after success path
+- [ ] Cleanup removes all resources on failure path
+- [ ] `runPipelines` aggregates all pipeline tasks correctly
+
 ### Test Coverage Summary
 
 | Test Type | Scenario | Image Name Mode | Repository Mode | sourceRef | contextTask | dockerfileName | buildArgs/labels | waitForRunning | lifecycle | Multi-Config | Multi-Publish | pullPolicy | Config Cache |
@@ -3316,15 +4016,165 @@ testIntegration {
 
 ---
 
-## Future: `dockerWorkflows` DSL
+## `dockerWorkflows` DSL Implementation
 
-The `dockerWorkflows` DSL would follow the **same pattern**:
+The `dockerWorkflows` DSL follows the **same pattern** as `dockerProject`:
 - Keep user-facing DSL unchanged
-- Replace `PipelineRunTask` with `PipelineTaskGenerator`
+- Replace `PipelineRunTask` with `WorkflowTaskGenerator`
 - Generate task dependency graphs at configuration time
 - Delete runtime orchestration code
 
-**Recommendation**: Complete `dockerProject` configuration cache compliance first (simpler, proves the pattern), then apply the same approach to `dockerWorkflows`.
+### WorkflowTaskGenerator
+
+**File**: `plugin/src/main/groovy/com/kineticfire/gradle/docker/generator/WorkflowTaskGenerator.groovy`
+
+Extends `TaskGraphGenerator`.
+
+**Methods**:
+- `generate(Project project, DockerWorkflowsExtension extension)` - Main entry point
+- `generatePipelineTasks(Project project, PipelineSpec pipelineSpec)` - Per-pipeline generation
+- `registerBuildStepDependency(Project project, PipelineSpec spec)` - Links to docker.images build tasks
+- `registerTestStepTasks(Project project, PipelineSpec spec)` - composeUp, test config, composeDown
+- `registerConditionalTasks(Project project, PipelineSpec spec)` - onSuccess/onFailure
+- `registerAlwaysTask(Project project, PipelineSpec spec)` - cleanup
+- `wirePipelineDependencies(Project project, PipelineSpec spec)` - Wire full pipeline
+- `wireLifecycleTask(Project project, String pipelineName)` - Creates `run{PipelineName}`
+
+**Task Generation Flow**:
+```groovy
+void generate(Project project, DockerWorkflowsExtension extension) {
+    extension.pipelines.each { pipelineSpec ->
+        generatePipelineTasks(project, pipelineSpec)
+    }
+
+    // Create aggregate task that runs all pipelines
+    project.tasks.named('runPipelines') {
+        extension.pipelines.each { pipelineSpec ->
+            dependsOn("run${pipelineSpec.name.capitalize()}")
+        }
+    }
+}
+
+void generatePipelineTasks(Project project, PipelineSpec pipelineSpec) {
+    def pipelineName = pipelineSpec.name
+    def stateDir = "workflow/${pipelineName}"
+
+    // Build step - just wire dependency to existing docker.images task
+    if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
+        // No new task - just dependency wiring later
+    }
+
+    // Test step - configure test task and compose lifecycle
+    if (pipelineSpec.test.isPresent()) {
+        registerTestStepTasks(project, pipelineSpec)
+    }
+
+    // Conditional tasks
+    if (pipelineSpec.onSuccess.isPresent() || pipelineSpec.onTestSuccess.isPresent()) {
+        registerTagOnSuccessTask(project, pipelineSpec, stateDir)
+    }
+
+    // Always/cleanup task
+    if (pipelineSpec.always.isPresent()) {
+        registerAlwaysTask(project, pipelineSpec)
+    }
+
+    // Wire dependencies
+    wirePipelineDependencies(project, pipelineSpec)
+    wireLifecycleTask(project, pipelineName)
+}
+```
+
+**Dependency Wiring Pattern**:
+```groovy
+void wirePipelineDependencies(Project project, PipelineSpec pipelineSpec) {
+    def pipelineName = pipelineSpec.name
+    def testSpec = pipelineSpec.test.get()
+    def testTaskName = testSpec.testTaskName.get()
+    def stackName = testSpec.stack.get().name
+
+    // composeUp depends on build (if build step configured)
+    if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
+        def imageName = pipelineSpec.build.get().image.get().name
+        def buildTaskName = TaskNamingUtils.buildTaskName(imageName)
+        project.tasks.named(TaskNamingUtils.composeUpTaskName(stackName)) {
+            dependsOn(buildTaskName)
+        }
+    }
+
+    // Test depends on composeUp, finalizedBy composeDown and cleanup
+    project.tasks.named(testTaskName) {
+        dependsOn(TaskNamingUtils.composeUpTaskName(stackName))
+        finalizedBy(TaskNamingUtils.composeDownTaskName(stackName))
+        if (pipelineSpec.always.isPresent()) {
+            finalizedBy(TaskNamingUtils.cleanupTaskName("workflow${pipelineName.capitalize()}"))
+        }
+
+        // Output test result to file
+        def resultFile = project.layout.buildDirectory.file("workflow/${pipelineName}/test-result.json")
+        outputs.file(resultFile)
+        doLast {
+            PipelineStateFile.writeTestResult(
+                resultFile.get().asFile,
+                !state.failure,
+                state.failure?.message ?: "",
+                System.currentTimeMillis()
+            )
+        }
+    }
+
+    // Tag on success depends on test
+    def tagTaskName = TaskNamingUtils.tagOnSuccessTaskName("workflow${pipelineName.capitalize()}")
+    if (project.tasks.findByName(tagTaskName) != null) {
+        project.tasks.named(tagTaskName) {
+            dependsOn(testTaskName)
+        }
+    }
+
+    // Lifecycle task depends on final step in chain
+    def lifecycleTaskName = "run${pipelineName.capitalize()}"
+    project.tasks.named(lifecycleTaskName) {
+        // Depend on the last task in the chain
+        if (/* publish configured */) {
+            dependsOn(publishTaskName)
+        } else if (/* save configured */) {
+            dependsOn(saveTaskName)
+        } else if (/* tag on success configured */) {
+            dependsOn(tagTaskName)
+        } else {
+            dependsOn(testTaskName)
+        }
+    }
+}
+```
+
+### Update Plugin Registration for Workflows
+
+**In `GradleDockerPlugin.registerWorkflowTasks()`**:
+
+```groovy
+// BEFORE (non-compliant):
+project.afterEvaluate {
+    dockerWorkflowsExt.pipelines.all { pipelineSpec ->
+        def taskName = "run${pipelineSpec.name.capitalize()}"
+        project.tasks.register(taskName, PipelineRunTask) { task ->
+            configurePipelineRunTask(task, pipelineSpec, dockerService, taskExecutionService)
+        }
+    }
+}
+
+// AFTER (compliant):
+project.afterEvaluate {
+    def generator = new WorkflowTaskGenerator()
+    generator.generate(project, dockerWorkflowsExt)
+}
+
+// Keep runPipelines aggregate task registration (unchanged)
+project.tasks.register('runPipelines') {
+    group = 'docker workflows'
+    description = 'Run all configured pipelines'
+}
+```
 
 ---
 
@@ -3342,16 +4192,80 @@ The `dockerWorkflows` DSL would follow the **same pattern**:
 
 ---
 
+## File Summary
+
+### Files to Create
+
+| File | Purpose |
+|------|---------|
+| `generator/TaskGraphGenerator.groovy` | Abstract base for task generation |
+| `generator/PipelineStateFile.groovy` | JSON state communication |
+| `generator/TaskNamingUtils.groovy` | Task naming utilities |
+| `generator/DockerProjectTaskGenerator.groovy` | dockerProject task generation |
+| `generator/WorkflowTaskGenerator.groovy` | dockerWorkflows task generation |
+| `task/TagOnSuccessTask.groovy` | Shared conditional tagging task |
+| `task/CleanupTask.groovy` | Shared cleanup task |
+| `generator/TaskGraphGeneratorTest.groovy` | Unit tests for base generator |
+| `generator/PipelineStateFileTest.groovy` | Unit tests for state file |
+| `generator/TaskNamingUtilsTest.groovy` | Unit tests for naming utils |
+| `generator/DockerProjectTaskGeneratorTest.groovy` | Unit tests for dockerProject generator |
+| `generator/WorkflowTaskGeneratorTest.groovy` | Unit tests for workflows generator |
+| `task/TagOnSuccessTaskTest.groovy` | Unit tests for tag task |
+| `task/CleanupTaskTest.groovy` | Unit tests for cleanup task |
+| `DockerWorkflowsDslFunctionalTest.groovy` | Functional tests for dockerWorkflows DSL |
+
+### Files to Delete
+
+| File | Reason |
+|------|--------|
+| `task/DockerProjectRunTask.groovy` | Dynamic execution at runtime |
+| `task/PipelineRunTask.groovy` | Dynamic execution at runtime |
+| `service/TaskExecutionService.groovy` | Enables dynamic task execution |
+| `workflow/TaskLookup.groovy` | Dynamic lookup interface + implementations |
+| `workflow/executor/BuildStepExecutor.groovy` | Uses TaskLookup for dynamic execution |
+| `workflow/executor/TestStepExecutor.groovy` | Uses TaskLookup for dynamic execution |
+| `workflow/executor/ConditionalExecutor.groovy` | Runtime conditional logic |
+| `workflow/executor/AlwaysStepExecutor.groovy` | Uses TaskLookup for dynamic execution |
+| `workflow/executor/SuccessStepExecutor.groovy` | Uses TaskLookup for dynamic execution |
+| `workflow/executor/FailureStepExecutor.groovy` | Uses TaskLookup for dynamic execution |
+| `task/DockerProjectRunTaskTest.groovy` | Tests for deleted code |
+| `task/PipelineRunTaskTest.groovy` | Tests for deleted code |
+| `service/TaskExecutionServiceTest.groovy` | Tests for deleted code |
+| `workflow/TaskLookupTest.groovy` | Tests for deleted code |
+| `workflow/executor/BuildStepExecutorTest.groovy` | Tests for deleted code |
+| `workflow/executor/TestStepExecutorTest.groovy` | Tests for deleted code |
+| `workflow/executor/ConditionalExecutorTest.groovy` | Tests for deleted code |
+| `workflow/executor/AlwaysStepExecutorTest.groovy` | Tests for deleted code |
+| `workflow/executor/SuccessStepExecutorTest.groovy` | Tests for deleted code |
+| `workflow/executor/FailureStepExecutorTest.groovy` | Tests for deleted code |
+
+### Files to Modify
+
+| File | Changes |
+|------|---------|
+| `GradleDockerPlugin.groovy` | Replace run task registration with generator calls |
+| `PipelineSpec.groovy` | Add flattened property accessors |
+| `BuildStepSpec.groovy` | Add flattened properties |
+| `TestStepSpec.groovy` | Add flattened properties |
+| `SuccessStepSpec.groovy` | Add flattened properties |
+| `FailureStepSpec.groovy` | Add flattened properties |
+| `AlwaysStepSpec.groovy` | Add flattened properties |
+| All spec classes from existing plan | Per existing plan |
+
+---
+
 ## Timeline Estimate
 
 | Phase | Estimated Effort | Dependencies |
-|-------|-----------------|--------------|
-| Phase 1: Add Repository Property | 0.5-1 day | None |
-| Phase 2: Task Generator Infrastructure | 2-3 days | Phase 1 |
-| Phase 3: Lightweight Conditional Tasks | 1-2 days | Phase 2 |
-| Phase 4: Update Plugin Registration | 1-2 days | Phase 3 |
+|-------|--------------------|--------------|
+| Phase 0: Shared Infrastructure | 1-2 days | None |
+| Phase 1: Spec Updates (both DSLs) | 1-2 days | None (parallel with Phase 0) |
+| Phase 2: Task Generators (both DSLs) | 2-3 days | Phase 0, Phase 1 |
+| Phase 3: Lightweight Conditional Tasks | 1-2 days | Phase 0 |
+| Phase 4: Update Plugin Registration | 1-2 days | Phase 2, Phase 3 |
 | Phase 5: Testing | 3-4 days | Phase 4 |
-| **Total** | **7.5-12 days** | |
+| Phase 6: Documentation | 1 day | Phase 5 |
+| **Total** | **10-16 days** | |
 
 ---
 
