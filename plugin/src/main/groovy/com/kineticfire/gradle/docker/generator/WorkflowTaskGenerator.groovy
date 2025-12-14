@@ -79,8 +79,11 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
      * @param dockerServiceProvider Provider for DockerService (injected at config time)
      */
     void generate(Project project, DockerWorkflowsExtension extension, Provider<DockerService> dockerServiceProvider) {
+        // Always create runPipelines aggregate task (even if no pipelines configured)
+        createRunPipelinesTask(project, extension)
+
         if (extension.pipelines.isEmpty()) {
-            LOGGER.debug("No pipelines configured, skipping task generation")
+            LOGGER.debug("No pipelines configured, skipping pipeline task generation")
             return
         }
 
@@ -90,9 +93,6 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         extension.pipelines.each { pipelineSpec ->
             generatePipelineTasks(project, pipelineSpec, dockerServiceProvider)
         }
-
-        // Create aggregate lifecycle task for running all pipelines
-        createRunPipelinesTask(project, extension)
 
         LOGGER.lifecycle("dockerWorkflows: Task graph generation complete")
     }
@@ -318,7 +318,7 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         }
 
         def publishSpec = successSpec.publish.get()
-        if (publishSpec.targets.isEmpty()) {
+        if (publishSpec.to.isEmpty()) {
             return null
         }
 
@@ -347,7 +347,7 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             }
 
             // Configure from first publish target
-            def firstTarget = publishSpec.targets.iterator().next()
+            def firstTarget = publishSpec.to.iterator().next()
             if (firstTarget.registry.isPresent()) {
                 task.registry.set(firstTarget.registry)
             }

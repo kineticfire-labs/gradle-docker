@@ -22,6 +22,8 @@ import com.kineticfire.gradle.docker.model.CompressionType
 import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.extension.TestIntegrationExtension
+import com.kineticfire.gradle.docker.generator.DockerProjectTaskGenerator
+import com.kineticfire.gradle.docker.generator.WorkflowTaskGenerator
 import com.kineticfire.gradle.docker.service.*
 import com.kineticfire.gradle.docker.task.*
 import com.kineticfire.gradle.docker.spec.ImageSpec
@@ -220,6 +222,11 @@ class GradleDockerPlugin implements Plugin<Project> {
             if (dockerProjectExt.spec.isConfigured()) {
                 def translator = new DockerProjectTranslator()
                 translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+                // STEP 1b: Generate configuration-cache-compatible task graph for dockerProject
+                // This creates the static task graph instead of dynamic execution
+                def dockerProjectGenerator = new DockerProjectTaskGenerator()
+                dockerProjectGenerator.generate(project, dockerProjectExt, dockerService)
             }
 
             // STEP 2: Now register tasks for ALL images (including translator-created ones)
@@ -271,36 +278,49 @@ class GradleDockerPlugin implements Plugin<Project> {
         dockerExt.images.all { imageSpec ->
             def imageName = imageSpec.name
             def capitalizedName = imageName.capitalize()
-            
+
             // Defer tags validation to task execution time for TestKit compatibility
             // Tags will be validated when tasks actually execute
-            
+
             // Build task - always register, will be skipped at execution time in sourceRef mode
-            project.tasks.register("dockerBuild${capitalizedName}", DockerBuildTask) { task ->
-                configureDockerBuildTask(task, imageSpec, dockerService, project)
+            // Check if task already exists (may be created by DockerProjectTaskGenerator)
+            def buildTaskName = "dockerBuild${capitalizedName}"
+            if (project.tasks.findByName(buildTaskName) == null) {
+                project.tasks.register(buildTaskName, DockerBuildTask) { task ->
+                    configureDockerBuildTask(task, imageSpec, dockerService, project)
+                }
             }
-            
+
             // Save task
-            if (imageSpec.save.isPresent()) {
-                project.tasks.register("dockerSave${capitalizedName}", DockerSaveTask) { task ->
+            def saveTaskName = "dockerSave${capitalizedName}"
+            if (imageSpec.save.isPresent() && project.tasks.findByName(saveTaskName) == null) {
+                project.tasks.register(saveTaskName, DockerSaveTask) { task ->
                     configureDockerSaveTask(task, imageSpec, dockerService, project)
                 }
             }
-            
+
             // Tag task
-            project.tasks.register("dockerTag${capitalizedName}", DockerTagTask) { task ->
-                configureDockerTagTask(task, imageSpec, dockerService, project)
+            def tagTaskName = "dockerTag${capitalizedName}"
+            if (project.tasks.findByName(tagTaskName) == null) {
+                project.tasks.register(tagTaskName, DockerTagTask) { task ->
+                    configureDockerTagTask(task, imageSpec, dockerService, project)
+                }
             }
-            
+
             // Publish task
-            if (imageSpec.publish.isPresent()) {
-                project.tasks.register("dockerPublish${capitalizedName}", DockerPublishTask) { task ->
+            def publishTaskName = "dockerPublish${capitalizedName}"
+            if (imageSpec.publish.isPresent() && project.tasks.findByName(publishTaskName) == null) {
+                project.tasks.register(publishTaskName, DockerPublishTask) { task ->
                     configureDockerPublishTask(task, imageSpec, dockerService, project)
                 }
             }
-            
+
             // Per-image aggregate task - runs all configured operations for this image
-            project.tasks.register("dockerImage${capitalizedName}") { task ->
+            def imageTaskName = "dockerImage${capitalizedName}"
+            if (project.tasks.findByName(imageTaskName) != null) {
+                return  // Skip if aggregate task already exists
+            }
+            project.tasks.register(imageTaskName) { task ->
                 task.group = 'docker'
                 task.description = "Run all configured Docker operations for image: ${imageSpec.name}"
                 
@@ -339,63 +359,28 @@ class GradleDockerPlugin implements Plugin<Project> {
     }
 
     /**
-     * Register workflow pipeline tasks.
+     * Register workflow pipeline tasks using configuration-cache-compatible task graph generation.
      *
-     * Creates a PipelineRunTask for each defined pipeline in dockerWorkflows.pipelines.
-     * Tasks are named 'run{PipelineName}' (e.g., 'runCiPipeline').
+     * Uses WorkflowTaskGenerator to create static task graphs for each pipeline instead of
+     * dynamic PipelineRunTask execution. This approach is fully compatible with Gradle's
+     * configuration cache.
+     *
+     * Generated tasks are named 'run{PipelineName}' (e.g., 'runCi') as lifecycle tasks that
+     * depend on the generated task graph.
      */
     private void registerWorkflowTasks(Project project, DockerWorkflowsExtension dockerWorkflowsExt,
                                        DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                                        Provider<DockerService> dockerService, Provider<ComposeService> composeService,
                                        Provider<TaskExecutionService> taskExecutionService) {
-        // Register an aggregate task for running all pipelines
-        project.tasks.register('runPipelines') {
-            group = 'docker workflows'
-            description = 'Run all configured pipelines'
-        }
-
-        // Register tasks for each pipeline after evaluation (when pipelines are fully configured)
+        // Generate workflow task graphs after evaluation (when pipelines are fully configured)
         project.afterEvaluate {
-            dockerWorkflowsExt.pipelines.all { pipelineSpec ->
-                def pipelineName = pipelineSpec.name
-                def capitalizedName = pipelineName.capitalize()
-                def taskName = "run${capitalizedName}"
+            // Use WorkflowTaskGenerator to create configuration-cache-compatible task graphs
+            def workflowGenerator = new WorkflowTaskGenerator()
+            workflowGenerator.generate(project, dockerWorkflowsExt, dockerService)
 
-                project.tasks.register(taskName, PipelineRunTask) { task ->
-                    configurePipelineRunTask(task, pipelineSpec, dockerService, taskExecutionService)
-                }
-
-                // Add to aggregate task
-                project.tasks.named('runPipelines').configure { aggregateTask ->
-                    aggregateTask.dependsOn(taskName)
-                }
-
-                project.logger.info("Registered pipeline task: {} for pipeline: {}", taskName, pipelineName)
-            }
+            project.logger.info("Workflow task generation complete for {} pipeline(s)",
+                dockerWorkflowsExt.pipelines.size())
         }
-    }
-
-    /**
-     * Configure a PipelineRunTask with the pipeline spec and services.
-     *
-     * Uses TaskExecutionService (a Gradle BuildService) for configuration-cache-compatible
-     * task lookup and execution.
-     */
-    private void configurePipelineRunTask(PipelineRunTask task, pipelineSpec,
-                                          Provider<DockerService> dockerService,
-                                          Provider<TaskExecutionService> taskExecutionService) {
-        task.description = "Run pipeline: ${pipelineSpec.name}"
-
-        // Configure pipeline spec and name
-        task.pipelineSpec.set(pipelineSpec)
-        task.pipelineName.set(pipelineSpec.name)
-
-        // Set the TaskExecutionService provider for configuration cache compatibility
-        // The Provider is serializable, allowing proper configuration cache handling
-        task.setTaskExecutionServiceProvider(taskExecutionService)
-
-        // Set the DockerService provider for tagging operations in onTestSuccess
-        task.setDockerServiceProvider(dockerService)
     }
 
     private void configureAfterEvaluation(Project project, DockerExtension dockerExt, DockerTestExtension dockerTestExt,

@@ -17,8 +17,8 @@
 package com.kineticfire.gradle.docker
 
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
-import com.kineticfire.gradle.docker.task.PipelineRunTask
 import org.gradle.api.Project
+import org.gradle.api.Task
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 import spock.lang.TempDir
@@ -26,7 +26,11 @@ import spock.lang.TempDir
 import java.nio.file.Path
 
 /**
- * Unit tests for GradleDockerPlugin workflow task registration
+ * Unit tests for GradleDockerPlugin workflow task registration.
+ *
+ * These tests verify that WorkflowTaskGenerator creates the expected task graph
+ * for pipeline configurations. The tasks are now generated as a static task graph
+ * instead of using PipelineRunTask for dynamic execution.
  */
 class GradleDockerPluginWorkflowTest extends Specification {
 
@@ -63,31 +67,54 @@ class GradleDockerPluginWorkflowTest extends Specification {
 
     // ===== AGGREGATE TASK REGISTRATION TESTS =====
 
-    def "plugin registers runPipelines aggregate task"() {
-        expect:
+    def "plugin registers runPipelines aggregate task after evaluation with pipelines"() {
+        given:
+        def extension = project.extensions.findByType(DockerWorkflowsExtension)
+        extension.pipelines {
+            testPipeline { }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
         project.tasks.findByName('runPipelines') != null
     }
 
     def "runPipelines task has correct group"() {
         given:
-        def task = project.tasks.findByName('runPipelines')
+        def extension = project.extensions.findByType(DockerWorkflowsExtension)
+        extension.pipelines {
+            testPipeline { }
+        }
 
-        expect:
+        when:
+        project.evaluate()
+
+        then:
+        def task = project.tasks.findByName('runPipelines')
         task.group == 'docker workflows'
     }
 
     def "runPipelines task has description"() {
         given:
-        def task = project.tasks.findByName('runPipelines')
+        def extension = project.extensions.findByType(DockerWorkflowsExtension)
+        extension.pipelines {
+            testPipeline { }
+        }
 
-        expect:
+        when:
+        project.evaluate()
+
+        then:
+        def task = project.tasks.findByName('runPipelines')
         task.description != null
         task.description.contains('pipelines')
     }
 
-    // ===== PIPELINE TASK REGISTRATION TESTS =====
+    // ===== PIPELINE LIFECYCLE TASK REGISTRATION TESTS =====
 
-    def "plugin registers pipeline task after evaluation"() {
+    def "plugin registers pipeline lifecycle task after evaluation"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -103,7 +130,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
         project.tasks.findByName('runCiPipeline') != null
     }
 
-    def "pipeline task is PipelineRunTask type"() {
+    def "pipeline lifecycle task is a Task"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -114,10 +141,10 @@ class GradleDockerPluginWorkflowTest extends Specification {
         project.evaluate()
 
         then:
-        project.tasks.findByName('runTestPipeline') instanceof PipelineRunTask
+        project.tasks.findByName('runTestPipeline') instanceof Task
     }
 
-    def "pipeline task has correct group"() {
+    def "pipeline lifecycle task has correct group"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -132,7 +159,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
         task.group == 'docker workflows'
     }
 
-    def "pipeline task has description"() {
+    def "pipeline lifecycle task has description"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -148,43 +175,9 @@ class GradleDockerPluginWorkflowTest extends Specification {
         task.description.contains('descPipeline')
     }
 
-    def "pipeline task has pipelineSpec configured"() {
-        given:
-        def extension = project.extensions.findByType(DockerWorkflowsExtension)
-        extension.pipelines {
-            specPipeline {
-                description.set('Test spec')
-            }
-        }
-
-        when:
-        project.evaluate()
-
-        then:
-        def task = project.tasks.findByName('runSpecPipeline') as PipelineRunTask
-        task.pipelineSpec.isPresent()
-        task.pipelineSpec.get().name == 'specPipeline'
-    }
-
-    def "pipeline task has pipelineName configured"() {
-        given:
-        def extension = project.extensions.findByType(DockerWorkflowsExtension)
-        extension.pipelines {
-            namePipeline { }
-        }
-
-        when:
-        project.evaluate()
-
-        then:
-        def task = project.tasks.findByName('runNamePipeline') as PipelineRunTask
-        task.pipelineName.isPresent()
-        task.pipelineName.get() == 'namePipeline'
-    }
-
     // ===== MULTIPLE PIPELINES TESTS =====
 
-    def "plugin registers tasks for multiple pipelines"() {
+    def "plugin registers lifecycle tasks for multiple pipelines"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -202,7 +195,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
         project.tasks.findByName('runPipeline3') != null
     }
 
-    def "aggregate task depends on all pipeline tasks"() {
+    def "aggregate task depends on all pipeline lifecycle tasks"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -221,7 +214,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
 
     // ===== NAMING CONVENTION TESTS =====
 
-    def "pipeline task name follows run{PipelineName} convention"() {
+    def "pipeline lifecycle task name follows run{PipelineName} convention"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -235,7 +228,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
         project.tasks.findByName('runMyTest') != null
     }
 
-    def "pipeline task capitalizes first letter of pipeline name"() {
+    def "pipeline lifecycle task capitalizes first letter of pipeline name"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -249,7 +242,7 @@ class GradleDockerPluginWorkflowTest extends Specification {
         project.tasks.findByName('runLowercase') != null
     }
 
-    def "pipeline task handles already capitalized names"() {
+    def "pipeline lifecycle task handles already capitalized names"() {
         given:
         def extension = project.extensions.findByType(DockerWorkflowsExtension)
         extension.pipelines {
@@ -265,12 +258,12 @@ class GradleDockerPluginWorkflowTest extends Specification {
 
     // ===== NO PIPELINES TESTS =====
 
-    def "no pipeline tasks registered when no pipelines configured"() {
+    def "runPipelines task exists even when no pipelines configured"() {
         when:
         project.evaluate()
 
         then:
-        // Only aggregate task exists
+        // Aggregate task always exists
         project.tasks.findByName('runPipelines') != null
         // No individual pipeline tasks
         project.tasks.findAll { it.name.startsWith('run') && it.name != 'runPipelines' }.isEmpty()

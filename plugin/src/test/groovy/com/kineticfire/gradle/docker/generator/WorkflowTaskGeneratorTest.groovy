@@ -52,12 +52,12 @@ class WorkflowTaskGeneratorTest extends Specification {
 
     // ===== BASIC GENERATION TESTS =====
 
-    def "generate skips when no pipelines configured"() {
+    def "generate creates runPipelines even when no pipelines configured"() {
         when:
         generator.generate(project, extension, dockerServiceProvider)
 
         then:
-        project.tasks.findByName('runPipelines') == null
+        project.tasks.findByName('runPipelines') != null
     }
 
     def "generate creates runPipelines task when pipelines configured"() {

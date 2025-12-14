@@ -197,9 +197,9 @@ class WorkflowPluginIntegrationFunctionalTest extends Specification {
             task verifyConfig {
                 doLast {
                     def task = project.tasks.findByName('runMyPipeline')
-                    assert task.pipelineName.get() == 'myPipeline' : "Pipeline name should be 'myPipeline'"
-                    assert task.pipelineSpec.isPresent() : "Pipeline spec should be present"
+                    assert task != null : "Pipeline task should exist"
                     assert task.group == 'docker workflows' : "Task should be in 'docker workflows' group"
+                    assert task.description.contains('myPipeline') : "Task description should contain pipeline name"
                     println "CONFIG_VERIFIED"
                 }
             }

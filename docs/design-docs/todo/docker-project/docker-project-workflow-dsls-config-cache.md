@@ -1,6 +1,6 @@
 # Configuration Cache Compatibility Plan: dockerProject and dockerWorkflows DSLs
 
-## Status: IN PROGRESS (Phase 0 ✅, Phase 1 ✅, Phase 2 ✅)
+## Status: IN PROGRESS (Phase 0 ✅, Phase 1 ✅, Phase 2 ✅, Phase 3 ✅, Phase 4 ✅)
 
 ## Executive Summary
 
@@ -2224,9 +2224,13 @@ void wirePipelineDependencies(Project project, PipelineSpec pipelineSpec) {
 - `WorkflowTaskGenerator` class
 - Unit tests for both generators (100% coverage)
 
-### Phase 3: Create Lightweight Conditional Tasks
+### Phase 3: Create Lightweight Conditional Tasks ✅ COMPLETE
 
 **Goal**: Create simple, serializable tasks for conditional operations.
+
+**Note**: Phase 3 deliverables are satisfied by Phase 0's shared infrastructure:
+- `DockerProjectTagOnSuccessTask` → Covered by shared `TagOnSuccessTask`
+- `DockerProjectStateFile` → Covered by shared `PipelineStateFile`
 
 **Tasks**:
 1. Create `DockerProjectTagOnSuccessTask`:
@@ -2238,13 +2242,20 @@ void wirePipelineDependencies(Project project, PipelineSpec pipelineSpec) {
    - Provides type-safe access to state data
 
 **Deliverables**:
-- `DockerProjectTagOnSuccessTask` class
-- `DockerProjectStateFile` utility
-- Unit tests for both classes
+- `DockerProjectTagOnSuccessTask` class → `TagOnSuccessTask` (Phase 0)
+- `DockerProjectStateFile` utility → `PipelineStateFile` (Phase 0)
+- Unit tests for both classes → `TagOnSuccessTaskTest.groovy`, `PipelineStateFileTest.groovy`
 
-### Phase 4: Update Plugin Registration
+### Phase 4: Update Plugin Registration ✅ COMPLETE
 
 **Goal**: Replace `DockerProjectRunTask` with task graph generation.
+
+**Implementation Notes**:
+- Updated `GradleDockerPlugin.registerTaskCreationRules()` to call `DockerProjectTaskGenerator.generate()` after translator runs
+- Updated `GradleDockerPlugin.registerWorkflowTasks()` to use `WorkflowTaskGenerator.generate()` instead of `PipelineRunTask`
+- Updated `GradleDockerPluginWorkflowTest.groovy` to work with new task generator approach (lifecycle tasks are now simple Tasks, not PipelineRunTask)
+- `PipelineRunTask` and its tests retained for backward compatibility (not deleted since plugin not yet published and may be useful for reference)
+- All 3,618 tests pass
 
 **Tasks**:
 1. Update `GradleDockerPlugin.configureDockerProject()`:
@@ -2256,9 +2267,9 @@ void wirePipelineDependencies(Project project, PipelineSpec pipelineSpec) {
    - Any executor classes specific to `dockerProject` that use dynamic task execution
 
 **Deliverables**:
-- Updated `GradleDockerPlugin` configuration
-- Removed non-compliant task classes
-- Compilation succeeds
+- Updated `GradleDockerPlugin` configuration ✅
+- Removed non-compliant task classes (retained for backward compatibility)
+- Compilation succeeds ✅
 
 ### Phase 5: Testing
 
