@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.extension
 
+import com.kineticfire.gradle.docker.Lifecycle
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.file.ProjectLayout
@@ -55,12 +56,14 @@ abstract class TestIntegrationExtension {
     }
     
     /**
-     * Configure a test task to use Docker Compose stack with specified lifecycle
+     * Configure a test task to use Docker Compose stack with specified lifecycle.
+     * Type-safe version using Lifecycle enum.
+     *
      * @param test Test task to configure
      * @param stackName Name of the compose stack to use
-     * @param lifecycle When to start/stop the stack: "class" or "method"
+     * @param lifecycle When to start/stop the stack: Lifecycle.CLASS or Lifecycle.METHOD
      */
-    void usesCompose(Test test, String stackName, String lifecycle) {
+    void usesCompose(Test test, String stackName, Lifecycle lifecycle) {
         logger.info("Configuring test '{}' to use compose stack '{}' with lifecycle '{}'",
             test.name, stackName, lifecycle)
 
@@ -92,20 +95,30 @@ abstract class TestIntegrationExtension {
             }
         }
 
-        // Configure test task based on lifecycle
-        switch (lifecycle.toLowerCase()) {
-            case 'class':
+        // Configure test task based on lifecycle (type-safe - no validation needed)
+        switch (lifecycle) {
+            case Lifecycle.CLASS:
                 configureClassLifecycle(test, stackName, stackSpec)
                 break
-            case 'method':
+            case Lifecycle.METHOD:
                 configureMethodLifecycle(test, stackName, stackSpec)
                 break
-            default:
-                throw new IllegalArgumentException(
-                    "Invalid lifecycle '${lifecycle}'. Must be 'class' or 'method'. " +
-                    "Example: usesCompose stack: '${stackName}', lifecycle: 'class'"
-                )
         }
+    }
+
+    /**
+     * Configure a test task to use Docker Compose stack with specified lifecycle.
+     * String version for backward compatibility.
+     *
+     * @param test Test task to configure
+     * @param stackName Name of the compose stack to use
+     * @param lifecycle When to start/stop the stack: "class" or "method"
+     * @deprecated Use the Lifecycle enum version for type-safety
+     */
+    @Deprecated
+    void usesCompose(Test test, String stackName, String lifecycle) {
+        // Convert string to enum and delegate
+        usesCompose(test, stackName, Lifecycle.fromString(lifecycle))
     }
     
     /**
@@ -125,13 +138,13 @@ abstract class TestIntegrationExtension {
         // Class lifecycle uses test framework extension to manage compose per test class
 
         // Set comprehensive system properties from dockerTest DSL
-        setComprehensiveSystemProperties(test, stackName, stackSpec, "class")
+        setComprehensiveSystemProperties(test, stackName, stackSpec, Lifecycle.CLASS)
 
         // Auto-wire task dependencies to ensure compose tasks run
         autoWireComposeDependencies(test, stackName)
 
         // Add listener to provide helpful hints if tests fail due to missing annotation
-        addAnnotationHintListener(test, stackName, "class")
+        addAnnotationHintListener(test, stackName, Lifecycle.CLASS)
 
         logger.info("Test '{}' configured for CLASS lifecycle from dockerTest DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
@@ -142,13 +155,13 @@ abstract class TestIntegrationExtension {
         // Method lifecycle uses test framework extension to manage compose per test method
 
         // Set comprehensive system properties from dockerTest DSL
-        setComprehensiveSystemProperties(test, stackName, stackSpec, "method")
+        setComprehensiveSystemProperties(test, stackName, stackSpec, Lifecycle.METHOD)
 
         // Auto-wire task dependencies to ensure compose tasks run
         autoWireComposeDependencies(test, stackName)
 
         // Add listener to provide helpful hints if tests fail due to missing annotation
-        addAnnotationHintListener(test, stackName, "method")
+        addAnnotationHintListener(test, stackName, Lifecycle.METHOD)
 
         logger.info("Test '{}' configured for METHOD lifecycle from dockerTest DSL", test.name)
         logger.info("Spock: Use @ComposeUp (zero parameters)")
@@ -160,12 +173,12 @@ abstract class TestIntegrationExtension {
      * @param test Test task to configure
      * @param stackName Name of the compose stack
      * @param stackSpec ComposeStackSpec containing all configuration
-     * @param lifecycle Lifecycle mode ("class" or "method")
+     * @param lifecycle Lifecycle mode (Lifecycle.CLASS or Lifecycle.METHOD)
      */
-    private void setComprehensiveSystemProperties(Test test, String stackName, stackSpec, String lifecycle) {
+    private void setComprehensiveSystemProperties(Test test, String stackName, stackSpec, Lifecycle lifecycle) {
         // Basic configuration
         test.systemProperty("docker.compose.stack", stackName)
-        test.systemProperty("docker.compose.lifecycle", lifecycle)
+        test.systemProperty("docker.compose.lifecycle", lifecycle.toPropertyValue())
         // Set both old and new property names for backward compatibility
         test.systemProperty("docker.compose.project", projectNameProvider.get())
         test.systemProperty("docker.compose.projectName", stackSpec.projectName.getOrElse(""))
@@ -236,10 +249,10 @@ abstract class TestIntegrationExtension {
      *
      * @param test Test task to add listener to
      * @param stackName Name of the compose stack
-     * @param lifecycle Lifecycle mode ("class" or "method")
+     * @param lifecycle Lifecycle mode (Lifecycle.CLASS or Lifecycle.METHOD)
      */
-    private void addAnnotationHintListener(Test test, String stackName, String lifecycle) {
-        test.addTestListener(new ComposeAnnotationHintListener(stackName, lifecycle))
+    private void addAnnotationHintListener(Test test, String stackName, Lifecycle lifecycle) {
+        test.addTestListener(new ComposeAnnotationHintListener(stackName, lifecycle.toPropertyValue()))
         logger.debug("Added annotation hint listener to test task '{}'", test.name)
     }
 }

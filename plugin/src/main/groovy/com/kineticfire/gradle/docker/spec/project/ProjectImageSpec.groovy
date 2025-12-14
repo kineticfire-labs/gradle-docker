@@ -16,17 +16,21 @@
 
 package com.kineticfire.gradle.docker.spec.project
 
+import com.kineticfire.gradle.docker.PullPolicy
 import com.kineticfire.gradle.docker.spec.AuthSpec
 import groovy.lang.Closure
 import groovy.lang.DelegatesTo
 import org.gradle.api.Action
+import org.gradle.api.Task
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.Optional
+import org.gradle.api.tasks.TaskProvider
 
 import javax.inject.Inject
 
@@ -50,8 +54,14 @@ abstract class ProjectImageSpec {
 
         // Build mode conventions
         dockerfile.convention('src/main/docker/Dockerfile')
+        dockerfileName.convention('')
+        jarName.convention('app.jar')
         buildArgs.convention([:])
         labels.convention([:])
+
+        // Context task triple-property pattern conventions
+        contextTaskName.convention('')
+        contextTaskPath.convention('')
 
         // SourceRef mode conventions
         sourceRef.convention('')
@@ -61,11 +71,16 @@ abstract class ProjectImageSpec {
         sourceRefTag.convention('')
         sourceRefRepository.convention('')
         pullIfMissing.convention(false)
+        pullPolicy.convention(PullPolicy.NEVER)
 
         // Common conventions
         registry.convention('')
         namespace.convention('')
+        repository.convention('')
         tags.convention(['latest'])
+
+        // Multi-image support
+        primary.convention(false)
 
         // Version property - empty by default, derived from first non-'latest' tag if not set
         version.convention('')
@@ -74,8 +89,27 @@ abstract class ProjectImageSpec {
     // === BUILD MODE PROPERTIES ===
 
     /**
-     * Image name (e.g., 'my-app')
+     * Image name (e.g., 'my-app').
+     * Renamed from 'name' for consistency with docker.images.&lt;name&gt; DSL.
      */
+    @Input
+    @Optional
+    abstract Property<String> getImageName()
+
+    /**
+     * Whether this is the primary image in a multi-image configuration.
+     * The primary image receives onSuccess.additionalTags.
+     * If only one image is defined, it's automatically primary.
+     * Default: false
+     */
+    @Input
+    abstract Property<Boolean> getPrimary()
+
+    /**
+     * Deprecated: Use imageName instead.
+     * @deprecated Renamed to imageName for consistency with docker DSL.
+     */
+    @Deprecated
     @Input
     @Optional
     abstract Property<String> getName()
@@ -98,10 +132,30 @@ abstract class ProjectImageSpec {
     /**
      * Path to Dockerfile relative to project root.
      * Default: 'src/main/docker/Dockerfile'
+     * Mutually exclusive with dockerfileName.
      */
     @Input
     @Optional
     abstract Property<String> getDockerfile()
+
+    /**
+     * Name of Dockerfile in src/main/docker directory.
+     * When set, resolves to 'src/main/docker/{dockerfileName}'.
+     * Only applies when jarFrom is used (ignored for contextTask and contextDir).
+     * Mutually exclusive with dockerfile path.
+     * Default: '' (empty means use dockerfile path directly)
+     */
+    @Input
+    @Optional
+    abstract Property<String> getDockerfileName()
+
+    /**
+     * Name to use for the JAR file in the build context.
+     * Only applies when jarFrom is used.
+     * Default: 'app.jar'
+     */
+    @Input
+    abstract Property<String> getJarName()
 
     /**
      * Task path that produces a JAR to include in context (e.g., ':app:jar').
@@ -115,11 +169,61 @@ abstract class ProjectImageSpec {
 
     /**
      * Alternative to jarFrom: specify a directory as build context.
-     * Mutually exclusive with jarFrom.
+     * Mutually exclusive with jarFrom and contextTask.
      */
     @Input
     @Optional
     abstract Property<String> getContextDir()
+
+    // === CONTEXT TASK TRIPLE-PROPERTY PATTERN ===
+    // For configuration cache safety, we store both the TaskProvider (for convenient DSL)
+    // and flattened string properties (for serialization)
+
+    /**
+     * Task that prepares the build context directory.
+     * User-facing DSL property for convenient task assignment.
+     * When set, auto-populates contextTaskName and contextTaskPath.
+     * Mutually exclusive with jarFrom and contextDir.
+     *
+     * Note: This property is @Internal and not cached directly.
+     * The string properties contextTaskName and contextTaskPath are used for caching.
+     */
+    @Internal
+    TaskProvider<Task> contextTask
+
+    /**
+     * Name of the context task (auto-populated from contextTask).
+     * Used for configuration cache serialization.
+     */
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskName()
+
+    /**
+     * Full path of the context task (e.g., ':app-image:prepareContext').
+     * Auto-populated from contextTask.
+     * Used for configuration cache serialization and task lookup during replay.
+     */
+    @Input
+    @Optional
+    abstract Property<String> getContextTaskPath()
+
+    /**
+     * Set the context task and auto-populate the string properties.
+     *
+     * @param taskProvider The task provider that produces the build context
+     */
+    void contextTask(TaskProvider<Task> taskProvider) {
+        this.contextTask = taskProvider
+        if (taskProvider != null) {
+            // Extract and store the serializable string properties
+            contextTaskName.set(taskProvider.name)
+            // For full path, we need to get it from the task when available
+            taskProvider.configure { task ->
+                contextTaskPath.set(task.path)
+            }
+        }
+    }
 
     /**
      * Build arguments to pass to docker build
@@ -183,9 +287,20 @@ abstract class ProjectImageSpec {
     /**
      * Whether to pull the image if not present locally.
      * Only applies in sourceRef mode.
+     * @deprecated Use pullPolicy instead for more control.
      */
+    @Deprecated
     @Input
     abstract Property<Boolean> getPullIfMissing()
+
+    /**
+     * Image pull policy for sourceRef mode.
+     * Provides type-safe control over when to pull images from registry.
+     * Only applicable in Source Reference Mode (not Build Mode).
+     * Default: NEVER (fail if image not found locally)
+     */
+    @Input
+    abstract Property<PullPolicy> getPullPolicy()
 
     // === COMMON PROPERTIES ===
 
@@ -202,6 +317,15 @@ abstract class ProjectImageSpec {
     @Input
     @Optional
     abstract Property<String> getNamespace()
+
+    /**
+     * Target repository for publishing (e.g., 'myorg/myapp').
+     * Alternative to namespace + imageName.
+     * Mutually exclusive with imageName - cannot set both.
+     */
+    @Input
+    @Optional
+    abstract Property<String> getRepository()
 
     /**
      * Authentication for pulling images (sourceRef mode with private registries)
@@ -244,7 +368,8 @@ abstract class ProjectImageSpec {
      */
     boolean isBuildMode() {
         return (jarFrom.isPresent() && !jarFrom.get().isEmpty()) ||
-               (contextDir.isPresent() && !contextDir.get().isEmpty())
+               (contextDir.isPresent() && !contextDir.get().isEmpty()) ||
+               (contextTaskName.isPresent() && !contextTaskName.get().isEmpty())
     }
 
     /**
@@ -258,5 +383,132 @@ abstract class ProjectImageSpec {
         def tagList = tags.getOrElse([])
         def nonLatestTag = tagList.find { it != 'latest' }
         return nonLatestTag ?: ''
+    }
+
+    // === DSL HELPER METHODS ===
+
+    /**
+     * Add a build argument for the Docker build.
+     * Convenience method matching docker DSL API.
+     *
+     * @param key The build argument name
+     * @param value The build argument value
+     */
+    void buildArg(String key, String value) {
+        buildArgs.put(key, value)
+    }
+
+    /**
+     * Add a label to the built image.
+     * Convenience method matching docker DSL API.
+     *
+     * @param key The label name
+     * @param value The label value
+     */
+    void label(String key, String value) {
+        labels.put(key, value)
+    }
+
+    /**
+     * Configure source reference using component-based DSL.
+     * Alternative to setting sourceRef string directly.
+     *
+     * Example:
+     * <pre>
+     * sourceRef {
+     *     registry = 'docker.io'
+     *     namespace = 'library'
+     *     name = 'nginx'
+     *     tag = 'latest'
+     * }
+     * </pre>
+     *
+     * @param closure Configuration closure for SourceRefSpec
+     */
+    void sourceRef(@DelegatesTo(SourceRefSpec) Closure closure) {
+        def spec = new SourceRefSpec()
+        closure.delegate = spec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call()
+
+        // Compute and store the full reference string
+        sourceRef.set(spec.computeReference())
+
+        // Also store component properties for reference
+        if (spec.registry) sourceRefRegistry.set(spec.registry)
+        if (spec.namespace) sourceRefNamespace.set(spec.namespace)
+        if (spec.name) sourceRefImageName.set(spec.name)
+        if (spec.tag) sourceRefTag.set(spec.tag)
+    }
+
+    /**
+     * Get the effective source reference string.
+     * Computes from component properties if sourceRef is not explicitly set.
+     *
+     * @return The full source reference string, or empty string if not configured
+     */
+    String getEffectiveSourceRef() {
+        // If sourceRef is explicitly set, use it
+        if (sourceRef.isPresent() && !sourceRef.get().isEmpty()) {
+            return sourceRef.get()
+        }
+
+        // Otherwise, try to compute from component properties
+        def spec = new SourceRefSpec()
+        spec.registry = sourceRefRegistry.getOrElse('')
+        spec.namespace = sourceRefNamespace.getOrElse('')
+        spec.name = sourceRefImageName.getOrElse('')
+        spec.tag = sourceRefTag.getOrElse('')
+
+        // If repository is set, use it instead of namespace+name
+        if (sourceRefRepository.isPresent() && !sourceRefRepository.get().isEmpty()) {
+            spec.repository = sourceRefRepository.get()
+        }
+
+        return spec.computeReference()
+    }
+
+    /**
+     * Inner class for component-based source reference configuration.
+     */
+    static class SourceRefSpec {
+        String registry = ''
+        String namespace = ''
+        String name = ''
+        String tag = ''
+        String repository = ''
+
+        /**
+         * Compute the full reference string from component properties.
+         *
+         * @return The computed reference string (e.g., 'docker.io/library/nginx:latest')
+         */
+        String computeReference() {
+            StringBuilder ref = new StringBuilder()
+
+            // Add registry if present
+            if (registry) {
+                ref.append(registry).append('/')
+            }
+
+            // Add repository or namespace/name
+            if (repository) {
+                ref.append(repository)
+            } else {
+                if (namespace) {
+                    ref.append(namespace).append('/')
+                }
+                if (name) {
+                    ref.append(name)
+                }
+            }
+
+            // Add tag if present
+            if (tag && ref.length() > 0) {
+                ref.append(':').append(tag)
+            }
+
+            return ref.toString()
+        }
     }
 }

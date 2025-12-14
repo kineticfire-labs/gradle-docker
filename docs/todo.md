@@ -71,49 +71,6 @@ dockerProject.image:
 
 
 
-2. rename dockerTest to dockerTest?
-Phases 1 - 8
-4
-
-
-
-
-> Task :docker:scenario-4:cleanDockerImages
-Docker build: [Warning] One or more build-args [JAR_FILE] were not consumed
-
-
-
-The configuration cache warnings are expected for PipelineRunTask because:
-1. PipelineRunTask is already marked as notCompatibleWithConfigurationCache
-2. When it executes test tasks programmatically at runtime, those tasks (Test from GroovyBasePlugin/JavaBasePlugin) access .project internally
-3. This is inherent to the pipeline workflow design - we can't avoid it without completely redesigning how pipelines work
-
-
-
-
-> Task :dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline FAILED
-
-3 problems were found storing the configuration cache.
-- Plugin class 'org.gradle.api.plugins.GroovyBasePlugin': execution of task ':dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Plugin class 'org.gradle.api.plugins.JavaBasePlugin': execution of task ':dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-- Task `:dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline` of type `com.kineticfire.gradle.docker.task.PipelineRunTask`: execution of task ':dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline' caused invocation of 'Task.project' in other task at execution time which is unsupported with the configuration cache.
-  See https://docs.gradle.org/9.0.0/userguide/configuration_cache_requirements.html#config_cache:requirements:use_project_during_execution
-
-See the complete report at file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/configuration-cache/55xvxtljzt2yjyqspeb446lap/aao4032fwbknjsnltjkjv98pt/configuration-cache-report.html
-
-[Incubating] Problems report is available at: file:///home/user/kf/repos/github-repos/gradle-docker/plugin-integration-test/build/reports/problems/problems-report.html
-
-FAILURE: Build failed with an exception.
-
-* What went wrong:
-  Execution failed for task ':dockerWorkflows:scenario-3-failed-tests:app-image:runFailingPipeline'.
-> Pipeline 'failingPipeline' failed: Test execution failed: There are test sources present and no filters are applied, but the test task did not discover any tests to execute. This is likely due to a misconfiguration. Please check your test configuration. If this is not a misconfiguration, this error can be disabled by setting the 'failOnNoDiscoveredTests' property to false.
-
-
-
-
 
 
 1. integration tests:

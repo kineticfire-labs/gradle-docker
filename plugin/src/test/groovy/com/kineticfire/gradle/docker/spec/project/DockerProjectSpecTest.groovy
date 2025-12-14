@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec.project
 
+import com.kineticfire.gradle.docker.Lifecycle
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -135,12 +136,12 @@ class DockerProjectSpecTest extends Specification {
         when:
         dockerProjectSpec.test({ ProjectTestSpec testSpec ->
             testSpec.compose.set('test-compose.yml')
-            testSpec.lifecycle.set('method')
+            testSpec.lifecycle.set(Lifecycle.METHOD)
         } as org.gradle.api.Action<ProjectTestSpec>)
 
         then:
         dockerProjectSpec.test.get().compose.get() == 'test-compose.yml'
-        dockerProjectSpec.test.get().lifecycle.get() == 'method'
+        dockerProjectSpec.test.get().lifecycle.get() == Lifecycle.METHOD
     }
 
     def "onSuccess action configures ProjectSuccessSpec"() {
@@ -233,7 +234,7 @@ class DockerProjectSpecTest extends Specification {
         dockerProjectSpec.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
             waitForHealthy.set(['app'])
-            lifecycle.set('class')
+            lifecycle.set(Lifecycle.CLASS)
         }
         dockerProjectSpec.onSuccess {
             additionalTags.set(['tested', 'stable'])

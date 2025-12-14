@@ -17,12 +17,17 @@
 package com.kineticfire.gradle.docker.spec.project
 
 import com.kineticfire.gradle.docker.model.SaveCompression
+import groovy.lang.Closure
+import groovy.lang.DelegatesTo
+import org.gradle.api.Action
 import org.gradle.api.GradleException
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.file.ProjectLayout
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.Nested
 import org.gradle.api.tasks.Optional
 
 import javax.inject.Inject
@@ -41,6 +46,12 @@ abstract class ProjectSuccessSpec {
     private final ObjectFactory objectFactory
     private final ProjectLayout layout
 
+    /**
+     * Container for multiple named publish targets.
+     * Each target can have its own registry, namespace, tags, and auth.
+     */
+    final NamedDomainObjectContainer<PublishTargetSpec> publishTargets
+
     @Inject
     ProjectSuccessSpec(ObjectFactory objectFactory, ProjectLayout layout) {
         this.objectFactory = objectFactory
@@ -49,6 +60,11 @@ abstract class ProjectSuccessSpec {
         additionalTags.convention([])
         saveCompression.convention('')  // Empty means use SaveSpec default (NONE)
         publishTags.convention([])
+
+        // Create the named container for publish targets
+        publishTargets = objectFactory.domainObjectContainer(PublishTargetSpec) { name ->
+            objectFactory.newInstance(PublishTargetSpec, name)
+        }
     }
 
     /**
@@ -179,6 +195,83 @@ abstract class ProjectSuccessSpec {
                     "Unknown compression type '${compression}'. " +
                     "Valid values: none, gzip, bzip2, xz, zip"
                 )
+        }
+    }
+
+    // === MULTIPLE PUBLISH TARGETS ===
+
+    /**
+     * Configure multiple publish targets using a closure.
+     *
+     * Example:
+     * <pre>
+     * onSuccess {
+     *     publish {
+     *         dockerHub {
+     *             registry = 'docker.io'
+     *             namespace = 'myorg'
+     *             tags = ['latest']
+     *         }
+     *         privateRegistry {
+     *             registry = 'registry.example.com'
+     *         }
+     *     }
+     * }
+     * </pre>
+     *
+     * Note: Cannot use both flat publish properties (publishRegistry, publishNamespace, publishTags)
+     * AND the publish {} block simultaneously.
+     *
+     * @param closure Configuration closure for publish targets container
+     */
+    void publish(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {
+        closure.delegate = publishTargets
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call(publishTargets)  // Pass container to support both delegate and parameter styles
+    }
+
+    /**
+     * Configure multiple publish targets using an action.
+     *
+     * @param action Configuration action for publish targets container
+     */
+    void publish(Action<NamedDomainObjectContainer<PublishTargetSpec>> action) {
+        action.execute(publishTargets)
+    }
+
+    /**
+     * Check if flat publish properties are configured.
+     *
+     * @return true if any of publishRegistry, publishNamespace, or publishTags is set
+     */
+    boolean hasFlatPublishConfig() {
+        return (publishRegistry.isPresent() && !publishRegistry.get().isEmpty()) ||
+               (publishNamespace.isPresent() && !publishNamespace.get().isEmpty()) ||
+               !publishTags.get().isEmpty()
+    }
+
+    /**
+     * Check if multiple publish targets are configured.
+     *
+     * @return true if publishTargets container is not empty
+     */
+    boolean hasMultiplePublishTargets() {
+        return !publishTargets.isEmpty()
+    }
+
+    /**
+     * Validate that flat properties and publish {} block are not used together.
+     *
+     * @throws GradleException if both are configured
+     */
+    void validatePublishConfig() {
+        if (hasFlatPublishConfig() && hasMultiplePublishTargets()) {
+            throw new GradleException(
+                "Cannot use both flat publish properties (publishRegistry, publishNamespace, publishTags) " +
+                "AND the publish { } block. Choose one approach:\n" +
+                "  - Simple: publishRegistry = '...', publishTags = [...]\n" +
+                "  - Multiple: publish { target1 { ... } target2 { ... } }"
+            )
         }
     }
 }

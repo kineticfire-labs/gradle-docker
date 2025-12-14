@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.service
 
+import com.kineticfire.gradle.docker.Lifecycle
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
@@ -417,7 +418,8 @@ class DockerProjectTranslator {
                 pipeline.test { testStep ->
                     testStep.testTaskName.set(testSpec.testTaskName.getOrElse('integrationTest'))
 
-                    def lifecycleValue = parseLifecycle(testSpec.lifecycle.getOrElse('class'))
+                    def lifecycle = testSpec.lifecycle.getOrElse(Lifecycle.CLASS)
+                    def lifecycleValue = convertLifecycle(lifecycle)
                     testStep.lifecycle.set(lifecycleValue)
 
                     // When METHOD lifecycle, delegate stack management to test framework extension
@@ -476,8 +478,27 @@ class DockerProjectTranslator {
     }
 
     /**
-     * Parse lifecycle string to WorkflowLifecycle enum.
+     * Convert Lifecycle enum to WorkflowLifecycle enum.
+     *
+     * @param lifecycle The Lifecycle enum value
+     * @return The corresponding WorkflowLifecycle enum value
      */
+    WorkflowLifecycle convertLifecycle(Lifecycle lifecycle) {
+        switch (lifecycle) {
+            case Lifecycle.CLASS: return WorkflowLifecycle.CLASS
+            case Lifecycle.METHOD: return WorkflowLifecycle.METHOD
+            default:
+                throw new GradleException(
+                    "Unknown lifecycle '${lifecycle}'. Valid values: CLASS, METHOD"
+                )
+        }
+    }
+
+    /**
+     * Parse lifecycle string to WorkflowLifecycle enum.
+     * @deprecated Use convertLifecycle(Lifecycle) instead
+     */
+    @Deprecated
     WorkflowLifecycle parseLifecycle(String lifecycle) {
         switch (lifecycle.toLowerCase()) {
             case 'class': return WorkflowLifecycle.CLASS
@@ -513,8 +534,8 @@ class DockerProjectTranslator {
             def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
 
             // Determine if this is METHOD lifecycle (test framework handles compose)
-            def lifecycleValue = testSpec.lifecycle.getOrElse('class')
-            def isMethodLifecycle = lifecycleValue.toLowerCase() == 'method'
+            def lifecycle = testSpec.lifecycle.getOrElse(Lifecycle.CLASS)
+            def isMethodLifecycle = lifecycle == Lifecycle.METHOD
 
             // Check if required tasks exist before configuring dependencies
             // In production, these tasks exist because this runs after afterEvaluate

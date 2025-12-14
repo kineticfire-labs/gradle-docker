@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.spec.project
 
+import com.kineticfire.gradle.docker.Lifecycle
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -37,7 +38,7 @@ class ProjectTestSpecTest extends Specification {
     def "constructor initializes with defaults"() {
         expect:
         testSpec != null
-        testSpec.lifecycle.get() == 'class'
+        testSpec.lifecycle.get() == Lifecycle.CLASS
         testSpec.timeoutSeconds.get() == 60
         testSpec.pollSeconds.get() == 2
         testSpec.testTaskName.get() == 'integrationTest'
@@ -74,18 +75,18 @@ class ProjectTestSpecTest extends Specification {
 
     def "lifecycle property works correctly with class value"() {
         when:
-        testSpec.lifecycle.set('class')
+        testSpec.lifecycle.set(Lifecycle.CLASS)
 
         then:
-        testSpec.lifecycle.get() == 'class'
+        testSpec.lifecycle.get() == Lifecycle.CLASS
     }
 
     def "lifecycle property works correctly with method value"() {
         when:
-        testSpec.lifecycle.set('method')
+        testSpec.lifecycle.set(Lifecycle.METHOD)
 
         then:
-        testSpec.lifecycle.get() == 'method'
+        testSpec.lifecycle.get() == Lifecycle.METHOD
     }
 
     def "timeoutSeconds property works correctly"() {
@@ -128,7 +129,7 @@ class ProjectTestSpecTest extends Specification {
         testSpec.compose.set('src/test/resources/compose/stack.yml')
         testSpec.waitForHealthy.set(['app', 'db'])
         testSpec.waitForRunning.set(['worker'])
-        testSpec.lifecycle.set('method')
+        testSpec.lifecycle.set(Lifecycle.METHOD)
         testSpec.timeoutSeconds.set(180)
         testSpec.pollSeconds.set(10)
         testSpec.projectName.set('test-stack')
@@ -138,7 +139,7 @@ class ProjectTestSpecTest extends Specification {
         testSpec.compose.get() == 'src/test/resources/compose/stack.yml'
         testSpec.waitForHealthy.get() == ['app', 'db']
         testSpec.waitForRunning.get() == ['worker']
-        testSpec.lifecycle.get() == 'method'
+        testSpec.lifecycle.get() == Lifecycle.METHOD
         testSpec.timeoutSeconds.get() == 180
         testSpec.pollSeconds.get() == 10
         testSpec.projectName.get() == 'test-stack'
@@ -152,7 +153,7 @@ class ProjectTestSpecTest extends Specification {
         then:
         testSpec.compose.get() == 'docker-compose.yml'
         // Defaults are still in place
-        testSpec.lifecycle.get() == 'class'
+        testSpec.lifecycle.get() == Lifecycle.CLASS
         testSpec.timeoutSeconds.get() == 60
         testSpec.pollSeconds.get() == 2
         testSpec.testTaskName.get() == 'integrationTest'

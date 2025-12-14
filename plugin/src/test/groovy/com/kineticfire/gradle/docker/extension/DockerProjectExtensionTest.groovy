@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.extension
 
+import com.kineticfire.gradle.docker.Lifecycle
 import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
@@ -106,26 +107,26 @@ class DockerProjectExtensionTest extends Specification {
         extension.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
             waitForHealthy.set(['app', 'db'])
-            lifecycle.set('class')
+            lifecycle.set(Lifecycle.CLASS)
         }
 
         then:
         extension.spec.test.get().compose.get() == 'src/integrationTest/resources/compose/app.yml'
         extension.spec.test.get().waitForHealthy.get() == ['app', 'db']
-        extension.spec.test.get().lifecycle.get() == 'class'
+        extension.spec.test.get().lifecycle.get() == Lifecycle.CLASS
     }
 
     def "test action configures ProjectTestSpec"() {
         when:
         extension.test({ ProjectTestSpec testSpec ->
             testSpec.compose.set('docker-compose.yml')
-            testSpec.lifecycle.set('method')
+            testSpec.lifecycle.set(Lifecycle.METHOD)
             testSpec.timeoutSeconds.set(120)
         } as org.gradle.api.Action<ProjectTestSpec>)
 
         then:
         extension.spec.test.get().compose.get() == 'docker-compose.yml'
-        extension.spec.test.get().lifecycle.get() == 'method'
+        extension.spec.test.get().lifecycle.get() == Lifecycle.METHOD
         extension.spec.test.get().timeoutSeconds.get() == 120
     }
 

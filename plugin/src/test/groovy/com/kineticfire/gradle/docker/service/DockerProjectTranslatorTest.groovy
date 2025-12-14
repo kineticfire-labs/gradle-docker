@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.service
 
+import com.kineticfire.gradle.docker.Lifecycle
 import com.kineticfire.gradle.docker.extension.DockerExtension
 import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
@@ -124,6 +125,20 @@ services:
         then:
         def e = thrown(GradleException)
         e.message.contains("Unknown lifecycle 'invalid'")
+    }
+
+    def "convertLifecycle returns correct enum values"() {
+        expect:
+        translator.convertLifecycle(Lifecycle.CLASS) == WorkflowLifecycle.CLASS
+        translator.convertLifecycle(Lifecycle.METHOD) == WorkflowLifecycle.METHOD
+    }
+
+    def "convertLifecycle throws for null value"() {
+        when:
+        translator.convertLifecycle(null)
+
+        then:
+        thrown(GradleException)
     }
 
     // ===== VALIDATION TESTS =====
@@ -533,7 +548,7 @@ services:
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
-            lifecycle.set('method')
+            lifecycle.set(Lifecycle.METHOD)
         }
 
         when:
