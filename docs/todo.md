@@ -1,40 +1,6 @@
 # todo
 
-**REMAINING WORK:**
-Phase 5:
-24 +  The following integration tests in `plugin-integration-test/dockerProject/` were NOT implemented and need to be added:
-25 +  1. `scenario-1-build-mode/` - Basic build mode: jarFrom, test, additionalTags - DONE
-26 +  2. `scenario-2-sourceref-mode/` - SourceRef mode with component properties - DONE
-27 +  3. `scenario-3-save-publish/` - Save and publish on success - DONE
-28 +  4. `scenario-4-method-lifecycle/` - Method lifecycle mode - DONE
-      5. `scenario-5-contextdir-mode/` - Build mode using contextDir instead of jarFrom - DONE
-   30 +  6. `README.md` - Documentation of scenarios
-
-User DSL:
-dockerProject {
-    image {
-        name.set('my-app')
-        tags.set(['latest', '1.0.0'])
-        jarFrom.set(':app:jar')
-        buildArgs.put('VERSION', '1.0.0')
-        labels.put('title', 'My App')
-    }
-
-    test {
-        compose.set('src/integrationTest/resources/compose/app.yml')
-        waitForHealthy.set(['app'])
-        timeoutSeconds.set(60)
-        testTaskName.set('integrationTest')
-    }
-
-    onSuccess {
-        additionalTags.set(['tested', 'stable'])
-        saveFile.set('build/images/my-app.tar.gz')
-        publishRegistry.set('localhost:5000')
-        publishNamespace.set('myorg')
-        publishTags.set(['latest', 'tested'])
-    }
-}
+0,1,2
 
 
 Help me understand the overall usage for our proposed 'dockerProject' DSL.  Start with this outline:
