@@ -69,43 +69,50 @@ services:
 
     // ===== HELPER METHOD TESTS =====
 
-    def "deriveImageName returns name when set"() {
+    def "deriveImageName returns imageName when set"() {
         given:
-        dockerProjectExt.image {
-            name.set('my-app')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+            }
         }
 
         expect:
-        translator.deriveImageName(dockerProjectExt.spec.image.get(), project) == 'my-app'
+        translator.deriveImageName(dockerProjectExt.spec.images.getByName('myApp'), project) == 'my-app'
     }
 
-    def "deriveImageName returns sourceRefImageName when name not set"() {
+    def "deriveImageName returns sourceRefImageName when imageName not set"() {
         given:
-        dockerProjectExt.image {
-            sourceRefImageName.set('nginx')
+        dockerProjectExt.images {
+            nginx {
+                sourceRefImageName.set('nginx')
+            }
         }
 
         expect:
-        translator.deriveImageName(dockerProjectExt.spec.image.get(), project) == 'nginx'
+        translator.deriveImageName(dockerProjectExt.spec.images.getByName('nginx'), project) == 'nginx'
     }
 
-    def "deriveImageName returns project name as fallback"() {
+    def "deriveImageName returns blockName when imageName and sourceRefImageName not set"() {
         given:
-        dockerProjectExt.image {
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                contextDir.set('docker')
+            }
         }
         project.file('docker').mkdirs()
 
         expect:
-        translator.deriveImageName(dockerProjectExt.spec.image.get(), project) == project.name
+        translator.deriveImageName(dockerProjectExt.spec.images.getByName('myApp'), project) == 'myApp'
     }
 
-    def "sanitizeName removes special characters"() {
+    def "sanitizeName removes special characters and lowercases"() {
         expect:
         translator.sanitizeName('my-app') == 'myapp'
         translator.sanitizeName('my_app') == 'myapp'
         translator.sanitizeName('my.app') == 'myapp'
-        translator.sanitizeName('MyApp') == 'myApp'
+        translator.sanitizeName('MyApp') == 'myapp'
+        translator.sanitizeName('myNginx') == 'mynginx'
         translator.sanitizeName(null) == ''
         translator.sanitizeName('') == ''
     }
@@ -145,8 +152,10 @@ services:
 
     def "validation fails when docker extension is null"() {
         given:
-        dockerProjectExt.image {
-            jarFrom.set('jar')
+        dockerProjectExt.images {
+            myApp {
+                jarFrom.set('jar')
+            }
         }
 
         when:
@@ -159,8 +168,10 @@ services:
 
     def "validation fails when dockerTest extension is null"() {
         given:
-        dockerProjectExt.image {
-            jarFrom.set('jar')
+        dockerProjectExt.images {
+            myApp {
+                jarFrom.set('jar')
+            }
         }
 
         when:
@@ -173,8 +184,10 @@ services:
 
     def "validation fails when dockerWorkflows extension is null"() {
         given:
-        dockerProjectExt.image {
-            jarFrom.set('jar')
+        dockerProjectExt.images {
+            myApp {
+                jarFrom.set('jar')
+            }
         }
 
         when:
@@ -187,9 +200,11 @@ services:
 
     def "validation fails when neither build mode nor sourceRef mode configured"() {
         given:
-        dockerProjectExt.image {
-            name.set('test-app')
-            // No jarFrom, contextDir, or sourceRef properties
+        dockerProjectExt.images {
+            testApp {
+                imageName.set('test-app')
+                // No jarFrom, contextDir, or sourceRef properties
+            }
         }
 
         when:
@@ -202,9 +217,11 @@ services:
 
     def "validation fails when both build mode and sourceRef mode configured"() {
         given:
-        dockerProjectExt.image {
-            jarFrom.set('jar')
-            sourceRefImageName.set('nginx')
+        dockerProjectExt.images {
+            myApp {
+                jarFrom.set('jar')
+                sourceRefImageName.set('nginx')
+            }
         }
 
         when:
@@ -218,9 +235,11 @@ services:
     def "validation fails when both jarFrom and contextDir specified"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            jarFrom.set('jar')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                jarFrom.set('jar')
+                contextDir.set('docker')
+            }
         }
 
         when:
@@ -240,9 +259,11 @@ services:
         }
 
         // Then try to configure same name via dockerProject{}
-        dockerProjectExt.image {
-            name.set('my-app')
-            jarFrom.set('jar')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                jarFrom.set('jar')
+            }
         }
 
         when:
@@ -327,11 +348,13 @@ services:
         project.file('docker').mkdirs()
         project.file('docker/Dockerfile').text = 'FROM openjdk:17'
 
-        dockerProjectExt.image {
-            name.set('my-service')
-            tags.set(['1.0.0', 'latest'])
-            contextDir.set('docker')
-            dockerfile.set('docker/Dockerfile')
+        dockerProjectExt.images {
+            myService {
+                imageName.set('my-service')
+                tags.set(['1.0.0', 'latest'])
+                contextDir.set('docker')
+                dockerfile.set('docker/Dockerfile')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -353,13 +376,15 @@ services:
 
     def "translate creates docker image for sourceRef mode"() {
         given:
-        dockerProjectExt.image {
-            sourceRefRegistry.set('docker.io')
-            sourceRefNamespace.set('library')
-            sourceRefImageName.set('nginx')
-            sourceRefTag.set('1.25')
-            tags.set(['my-nginx', 'latest'])
-            pullIfMissing.set(true)
+        dockerProjectExt.images {
+            nginx {
+                sourceRefRegistry.set('docker.io')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('1.25')
+                tags.set(['my-nginx', 'latest'])
+                pullIfMissing.set(true)
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -382,9 +407,11 @@ services:
 
     def "translate creates docker image for sourceRef mode with direct sourceRef"() {
         given:
-        dockerProjectExt.image {
-            sourceRef.set('docker.io/library/nginx:1.25')
-            tags.set(['my-nginx'])
+        dockerProjectExt.images {
+            myNginx {
+                sourceRef.set('docker.io/library/nginx:1.25')
+                tags.set(['my-nginx'])
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -394,21 +421,24 @@ services:
         translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
         then:
-        dockerExt.images.findByName(project.name) != null
+        // Uses blockName 'myNginx' when no imageName set
+        dockerExt.images.findByName('mynginx') != null
 
         and:
-        def image = dockerExt.images.getByName(project.name)
+        def image = dockerExt.images.getByName('mynginx')
         image.sourceRef.get() == 'docker.io/library/nginx:1.25'
     }
 
     def "translate creates docker image for sourceRef mode with pullAuth"() {
         given:
-        dockerProjectExt.image {
-            sourceRefImageName.set('private-image')
-            tags.set(['latest'])
-            pullAuth {
-                username.set('testuser')
-                password.set('testpass')
+        dockerProjectExt.images {
+            privateImage {
+                sourceRefImageName.set('private-image')
+                tags.set(['latest'])
+                pullAuth {
+                    username.set('testuser')
+                    password.set('testpass')
+                }
             }
         }
         dockerProjectExt.test {
@@ -430,9 +460,11 @@ services:
     def "translate creates compose stack when test block configured"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -458,9 +490,11 @@ services:
     def "translate skips compose stack when test block not configured"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         // No test block configured
 
@@ -474,9 +508,11 @@ services:
     def "translate creates compose stack with custom project name"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -494,9 +530,11 @@ services:
     def "translate creates compose stack with waitForRunning"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -516,9 +554,11 @@ services:
     def "translate creates pipeline with build and test steps"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -542,9 +582,11 @@ services:
     def "translate creates pipeline with method lifecycle"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -563,9 +605,11 @@ services:
     def "translate creates pipeline with onTestSuccess"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -585,9 +629,11 @@ services:
     def "translate creates pipeline with save configuration"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -608,9 +654,11 @@ services:
     def "translate creates pipeline with publish configuration"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -636,9 +684,11 @@ services:
     def "translate creates pipeline with onTestFailure"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -660,9 +710,11 @@ services:
     def "translate works with empty additionalTags"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -685,9 +737,11 @@ services:
     def "translate uses default test task name when not specified"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -705,9 +759,11 @@ services:
     def "translate uses default lifecycle when not specified"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -727,11 +783,13 @@ services:
     def "translate derives version from tags"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
-            tags.set(['1.0.0', 'latest'])
-            // No explicit version
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                tags.set(['1.0.0', 'latest'])
+                // No explicit version
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -748,11 +806,13 @@ services:
     def "translate uses explicit version when set"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
-            tags.set(['1.0.0', 'latest'])
-            version.set('2.0.0')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                tags.set(['1.0.0', 'latest'])
+                version.set('2.0.0')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -771,11 +831,13 @@ services:
     def "translate copies buildArgs to image"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
-            buildArgs.put('VERSION', '1.0.0')
-            buildArgs.put('BUILD_DATE', '2024-01-01')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                buildArgs.put('VERSION', '1.0.0')
+                buildArgs.put('BUILD_DATE', '2024-01-01')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -792,11 +854,13 @@ services:
     def "translate copies labels to image"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
-            labels.put('maintainer', 'team@example.com')
-            labels.put('version', '1.0')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                labels.put('maintainer', 'team@example.com')
+                labels.put('version', '1.0')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -815,11 +879,13 @@ services:
     def "translate copies registry and namespace to image"() {
         given:
         project.file('docker').mkdirs()
-        dockerProjectExt.image {
-            name.set('my-app')
-            contextDir.set('docker')
-            registry.set('ghcr.io')
-            namespace.set('myorg')
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                registry.set('ghcr.io')
+                namespace.set('myorg')
+            }
         }
         dockerProjectExt.test {
             compose.set('src/integrationTest/resources/compose/app.yml')

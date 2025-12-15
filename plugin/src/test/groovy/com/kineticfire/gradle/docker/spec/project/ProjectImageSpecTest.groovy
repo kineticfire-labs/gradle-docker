@@ -55,13 +55,13 @@ class ProjectImageSpecTest extends Specification {
 
     // ===== BUILD MODE PROPERTY TESTS =====
 
-    def "name property works correctly"() {
+    def "legacyName property works correctly"() {
         when:
-        imageSpec.name.set('my-app')
+        imageSpec.legacyName.set('my-app')
 
         then:
-        imageSpec.name.present
-        imageSpec.name.get() == 'my-app'
+        imageSpec.legacyName.present
+        imageSpec.legacyName.get() == 'my-app'
     }
 
     def "tags property works correctly"() {
@@ -324,7 +324,7 @@ class ProjectImageSpecTest extends Specification {
 
     def "complete build mode configuration"() {
         when:
-        imageSpec.name.set('my-service')
+        imageSpec.imageName.set('my-service')
         imageSpec.tags.set(['1.0.0', 'latest'])
         imageSpec.dockerfile.set('docker/Dockerfile')
         imageSpec.jarFrom.set(':service:jar')
@@ -334,7 +334,7 @@ class ProjectImageSpecTest extends Specification {
         imageSpec.namespace.set('myorg')
 
         then:
-        imageSpec.name.get() == 'my-service'
+        imageSpec.imageName.get() == 'my-service'
         imageSpec.tags.get() == ['1.0.0', 'latest']
         imageSpec.dockerfile.get() == 'docker/Dockerfile'
         imageSpec.jarFrom.get() == ':service:jar'

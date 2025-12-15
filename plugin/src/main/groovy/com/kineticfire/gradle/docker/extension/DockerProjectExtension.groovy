@@ -24,6 +24,7 @@ import com.kineticfire.gradle.docker.spec.project.ProjectFailureSpec
 import groovy.lang.Closure
 import groovy.lang.DelegatesTo
 import org.gradle.api.Action
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.model.ObjectFactory
 
 import javax.inject.Inject
@@ -33,6 +34,31 @@ import javax.inject.Inject
  *
  * This extension provides a high-level facade that internally translates
  * to docker, dockerTest, and dockerWorkflows configurations.
+ *
+ * Example usage:
+ * <pre>
+ * dockerProject {
+ *     images {
+ *         myApp {
+ *             imageName.set('my-app')
+ *             tags.set(['latest', '1.0.0'])
+ *             jarFrom.set(':app:jar')
+ *             primary.set(true)  // receives onSuccess.additionalTags
+ *         }
+ *         testDb {
+ *             imageName.set('test-db')
+ *             contextDir.set('src/test/docker/db')
+ *         }
+ *     }
+ *     test {
+ *         compose.set('src/integrationTest/resources/compose/app.yml')
+ *         waitForHealthy.set(['app', 'db'])
+ *     }
+ *     onSuccess {
+ *         additionalTags.set(['tested'])
+ *     }
+ * }
+ * </pre>
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: Uses ObjectFactory.newInstance() for spec creation,
  * allowing Gradle to inject services automatically. The nested specs are initialized
@@ -54,13 +80,34 @@ abstract class DockerProjectExtension {
         return spec
     }
 
-    // DSL methods with Closure support (Groovy DSL compatibility)
-    void image(@DelegatesTo(ProjectImageSpec) Closure closure) {
-        spec.image(closure)
+    /**
+     * Get the images container for multi-image configuration.
+     *
+     * @return The named domain object container of image specs
+     */
+    NamedDomainObjectContainer<ProjectImageSpec> getImages() {
+        return spec.images
     }
 
-    void image(Action<ProjectImageSpec> action) {
-        spec.image(action)
+    // DSL methods with Closure support (Groovy DSL compatibility)
+
+    /**
+     * Configure images using a closure.
+     * Each named block inside the closure creates a new image configuration.
+     *
+     * @param closure Configuration closure for the images container
+     */
+    void images(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {
+        spec.images(closure)
+    }
+
+    /**
+     * Configure images using an Action.
+     *
+     * @param action Configuration action for the images container
+     */
+    void images(Action<NamedDomainObjectContainer<ProjectImageSpec>> action) {
+        spec.images(action)
     }
 
     void test(@DelegatesTo(ProjectTestSpec) Closure closure) {

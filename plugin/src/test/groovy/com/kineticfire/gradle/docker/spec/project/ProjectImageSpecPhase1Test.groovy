@@ -370,18 +370,18 @@ class ProjectImageSpecPhase1Test extends Specification {
         refSpec.computeReference() == ''
     }
 
-    // ===== DEPRECATED NAME PROPERTY TEST =====
+    // ===== DEPRECATED LEGACY NAME PROPERTY TEST =====
 
-    def "deprecated name property is optional"() {
+    def "deprecated legacyName property is optional"() {
         expect:
-        !spec.name.isPresent()
+        !spec.legacyName.isPresent()
     }
 
-    def "deprecated name property can still be set"() {
+    def "deprecated legacyName property can still be set"() {
         when:
-        spec.name.set('old-name')
+        spec.legacyName.set('old-name')
 
         then:
-        spec.name.get() == 'old-name'
+        spec.legacyName.get() == 'old-name'
     }
 }

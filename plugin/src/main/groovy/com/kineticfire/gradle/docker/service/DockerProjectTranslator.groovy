@@ -62,29 +62,38 @@ class DockerProjectTranslator {
                    DockerExtension dockerExt, DockerTestExtension dockerTestExt,
                    DockerWorkflowsExtension dockerWorkflowsExt) {
 
-        def imageSpec = projectSpec.image.get()
+        // Get the primary image - for multi-image support, this is the image designated as primary,
+        // or the single image if only one is defined
+        def imageSpec = projectSpec.primaryImage
+        if (imageSpec == null) {
+            throw new GradleException("dockerProject.images must have at least one image configured")
+        }
         def testSpec = projectSpec.test.get()
         def successSpec = projectSpec.onSuccess.get()
         def failureSpec = projectSpec.onFailure.get()
 
         // Validate configuration and extension availability
-        validateSpec(projectSpec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+        validateSpec(projectSpec, imageSpec, dockerExt, dockerTestExt, dockerWorkflowsExt)
 
-        // Generate sanitized names for internal use
+        // Generate sanitized names for internal use (based on primary image)
         def imageName = deriveImageName(imageSpec, project)
         def sanitizedName = sanitizeName(imageName)
         def stackName = "${sanitizedName}Test"
         def pipelineName = "${sanitizedName}Pipeline"
 
-        // 1. Configure docker.images
-        configureDockerImage(project, dockerExt, imageSpec, sanitizedName)
+        // 1. Configure docker.images for all images in the container
+        projectSpec.images.each { img ->
+            def imgName = deriveImageName(img, project)
+            def imgSanitized = sanitizeName(imgName)
+            configureDockerImage(project, dockerExt, img, imgSanitized)
+        }
 
         // 2. Configure dockerTest.composeStacks (if test block is configured)
         if (testSpec.compose.isPresent()) {
             configureComposeStack(project, dockerTestExt, testSpec, stackName)
         }
 
-        // 3. Configure dockerWorkflows.pipelines
+        // 3. Configure dockerWorkflows.pipelines (based on primary image for now)
         configurePipeline(project, dockerWorkflowsExt, dockerExt, dockerTestExt,
                           sanitizedName, stackName, pipelineName, testSpec, successSpec, failureSpec)
 
@@ -94,8 +103,9 @@ class DockerProjectTranslator {
         project.logger.lifecycle("dockerProject: Configured image '${imageName}' with pipeline '${pipelineName}'")
     }
 
-    private void validateSpec(DockerProjectSpec projectSpec, DockerExtension dockerExt,
-                              DockerTestExtension dockerTestExt, DockerWorkflowsExtension dockerWorkflowsExt) {
+    private void validateSpec(DockerProjectSpec projectSpec, ProjectImageSpec imageSpec,
+                              DockerExtension dockerExt, DockerTestExtension dockerTestExt,
+                              DockerWorkflowsExtension dockerWorkflowsExt) {
         // Validate all three extensions are available
         if (dockerExt == null) {
             throw new GradleException(
@@ -116,12 +126,17 @@ class DockerProjectTranslator {
             )
         }
 
-        def imageSpec = projectSpec.image.get()
+        // Validate each image in the container
+        projectSpec.images.each { img ->
+            validateImageSpec(img, dockerExt)
+        }
+    }
 
+    private void validateImageSpec(ProjectImageSpec imageSpec, DockerExtension dockerExt) {
         // Must have either build mode or sourceRef mode configured
         if (!imageSpec.isBuildMode() && !imageSpec.isSourceRefMode()) {
             throw new GradleException(
-                "dockerProject.image must specify either build properties (jarFrom or contextDir) " +
+                "dockerProject.images must specify either build properties (jarFrom or contextDir) " +
                 "or sourceRef properties (sourceRef, sourceRefImageName, or sourceRefRepository)"
             )
         }
@@ -129,7 +144,7 @@ class DockerProjectTranslator {
         // Cannot mix build mode and sourceRef mode
         if (imageSpec.isBuildMode() && imageSpec.isSourceRefMode()) {
             throw new GradleException(
-                "dockerProject.image cannot mix build mode (jarFrom/contextDir) with sourceRef mode"
+                "dockerProject.images cannot mix build mode (jarFrom/contextDir) with sourceRef mode"
             )
         }
 
@@ -138,12 +153,12 @@ class DockerProjectTranslator {
         def hasContextDir = imageSpec.contextDir.isPresent() && !imageSpec.contextDir.get().isEmpty()
         if (hasJarFrom && hasContextDir) {
             throw new GradleException(
-                "dockerProject.image cannot specify both jarFrom and contextDir - use one or the other"
+                "dockerProject.images cannot specify both jarFrom and contextDir - use one or the other"
             )
         }
 
         // Validate mutual exclusivity: check for conflicting direct docker{} configuration
-        def derivedImageName = imageSpec.name.isPresent() ? imageSpec.name.get() : ''
+        def derivedImageName = deriveImageNameForValidation(imageSpec)
         def sanitizedName = sanitizeName(derivedImageName)
         if (!sanitizedName.isEmpty() && dockerExt.images.findByName(sanitizedName) != null) {
             throw new GradleException(
@@ -155,14 +170,34 @@ class DockerProjectTranslator {
     }
 
     /**
+     * Derive image name for validation purposes (no project fallback).
+     */
+    private String deriveImageNameForValidation(ProjectImageSpec imageSpec) {
+        if (imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()) {
+            return imageSpec.imageName.get()
+        }
+        if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
+            return imageSpec.legacyName.get()
+        }
+        return ''
+    }
+
+    /**
      * Derive the image name from the ProjectImageSpec or fall back to project name.
      */
     String deriveImageName(ProjectImageSpec imageSpec, Project project) {
-        if (imageSpec.name.isPresent() && !imageSpec.name.get().isEmpty()) {
-            return imageSpec.name.get()
+        if (imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()) {
+            return imageSpec.imageName.get()
+        }
+        if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
+            return imageSpec.legacyName.get()
         }
         if (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) {
             return imageSpec.sourceRefImageName.get()
+        }
+        // Block name from Named interface (e.g., "myApp" from images { myApp { } })
+        if (imageSpec.blockName.isPresent() && !imageSpec.blockName.get().isEmpty()) {
+            return imageSpec.blockName.get()
         }
         // Fall back to project name
         return project.name
@@ -170,24 +205,25 @@ class DockerProjectTranslator {
 
     /**
      * Sanitize name for use in task names and container names.
-     * Reuses the same sanitization pattern as existing plugin code.
+     * Converts to lowercase and removes special characters.
      */
     String sanitizeName(String name) {
         if (name == null || name.isEmpty()) {
             return ''
         }
-        // Remove special characters, convert to camelCase-safe format
-        return name.replaceAll('[^a-zA-Z0-9]', '')
-                   .replaceFirst('^([A-Z])', { it[0].toLowerCase() })
+        // Convert to lowercase and remove non-alphanumeric characters
+        return name.toLowerCase().replaceAll('[^a-z0-9]', '')
     }
 
     private void configureDockerImage(Project project, DockerExtension dockerExt,
                                        ProjectImageSpec imageSpec, String sanitizedName) {
         dockerExt.images.create(sanitizedName) { image ->
-            // Map ProjectImageSpec.name -> ImageSpec.imageName (the Docker image name)
+            // Map ProjectImageSpec.imageName -> ImageSpec.imageName (the Docker image name)
             def derivedImageName = deriveImageName(imageSpec, project)
-            if (imageSpec.name.isPresent() && !imageSpec.name.get().isEmpty()) {
-                image.imageName.set(imageSpec.name)
+            if (imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()) {
+                image.imageName.set(imageSpec.imageName)
+            } else if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
+                image.imageName.set(imageSpec.legacyName)
             } else {
                 // Fallback: use derived name as the Docker image name
                 image.imageName.set(derivedImageName)

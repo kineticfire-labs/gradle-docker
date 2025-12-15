@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.spec.project
 import groovy.lang.Closure
 import groovy.lang.DelegatesTo
 import org.gradle.api.Action
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.ProviderFactory
@@ -32,6 +33,25 @@ import javax.inject.Inject
  * This spec collects simplified configuration and is later translated
  * into docker, dockerTest, and dockerWorkflows configurations.
  *
+ * Supports multiple images via the images { } container:
+ * <pre>
+ * dockerProject {
+ *     images {
+ *         myApp {
+ *             imageName.set('my-app')
+ *             jarFrom.set(':app:jar')
+ *             primary.set(true)  // receives onSuccess.additionalTags
+ *         }
+ *         testDb {
+ *             imageName.set('test-db')
+ *             contextDir.set('src/test/docker/db')
+ *         }
+ *     }
+ *     test { ... }
+ *     onSuccess { ... }
+ * }
+ * </pre>
+ *
  * GRADLE 9/10 COMPATIBILITY NOTE: This class uses @Inject for service injection.
  * Gradle's ObjectFactory will inject ObjectFactory, ProviderFactory, and ProjectLayout
  * automatically when using objectFactory.newInstance(DockerProjectSpec).
@@ -42,8 +62,10 @@ abstract class DockerProjectSpec {
     private final ProviderFactory providers
     private final ProjectLayout layout
 
+    // Images container for multi-image support
+    private NamedDomainObjectContainer<ProjectImageSpec> imagesContainer
+
     // Lazy-initialized nested specs to avoid calling .convention() on uninitialized abstract properties
-    private ProjectImageSpec imageSpec
     private ProjectTestSpec testSpec
     private ProjectSuccessSpec successSpec
     private ProjectFailureSpec failureSpec
@@ -61,9 +83,15 @@ abstract class DockerProjectSpec {
      * Called automatically by DockerProjectExtension after instantiation.
      */
     void initializeNestedSpecs() {
-        if (imageSpec == null) {
-            imageSpec = objectFactory.newInstance(ProjectImageSpec)
-            image.set(imageSpec)
+        if (imagesContainer == null) {
+            // Capture objectFactory in local variable for closure access
+            def factory = this.objectFactory
+            imagesContainer = factory.domainObjectContainer(ProjectImageSpec) { String name ->
+                def spec = factory.newInstance(ProjectImageSpec)
+                spec.setName(name)  // Required for Named interface - used by container.getByName()
+                spec.blockName.set(name)  // Also store in property for DSL access
+                return spec
+            }
         }
         if (testSpec == null) {
             testSpec = objectFactory.newInstance(ProjectTestSpec)
@@ -79,22 +107,42 @@ abstract class DockerProjectSpec {
         }
     }
 
-    abstract Property<ProjectImageSpec> getImage()
+    /**
+     * Get the images container for multi-image configuration.
+     * Each image is defined with a named block inside images { }.
+     *
+     * @return The named domain object container of image specs
+     */
+    NamedDomainObjectContainer<ProjectImageSpec> getImages() {
+        initializeNestedSpecs()
+        return imagesContainer
+    }
+
     abstract Property<ProjectTestSpec> getTest()
     abstract Property<ProjectSuccessSpec> getOnSuccess()
     abstract Property<ProjectFailureSpec> getOnFailure()
 
-    // DSL methods with Closure support (Groovy DSL compatibility)
-    void image(@DelegatesTo(ProjectImageSpec) Closure closure) {
+    // === DSL METHODS ===
+
+    /**
+     * Configure images using a closure.
+     * Each named block inside the closure creates a new image configuration.
+     *
+     * @param closure Configuration closure for the images container
+     */
+    void images(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {
         initializeNestedSpecs()
-        closure.delegate = image.get()
-        closure.resolveStrategy = Closure.DELEGATE_FIRST
-        closure.call()
+        imagesContainer.configure(closure)
     }
 
-    void image(Action<ProjectImageSpec> action) {
+    /**
+     * Configure images using an Action.
+     *
+     * @param action Configuration action for the images container
+     */
+    void images(Action<NamedDomainObjectContainer<ProjectImageSpec>> action) {
         initializeNestedSpecs()
-        action.execute(image.get())
+        action.execute(imagesContainer)
     }
 
     void test(@DelegatesTo(ProjectTestSpec) Closure closure) {
@@ -134,19 +182,41 @@ abstract class DockerProjectSpec {
     }
 
     /**
-     * Check if this spec has been configured (at minimum, image block is present with meaningful values)
+     * Check if this spec has been configured (at minimum, one image is present with meaningful values)
      */
     boolean isConfigured() {
-        if (!image.isPresent()) {
+        if (imagesContainer == null || imagesContainer.isEmpty()) {
             return false
         }
-        def img = image.get()
-        // Check if any meaningful configuration is present (non-empty values)
-        return (img.name.isPresent() && !img.name.get().isEmpty()) ||
-               (img.sourceRef.isPresent() && !img.sourceRef.get().isEmpty()) ||
-               (img.sourceRefImageName.isPresent() && !img.sourceRefImageName.get().isEmpty()) ||
-               (img.sourceRefRepository.isPresent() && !img.sourceRefRepository.get().isEmpty()) ||
-               (img.jarFrom.isPresent() && !img.jarFrom.get().isEmpty()) ||
-               (img.contextDir.isPresent() && !img.contextDir.get().isEmpty())
+        // Check if any image has meaningful configuration
+        return imagesContainer.any { img ->
+            (img.imageName.isPresent() && !img.imageName.get().isEmpty()) ||
+            (img.legacyName.isPresent() && !img.legacyName.get().isEmpty()) ||
+            (img.sourceRef.isPresent() && !img.sourceRef.get().isEmpty()) ||
+            (img.sourceRefImageName.isPresent() && !img.sourceRefImageName.get().isEmpty()) ||
+            (img.sourceRefRepository.isPresent() && !img.sourceRefRepository.get().isEmpty()) ||
+            (img.jarFrom.isPresent() && !img.jarFrom.get().isEmpty()) ||
+            (img.contextDir.isPresent() && !img.contextDir.get().isEmpty()) ||
+            (img.repository.isPresent() && !img.repository.get().isEmpty())
+        }
+    }
+
+    /**
+     * Get the primary image from the images container.
+     * If only one image is defined, it's automatically considered primary.
+     * If multiple images are defined, exactly one must have primary.set(true).
+     *
+     * @return The primary image spec, or null if no images or no primary designated
+     */
+    ProjectImageSpec getPrimaryImage() {
+        if (imagesContainer == null || imagesContainer.isEmpty()) {
+            return null
+        }
+        // If only one image, it's automatically primary
+        if (imagesContainer.size() == 1) {
+            return imagesContainer.first()
+        }
+        // Otherwise, find the one marked primary
+        return imagesContainer.find { it.primary.getOrElse(false) }
     }
 }

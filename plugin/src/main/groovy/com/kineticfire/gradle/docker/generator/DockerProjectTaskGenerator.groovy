@@ -90,24 +90,54 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         }
 
         def spec = extension.spec
-        def imageSpec = spec.image.get()
         def testSpec = spec.test.get()
         def successSpec = spec.onSuccess.get()
 
-        // Derive image name for task naming
-        def imageName = deriveImageName(imageSpec, project)
-        def sanitizedImageName = TaskNamingUtils.normalizeName(imageName)
+        // Get all images
+        def allImages = spec.images.toList()
+        if (allImages.isEmpty()) {
+            LOGGER.debug("No images configured in dockerProject, skipping task generation")
+            return
+        }
 
-        LOGGER.lifecycle("dockerProject: Generating task graph for image '{}'", imageName)
+        // Validate and get primary image
+        def primaryImage = spec.primaryImage
+        if (primaryImage == null && allImages.size() > 1) {
+            throw new org.gradle.api.GradleException(
+                "Multiple images defined in dockerProject but none marked as primary. " +
+                "Set primary.set(true) on exactly one image."
+            )
+        }
+        // If only one image and no explicit primary, use it
+        if (primaryImage == null) {
+            primaryImage = allImages.first()
+        }
 
-        // 1. Register build tasks
-        def buildTaskProvider = registerBuildTask(project, imageSpec, sanitizedImageName, dockerServiceProvider)
+        // Build tasks for ALL images
+        def buildTaskProviders = [:]
+        allImages.each { imageSpec ->
+            def imageName = deriveImageName(imageSpec, project)
+            def sanitizedImageName = TaskNamingUtils.normalizeName(imageName)
+            sanitizedImageName = TaskNamingUtils.capitalize(sanitizedImageName)
+
+            LOGGER.lifecycle("dockerProject: Generating build task for image '{}'", imageName)
+
+            def buildTaskProvider = registerBuildTask(project, imageSpec, sanitizedImageName, dockerServiceProvider)
+            buildTaskProviders[imageName] = buildTaskProvider
+        }
+
+        // Use primary image for task naming and success operations
+        def primaryImageName = deriveImageName(primaryImage, project)
+        def primarySanitizedName = TaskNamingUtils.normalizeName(primaryImageName)
+        primarySanitizedName = TaskNamingUtils.capitalize(primarySanitizedName)
+
+        LOGGER.lifecycle("dockerProject: Primary image is '{}', generating pipeline tasks", primaryImageName)
 
         // 2. Register compose tasks if test is configured
         def composeUpTaskName = null
         def composeDownTaskName = null
         if (testSpec.compose.isPresent() && !testSpec.compose.get().isEmpty()) {
-            def stackName = "${sanitizedImageName}Test"
+            def stackName = "${primarySanitizedName}Test"
             composeUpTaskName = TaskNamingUtils.composeUpTaskName(stackName)
             composeDownTaskName = TaskNamingUtils.composeDownTaskName(stackName)
 
@@ -115,24 +145,24 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             // We just wire dependencies here
         }
 
-        // 3. Register tag on success task
+        // 3. Register tag on success task (for primary image only)
         def tagOnSuccessTaskProvider = registerTagOnSuccessTask(
-            project, imageSpec, successSpec, sanitizedImageName, dockerServiceProvider
+            project, primaryImage, successSpec, primarySanitizedName, dockerServiceProvider
         )
 
-        // 4. Register save task if configured
+        // 4. Register save task if configured (for primary image only)
         def saveTaskProvider = null
         if (successSpec.saveFile.isPresent() && !successSpec.saveFile.get().isEmpty()) {
-            saveTaskProvider = registerSaveTask(project, imageSpec, successSpec, sanitizedImageName, dockerServiceProvider)
+            saveTaskProvider = registerSaveTask(project, primaryImage, successSpec, primarySanitizedName, dockerServiceProvider)
         }
 
-        // 5. Register publish tasks
-        def publishTaskProviders = registerPublishTasks(project, imageSpec, successSpec, sanitizedImageName, dockerServiceProvider)
+        // 5. Register publish tasks (for primary image only)
+        def publishTaskProviders = registerPublishTasks(project, primaryImage, successSpec, primarySanitizedName, dockerServiceProvider)
 
-        // 6. Wire task dependencies
+        // 6. Wire task dependencies - all build tasks feed into the pipeline
         wireTaskDependencies(
-            project, testSpec, sanitizedImageName,
-            buildTaskProvider, composeUpTaskName, composeDownTaskName,
+            project, testSpec, primarySanitizedName,
+            buildTaskProviders, composeUpTaskName, composeDownTaskName,
             tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProviders
         )
 
@@ -141,22 +171,37 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             project, tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProviders
         )
 
-        LOGGER.lifecycle("dockerProject: Task graph generation complete")
+        LOGGER.lifecycle("dockerProject: Task graph generation complete for {} image(s)", allImages.size())
     }
 
     /**
      * Derive the image name from the spec or project name.
+     * Priority: imageName > name (deprecated) > repository > blockName > sourceRefImageName > project.name
      */
     private String deriveImageName(ProjectImageSpec imageSpec, Project project) {
-        if (imageSpec.name.isPresent() && !imageSpec.name.get().isEmpty()) {
-            return imageSpec.name.get()
-        }
+        // Explicit imageName takes highest priority
         if (imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()) {
             return imageSpec.imageName.get()
         }
+        // Deprecated 'legacyName' property (renamed from 'name' for Named interface)
+        if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
+            return imageSpec.legacyName.get()
+        }
+        // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
+        if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
+            def repo = imageSpec.repository.get()
+            def lastSlash = repo.lastIndexOf('/')
+            return lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
+        }
+        // Block name from DSL (e.g., "myApp" from images { myApp { } })
+        if (imageSpec.blockName.isPresent() && !imageSpec.blockName.get().isEmpty()) {
+            return imageSpec.blockName.get()
+        }
+        // Source reference image name
         if (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) {
             return imageSpec.sourceRefImageName.get()
         }
+        // Fallback to project name
         return project.name
     }
 
@@ -192,10 +237,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             task.dockerService.set(dockerServiceProvider)
 
             // Configure image naming
-            if (imageSpec.name.isPresent()) {
-                task.imageName.set(imageSpec.name)
-            } else if (imageSpec.imageName.isPresent()) {
+            if (imageSpec.imageName.isPresent()) {
                 task.imageName.set(imageSpec.imageName)
+            } else if (imageSpec.legacyName.isPresent()) {
+                task.imageName.set(imageSpec.legacyName)
             } else {
                 task.imageName.set(sanitizedImageName)
             }
@@ -217,18 +262,28 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             task.buildArgs.putAll(imageSpec.buildArgs)
             task.labels.putAll(imageSpec.labels)
 
-            // Configure context
+            // Configure context and Dockerfile
             if (contextTaskProvider != null) {
                 def contextDir = project.layout.buildDirectory.dir("docker-context/${sanitizedImageName}")
                 task.contextPath.set(contextDir)
                 task.dependsOn(contextTaskProvider)
+
+                // When using context task, Dockerfile is copied into the context directory
+                def dockerfilePath = imageSpec.dockerfile.getOrElse('src/main/docker/Dockerfile')
+                def dockerfileName = new File(dockerfilePath).name
+                task.dockerfile.set(contextDir.map { it.file(dockerfileName) })
             } else if (imageSpec.contextDir.isPresent() && !imageSpec.contextDir.get().isEmpty()) {
                 task.contextPath.set(project.layout.projectDirectory.dir(imageSpec.contextDir.get()))
-            }
 
-            // Configure Dockerfile
-            if (imageSpec.dockerfile.isPresent() && !imageSpec.dockerfile.get().isEmpty()) {
-                task.dockerfile.set(project.layout.projectDirectory.file(imageSpec.dockerfile.get()))
+                // Configure Dockerfile for non-context-task builds
+                if (imageSpec.dockerfile.isPresent() && !imageSpec.dockerfile.get().isEmpty()) {
+                    task.dockerfile.set(project.layout.projectDirectory.file(imageSpec.dockerfile.get()))
+                }
+            } else {
+                // No context - configure Dockerfile if specified
+                if (imageSpec.dockerfile.isPresent() && !imageSpec.dockerfile.get().isEmpty()) {
+                    task.dockerfile.set(project.layout.projectDirectory.file(imageSpec.dockerfile.get()))
+                }
             }
         }
 
@@ -334,10 +389,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             task.dockerService.set(dockerServiceProvider)
 
             // Configure image name
-            if (imageSpec.name.isPresent()) {
-                task.imageName.set(imageSpec.name)
-            } else if (imageSpec.imageName.isPresent()) {
+            if (imageSpec.imageName.isPresent()) {
                 task.imageName.set(imageSpec.imageName)
+            } else if (imageSpec.legacyName.isPresent()) {
+                task.imageName.set(imageSpec.legacyName)
             } else {
                 task.imageName.set(sanitizedImageName)
             }
@@ -378,10 +433,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             task.dockerService.set(dockerServiceProvider)
 
             // Configure image name
-            if (imageSpec.name.isPresent()) {
-                task.imageName.set(imageSpec.name)
-            } else if (imageSpec.imageName.isPresent()) {
+            if (imageSpec.imageName.isPresent()) {
                 task.imageName.set(imageSpec.imageName)
+            } else if (imageSpec.legacyName.isPresent()) {
+                task.imageName.set(imageSpec.legacyName)
             } else {
                 task.imageName.set(sanitizedImageName)
             }
@@ -435,10 +490,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     task.dockerService.set(dockerServiceProvider)
 
                     // Configure image name
-                    if (imageSpec.name.isPresent()) {
-                        task.imageName.set(imageSpec.name)
-                    } else if (imageSpec.imageName.isPresent()) {
+                    if (imageSpec.imageName.isPresent()) {
                         task.imageName.set(imageSpec.imageName)
+                    } else if (imageSpec.legacyName.isPresent()) {
+                        task.imageName.set(imageSpec.legacyName)
                     } else {
                         task.imageName.set(sanitizedImageName)
                     }
@@ -488,10 +543,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     task.dockerService.set(dockerServiceProvider)
 
                     // Configure image name
-                    if (imageSpec.name.isPresent()) {
-                        task.imageName.set(imageSpec.name)
-                    } else if (imageSpec.imageName.isPresent()) {
+                    if (imageSpec.imageName.isPresent()) {
                         task.imageName.set(imageSpec.imageName)
+                    } else if (imageSpec.legacyName.isPresent()) {
+                        task.imageName.set(imageSpec.legacyName)
                     } else {
                         task.imageName.set(sanitizedImageName)
                     }
@@ -514,15 +569,8 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                         task.tags.set(successSpec.additionalTags)
                     }
 
-                    // Configure auth if present
-                    if (targetSpec.auth != null) {
-                        if (targetSpec.auth.username.isPresent()) {
-                            task.username.set(targetSpec.auth.username)
-                        }
-                        if (targetSpec.auth.password.isPresent()) {
-                            task.password.set(targetSpec.auth.password)
-                        }
-                    }
+                    // Note: Auth is handled through publishTargets configured separately
+                    // The task will use the auth from its publishTargets property at execution time
 
                     // Add onlyIf based on test result
                     task.onlyIf { t ->
@@ -544,12 +592,14 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
     /**
      * Wire all task dependencies.
+     *
+     * @param buildTaskProviders Map of image name -> build task provider (supports multiple images)
      */
     private void wireTaskDependencies(
             Project project,
             ProjectTestSpec testSpec,
             String sanitizedImageName,
-            TaskProvider<DockerBuildTask> buildTaskProvider,
+            Map<String, TaskProvider<DockerBuildTask>> buildTaskProviders,
             String composeUpTaskName,
             String composeDownTaskName,
             TaskProvider<TagOnSuccessTask> tagOnSuccessTaskProvider,
@@ -561,8 +611,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
         // Wire compose tasks if configured
         if (composeUpTaskName != null && taskExists(project, composeUpTaskName)) {
-            // composeUp depends on build
-            wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
+            // composeUp depends on ALL build tasks (all images must be built first)
+            buildTaskProviders.values().each { buildTaskProvider ->
+                wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
+            }
 
             // Test task depends on composeUp, finalizedBy composeDown
             if (taskExists(project, testTaskName)) {
@@ -592,8 +644,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 }
             }
         } else if (taskExists(project, testTaskName)) {
-            // No compose - test depends directly on build
-            wireTaskDependency(project, testTaskName, buildTaskProvider.name)
+            // No compose - test depends directly on ALL build tasks
+            buildTaskProviders.values().each { buildTaskProvider ->
+                wireTaskDependency(project, testTaskName, buildTaskProvider.name)
+            }
 
             // Configure test task to write result file
             project.tasks.named(testTaskName).configure { task ->

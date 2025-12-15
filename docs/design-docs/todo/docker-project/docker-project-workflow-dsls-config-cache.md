@@ -2962,9 +2962,12 @@ Tests are required at three levels:
 
 #### New Integration Test Scenarios
 
-##### Scenario 4: Repository Mode
+**Note**: Scenarios are numbered starting at 6 because scenarios 4 and 5 already exist in the codebase
+(`scenario-4-method-lifecycle` and `scenario-5-contextdir-mode`).
 
-**Location**: `plugin-integration-test/dockerProject/scenario-4-repository-mode/`
+##### Scenario 6: Repository Mode
+
+**Location**: `plugin-integration-test/dockerProject/scenario-6-repository-mode/`
 
 **Purpose**: Verify Repository Mode works end-to-end with real Docker
 
@@ -2972,12 +2975,12 @@ Tests are required at three levels:
 ```groovy
 dockerProject {
     images {
-        scenario4App {
-            repository.set('scenario4org/scenario4-app')
+        scenario6App {
+            repository.set('scenario6org/scenario6-app')
             tags.set(['latest', '1.0.0'])
             jarFrom.set(':app:jar')
             buildArgs.put('BUILD_VERSION', '1.0.0')
-            labels.put('org.opencontainers.image.title', 'Scenario 4 - Repository Mode')
+            labels.put('org.opencontainers.image.title', 'Scenario 6 - Repository Mode')
             // Single image is automatically primary
         }
     }
@@ -2995,14 +2998,14 @@ dockerProject {
 
 **Verifications**:
 1. Image builds successfully with repository-style name
-2. Image is tagged correctly: `scenario4org/scenario4-app:latest`, `scenario4org/scenario4-app:1.0.0`
+2. Image is tagged correctly: `scenario6org/scenario6-app:latest`, `scenario6org/scenario6-app:1.0.0`
 3. Test runs against the image
-4. On success, `scenario4org/scenario4-app:tested` tag is applied
+4. On success, `scenario6org/scenario6-app:tested` tag is applied
 5. Cleanup removes all images
 
-##### Scenario 5: Repository Mode with Private Registry
+##### Scenario 7: Repository Mode with Private Registry
 
-**Location**: `plugin-integration-test/dockerProject/scenario-5-repository-registry/`
+**Location**: `plugin-integration-test/dockerProject/scenario-7-repository-registry/`
 
 **Purpose**: Verify Repository Mode with private registry publishing
 
@@ -3010,9 +3013,9 @@ dockerProject {
 ```groovy
 dockerProject {
     images {
-        scenario5App {
-            repository.set('scenario5org/scenario5-app')
-            registry.set('localhost:5035')
+        scenario7App {
+            repository.set('scenario7org/scenario7-app')
+            registry.set('localhost:5037')
             tags.set(['latest', '1.0.0'])
             jarFrom.set(':app:jar')
             // Single image is automatically primary
@@ -3025,23 +3028,23 @@ dockerProject {
     }
     onSuccess {
         additionalTags.set(['tested', 'stable'])
-        publishRegistry.set('localhost:5035')
+        publishRegistry.set('localhost:5037')
         publishTags.set(['latest', '1.0.0', 'tested'])
     }
 }
 ```
 
 **Verifications**:
-1. Spin up local registry on port 5035
+1. Spin up local registry on port 5037
 2. Build image with repository name
 3. Run tests
 4. On success, publish to registry
-5. Verify images exist in registry via `docker pull localhost:5035/scenario5org/scenario5-app:tested`
+5. Verify images exist in registry via `docker pull localhost:5037/scenario7org/scenario7-app:tested`
 6. Cleanup registry and images
 
-##### Scenario 6: Image Name Mode with All Options (Multiple BuildArgs and Labels)
+##### Scenario 8: Image Name Mode with All Options (Multiple BuildArgs and Labels)
 
-**Location**: `plugin-integration-test/dockerProject/scenario-6-imagename-full/`
+**Location**: `plugin-integration-test/dockerProject/scenario-8-imagename-full/`
 
 **Purpose**: Verify Image Name Mode with registry, namespace, and all options including **multiple buildArgs and labels**
 
@@ -3049,10 +3052,10 @@ dockerProject {
 ```groovy
 dockerProject {
     images {
-        scenario6App {
-            imageName.set('scenario6-app')
-            registry.set('localhost:5036')
-            namespace.set('scenario6ns')
+        scenario8App {
+            imageName.set('scenario8-app')
+            registry.set('localhost:5038')
+            namespace.set('scenario8ns')
             tags.set(['latest', '1.0.0', 'dev'])
             jarFrom.set(':app:jar')
 
@@ -3062,7 +3065,7 @@ dockerProject {
             buildArgs.put('JAVA_VERSION', '21')
 
             // Multiple labels (4 entries - OCI standard labels)
-            labels.put('org.opencontainers.image.title', 'Scenario 6 App')
+            labels.put('org.opencontainers.image.title', 'Scenario 8 App')
             labels.put('org.opencontainers.image.version', '1.0.0')
             labels.put('org.opencontainers.image.vendor', 'Test Vendor')
             labels.put('org.opencontainers.image.authors', 'test@example.com')
@@ -3077,19 +3080,19 @@ dockerProject {
     }
     onSuccess {
         additionalTags.set(['tested', 'verified'])
-        saveFile.set('build/images/scenario6-app.tar.gz')
-        publishRegistry.set('localhost:5036')
-        publishNamespace.set('scenario6ns')
+        saveFile.set('build/images/scenario8-app.tar.gz')
+        publishRegistry.set('localhost:5038')
+        publishNamespace.set('scenario8ns')
         publishTags.set(['latest', '1.0.0', 'tested'])
     }
 }
 ```
 
 **Verifications**:
-1. Build image with full naming: `localhost:5036/scenario6ns/scenario6-app`
+1. Build image with full naming: `localhost:5038/scenario8ns/scenario8-app`
 2. All tags applied
 3. **All 4 labels verified via `docker inspect`**:
-   - `org.opencontainers.image.title` = `Scenario 6 App`
+   - `org.opencontainers.image.title` = `Scenario 8 App`
    - `org.opencontainers.image.version` = `1.0.0`
    - `org.opencontainers.image.vendor` = `Test Vendor`
    - `org.opencontainers.image.authors` = `test@example.com`
@@ -3102,17 +3105,17 @@ dockerProject {
 **Label Verification Script**:
 ```bash
 # Verify all labels were applied
-LABELS=$(docker inspect scenario6-app:latest --format '{{json .Config.Labels}}')
-echo "$LABELS" | jq -e '.["org.opencontainers.image.title"] == "Scenario 6 App"' || exit 1
+LABELS=$(docker inspect scenario8-app:latest --format '{{json .Config.Labels}}')
+echo "$LABELS" | jq -e '.["org.opencontainers.image.title"] == "Scenario 8 App"' || exit 1
 echo "$LABELS" | jq -e '.["org.opencontainers.image.version"] == "1.0.0"' || exit 1
 echo "$LABELS" | jq -e '.["org.opencontainers.image.vendor"] == "Test Vendor"' || exit 1
 echo "$LABELS" | jq -e '.["org.opencontainers.image.authors"] == "test@example.com"' || exit 1
 echo "All 4 labels verified successfully"
 ```
 
-##### Scenario 7: Configuration Cache Verification
+##### Scenario 9: Configuration Cache Verification
 
-**Location**: `plugin-integration-test/dockerProject/scenario-7-config-cache/`
+**Location**: `plugin-integration-test/dockerProject/scenario-9-config-cache/`
 
 **Purpose**: Explicitly verify configuration cache compatibility
 
@@ -3120,8 +3123,8 @@ echo "All 4 labels verified successfully"
 ```groovy
 dockerProject {
     images {
-        scenario7App {
-            imageName.set('scenario7-app')
+        scenario9App {
+            imageName.set('scenario9-app')
             tags.set(['latest'])
             jarFrom.set(':app:jar')
             // Single image is automatically primary
@@ -3145,7 +3148,7 @@ dockerProject {
 grep -q "BUILD SUCCESSFUL" run1.log || exit 1
 
 # Clean Docker resources but keep configuration cache
-docker rmi scenario7-app:latest scenario7-app:tested || true
+docker rmi scenario9-app:latest scenario9-app:tested || true
 
 # Second run - should reuse configuration cache
 ./gradlew runDockerProject --configuration-cache 2>&1 | tee run2.log
@@ -3157,9 +3160,9 @@ grep -q "Reusing configuration cache" run2.log || exit 1
 echo "Configuration cache verification PASSED"
 ```
 
-##### Scenario 8: Custom Context Task (Non-Java/Complex Projects)
+##### Scenario 10: Custom Context Task (Non-Java/Complex Projects)
 
-**Location**: `plugin-integration-test/dockerProject/scenario-8-context-task/`
+**Location**: `plugin-integration-test/dockerProject/scenario-10-context-task/`
 
 **Purpose**: Verify `contextTask` property for complex context preparation (Java with config files, simulating non-Java patterns)
 
@@ -3167,13 +3170,13 @@ echo "Configuration cache verification PASSED"
 ```groovy
 dockerProject {
     images {
-        scenario8App {
-            imageName.set('scenario8-app')
+        scenario10App {
+            imageName.set('scenario10-app')
             tags.set(['latest', '1.0.0'])
 
             // Use contextTask for full control over context preparation
-            contextTask.set(tasks.register('prepareScenario8Context', Copy) {
-                into layout.buildDirectory.dir('docker-context/scenario8App')
+            contextTask.set(tasks.register('prepareScenario10Context', Copy) {
+                into layout.buildDirectory.dir('docker-context/scenario10App')
 
                 // Copy Dockerfile
                 from('src/main/docker')
@@ -3221,9 +3224,9 @@ dockerProject {
 - `src/main/resources/config/application.yml` - Sample config file
 - `src/main/scripts/entrypoint.sh` - Sample startup script
 
-##### Scenario 9: waitForRunning Verification (Minimal Container)
+##### Scenario 11: waitForRunning Verification (Minimal Container)
 
-**Location**: `plugin-integration-test/dockerProject/scenario-9-wait-for-running/`
+**Location**: `plugin-integration-test/dockerProject/scenario-11-wait-for-running/`
 
 **Purpose**: Verify `waitForRunning` wait strategy works correctly with a minimal container that has no healthcheck.
 
@@ -3261,7 +3264,7 @@ CMD ["sleep", "infinity"]
 ```yaml
 services:
   app:
-    image: scenario9-running-test:latest
+    image: scenario11-running-test:latest
     # No healthcheck - we're testing waitForRunning
     # No ports - we use docker exec for verification
 ```
@@ -3270,8 +3273,8 @@ services:
 ```groovy
 dockerProject {
     images {
-        scenario9App {
-            imageName.set('scenario9-running-test')
+        scenario11App {
+            imageName.set('scenario11-running-test')
             tags.set(['latest'])
             contextDir.set('src/main/docker')  // Contains minimal Dockerfile
             // Single image is automatically primary
@@ -3326,9 +3329,9 @@ class WaitForRunningVerificationSpec extends Specification {
 - No race conditions with file-based verification approach
 - Plugin handles containers without HEALTHCHECK correctly
 
-##### Scenario 10: Method Lifecycle (Per-Test Container Isolation)
+##### Scenario 12: Method Lifecycle (Per-Test Container Isolation)
 
-**Location**: `plugin-integration-test/dockerProject/scenario-10-method-lifecycle/`
+**Location**: `plugin-integration-test/dockerProject/scenario-12-method-lifecycle/`
 
 **Purpose**: Verify `lifecycle.set(Lifecycle.METHOD)` properly starts/stops the compose stack for each test method.
 
@@ -3342,8 +3345,8 @@ import com.kineticfire.gradle.docker.Lifecycle
 
 dockerProject {
     images {
-        scenario10App {
-            imageName.set('scenario10-method-lifecycle')
+        scenario12App {
+            imageName.set('scenario12-method-lifecycle')
             tags.set(['latest'])
             jarFrom.set(':app:jar')
             // Single image is automatically primary
@@ -3420,9 +3423,9 @@ class MethodLifecycleVerificationSpec extends Specification {
 **Note**: This test takes longer than class lifecycle tests due to multiple compose start/stop cycles.
 This is expected behavior and demonstrates the trade-off between isolation and speed.
 
-##### Scenario 11: Multiple Test Configurations (Performance Optimization)
+##### Scenario 13: Multiple Test Configurations (Performance Optimization)
 
-**Location**: `plugin-integration-test/dockerProject/scenario-11-multi-test-configs/`
+**Location**: `plugin-integration-test/dockerProject/scenario-13-multi-test-configs/`
 
 **Purpose**: Verify multiple test configurations with different lifecycles work correctly, demonstrating the performance optimization pattern.
 
@@ -3435,8 +3438,8 @@ import com.kineticfire.gradle.docker.Lifecycle
 
 dockerProject {
     images {
-        scenario11App {
-            imageName.set('scenario11-multi-config')
+        scenario13App {
+            imageName.set('scenario13-multi-config')
             tags.set(['latest'])
             jarFrom.set(':app:jar')
             // Single image is automatically primary
@@ -3553,9 +3556,9 @@ class StatefulDatabaseIT extends Specification {
 - Performance optimization pattern is viable
 - `onSuccess` acts as a gate requiring all tests to pass
 
-##### Scenario 12: Multiple Publish Targets
+##### Scenario 14: Multiple Publish Targets
 
-**Location**: `plugin-integration-test/dockerProject/scenario-12-multi-publish/`
+**Location**: `plugin-integration-test/dockerProject/scenario-14-multi-publish/`
 
 **Purpose**: Verify publishing to multiple registries with different configurations, authentication, and tags.
 
@@ -3568,8 +3571,8 @@ import com.kineticfire.gradle.docker.Lifecycle
 
 dockerProject {
     images {
-        scenario12App {
-            imageName.set('scenario12-multi-publish')
+        scenario14App {
+            imageName.set('scenario14-multi-publish')
             tags.set(['latest', '1.0.0'])
             jarFrom.set(':app:jar')
             // Single image is automatically primary
@@ -3587,13 +3590,13 @@ dockerProject {
 
         publish {
             to('primary') {
-                registry.set('localhost:5121')
+                registry.set('localhost:5141')
                 namespace.set('primary-org')
                 tags.set(['latest', '1.0.0', 'tested'])
             }
 
             to('backup') {
-                registry.set('localhost:5122')
+                registry.set('localhost:5142')
                 namespace.set('backup-org')
                 tags.set(['backup-latest', 'backup-1.0.0'])
             }
@@ -3603,7 +3606,7 @@ dockerProject {
 ```
 
 **Test Infrastructure**:
-- Two local Docker registries on ports 5121 and 5122
+- Two local Docker registries on ports 5141 and 5142
 - No authentication (for simplicity in local testing)
 - Different namespaces per registry
 - Different tags per registry
@@ -3614,12 +3617,12 @@ dockerProject {
 3. `dockerProjectPublishPrimary` task is generated and runs
 4. `dockerProjectPublishBackup` task is generated and runs
 5. Primary registry contains:
-   - `localhost:5121/primary-org/scenario12-multi-publish:latest`
-   - `localhost:5121/primary-org/scenario12-multi-publish:1.0.0`
-   - `localhost:5121/primary-org/scenario12-multi-publish:tested`
+   - `localhost:5141/primary-org/scenario14-multi-publish:latest`
+   - `localhost:5141/primary-org/scenario14-multi-publish:1.0.0`
+   - `localhost:5141/primary-org/scenario14-multi-publish:tested`
 6. Backup registry contains:
-   - `localhost:5122/backup-org/scenario12-multi-publish:backup-latest`
-   - `localhost:5122/backup-org/scenario12-multi-publish:backup-1.0.0`
+   - `localhost:5142/backup-org/scenario14-multi-publish:backup-latest`
+   - `localhost:5142/backup-org/scenario14-multi-publish:backup-1.0.0`
 7. Both registries can be pulled from (verify with `docker pull`)
 8. Cleanup removes registries and images
 9. Configuration cache compatible
@@ -3627,14 +3630,14 @@ dockerProject {
 **Verification Script**:
 ```bash
 # Verify primary registry
-docker pull localhost:5121/primary-org/scenario12-multi-publish:latest || exit 1
-docker pull localhost:5121/primary-org/scenario12-multi-publish:1.0.0 || exit 1
-docker pull localhost:5121/primary-org/scenario12-multi-publish:tested || exit 1
+docker pull localhost:5141/primary-org/scenario14-multi-publish:latest || exit 1
+docker pull localhost:5141/primary-org/scenario14-multi-publish:1.0.0 || exit 1
+docker pull localhost:5141/primary-org/scenario14-multi-publish:tested || exit 1
 echo "Primary registry verified"
 
 # Verify backup registry
-docker pull localhost:5122/backup-org/scenario12-multi-publish:backup-latest || exit 1
-docker pull localhost:5122/backup-org/scenario12-multi-publish:backup-1.0.0 || exit 1
+docker pull localhost:5142/backup-org/scenario14-multi-publish:backup-latest || exit 1
+docker pull localhost:5142/backup-org/scenario14-multi-publish:backup-1.0.0 || exit 1
 echo "Backup registry verified"
 
 echo "All multi-publish verifications passed!"
@@ -3647,9 +3650,9 @@ echo "All multi-publish verifications passed!"
 - Both registries receive the correct images with correct tags
 - Multi-registry pattern is viable for enterprise use cases
 
-##### Scenario 13: Pull Policy with Source Reference Mode
+##### Scenario 15: Pull Policy with Source Reference Mode
 
-**Location**: `plugin-integration-test/dockerProject/scenario-13-pull-policy/`
+**Location**: `plugin-integration-test/dockerProject/scenario-15-pull-policy/`
 
 **Purpose**: Verify `pullPolicy` property works correctly in Source Reference Mode with all three policy values.
 
@@ -3766,9 +3769,9 @@ dockerProject {
 
 **Location**: `plugin-integration-test/dockerWorkflows/`
 
-##### Scenario 14: Workflow Basic Pipeline with Config Cache
+##### Scenario 16: Workflow Basic Pipeline with Config Cache
 
-**Location**: `plugin-integration-test/dockerWorkflows/scenario-14-workflow-config-cache-basic/`
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-16-workflow-config-cache-basic/`
 
 **Purpose**: Basic workflow pipeline with configuration cache verification
 
@@ -3800,9 +3803,9 @@ dockerWorkflows {
 5. No configuration cache warnings or errors
 6. Cleanup removes all containers and images
 
-##### Scenario 15: Workflow Full Pipeline with Config Cache
+##### Scenario 17: Workflow Full Pipeline with Config Cache
 
-**Location**: `plugin-integration-test/dockerWorkflows/scenario-15-workflow-config-cache-full/`
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-17-workflow-config-cache-full/`
 
 **Purpose**: Full workflow pipeline with all steps (build, test, tag, save, publish)
 
@@ -3843,9 +3846,9 @@ dockerWorkflows {
 4. Cleanup runs regardless of success/failure
 5. Configuration cache compatible
 
-##### Scenario 16: Multiple Independent Pipelines
+##### Scenario 18: Multiple Independent Pipelines
 
-**Location**: `plugin-integration-test/dockerWorkflows/scenario-16-workflow-multiple-pipelines/`
+**Location**: `plugin-integration-test/dockerWorkflows/scenario-18-workflow-multiple-pipelines/`
 
 **Purpose**: Multiple independent pipelines with configuration cache
 
@@ -3881,7 +3884,7 @@ dockerWorkflows {
 4. Both pipelines can run (sequentially or in parallel)
 5. Configuration cache compatible
 
-##### Scenario 17: Workflow with Existing Failed Tests Scenario Update
+##### Scenario 19: Workflow with Existing Failed Tests Scenario Update
 
 **Location**: `plugin-integration-test/dockerWorkflows/scenario-3-failed-tests/` (existing, update)
 
@@ -3932,16 +3935,16 @@ dockerWorkflows {
 | Integration | scenario-1 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
 | Integration | scenario-2 | - | - | ✅ (existing) | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
 | Integration | scenario-3 | ✅ (existing) | - | - | - | - | - | - | CLASS | - | - | - | ✅ (UPDATE) |
-| Integration | scenario-4 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
-| Integration | scenario-5 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
-| Integration | scenario-6 | ✅ (NEW) | - | - | - | - | ✅ (multiple) | - | CLASS | - | - | - | ✅ |
-| Integration | scenario-7 | ✅ | - | - | - | - | - | - | CLASS | - | - | - | ✅ (NEW - explicit) |
-| Integration | scenario-8 | ✅ | - | - | ✅ (NEW) | - | - | - | CLASS | - | - | - | ✅ |
-| Integration | scenario-9 | ✅ | - | - | - | - | - | ✅ (NEW) | CLASS | - | - | - | ✅ |
-| Integration | scenario-10 | ✅ | - | - | - | - | - | - | ✅ METHOD (NEW) | - | - | - | ✅ |
-| Integration | scenario-11 | ✅ | - | - | - | - | - | - | ✅ CLASS+METHOD | ✅ (NEW) | - | - | ✅ |
-| Integration | scenario-12 | ✅ | - | - | - | - | - | - | CLASS | - | ✅ (NEW) | - | ✅ |
-| Integration | scenario-13 | - | - | ✅ | - | - | - | - | CLASS | - | - | ✅ (NEW) | ✅ |
+| Integration | scenario-6 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-7 | - | ✅ (NEW) | - | - | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-8 | ✅ (NEW) | - | - | - | - | ✅ (multiple) | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-9 | ✅ | - | - | - | - | - | - | CLASS | - | - | - | ✅ (NEW - explicit) |
+| Integration | scenario-10 | ✅ | - | - | ✅ (NEW) | - | - | - | CLASS | - | - | - | ✅ |
+| Integration | scenario-11 | ✅ | - | - | - | - | - | ✅ (NEW) | CLASS | - | - | - | ✅ |
+| Integration | scenario-12 | ✅ | - | - | - | - | - | - | ✅ METHOD (NEW) | - | - | - | ✅ |
+| Integration | scenario-13 | ✅ | - | - | - | - | - | - | ✅ CLASS+METHOD | ✅ (NEW) | - | - | ✅ |
+| Integration | scenario-14 | ✅ | - | - | - | - | - | - | CLASS | - | ✅ (NEW) | - | ✅ |
+| Integration | scenario-15 | - | - | ✅ | - | - | - | - | CLASS | - | - | ✅ (NEW) | ✅ |
 
 ---
 

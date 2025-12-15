@@ -45,8 +45,8 @@ class DockerProjectSpecTest extends Specification {
         dockerProjectSpec.initializeNestedSpecs()
 
         then:
-        dockerProjectSpec.image.present
-        dockerProjectSpec.image.get() instanceof ProjectImageSpec
+        dockerProjectSpec.images != null
+        dockerProjectSpec.images.size() == 0
         dockerProjectSpec.test.present
         dockerProjectSpec.test.get() instanceof ProjectTestSpec
         dockerProjectSpec.onSuccess.present
@@ -58,27 +58,29 @@ class DockerProjectSpecTest extends Specification {
     def "initializeNestedSpecs is idempotent"() {
         when:
         dockerProjectSpec.initializeNestedSpecs()
-        def firstImage = dockerProjectSpec.image.get()
+        def firstImages = dockerProjectSpec.images
         dockerProjectSpec.initializeNestedSpecs()
-        def secondImage = dockerProjectSpec.image.get()
+        def secondImages = dockerProjectSpec.images
 
         then:
-        firstImage.is(secondImage)
+        firstImages.is(secondImages)
     }
 
     // ===== DSL CLOSURE TESTS =====
 
-    def "image closure configures ProjectImageSpec"() {
+    def "images closure creates named image specs"() {
         when:
-        dockerProjectSpec.image {
-            name.set('my-app')
-            tags.set(['1.0.0', 'latest'])
+        dockerProjectSpec.images {
+            myApp {
+                imageName.set('my-app')
+                tags.set(['1.0.0', 'latest'])
+            }
         }
 
         then:
-        dockerProjectSpec.image.present
-        dockerProjectSpec.image.get().name.get() == 'my-app'
-        dockerProjectSpec.image.get().tags.get() == ['1.0.0', 'latest']
+        dockerProjectSpec.images.size() == 1
+        dockerProjectSpec.images.getByName('myApp').imageName.get() == 'my-app'
+        dockerProjectSpec.images.getByName('myApp').tags.get() == ['1.0.0', 'latest']
     }
 
     def "test closure configures ProjectTestSpec"() {
@@ -120,16 +122,18 @@ class DockerProjectSpecTest extends Specification {
 
     // ===== DSL ACTION TESTS =====
 
-    def "image action configures ProjectImageSpec"() {
+    def "images action creates named image specs"() {
         when:
-        dockerProjectSpec.image({ ProjectImageSpec imageSpec ->
-            imageSpec.name.set('action-app')
-            imageSpec.jarFrom.set(':app:jar')
-        } as org.gradle.api.Action<ProjectImageSpec>)
+        dockerProjectSpec.images({ images ->
+            images.create('actionApp') { imageSpec ->
+                imageSpec.imageName.set('action-app')
+                imageSpec.jarFrom.set(':app:jar')
+            }
+        } as org.gradle.api.Action)
 
         then:
-        dockerProjectSpec.image.get().name.get() == 'action-app'
-        dockerProjectSpec.image.get().jarFrom.get() == ':app:jar'
+        dockerProjectSpec.images.getByName('actionApp').imageName.get() == 'action-app'
+        dockerProjectSpec.images.getByName('actionApp').jarFrom.get() == ':app:jar'
     }
 
     def "test action configures ProjectTestSpec"() {
@@ -173,7 +177,7 @@ class DockerProjectSpecTest extends Specification {
         dockerProjectSpec.isConfigured() == false
     }
 
-    def "isConfigured returns false when image name not set"() {
+    def "isConfigured returns false when no images added"() {
         when:
         dockerProjectSpec.initializeNestedSpecs()
 
@@ -181,40 +185,48 @@ class DockerProjectSpecTest extends Specification {
         dockerProjectSpec.isConfigured() == false
     }
 
-    def "isConfigured returns true when image name is set"() {
+    def "isConfigured returns true when image with imageName is added"() {
         when:
-        dockerProjectSpec.image {
-            name.set('my-app')
+        dockerProjectSpec.images {
+            myApp {
+                imageName.set('my-app')
+            }
         }
 
         then:
         dockerProjectSpec.isConfigured() == true
     }
 
-    def "isConfigured returns true when sourceRef is set"() {
+    def "isConfigured returns true when image with sourceRef is added"() {
         when:
-        dockerProjectSpec.image {
-            sourceRef.set('docker.io/library/nginx:1.25')
+        dockerProjectSpec.images {
+            nginx {
+                sourceRef.set('docker.io/library/nginx:1.25')
+            }
         }
 
         then:
         dockerProjectSpec.isConfigured() == true
     }
 
-    def "isConfigured returns true when sourceRefImageName is set"() {
+    def "isConfigured returns true when image with sourceRefImageName is added"() {
         when:
-        dockerProjectSpec.image {
-            sourceRefImageName.set('nginx')
+        dockerProjectSpec.images {
+            nginx {
+                sourceRefImageName.set('nginx')
+            }
         }
 
         then:
         dockerProjectSpec.isConfigured() == true
     }
 
-    def "isConfigured returns true when sourceRefRepository is set"() {
+    def "isConfigured returns true when image with sourceRefRepository is added"() {
         when:
-        dockerProjectSpec.image {
-            sourceRefRepository.set('library/nginx')
+        dockerProjectSpec.images {
+            nginx {
+                sourceRefRepository.set('library/nginx')
+            }
         }
 
         then:
@@ -225,11 +237,13 @@ class DockerProjectSpecTest extends Specification {
 
     def "complete build mode configuration"() {
         when:
-        dockerProjectSpec.image {
-            name.set('my-service')
-            tags.set(['1.0.0', 'latest'])
-            jarFrom.set(':service:jar')
-            dockerfile.set('docker/Dockerfile')
+        dockerProjectSpec.images {
+            myService {
+                imageName.set('my-service')
+                tags.set(['1.0.0', 'latest'])
+                jarFrom.set(':service:jar')
+                dockerfile.set('docker/Dockerfile')
+            }
         }
         dockerProjectSpec.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -248,8 +262,9 @@ class DockerProjectSpecTest extends Specification {
 
         then:
         dockerProjectSpec.isConfigured() == true
-        dockerProjectSpec.image.get().name.get() == 'my-service'
-        dockerProjectSpec.image.get().isBuildMode() == true
+        def imageSpec = dockerProjectSpec.images.getByName('myService')
+        imageSpec.imageName.get() == 'my-service'
+        imageSpec.isBuildMode() == true
         dockerProjectSpec.test.get().compose.get() == 'src/integrationTest/resources/compose/app.yml'
         dockerProjectSpec.onSuccess.get().saveFile.get() == 'build/images/service.tar.gz'
         dockerProjectSpec.onFailure.get().additionalTags.get() == ['failed']
@@ -257,13 +272,15 @@ class DockerProjectSpecTest extends Specification {
 
     def "complete sourceRef mode configuration"() {
         when:
-        dockerProjectSpec.image {
-            sourceRefRegistry.set('docker.io')
-            sourceRefNamespace.set('library')
-            sourceRefImageName.set('nginx')
-            sourceRefTag.set('1.25-alpine')
-            pullIfMissing.set(true)
-            tags.set(['my-nginx', 'latest'])
+        dockerProjectSpec.images {
+            nginx {
+                sourceRefRegistry.set('docker.io')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('1.25-alpine')
+                pullIfMissing.set(true)
+                tags.set(['my-nginx', 'latest'])
+            }
         }
         dockerProjectSpec.test {
             compose.set('src/integrationTest/resources/compose/nginx.yml')
@@ -275,42 +292,101 @@ class DockerProjectSpecTest extends Specification {
 
         then:
         dockerProjectSpec.isConfigured() == true
-        dockerProjectSpec.image.get().isSourceRefMode() == true
-        dockerProjectSpec.image.get().sourceRefImageName.get() == 'nginx'
+        def imageSpec = dockerProjectSpec.images.getByName('nginx')
+        imageSpec.isSourceRefMode() == true
+        imageSpec.sourceRefImageName.get() == 'nginx'
         dockerProjectSpec.test.get().waitForHealthy.get() == ['nginx']
         dockerProjectSpec.onSuccess.get().additionalTags.get() == ['verified']
     }
 
-    // ===== MULTIPLE CONFIGURATION CALLS =====
+    // ===== MULTIPLE IMAGES TESTS =====
 
-    def "multiple image closure calls accumulate configuration"() {
+    def "multiple images can be configured"() {
         when:
-        dockerProjectSpec.image {
-            name.set('my-app')
-        }
-        dockerProjectSpec.image {
-            tags.set(['1.0.0'])
-        }
-        dockerProjectSpec.image {
-            jarFrom.set(':app:jar')
+        dockerProjectSpec.images {
+            app {
+                imageName.set('my-app')
+                jarFrom.set(':app:jar')
+                primary.set(true)
+            }
+            db {
+                imageName.set('my-db')
+                contextDir.set('src/main/docker/db')
+            }
         }
 
         then:
-        dockerProjectSpec.image.get().name.get() == 'my-app'
-        dockerProjectSpec.image.get().tags.get() == ['1.0.0']
-        dockerProjectSpec.image.get().jarFrom.get() == ':app:jar'
+        dockerProjectSpec.images.size() == 2
+        dockerProjectSpec.images.getByName('app').imageName.get() == 'my-app'
+        dockerProjectSpec.images.getByName('db').imageName.get() == 'my-db'
     }
 
-    def "last value wins when same property set multiple times"() {
+    def "blockName is automatically set from DSL block name"() {
         when:
-        dockerProjectSpec.image {
-            name.set('first-name')
-        }
-        dockerProjectSpec.image {
-            name.set('second-name')
+        dockerProjectSpec.images {
+            myAppImage {
+                imageName.set('my-app')
+            }
         }
 
         then:
-        dockerProjectSpec.image.get().name.get() == 'second-name'
+        dockerProjectSpec.images.getByName('myAppImage').blockName.get() == 'myAppImage'
+    }
+
+    // ===== PRIMARY IMAGE TESTS =====
+
+    def "getPrimaryImage returns single image when only one defined"() {
+        when:
+        dockerProjectSpec.images {
+            myApp {
+                imageName.set('my-app')
+            }
+        }
+
+        then:
+        def primary = dockerProjectSpec.primaryImage
+        primary != null
+        primary.imageName.get() == 'my-app'
+    }
+
+    def "getPrimaryImage returns image marked as primary"() {
+        when:
+        dockerProjectSpec.images {
+            app {
+                imageName.set('my-app')
+                primary.set(true)
+            }
+            db {
+                imageName.set('my-db')
+            }
+        }
+
+        then:
+        def primary = dockerProjectSpec.primaryImage
+        primary != null
+        primary.imageName.get() == 'my-app'
+    }
+
+    def "getPrimaryImage returns null when multiple images without primary"() {
+        when:
+        dockerProjectSpec.images {
+            app {
+                imageName.set('my-app')
+            }
+            db {
+                imageName.set('my-db')
+            }
+        }
+
+        then:
+        dockerProjectSpec.primaryImage == null
+    }
+
+    def "getPrimaryImage returns null when no images"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+
+        then:
+        dockerProjectSpec.primaryImage == null
     }
 }

@@ -21,6 +21,7 @@ import com.kineticfire.gradle.docker.spec.AuthSpec
 import groovy.lang.Closure
 import groovy.lang.DelegatesTo
 import org.gradle.api.Action
+import org.gradle.api.Named
 import org.gradle.api.Task
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.ListProperty
@@ -43,14 +44,18 @@ import javax.inject.Inject
  *
  * GRADLE 9/10 COMPATIBILITY NOTE: Uses @Inject for Gradle service injection.
  * All properties use Provider API with proper @Input/@Optional annotations.
+ *
+ * Implements Named for NamedDomainObjectContainer support.
  */
-abstract class ProjectImageSpec {
+abstract class ProjectImageSpec implements Named {
 
     private final ObjectFactory objectFactory
+    private String name
 
     @Inject
     ProjectImageSpec(ObjectFactory objectFactory) {
         this.objectFactory = objectFactory
+        this.name = ''  // Will be set by container factory
 
         // Build mode conventions
         dockerfile.convention('src/main/docker/Dockerfile')
@@ -86,7 +91,39 @@ abstract class ProjectImageSpec {
         version.convention('')
     }
 
+    // === NAMED INTERFACE IMPLEMENTATION ===
+
+    /**
+     * Returns the name used by NamedDomainObjectContainer for this image spec.
+     * This is the DSL block name (e.g., "myApp" from images { myApp { } }).
+     *
+     * @return The name of this image spec in the container
+     */
+    @Override
+    String getName() {
+        return this.name
+    }
+
+    /**
+     * Sets the name used by NamedDomainObjectContainer.
+     * Called by the container factory when creating instances.
+     *
+     * @param name The name to set
+     */
+    void setName(String name) {
+        this.name = name
+    }
+
     // === BUILD MODE PROPERTIES ===
+
+    /**
+     * Block name from DSL (e.g., "myApp" from images { myApp { } }).
+     * Set automatically when image is added to the images container.
+     * Used internally for task naming when imageName is not explicitly set.
+     */
+    @Input
+    @Optional
+    abstract Property<String> getBlockName()
 
     /**
      * Image name (e.g., 'my-app').
@@ -108,11 +145,13 @@ abstract class ProjectImageSpec {
     /**
      * Deprecated: Use imageName instead.
      * @deprecated Renamed to imageName for consistency with docker DSL.
+     * Note: Renamed from getName() to getLegacyName() because getName() is now used
+     * by the Named interface for NamedDomainObjectContainer support.
      */
     @Deprecated
     @Input
     @Optional
-    abstract Property<String> getName()
+    abstract Property<String> getLegacyName()
 
     /**
      * Tags to apply to the built image (e.g., ['latest', '1.0.0'])

@@ -21,6 +21,7 @@ import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectFailureSpec
+import org.gradle.api.NamedDomainObjectContainer
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -47,57 +48,83 @@ class DockerProjectExtensionTest extends Specification {
 
     def "spec is initialized with nested specs"() {
         expect:
-        extension.spec.image.present
+        extension.spec.images != null
         extension.spec.test.present
         extension.spec.onSuccess.present
         extension.spec.onFailure.present
     }
 
-    // ===== IMAGE DSL TESTS =====
+    // ===== IMAGES DSL TESTS =====
 
-    def "image closure configures ProjectImageSpec"() {
+    def "images closure creates named image specs"() {
         when:
-        extension.image {
-            name.set('my-app')
-            tags.set(['1.0.0', 'latest'])
-            jarFrom.set(':app:jar')
+        extension.images {
+            myApp {
+                imageName.set('my-app')
+                tags.set(['1.0.0', 'latest'])
+                jarFrom.set(':app:jar')
+            }
         }
 
         then:
-        extension.spec.image.get().name.get() == 'my-app'
-        extension.spec.image.get().tags.get() == ['1.0.0', 'latest']
-        extension.spec.image.get().jarFrom.get() == ':app:jar'
+        println "DEBUG: Container size = ${extension.spec.images.size()}"
+        println "DEBUG: Container names = ${extension.spec.images.names}"
+        extension.spec.images.each { item ->
+            println "DEBUG: Item - name property would be: ${item.blockName.getOrNull()}"
+        }
+        extension.spec.images.size() == 1
+        extension.spec.images.getByName('myApp').imageName.get() == 'my-app'
+        extension.spec.images.getByName('myApp').tags.get() == ['1.0.0', 'latest']
+        extension.spec.images.getByName('myApp').jarFrom.get() == ':app:jar'
     }
 
-    def "image action configures ProjectImageSpec"() {
+    def "images action creates named image specs"() {
         when:
-        extension.image({ ProjectImageSpec imageSpec ->
-            imageSpec.name.set('action-app')
-            imageSpec.dockerfile.set('docker/Dockerfile')
-        } as org.gradle.api.Action<ProjectImageSpec>)
+        extension.images({ NamedDomainObjectContainer<ProjectImageSpec> images ->
+            images.create('actionApp') { imageSpec ->
+                imageSpec.imageName.set('action-app')
+                imageSpec.dockerfile.set('docker/Dockerfile')
+            }
+        } as org.gradle.api.Action<NamedDomainObjectContainer<ProjectImageSpec>>)
 
         then:
-        extension.spec.image.get().name.get() == 'action-app'
-        extension.spec.image.get().dockerfile.get() == 'docker/Dockerfile'
+        extension.spec.images.size() == 1
+        extension.spec.images.getByName('actionApp').imageName.get() == 'action-app'
+        extension.spec.images.getByName('actionApp').dockerfile.get() == 'docker/Dockerfile'
     }
 
-    def "image closure configures sourceRef mode"() {
+    def "images closure configures sourceRef mode"() {
         when:
-        extension.image {
-            sourceRefRegistry.set('docker.io')
-            sourceRefNamespace.set('library')
-            sourceRefImageName.set('nginx')
-            sourceRefTag.set('1.25')
-            pullIfMissing.set(true)
+        extension.images {
+            nginx {
+                sourceRefRegistry.set('docker.io')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('1.25')
+                pullIfMissing.set(true)
+            }
         }
 
         then:
-        extension.spec.image.get().sourceRefRegistry.get() == 'docker.io'
-        extension.spec.image.get().sourceRefNamespace.get() == 'library'
-        extension.spec.image.get().sourceRefImageName.get() == 'nginx'
-        extension.spec.image.get().sourceRefTag.get() == '1.25'
-        extension.spec.image.get().pullIfMissing.get() == true
-        extension.spec.image.get().isSourceRefMode() == true
+        def imageSpec = extension.spec.images.getByName('nginx')
+        imageSpec.sourceRefRegistry.get() == 'docker.io'
+        imageSpec.sourceRefNamespace.get() == 'library'
+        imageSpec.sourceRefImageName.get() == 'nginx'
+        imageSpec.sourceRefTag.get() == '1.25'
+        imageSpec.pullIfMissing.get() == true
+        imageSpec.isSourceRefMode() == true
+    }
+
+    def "blockName is automatically set from DSL block name"() {
+        when:
+        extension.images {
+            myAppImage {
+                imageName.set('my-app')
+            }
+        }
+
+        then:
+        extension.spec.images.getByName('myAppImage').blockName.get() == 'myAppImage'
     }
 
     // ===== TEST DSL TESTS =====
@@ -184,11 +211,13 @@ class DockerProjectExtensionTest extends Specification {
 
     def "complete build mode configuration via extension"() {
         when:
-        extension.image {
-            name.set('my-service')
-            tags.set(['1.0.0', 'latest'])
-            jarFrom.set(':service:jar')
-            dockerfile.set('docker/Dockerfile')
+        extension.images {
+            myService {
+                imageName.set('my-service')
+                tags.set(['1.0.0', 'latest'])
+                jarFrom.set(':service:jar')
+                dockerfile.set('docker/Dockerfile')
+            }
         }
         extension.test {
             compose.set('src/integrationTest/resources/compose/app.yml')
@@ -204,8 +233,9 @@ class DockerProjectExtensionTest extends Specification {
 
         then:
         extension.spec.isConfigured() == true
-        extension.spec.image.get().isBuildMode() == true
-        extension.spec.image.get().name.get() == 'my-service'
+        def imageSpec = extension.spec.images.getByName('myService')
+        imageSpec.isBuildMode() == true
+        imageSpec.imageName.get() == 'my-service'
         extension.spec.test.get().compose.get() == 'src/integrationTest/resources/compose/app.yml'
         extension.spec.onSuccess.get().saveFile.get() == 'build/images/service.tar.gz'
         extension.spec.onFailure.get().additionalTags.get() == ['failed']
@@ -213,13 +243,15 @@ class DockerProjectExtensionTest extends Specification {
 
     def "complete sourceRef mode configuration via extension"() {
         when:
-        extension.image {
-            sourceRefRegistry.set('docker.io')
-            sourceRefNamespace.set('library')
-            sourceRefImageName.set('nginx')
-            sourceRefTag.set('1.25-alpine')
-            pullIfMissing.set(true)
-            tags.set(['my-nginx', 'latest'])
+        extension.images {
+            nginx {
+                sourceRefRegistry.set('docker.io')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('1.25-alpine')
+                pullIfMissing.set(true)
+                tags.set(['my-nginx', 'latest'])
+            }
         }
         extension.test {
             compose.set('src/integrationTest/resources/compose/nginx.yml')
@@ -231,22 +263,25 @@ class DockerProjectExtensionTest extends Specification {
 
         then:
         extension.spec.isConfigured() == true
-        extension.spec.image.get().isSourceRefMode() == true
-        extension.spec.image.get().sourceRefImageName.get() == 'nginx'
+        def imageSpec = extension.spec.images.getByName('nginx')
+        imageSpec.isSourceRefMode() == true
+        imageSpec.sourceRefImageName.get() == 'nginx'
     }
 
     // ===== SPEC ACCESS TESTS =====
 
     def "getSpec returns the underlying DockerProjectSpec"() {
         when:
-        extension.image {
-            name.set('test-app')
+        extension.images {
+            testApp {
+                imageName.set('test-app')
+            }
         }
         def spec = extension.spec
 
         then:
         spec != null
-        spec.image.get().name.get() == 'test-app'
+        spec.images.getByName('testApp').imageName.get() == 'test-app'
     }
 
     def "spec is same instance on multiple access"() {
@@ -258,24 +293,58 @@ class DockerProjectExtensionTest extends Specification {
         spec1.is(spec2)
     }
 
-    // ===== MULTIPLE CONFIGURATION CALLS =====
+    // ===== MULTIPLE IMAGE CONFIGURATION TESTS =====
 
-    def "multiple closure calls accumulate configuration"() {
+    def "multiple images can be configured"() {
         when:
-        extension.image {
-            name.set('my-app')
-        }
-        extension.image {
-            tags.set(['1.0.0'])
-        }
-        extension.image {
-            jarFrom.set(':app:jar')
+        extension.images {
+            app {
+                imageName.set('my-app')
+                jarFrom.set(':app:jar')
+                primary.set(true)
+            }
+            db {
+                imageName.set('my-db')
+                contextDir.set('src/main/docker/db')
+            }
         }
 
         then:
-        extension.spec.image.get().name.get() == 'my-app'
-        extension.spec.image.get().tags.get() == ['1.0.0']
-        extension.spec.image.get().jarFrom.get() == ':app:jar'
+        extension.spec.images.size() == 2
+        extension.spec.images.getByName('app').imageName.get() == 'my-app'
+        extension.spec.images.getByName('db').imageName.get() == 'my-db'
+    }
+
+    def "getPrimaryImage returns single image when only one defined"() {
+        when:
+        extension.images {
+            myApp {
+                imageName.set('my-app')
+            }
+        }
+
+        then:
+        def primary = extension.spec.primaryImage
+        primary != null
+        primary.imageName.get() == 'my-app'
+    }
+
+    def "getPrimaryImage returns image marked as primary"() {
+        when:
+        extension.images {
+            app {
+                imageName.set('my-app')
+                primary.set(true)
+            }
+            db {
+                imageName.set('my-db')
+            }
+        }
+
+        then:
+        def primary = extension.spec.primaryImage
+        primary != null
+        primary.imageName.get() == 'my-app'
     }
 
     // ===== EXTENSION REGISTRATION TEST =====
@@ -299,13 +368,15 @@ class DockerProjectExtensionTest extends Specification {
 
         when:
         testProject.dockerProject {
-            image {
-                name.set('project-app')
+            images {
+                projectApp {
+                    imageName.set('project-app')
+                }
             }
         }
 
         then:
         def ext = testProject.extensions.getByType(DockerProjectExtension)
-        ext.spec.image.get().name.get() == 'project-app'
+        ext.spec.images.getByName('projectApp').imageName.get() == 'project-app'
     }
 }

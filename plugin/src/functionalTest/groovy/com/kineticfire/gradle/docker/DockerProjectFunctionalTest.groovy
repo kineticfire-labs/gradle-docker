@@ -82,10 +82,12 @@ class DockerProjectFunctionalTest extends Specification {
             }
 
             dockerProject {
-                image {
-                    name.set('my-service')
-                    tags.set(['1.0.0', 'latest'])
-                    jarFrom.set('jar')
+                images {
+                    myService {
+                        imageName.set('my-service')
+                        tags.set(['1.0.0', 'latest'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -148,11 +150,13 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('static-app')
-                    tags.set(['1.0.0', 'latest'])
-                    dockerfile.set('docker/Dockerfile')
-                    contextDir.set('docker')
+                images {
+                    staticApp {
+                        imageName.set('static-app')
+                        tags.set(['1.0.0', 'latest'])
+                        dockerfile.set('docker/Dockerfile')
+                        contextDir.set('docker')
+                    }
                 }
 
                 test {
@@ -210,14 +214,16 @@ services:
             }
 
             dockerProject {
-                image {
-                    sourceRefRegistry.set('docker.io')
-                    sourceRefNamespace.set('library')
-                    sourceRefImageName.set('nginx')
-                    sourceRefTag.set('1.25-alpine')
+                images {
+                    nginx {
+                        sourceRefRegistry.set('docker.io')
+                        sourceRefNamespace.set('library')
+                        sourceRefImageName.set('nginx')
+                        sourceRefTag.set('1.25-alpine')
 
-                    tags.set(['test-nginx', 'latest'])
-                    pullIfMissing.set(true)
+                        tags.set(['test-nginx', 'latest'])
+                        pullIfMissing.set(true)
+                    }
                 }
 
                 test {
@@ -273,10 +279,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    sourceRef.set('docker.io/library/redis:7-alpine')
-                    name.set('my-redis')
-                    tags.set(['cached', 'latest'])
+                images {
+                    myRedis {
+                        sourceRef.set('docker.io/library/redis:7-alpine')
+                        imageName.set('my-redis')
+                        tags.set(['cached', 'latest'])
+                    }
                 }
 
                 test {
@@ -325,10 +333,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('app')
-                    tags.set(['1.0.0', 'latest'])
-                    jarFrom.set('jar')
+                images {
+                    app {
+                        imageName.set('app')
+                        tags.set(['1.0.0', 'latest'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -378,10 +388,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('saveable')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    saveable {
+                        imageName.set('saveable')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -438,10 +450,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('publishable')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    publishable {
+                        imageName.set('publishable')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -502,10 +516,12 @@ services:
             // For METHOD lifecycle, it sets delegateStackManagement=true and doesn't set stack
             // on the test step - the test framework extension handles compose lifecycle.
             dockerProject {
-                image {
-                    name.set('method-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    methodApp {
+                        imageName.set('method-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -555,16 +571,18 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('labeled-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    labeledApp {
+                        imageName.set('labeled-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
 
-                    buildArgs.put('BUILD_VERSION', '1.0.0')
-                    buildArgs.put('BUILD_ENV', 'test')
+                        buildArgs.put('BUILD_VERSION', '1.0.0')
+                        buildArgs.put('BUILD_ENV', 'test')
 
-                    labels.put('org.opencontainers.image.title', 'Labeled Application')
-                    labels.put('org.opencontainers.image.version', '1.0.0')
+                        labels.put('org.opencontainers.image.title', 'Labeled Application')
+                        labels.put('org.opencontainers.image.version', '1.0.0')
+                    }
                 }
 
                 test {
@@ -610,12 +628,14 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('namespaced-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
-                    registry.set('ghcr.io')
-                    namespace.set('myorg')
+                images {
+                    namespacedApp {
+                        imageName.set('namespaced-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                        registry.set('ghcr.io')
+                        namespace.set('myorg')
+                    }
                 }
 
                 test {
@@ -661,10 +681,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('simple-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    simpleApp {
+                        imageName.set('simple-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 // No test block - pipeline will have only build step
@@ -701,21 +723,23 @@ services:
             }
 
             dockerProject {
-                image {
-                    sourceRefRegistry.set('private.registry.io')
-                    sourceRefNamespace.set('private')
-                    sourceRefImageName.set('base-image')
-                    sourceRefTag.set('1.0')
+                images {
+                    myBase {
+                        sourceRefRegistry.set('private.registry.io')
+                        sourceRefNamespace.set('private')
+                        sourceRefImageName.set('base-image')
+                        sourceRefTag.set('1.0')
 
-                    pullIfMissing.set(true)
+                        pullIfMissing.set(true)
 
-                    pullAuth {
-                        username.set('pulluser')
-                        password.set('pullpass')
+                        pullAuth {
+                            username.set('pulluser')
+                            password.set('pullpass')
+                        }
+
+                        imageName.set('my-base')
+                        tags.set(['local'])
                     }
-
-                    name.set('my-base')
-                    tags.set(['local'])
                 }
 
                 test {
@@ -761,10 +785,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('healthcheck-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    healthcheckApp {
+                        imageName.set('healthcheck-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -813,10 +839,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('running-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    runningApp {
+                        imageName.set('running-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -863,10 +891,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('custom-test-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    customTestApp {
+                        imageName.set('custom-test-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
@@ -913,10 +943,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('invalid-app')
-                    tags.set(['1.0.0'])
-                    // Missing jarFrom, contextDir, and sourceRef
+                images {
+                    invalidApp {
+                        imageName.set('invalid-app')
+                        tags.set(['1.0.0'])
+                        // Missing jarFrom, contextDir, and sourceRef
+                    }
                 }
 
                 test {
@@ -959,11 +991,13 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('invalid-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
-                    contextDir.set('docker')
+                images {
+                    invalidApp {
+                        imageName.set('invalid-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                        contextDir.set('docker')
+                    }
                 }
             }
         """
@@ -989,11 +1023,13 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('invalid-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
-                    sourceRefImageName.set('nginx')
+                images {
+                    invalidApp {
+                        imageName.set('invalid-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                        sourceRefImageName.set('nginx')
+                    }
                 }
             }
         """
@@ -1019,10 +1055,12 @@ services:
             }
 
             dockerProject {
-                image {
-                    name.set('proj-app')
-                    tags.set(['1.0.0'])
-                    jarFrom.set('jar')
+                images {
+                    projApp {
+                        imageName.set('proj-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
                 }
 
                 test {
