@@ -153,6 +153,13 @@ dependencies {
 // Configure integration test task
 afterEvaluate {
     tasks.named('integrationTest') {
+        // CRITICAL: Configure usesCompose for @ComposeUp annotation support
+        // This tells the Spock extension which stack to use for METHOD lifecycle
+        usesCompose(
+            stack: 'methodTest',
+            lifecycle: 'method'
+        )
+
         // CRITICAL: METHOD lifecycle requires sequential test execution
         // to avoid port conflicts when containers are started per method
         maxParallelForks = 1

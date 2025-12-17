@@ -30,7 +30,14 @@ import org.gradle.api.tasks.TaskAction
 
 /**
  * Task for building Docker images
+ *
+ * This task has side effects (creates Docker images) and must always execute,
+ * so it is marked as untracked to prevent Gradle from skipping it based on
+ * input/output up-to-date checking. Docker images are external resources that
+ * Gradle cannot properly track - if someone deletes the image, Gradle would
+ * incorrectly consider this task UP-TO-DATE.
  */
+@UntrackedTask(because = "Docker build creates external resources that Gradle cannot track")
 abstract class DockerBuildTask extends DefaultTask {
     
     DockerBuildTask() {

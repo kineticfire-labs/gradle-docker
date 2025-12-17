@@ -113,12 +113,20 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             primaryImage = allImages.first()
         }
 
-        // Build tasks for ALL images
+        // Build tasks for build mode images only (not sourceRef mode)
         def buildTaskProviders = [:]
         allImages.each { imageSpec ->
             def imageName = deriveImageName(imageSpec, project)
-            def sanitizedImageName = TaskNamingUtils.normalizeName(imageName)
+            // Use sanitizeName for consistency with DockerProjectTranslator
+            def sanitizedImageName = TaskNamingUtils.sanitizeName(imageName)
+            // Capitalize first letter for task naming
             sanitizedImageName = TaskNamingUtils.capitalize(sanitizedImageName)
+
+            // Skip build task for sourceRef mode - image is pulled, not built
+            if (imageSpec.isSourceRefMode()) {
+                LOGGER.lifecycle("dockerProject: Skipping build task for sourceRef image '{}'", imageName)
+                return
+            }
 
             LOGGER.lifecycle("dockerProject: Generating build task for image '{}'", imageName)
 
@@ -128,7 +136,9 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
         // Use primary image for task naming and success operations
         def primaryImageName = deriveImageName(primaryImage, project)
-        def primarySanitizedName = TaskNamingUtils.normalizeName(primaryImageName)
+        // Use sanitizeName for consistency with DockerProjectTranslator
+        def primarySanitizedName = TaskNamingUtils.sanitizeName(primaryImageName)
+        // Capitalize first letter for task naming
         primarySanitizedName = TaskNamingUtils.capitalize(primarySanitizedName)
 
         LOGGER.lifecycle("dockerProject: Primary image is '{}', generating pipeline tasks", primaryImageName)
@@ -264,7 +274,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
             // Configure context and Dockerfile
             if (contextTaskProvider != null) {
-                def contextDir = project.layout.buildDirectory.dir("docker-context/${sanitizedImageName}")
+                // Use lowercase for context path to match DockerProjectTranslator's convention
+                // sanitizedImageName is capitalized for task naming, but context uses lowercase
+                def lowercaseName = sanitizedImageName.substring(0, 1).toLowerCase() + sanitizedImageName.substring(1)
+                def contextDir = project.layout.buildDirectory.dir("docker-context/${lowercaseName}")
                 task.contextPath.set(contextDir)
                 task.dependsOn(contextTaskProvider)
 
@@ -273,11 +286,20 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 def dockerfileName = new File(dockerfilePath).name
                 task.dockerfile.set(contextDir.map { it.file(dockerfileName) })
             } else if (imageSpec.contextDir.isPresent() && !imageSpec.contextDir.get().isEmpty()) {
-                task.contextPath.set(project.layout.projectDirectory.dir(imageSpec.contextDir.get()))
+                def contextDirPath = imageSpec.contextDir.get()
+                task.contextPath.set(project.layout.projectDirectory.dir(contextDirPath))
 
-                // Configure Dockerfile for non-context-task builds
-                if (imageSpec.dockerfile.isPresent() && !imageSpec.dockerfile.get().isEmpty()) {
-                    task.dockerfile.set(project.layout.projectDirectory.file(imageSpec.dockerfile.get()))
+                // When using contextDir, dockerfile should be inside contextDir by default
+                // Only use explicit dockerfile path if user overrode the default convention
+                def defaultDockerfile = 'src/main/docker/Dockerfile'
+                def configuredDockerfile = imageSpec.dockerfile.get()
+
+                if (configuredDockerfile == defaultDockerfile) {
+                    // User didn't explicitly set dockerfile, use contextDir/Dockerfile
+                    task.dockerfile.set(project.layout.projectDirectory.file("${contextDirPath}/Dockerfile"))
+                } else {
+                    // User explicitly set a different dockerfile path
+                    task.dockerfile.set(project.layout.projectDirectory.file(configuredDockerfile))
                 }
             } else {
                 // No context - configure Dockerfile if specified
@@ -285,6 +307,11 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     task.dockerfile.set(project.layout.projectDirectory.file(imageSpec.dockerfile.get()))
                 }
             }
+
+            // Configure output image ID file
+            def lowercaseForOutput = sanitizedImageName.substring(0, 1).toLowerCase() + sanitizedImageName.substring(1)
+            def outputDir = project.layout.buildDirectory.dir("docker/${lowercaseForOutput}")
+            task.imageId.set(outputDir.map { it.file('image-id.txt') })
         }
 
         return taskProvider
@@ -309,10 +336,13 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
         LOGGER.debug("Registering context preparation task: {}", taskName)
 
+        // Use lowercase for context path to match DockerProjectTranslator's convention
+        def lowercaseName = sanitizedImageName.substring(0, 1).toLowerCase() + sanitizedImageName.substring(1)
+
         return project.tasks.register(taskName, Copy) { task ->
             task.group = TASK_GROUP
-            task.description = "Prepare Docker build context for ${sanitizedImageName}"
-            task.into(project.layout.buildDirectory.dir("docker-context/${sanitizedImageName}"))
+            task.description = "Prepare Docker build context for ${lowercaseName}"
+            task.into(project.layout.buildDirectory.dir("docker-context/${lowercaseName}"))
 
             // Copy Dockerfile
             def dockerfilePath = imageSpec.dockerfile.getOrElse('src/main/docker/Dockerfile')

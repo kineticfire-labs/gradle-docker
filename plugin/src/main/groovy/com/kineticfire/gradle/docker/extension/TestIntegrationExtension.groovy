@@ -153,17 +153,18 @@ abstract class TestIntegrationExtension {
     
     private void configureMethodLifecycle(Test test, String stackName, stackSpec) {
         // Method lifecycle uses test framework extension to manage compose per test method
+        // NOTE: For METHOD lifecycle, we do NOT auto-wire compose task dependencies because
+        // the test framework extension (@ComposeUp or @ExtendWith) handles compose up/down
+        // per test method. The Gradle composeUp/composeDown tasks are not used.
 
         // Set comprehensive system properties from dockerTest DSL
         setComprehensiveSystemProperties(test, stackName, stackSpec, Lifecycle.METHOD)
-
-        // Auto-wire task dependencies to ensure compose tasks run
-        autoWireComposeDependencies(test, stackName)
 
         // Add listener to provide helpful hints if tests fail due to missing annotation
         addAnnotationHintListener(test, stackName, Lifecycle.METHOD)
 
         logger.info("Test '{}' configured for METHOD lifecycle from dockerTest DSL", test.name)
+        logger.info("Note: METHOD lifecycle - compose is managed by test framework, not Gradle tasks")
         logger.info("Spock: Use @ComposeUp (zero parameters)")
         logger.info("JUnit 5: Use @ExtendWith(DockerComposeMethodExtension.class)")
     }

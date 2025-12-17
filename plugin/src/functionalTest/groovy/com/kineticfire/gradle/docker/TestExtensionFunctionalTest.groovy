@@ -628,7 +628,7 @@ class TestExtensionFunctionalTest extends Specification {
         result.output.contains('composeDownClassFinStack')
     }
 
-    def "method lifecycle auto-wires composeUp dependency"() {
+    def "method lifecycle does not auto-wire composeUp dependency (compose managed by test framework)"() {
         given:
         buildFile << """
             plugins {
@@ -653,7 +653,11 @@ class TestExtensionFunctionalTest extends Specification {
                     def testTask = tasks.getByName('methodAutoTest')
                     def deps = testTask.dependsOn
                     println "Dependencies: \${deps}"
-                    assert deps.any { it.toString().contains('composeUpMethodAutoWireStack') }
+                    // Method lifecycle does NOT auto-wire compose tasks because compose is managed
+                    // by test framework annotations (@ComposeUp for Spock, @ExtendWith for JUnit)
+                    // per test method, not by Gradle tasks
+                    assert !deps.any { it.toString().contains('composeUpMethodAutoWireStack') }
+                    println "VERIFIED: method lifecycle correctly does not auto-wire composeUp"
                 }
             }
         """
@@ -668,10 +672,10 @@ class TestExtensionFunctionalTest extends Specification {
             .build()
 
         then:
-        result.output.contains('composeUpMethodAutoWireStack')
+        result.output.contains('VERIFIED: method lifecycle correctly does not auto-wire composeUp')
     }
 
-    def "method lifecycle auto-wires composeDown finalizer"() {
+    def "method lifecycle does not auto-wire composeDown finalizer (compose managed by test framework)"() {
         given:
         buildFile << """
             plugins {
@@ -696,7 +700,11 @@ class TestExtensionFunctionalTest extends Specification {
                     def testTask = tasks.getByName('methodFinTest')
                     def finalizers = testTask.finalizedBy.getDependencies()
                     println "Finalizers: \${finalizers}"
-                    assert finalizers.any { it.name.contains('composeDownMethodFinStack') }
+                    // Method lifecycle does NOT auto-wire compose tasks because compose is managed
+                    // by test framework annotations (@ComposeUp for Spock, @ExtendWith for JUnit)
+                    // per test method, not by Gradle tasks
+                    assert finalizers.isEmpty()
+                    println "VERIFIED: method lifecycle correctly does not auto-wire composeDown"
                 }
             }
         """
@@ -711,6 +719,6 @@ class TestExtensionFunctionalTest extends Specification {
             .build()
 
         then:
-        result.output.contains('composeDownMethodFinStack')
+        result.output.contains('VERIFIED: method lifecycle correctly does not auto-wire composeDown')
     }
 }

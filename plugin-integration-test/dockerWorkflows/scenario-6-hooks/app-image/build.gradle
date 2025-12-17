@@ -54,8 +54,8 @@ dependencies {
 def jarFileProvider = project(':app').tasks.named('jar').flatMap { it.archiveFile }
 def jarFileNameProvider = jarFileProvider.map { it.asFile.name }
 
-// Directory to store hook execution markers
-def hookMarkersDir = layout.buildDirectory.dir('hook-markers')
+// Directory to store hook execution markers (capture path as String for config cache compatibility)
+def hookMarkersPath = layout.buildDirectory.dir('hook-markers').get().asFile.absolutePath
 
 // =============================================================================
 // DOCKER DSL: Define the image to build
@@ -124,20 +124,22 @@ dockerWorkflows {
                 image = docker.images.hooksApp
 
                 // Hook: Execute before Docker build starts
+                // Note: Use captured hookMarkersPath (String) for configuration cache compatibility
                 beforeBuild = {
-                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markersDir = new File(hookMarkersPath)
                     markersDir.mkdirs()
                     def markerFile = new File(markersDir, 'beforeBuild.marker')
                     markerFile.text = "beforeBuild executed at ${new Date()}"
-                    logger.lifecycle("HOOK: beforeBuild executed - marker created")
+                    println "HOOK: beforeBuild executed - marker created"
                 } as org.gradle.api.Action<Void>
 
                 // Hook: Execute after Docker build completes
                 afterBuild = {
-                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markersDir = new File(hookMarkersPath)
+                    markersDir.mkdirs()
                     def markerFile = new File(markersDir, 'afterBuild.marker')
                     markerFile.text = "afterBuild executed at ${new Date()}"
-                    logger.lifecycle("HOOK: afterBuild executed - marker created")
+                    println "HOOK: afterBuild executed - marker created"
                 } as org.gradle.api.Action<Void>
             }
 
@@ -147,19 +149,21 @@ dockerWorkflows {
 
                 // Hook: Execute before tests start (after composeUp)
                 beforeTest = {
-                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markersDir = new File(hookMarkersPath)
+                    markersDir.mkdirs()
                     def markerFile = new File(markersDir, 'beforeTest.marker')
                     markerFile.text = "beforeTest executed at ${new Date()}"
-                    logger.lifecycle("HOOK: beforeTest executed - marker created")
+                    println "HOOK: beforeTest executed - marker created"
                 } as org.gradle.api.Action<Void>
 
                 // Hook: Execute after tests complete (receives TestResult)
                 afterTest = { testResult ->
-                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markersDir = new File(hookMarkersPath)
+                    markersDir.mkdirs()
                     def markerFile = new File(markersDir, 'afterTest.marker')
                     def resultInfo = "success=${testResult.success}, executed=${testResult.executed}"
                     markerFile.text = "afterTest executed at ${new Date()}\nTestResult: ${resultInfo}"
-                    logger.lifecycle("HOOK: afterTest executed - TestResult: ${resultInfo}")
+                    println "HOOK: afterTest executed - TestResult: ${resultInfo}"
                 } as org.gradle.api.Action<com.kineticfire.gradle.docker.workflow.TestResult>
             }
 
@@ -169,10 +173,11 @@ dockerWorkflows {
 
                 // Hook: Execute after successful test completion
                 afterSuccess = {
-                    def markersDir = new File(project.layout.buildDirectory.get().asFile, 'hook-markers')
+                    def markersDir = new File(hookMarkersPath)
+                    markersDir.mkdirs()
                     def markerFile = new File(markersDir, 'afterSuccess.marker')
                     markerFile.text = "afterSuccess executed at ${new Date()}"
-                    logger.lifecycle("HOOK: afterSuccess executed - marker created")
+                    println "HOOK: afterSuccess executed - marker created"
                 } as org.gradle.api.Action<Void>
             }
         }

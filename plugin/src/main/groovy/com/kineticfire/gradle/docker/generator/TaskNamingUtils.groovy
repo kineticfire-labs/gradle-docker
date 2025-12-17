@@ -225,4 +225,18 @@ final class TaskNamingUtils {
     static String stateDirectory(String prefix) {
         return "${prefix}/state"
     }
+
+    /**
+     * Sanitize a name by converting to lowercase and removing non-alphanumeric characters.
+     * This matches the convention used by DockerProjectTranslator for docker.images names.
+     *
+     * @param name The name to sanitize (e.g., 'project-scenario1-app')
+     * @return The sanitized name (e.g., 'projectscenario1app')
+     */
+    static String sanitizeName(String name) {
+        if (name == null || name.isEmpty()) {
+            return ''
+        }
+        return name.toLowerCase().replaceAll('[^a-z0-9]', '')
+    }
 }

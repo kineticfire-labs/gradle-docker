@@ -67,34 +67,38 @@ dependencies {
 //
 // This is different from build mode where a new image is created with a custom name.
 dockerProject {
-    // image block: Reference an existing Docker Hub image
-    image {
-        // SourceRef component properties: specify the existing image to use
-        // These properties identify the source image on Docker Hub
-        sourceRefRegistry.set('docker.io')       // Docker Hub registry
-        sourceRefNamespace.set('library')        // Official images namespace
-        sourceRefImageName.set('nginx')          // Image name
-        sourceRefTag.set('1.27-alpine')          // Specific version tag (alpine for smaller size)
-        // Effective sourceRef: docker.io/library/nginx:1.27-alpine
+    // images block: Define Docker images (supports multiple images)
+    images {
+        // Named block 'scenario2Nginx' - the block name is used internally for task naming
+        // Single image is automatically primary (receives onSuccess.additionalTags)
+        scenario2Nginx {
+            // SourceRef component properties: specify the existing image to use
+            // These properties identify the source image on Docker Hub
+            sourceRefRegistry.set('docker.io')       // Docker Hub registry
+            sourceRefNamespace.set('library')        // Official images namespace
+            sourceRefImageName.set('nginx')          // Image name
+            sourceRefTag.set('1.27-alpine')          // Specific version tag (alpine for smaller size)
+            // Effective sourceRef: docker.io/library/nginx:1.27-alpine
 
-        // Image name for internal task naming and pipeline generation
-        // In sourceRef mode, this doesn't create a new local image name
-        name.set('project-scenario2-nginx')
+            // Image name for internal task naming and pipeline generation
+            // In sourceRef mode, this doesn't create a new local image name
+            imageName.set('project-scenario2-nginx')
 
-        // Tags to apply to the source image (these become additional references)
-        // Note: In sourceRef mode, these tags are aliases to the source image
-        tags.set(['latest', '1.27'])
+            // Tags to apply to the source image (these become additional references)
+            // Note: In sourceRef mode, these tags are aliases to the source image
+            tags.set(['latest', '1.27'])
 
-        // Pull the image if it's not present locally
-        // When true, the plugin will pull from Docker Hub if the image is missing
-        pullIfMissing.set(true)
+            // Pull the image if it's not present locally
+            // When true, the plugin will pull from Docker Hub if the image is missing
+            pullIfMissing.set(true)
 
-        // Note: No pullAuth needed for public Docker Hub images
-        // For private registries, you would add:
-        // pullAuth {
-        //     username.set(System.getenv('DOCKER_USER'))
-        //     password.set(System.getenv('DOCKER_PASS'))
-        // }
+            // Note: No pullAuth needed for public Docker Hub images
+            // For private registries, you would add:
+            // pullAuth {
+            //     username.set(System.getenv('DOCKER_USER'))
+            //     password.set(System.getenv('DOCKER_PASS'))
+            // }
+        }
     }
 
     // test block: Configure Docker Compose stack and test execution
@@ -173,13 +177,13 @@ tasks.register('runProjectIntegrationTest') {
     doLast {
         // In sourceRef mode, verify the source image was pulled and is available
         // The 'verified' tag is applied as an alias to the source image
-        def result = exec {
-            commandLine 'docker', 'images', '-q', 'nginx:1.27-alpine'
-            standardOutput = new ByteArrayOutputStream()
-            ignoreExitValue = true
-        }
-        def imageId = result.standardOutput.toString().trim()
-        if (imageId.isEmpty()) {
+        def process = new ProcessBuilder('docker', 'images', '-q', 'nginx:1.27-alpine')
+            .redirectErrorStream(true)
+            .start()
+        def imageId = process.inputStream.text.trim()
+        def exitCode = process.waitFor()
+
+        if (exitCode != 0 || imageId.isEmpty()) {
             throw new GradleException("Expected source image 'nginx:1.27-alpine' not found! " +
                 "The image may not have been pulled.")
         }
@@ -196,11 +200,18 @@ tasks.register('cleanupProject') {
     group = 'verification'
 
     doLast {
-        // Remove test containers
-        exec {
-            commandLine 'docker', 'compose', '-p', 'project-scenario2-test', 'down', '-v'
-            ignoreExitValue = true
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
         }
+
+        // Remove test containers
+        runCommand(['docker', 'compose', '-p', 'project-scenario2-test', 'down', '-v'])
 
         // Note: In sourceRef mode, we don't remove the source image (nginx:1.27-alpine)
         // as it may be used by other tests. Only clean up test-specific tags if any.

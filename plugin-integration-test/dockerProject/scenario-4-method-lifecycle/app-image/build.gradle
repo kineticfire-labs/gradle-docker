@@ -60,21 +60,25 @@ dependencies {
 // This demonstrates the dockerProject DSL with lifecycle='method' which causes
 // containers to be started/stopped for each test method (test isolation).
 dockerProject {
-    // image block: Define the Docker image to build
-    image {
-        // Required: Image name (must be unique across integration tests)
-        name.set('project-scenario4-app')
+    // images block: Define Docker images to build (supports multiple images)
+    images {
+        // Named block 'scenario4App' - the block name is used internally for task naming
+        // Single image is automatically primary (receives onSuccess.additionalTags)
+        scenario4App {
+            // Required: Image name (must be unique across integration tests)
+            imageName.set('project-scenario4-app')
 
-        // Tags to apply to the built image
-        tags.set(['latest', '1.0.0'])
+            // Tags to apply to the built image
+            tags.set(['latest', '1.0.0'])
 
-        // jarFrom: Reference a task that produces a JAR file
-        // The JAR will be copied to the build context as 'app.jar'
-        jarFrom.set(':app:jar')
+            // jarFrom: Reference a task that produces a JAR file
+            // The JAR will be copied to the build context as 'app.jar'
+            jarFrom.set(':app:jar')
 
-        // Build arguments and labels for the Docker image
-        buildArgs.put('BUILD_VERSION', '1.0.0')
-        labels.put('org.opencontainers.image.title', 'Project Scenario 4 - Method Lifecycle')
+            // Build arguments and labels for the Docker image
+            buildArgs.put('BUILD_VERSION', '1.0.0')
+            labels.put('org.opencontainers.image.title', 'Project Scenario 4 - Method Lifecycle')
+        }
     }
 
     // test block: Configure Docker Compose stack with METHOD lifecycle
@@ -88,10 +92,10 @@ dockerProject {
         // Timeout for health checks (default: 60)
         timeoutSeconds.set(60)
 
-        // KEY: Use 'method' lifecycle for test isolation
+        // KEY: Use METHOD lifecycle for test isolation
         // Containers will start fresh before each test method and stop after
         // The @ComposeUp annotation on the test class handles this
-        lifecycle.set('method')
+        lifecycle.set(com.kineticfire.gradle.docker.Lifecycle.METHOD)
 
         // Test task to execute (default: 'integrationTest')
         testTaskName.set('integrationTest')

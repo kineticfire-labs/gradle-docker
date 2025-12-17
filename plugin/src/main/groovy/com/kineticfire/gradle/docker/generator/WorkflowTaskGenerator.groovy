@@ -149,6 +149,12 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         // 7. Configure test task to write result file
         configureTestResultCapture(project, testTaskName, stateDir)
 
+        // 7a. Configure build hooks if present
+        configureBuildHooks(project, pipelineSpec, buildTaskName)
+
+        // 7b. Configure test hooks if present
+        configureTestHooks(project, pipelineSpec, testTaskName, stateDir)
+
         // 8. Wire task dependencies
         wirePipelineDependencies(
             project, pipelineSpec, prefix,
@@ -158,7 +164,7 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
 
         // 9. Create pipeline lifecycle task
         createPipelineLifecycleTask(
-            project, pipelineName, prefix,
+            project, pipelineName, prefix, testTaskName,
             tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProvider, cleanupTaskProvider
         )
     }
@@ -178,7 +184,86 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
 
         def imageSpec = buildSpec.image.get()
         def imageName = imageSpec.name
-        return TaskNamingUtils.buildTaskName(TaskNamingUtils.normalizeName(imageName))
+        // Use the image name directly (preserve camelCase) to match how docker DSL creates tasks
+        return TaskNamingUtils.buildTaskName(imageName)
+    }
+
+    /**
+     * Configure build hooks (beforeBuild/afterBuild) on the build task.
+     */
+    private void configureBuildHooks(Project project, PipelineSpec pipelineSpec, String buildTaskName) {
+        LOGGER.debug("configureBuildHooks: buildTaskName={}, exists={}", buildTaskName,
+            buildTaskName != null ? taskExists(project, buildTaskName) : "null")
+
+        if (buildTaskName == null || !taskExists(project, buildTaskName)) {
+            LOGGER.debug("configureBuildHooks: skipping - task doesn't exist")
+            return
+        }
+
+        if (!pipelineSpec.build.isPresent()) {
+            LOGGER.debug("configureBuildHooks: skipping - build spec not present")
+            return
+        }
+
+        def buildSpec = pipelineSpec.build.get()
+        LOGGER.debug("configureBuildHooks: beforeBuild present={}, afterBuild present={}",
+            buildSpec.beforeBuild.isPresent(), buildSpec.afterBuild.isPresent())
+
+        project.tasks.named(buildTaskName).configure { task ->
+            // Execute beforeBuild hook
+            if (buildSpec.beforeBuild.isPresent()) {
+                task.doFirst {
+                    LOGGER.lifecycle("Executing beforeBuild hook for pipeline '{}'", pipelineSpec.name)
+                    buildSpec.beforeBuild.get().execute(null)
+                }
+            }
+
+            // Execute afterBuild hook
+            if (buildSpec.afterBuild.isPresent()) {
+                task.doLast {
+                    LOGGER.lifecycle("Executing afterBuild hook for pipeline '{}'", pipelineSpec.name)
+                    buildSpec.afterBuild.get().execute(null)
+                }
+            }
+        }
+    }
+
+    /**
+     * Configure test hooks (beforeTest/afterTest) on the test task.
+     */
+    private void configureTestHooks(Project project, PipelineSpec pipelineSpec, String testTaskName, String stateDir) {
+        if (testTaskName == null || !taskExists(project, testTaskName)) {
+            return
+        }
+
+        if (!pipelineSpec.test.isPresent()) {
+            return
+        }
+
+        def testSpec = pipelineSpec.test.get()
+
+        project.tasks.named(testTaskName).configure { task ->
+            // Execute beforeTest hook
+            if (testSpec.beforeTest.isPresent()) {
+                task.doFirst {
+                    LOGGER.lifecycle("Executing beforeTest hook for pipeline '{}'", pipelineSpec.name)
+                    testSpec.beforeTest.get().execute(null)
+                }
+            }
+
+            // Execute afterTest hook
+            if (testSpec.afterTest.isPresent()) {
+                task.doLast {
+                    LOGGER.lifecycle("Executing afterTest hook for pipeline '{}'", pipelineSpec.name)
+                    // Create a TestResult object from the test outcome
+                    def success = task.state.failure == null
+                    def testResult = success ?
+                        com.kineticfire.gradle.docker.workflow.TestResult.success(1, 1, 0) :
+                        com.kineticfire.gradle.docker.workflow.TestResult.failure(1, 1, 1, 0)
+                    testSpec.afterTest.get().execute(testResult)
+                }
+            }
+        }
     }
 
     /**
@@ -223,11 +308,33 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             // Get image name from build spec
             if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
                 def imageSpec = pipelineSpec.build.get().image.get()
-                task.imageName.set(imageSpec.imageName.getOrElse(imageSpec.name))
+                def baseImageName = imageSpec.imageName.getOrElse(imageSpec.name)
+                task.imageName.set(baseImageName)
+
+                // For sourceRef mode, set the source image reference
+                // Check if this is a sourceRef image (has sourceRef or sourceRefImageName set)
+                def hasSourceRef = (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) ||
+                                   (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) ||
+                                   (imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty())
+
+                if (hasSourceRef) {
+                    // Use the effective sourceRef as the source image to tag from
+                    def effectiveSourceRef = imageSpec.getEffectiveSourceRef()
+                    task.sourceImageRef.set(effectiveSourceRef)
+                    LOGGER.debug("TagOnSuccess using sourceRef image: {}", effectiveSourceRef)
+                }
             }
 
             task.additionalTags.set(additionalTags)
             task.testResultFile.set(resultFile)
+
+            // Execute afterSuccess hook if configured
+            if (successSpec.afterSuccess.isPresent()) {
+                task.doLast {
+                    LOGGER.lifecycle("Executing afterSuccess hook for pipeline '{}'", pipelineSpec.name)
+                    successSpec.afterSuccess.get().execute(null)
+                }
+            }
         }
     }
 
@@ -273,10 +380,29 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
 
             task.dockerService.set(dockerServiceProvider)
 
-            // Get image name from build spec
+            // Get image name and sourceRef info from build spec
             if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
                 def imageSpec = pipelineSpec.build.get().image.get()
                 task.imageName.set(imageSpec.imageName.getOrElse(imageSpec.name))
+
+                // Copy sourceRef properties for sourceRef mode images
+                def hasSourceRef = (imageSpec.sourceRef.isPresent() && !imageSpec.sourceRef.get().isEmpty()) ||
+                                   (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) ||
+                                   (imageSpec.sourceRefRepository.isPresent() && !imageSpec.sourceRefRepository.get().isEmpty())
+
+                if (hasSourceRef) {
+                    task.sourceRef.set(imageSpec.sourceRef)
+                    task.sourceRefRegistry.set(imageSpec.sourceRefRegistry)
+                    task.sourceRefNamespace.set(imageSpec.sourceRefNamespace)
+                    task.sourceRefImageName.set(imageSpec.sourceRefImageName)
+                    task.sourceRefRepository.set(imageSpec.sourceRefRepository)
+                    task.sourceRefTag.set(imageSpec.sourceRefTag)
+                    task.effectiveSourceRef.set(imageSpec.getEffectiveSourceRef())
+                    LOGGER.debug("Save task using sourceRef image: {}", imageSpec.getEffectiveSourceRef())
+                }
+
+                // Copy tags for building image reference
+                task.tags.set(imageSpec.tags)
             }
 
             task.outputFile.set(saveSpec.outputFile)
@@ -344,24 +470,23 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             if (pipelineSpec.build.isPresent() && pipelineSpec.build.get().image.isPresent()) {
                 def imageSpec = pipelineSpec.build.get().image.get()
                 task.imageName.set(imageSpec.imageName.getOrElse(imageSpec.name))
+
+                // Use publish tags from publishSpec if available, otherwise fall back to image tags
+                // This is used by EffectiveImageProperties as the source tags
+                def specPublishTags = publishSpec.publishTags.getOrElse([])
+                if (!specPublishTags.isEmpty()) {
+                    task.tags.set(specPublishTags)
+                    LOGGER.debug("Using publish tags from publishSpec: {}", specPublishTags)
+                } else if (imageSpec.tags.isPresent() && !imageSpec.tags.get().isEmpty()) {
+                    task.tags.set(imageSpec.tags)
+                    LOGGER.debug("Using image tags as publish tags: {}", imageSpec.tags.get())
+                }
             }
 
-            // Configure from first publish target
-            def firstTarget = publishSpec.to.iterator().next()
-            if (firstTarget.registry.isPresent()) {
-                task.registry.set(firstTarget.registry)
-            }
-            if (firstTarget.namespace.isPresent()) {
-                task.namespace.set(firstTarget.namespace)
-            }
-
-            // Use publish tags or additional tags
-            def publishTags = publishSpec.publishTags.get()
-            if (!publishTags.isEmpty()) {
-                task.tags.set(publishTags)
-            } else {
-                task.tags.set(successSpec.additionalTags)
-            }
+            // Set the publish targets from the spec - this is what DockerPublishTask.publishImage() uses
+            def targetsList = publishSpec.to.toList()
+            task.publishTargets.set(targetsList)
+            LOGGER.debug("Registered publish task with {} targets", targetsList.size())
 
             // Add onlyIf based on test result
             task.onlyIf { t ->
@@ -536,6 +661,7 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             Project project,
             String pipelineName,
             String prefix,
+            String testTaskName,
             TaskProvider<TagOnSuccessTask> tagOnSuccessTaskProvider,
             TaskProvider<DockerSaveTask> saveTaskProvider,
             TaskProvider<DockerPublishTask> publishTaskProvider,
@@ -551,15 +677,24 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         )
 
         lifecycleTask.configure { task ->
-            // Depend on the last task in the chain
-            if (cleanupTaskProvider != null) {
-                task.dependsOn(cleanupTaskProvider)
-            } else if (publishTaskProvider != null) {
+            // Depend on the last task in the pipeline chain
+            // Success chain: tagOnSuccess → save → publish
+            // If no success chain exists, depend on test task to ensure pipeline runs
+            if (publishTaskProvider != null) {
                 task.dependsOn(publishTaskProvider)
             } else if (saveTaskProvider != null) {
                 task.dependsOn(saveTaskProvider)
             } else if (tagOnSuccessTaskProvider != null) {
                 task.dependsOn(tagOnSuccessTaskProvider)
+            } else if (testTaskName != null && taskExists(project, testTaskName)) {
+                // No success/save/publish tasks - depend on test to ensure pipeline runs
+                // This handles pipelines with just build+test and no onTestSuccess
+                task.dependsOn(testTaskName)
+            }
+
+            // Cleanup should always run as a finalizer
+            if (cleanupTaskProvider != null) {
+                task.finalizedBy(cleanupTaskProvider)
             }
         }
 

@@ -25,6 +25,7 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.UntrackedTask
 
 /**
  * Shared task for cleanup operations after pipeline execution.
@@ -36,11 +37,16 @@ import org.gradle.api.tasks.TaskAction
  * Cleanup operations are best-effort: failures are logged but don't fail the task.
  * This ensures that one cleanup failure doesn't prevent other cleanup operations.
  *
+ * This task has side effects (removes containers, networks, images) and must always
+ * execute, so it is marked as untracked to prevent Gradle from skipping it based on
+ * input/output up-to-date checking.
+ *
  * Configuration Cache Compatible: Yes
  * - Uses flattened @Input properties only
  * - No nested object serialization
  * - No Project reference capture
  */
+@UntrackedTask(because = "Cleanup operations have side effects that must always execute")
 abstract class CleanupTask extends DefaultTask {
 
     CleanupTask() {

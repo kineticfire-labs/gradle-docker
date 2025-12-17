@@ -59,22 +59,26 @@ dependencies {
 // The dockerProject DSL translates these into the underlying docker/dockerTest/dockerWorkflows
 // configurations automatically.
 dockerProject {
-    // image block: Define the Docker image to build
-    image {
-        // Required: Image name (must be unique across integration tests)
-        name.set('project-scenario3-app')
+    // images block: Define Docker images to build (supports multiple images)
+    images {
+        // Named block 'scenario3App' - the block name is used internally for task naming
+        // Single image is automatically primary (receives onSuccess.additionalTags)
+        scenario3App {
+            // Required: Image name (must be unique across integration tests)
+            imageName.set('project-scenario3-app')
 
-        // Tags to apply to the built image
-        tags.set(['latest', '1.0.0'])
+            // Tags to apply to the built image
+            tags.set(['latest', '1.0.0'])
 
-        // jarFrom: Reference a task that produces a JAR file
-        // The JAR will be copied to the build context as 'app.jar'
-        jarFrom.set(':app:jar')
+            // jarFrom: Reference a task that produces a JAR file
+            // The JAR will be copied to the build context as 'app.jar'
+            jarFrom.set(':app:jar')
 
-        // Build arguments and labels for the Docker image
-        buildArgs.put('BUILD_VERSION', '1.0.0')
-        labels.put('org.opencontainers.image.title', 'Project Scenario 3 - Save & Publish')
-        labels.put('org.opencontainers.image.version', '1.0.0')
+            // Build arguments and labels for the Docker image
+            buildArgs.put('BUILD_VERSION', '1.0.0')
+            labels.put('org.opencontainers.image.title', 'Project Scenario 3 - Save & Publish')
+            labels.put('org.opencontainers.image.version', '1.0.0')
+        }
     }
 
     // test block: Configure Docker Compose stack and test execution
@@ -257,35 +261,33 @@ tasks.register('cleanupProject') {
     group = 'verification'
 
     doLast {
-        // Stop and remove test registry
-        exec {
-            commandLine 'docker', 'rm', '-f', 'test-registry-scenario3'
-            ignoreExitValue = true
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
         }
 
+        // Stop and remove test registry
+        runCommand(['docker', 'rm', '-f', 'test-registry-scenario3'])
+
         // Remove test containers
-        exec {
-            commandLine 'docker', 'compose', '-p', 'project-scenario3-test', 'down', '-v'
-            ignoreExitValue = true
-        }
+        runCommand(['docker', 'compose', '-p', 'project-scenario3-test', 'down', '-v'])
 
         // Remove test images (local)
         ['latest', '1.0.0', 'tested', 'stable'].each { tag ->
-            exec {
-                commandLine 'docker', 'rmi', "project-scenario3-app:${tag}"
-                ignoreExitValue = true
-            }
+            runCommand(['docker', 'rmi', "project-scenario3-app:${tag}"])
         }
 
         // Remove test images (registry tagged)
         ['latest', '1.0.0', 'tested'].each { tag ->
-            exec {
-                commandLine 'docker', 'rmi', "localhost:5032/scenario3/project-scenario3-app:${tag}"
-                ignoreExitValue = true
-            }
+            runCommand(['docker', 'rmi', "localhost:5032/scenario3/project-scenario3-app:${tag}"])
         }
 
         // Remove saved image file
-        delete 'build/images/project-scenario3-app.tar.gz'
+        new File(project.projectDir, 'build/images/project-scenario3-app.tar.gz').delete()
     }
 }

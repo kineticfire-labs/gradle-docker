@@ -34,13 +34,20 @@ import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.Optional
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.UntrackedTask
 
 import java.time.Duration
 import java.time.Instant
 
 /**
  * Task for starting Docker Compose stacks
+ *
+ * This task has side effects (starts containers) and must always execute,
+ * so it is marked as untracked to prevent Gradle from skipping it based on
+ * input/output up-to-date checking. Just because a state file exists from a
+ * previous run doesn't mean the containers are currently running.
  */
+@UntrackedTask(because = "Starting containers is a side effect that must always execute")
 abstract class ComposeUpTask extends DefaultTask {
     
     ComposeUpTask() {

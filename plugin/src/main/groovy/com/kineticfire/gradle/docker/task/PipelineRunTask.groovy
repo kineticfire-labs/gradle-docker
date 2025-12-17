@@ -37,6 +37,7 @@ import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.UntrackedTask
 import org.gradle.api.logging.Logger
 import org.gradle.api.logging.Logging
 
@@ -48,6 +49,10 @@ import javax.inject.Inject
  * Orchestrates the execution of: build → test → conditional (success/failure) → always (cleanup)
  * Uses executor pattern for each step to maintain separation of concerns.
  *
+ * This task has side effects (builds Docker images, runs tests, etc.) and must always execute,
+ * so it is marked as untracked to prevent Gradle from skipping it based on input/output
+ * up-to-date checking.
+ *
  * Configuration Cache Compatibility:
  * This task is marked as not compatible with configuration cache because pipeline
  * execution inherently requires dynamic task lookup and execution at runtime.
@@ -57,6 +62,7 @@ import javax.inject.Inject
  * - TaskExecutionService holds TaskContainer internally (not serialized)
  * - Executors are created at execution time, not configuration time
  */
+@UntrackedTask(because = "Pipeline execution has side effects (Docker builds, tests) that must always execute")
 abstract class PipelineRunTask extends DefaultTask {
 
     private static final Logger LOGGER = Logging.getLogger(PipelineRunTask)

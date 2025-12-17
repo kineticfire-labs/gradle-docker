@@ -53,24 +53,28 @@ dependencies {
 // This is the simplified dockerProject DSL that replaces the three-DSL approach
 // (docker + dockerTest + dockerWorkflows) for common single-image workflows.
 dockerProject {
-    // image block: Define the Docker image to build
-    image {
-        // Required: Image name (must be unique across integration tests)
-        name.set('project-scenario1-app')
+    // images block: Define Docker images to build (supports multiple images)
+    images {
+        // Named block 'scenario1App' - the block name is used internally for task naming
+        // Single image is automatically primary (receives onSuccess.additionalTags)
+        scenario1App {
+            // Required: Image name (must be unique across integration tests)
+            imageName.set('project-scenario1-app')
 
-        // Tags to apply to the built image
-        tags.set(['latest', '1.0.0'])
+            // Tags to apply to the built image
+            tags.set(['latest', '1.0.0'])
 
-        // jarFrom: Reference a task that produces a JAR file
-        // The JAR will be copied to the build context as 'app.jar'
-        jarFrom.set(':app:jar')
+            // jarFrom: Reference a task that produces a JAR file
+            // The JAR will be copied to the build context as 'app.jar'
+            jarFrom.set(':app:jar')
 
-        // Optional: Build arguments passed to docker build
-        buildArgs.put('BUILD_VERSION', '1.0.0')
+            // Optional: Build arguments passed to docker build
+            buildArgs.put('BUILD_VERSION', '1.0.0')
 
-        // Optional: Labels for the Docker image
-        labels.put('org.opencontainers.image.title', 'Project Scenario 1 App')
-        labels.put('org.opencontainers.image.version', '1.0.0')
+            // Optional: Labels for the Docker image
+            labels.put('org.opencontainers.image.title', 'Project Scenario 1 App')
+            labels.put('org.opencontainers.image.version', '1.0.0')
+        }
     }
 
     // test block: Configure Docker Compose stack and test execution
@@ -145,13 +149,13 @@ tasks.register('runProjectIntegrationTest') {
 
     doLast {
         // Verify the 'tested' tag was applied
-        def result = exec {
-            commandLine 'docker', 'images', '-q', 'project-scenario1-app:tested'
-            standardOutput = new ByteArrayOutputStream()
-            ignoreExitValue = true
-        }
-        def imageId = result.standardOutput.toString().trim()
-        if (imageId.isEmpty()) {
+        def process = new ProcessBuilder('docker', 'images', '-q', 'project-scenario1-app:tested')
+            .redirectErrorStream(true)
+            .start()
+        def imageId = process.inputStream.text.trim()
+        def exitCode = process.waitFor()
+
+        if (exitCode != 0 || imageId.isEmpty()) {
             throw new GradleException("Expected image 'project-scenario1-app:tested' not found! " +
                 "The onSuccess additionalTags may not have been applied.")
         }
@@ -165,18 +169,22 @@ tasks.register('cleanupProject') {
     group = 'verification'
 
     doLast {
-        // Remove test containers
-        exec {
-            commandLine 'docker', 'compose', '-p', 'project-scenario1-test', 'down', '-v'
-            ignoreExitValue = true
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
         }
+
+        // Remove test containers
+        runCommand(['docker', 'compose', '-p', 'project-scenario1-test', 'down', '-v'])
 
         // Remove test images
         ['latest', '1.0.0', 'tested'].each { tag ->
-            exec {
-                commandLine 'docker', 'rmi', "project-scenario1-app:${tag}"
-                ignoreExitValue = true
-            }
+            runCommand(['docker', 'rmi', "project-scenario1-app:${tag}"])
         }
     }
 }
