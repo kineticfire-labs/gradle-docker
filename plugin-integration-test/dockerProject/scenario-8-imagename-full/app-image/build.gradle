@@ -1,0 +1,288 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerProject Integration Test: Scenario 8 - Full ImageName Mode
+ *
+ * This scenario demonstrates the simplified dockerProject DSL with the complete
+ * imageName mode configuration including registry, namespace, multiple buildArgs,
+ * multiple labels, save to file, and publish to registry.
+ *
+ * What this tests:
+ * - dockerProject images block with imageName (not repository)
+ * - registry and namespace properties (separate from imageName)
+ * - Multiple buildArgs (4 build arguments)
+ * - Multiple labels (4 OCI standard labels)
+ * - onSuccess: additionalTags, saveFile, publishRegistry, publishNamespace
+ * - Automatic translation to docker/dockerTest/dockerWorkflows DSLs
+ *
+ * Port allocation (per README conventions):
+ * - Service: 9308 (dockerProject scenario 8)
+ * - Registry: 5038 (private Docker registry)
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// =============================================================================
+// DOCKER PROJECT DSL: Full ImageName Mode Configuration
+// =============================================================================
+// This demonstrates the complete dockerProject DSL with all image configuration
+// options using imageName mode (vs repository mode).
+dockerProject {
+    // images block: Define Docker images to build (supports multiple images)
+    images {
+        // Named block 'scenario8App' - the block name is used internally for task naming
+        // Single image is automatically primary (receives onSuccess.additionalTags)
+        scenario8App {
+            // imageName: The image name (without registry/namespace)
+            imageName.set('scenario8-app')
+
+            // registry: Target registry
+            // Final image: localhost:5038/scenario8ns/scenario8-app:tag
+            registry.set('localhost:5038')
+
+            // namespace: Image namespace (between registry and image name)
+            namespace.set('scenario8ns')
+
+            // Tags to apply to the built image
+            tags.set(['latest', '1.0.0', 'dev'])
+
+            // jarFrom: Reference a task that produces a JAR file
+            jarFrom.set(':app:jar')
+
+            // Multiple build arguments (4 args)
+            buildArgs.put('BUILD_VERSION', '1.0.0')
+            buildArgs.put('BUILD_DATE', '2025-01-15')
+            buildArgs.put('JAVA_VERSION', '21')
+            buildArgs.put('BUILDER', 'gradle-docker-plugin')
+
+            // Multiple labels (OCI standard labels - 4 labels)
+            labels.put('org.opencontainers.image.title', 'Scenario 8 App')
+            labels.put('org.opencontainers.image.version', '1.0.0')
+            labels.put('org.opencontainers.image.vendor', 'Test Vendor')
+            labels.put('org.opencontainers.image.authors', 'test@example.com')
+        }
+    }
+
+    // test block: Configure Docker Compose stack and test execution
+    test {
+        // Path to the Docker Compose file
+        compose.set('src/integrationTest/resources/compose/app.yml')
+
+        // Services to wait for HEALTHY status before running tests
+        waitForHealthy.set(['app'])
+
+        // Timeout for health checks
+        timeoutSeconds.set(60)
+
+        // Test task to execute
+        testTaskName.set('integrationTest')
+    }
+
+    // onSuccess block: Actions when tests pass
+    onSuccess {
+        // Additional tags to apply when tests succeed
+        additionalTags.set(['tested', 'verified'])
+
+        // Save the image to a tar.gz archive
+        saveFile.set('build/images/scenario8-app.tar.gz')
+
+        // Publish to private registry
+        publishRegistry.set('localhost:5038')
+        publishNamespace.set('scenario8ns')
+
+        // publishTags: Specify which tags to publish
+        publishTags.set(['latest', '1.0.0', 'tested'])
+    }
+}
+
+// =============================================================================
+// Integration Test Dependencies
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure integration test task with system properties
+tasks.named('integrationTest') {
+    systemProperty 'COMPOSE_PROJECT_NAME', 'project-scenario8-test'
+    systemProperty 'IMAGE_NAME', 'scenario8-app'
+    systemProperty 'REGISTRY_PORT', '5038'
+    systemProperty 'REGISTRY_NAMESPACE', 'scenario8ns'
+}
+
+// =============================================================================
+// Test Registry Setup (Private Docker Registry)
+// =============================================================================
+apply plugin: RegistryManagementPlugin
+
+withTestRegistry('test-registry-scenario8', 5038) {
+    // Registry will be configured with default settings
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Task names are derived from imageName 'scenario8-app' → sanitized to 'scenario8app'
+afterEvaluate {
+    // Ensure registry is started before running the pipeline
+    tasks.named('runScenario8appPipeline') {
+        dependsOn tasks.named('startTestRegistries')
+        finalizedBy tasks.named('stopTestRegistries')
+    }
+
+    tasks.named('composeUpScenario8appTest') {
+        dependsOn tasks.named('dockerBuildScenario8app')
+        dependsOn project(':app').tasks.named('jar')
+    }
+
+    // The integration test flow: composeUp -> tests -> composeDown
+    tasks.named('integrationTest') {
+        dependsOn tasks.named('composeUpScenario8appTest')
+        finalizedBy tasks.named('composeDownScenario8appTest')
+    }
+}
+
+// =============================================================================
+// Apply reusable Docker image testing plugin from buildSrc
+// =============================================================================
+apply from: "$rootDir/buildSrc/src/main/groovy/docker-image-testing.gradle"
+
+// Register Docker image clean and verify tasks
+registerBuildWorkflowTasks(project, [
+    'localhost:5038/scenario8ns/scenario8-app:latest',
+    'localhost:5038/scenario8ns/scenario8-app:1.0.0',
+    'localhost:5038/scenario8ns/scenario8-app:dev',
+    'localhost:5038/scenario8ns/scenario8-app:tested',
+    'localhost:5038/scenario8ns/scenario8-app:verified'
+])
+
+// Register saved image verification task
+registerVerifySavedImagesTask(project, ['build/images/scenario8-app.tar.gz'])
+
+// Register registry image verification task
+registerVerifyRegistryImagesTask(project, [
+    'localhost:5038/scenario8ns/scenario8-app:latest',
+    'localhost:5038/scenario8ns/scenario8-app:1.0.0',
+    'localhost:5038/scenario8ns/scenario8-app:tested'
+])
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('runProjectIntegrationTest') {
+    description = 'Run the full dockerProject imageName mode pipeline and verify results'
+    group = 'verification'
+
+    // Start registry first
+    dependsOn 'startTestRegistries'
+
+    // Ensure JAR is built first
+    dependsOn project(':app').tasks.named('jar')
+
+    // Run the pipeline (task name derived from imageName 'scenario8-app')
+    dependsOn tasks.named('runScenario8appPipeline')
+
+    // Verify results after pipeline completes
+    dependsOn 'verifyDockerImages'
+    dependsOn 'verifySavedDockerImages'
+    dependsOn 'verifyRegistryDockerImages'
+
+    // Stop registry when done
+    finalizedBy 'stopTestRegistries'
+
+    doLast {
+        logger.lifecycle("SUCCESS: dockerProject scenario-8 full imageName mode completed!")
+        logger.lifecycle("  - Image: localhost:5038/scenario8ns/scenario8-app")
+        logger.lifecycle("  - Tags: latest, 1.0.0, dev, tested, verified")
+        logger.lifecycle("  - Saved to: build/images/scenario8-app.tar.gz")
+        logger.lifecycle("  - Published to registry: localhost:5038")
+    }
+}
+
+// Configure task ordering for verification
+afterEvaluate {
+    if (tasks.findByName('verifyDockerImages') != null) {
+        tasks.named('verifyDockerImages') {
+            mustRunAfter tasks.named('runScenario8appPipeline')
+        }
+    }
+    if (tasks.findByName('verifySavedDockerImages') != null) {
+        tasks.named('verifySavedDockerImages') {
+            mustRunAfter tasks.named('runScenario8appPipeline')
+        }
+    }
+    if (tasks.findByName('verifyRegistryDockerImages') != null) {
+        tasks.named('verifyRegistryDockerImages') {
+            mustRunAfter tasks.named('runScenario8appPipeline')
+        }
+    }
+    if (tasks.findByName('stopTestRegistries') != null) {
+        tasks.named('stopTestRegistries') {
+            mustRunAfter 'verifyRegistryDockerImages'
+        }
+    }
+}
+
+// =============================================================================
+// Cleanup Task
+// =============================================================================
+tasks.register('cleanupProject') {
+    description = 'Clean up Docker resources from dockerProject test'
+    group = 'verification'
+
+    doLast {
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
+        }
+
+        // Stop and remove test registry
+        runCommand(['docker', 'rm', '-f', 'test-registry-scenario8'])
+
+        // Remove test containers
+        runCommand(['docker', 'compose', '-p', 'project-scenario8-test', 'down', '-v'])
+
+        // Remove test images (local and registry tagged)
+        ['latest', '1.0.0', 'dev', 'tested', 'verified'].each { tag ->
+            runCommand(['docker', 'rmi', "localhost:5038/scenario8ns/scenario8-app:${tag}"])
+        }
+
+        // Remove saved image file
+        new File(project.projectDir, 'build/images/scenario8-app.tar.gz').delete()
+    }
+}

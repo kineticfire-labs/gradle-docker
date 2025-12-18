@@ -49,6 +49,18 @@ tasks.register('integrationTest') {
     // Scenario 5: ContextDir mode
     dependsOn ':dockerProject:scenario-5-contextdir-mode:app-image:integrationTest'
 
+    // Scenario 6: Repository mode
+    dependsOn ':dockerProject:scenario-6-repository-mode:app-image:integrationTest'
+
+    // Scenario 7: Repository mode with registry publishing
+    dependsOn ':dockerProject:scenario-7-repository-registry:app-image:integrationTest'
+
+    // Scenario 8: Full imageName mode (registry, namespace, buildArgs, labels)
+    dependsOn ':dockerProject:scenario-8-imagename-full:app-image:integrationTest'
+
+    // Scenario 9: Configuration cache verification
+    dependsOn ':dockerProject:scenario-9-config-cache:app-image:integrationTest'
+
     doLast {
         logger.lifecycle("All dockerProject tests complete")
     }
@@ -64,6 +76,10 @@ tasks.named('clean') {
     dependsOn ':dockerProject:scenario-3-save-publish:app-image:clean'
     dependsOn ':dockerProject:scenario-4-method-lifecycle:app-image:clean'
     dependsOn ':dockerProject:scenario-5-contextdir-mode:app-image:clean'
+    dependsOn ':dockerProject:scenario-6-repository-mode:app-image:clean'
+    dependsOn ':dockerProject:scenario-7-repository-registry:app-image:clean'
+    dependsOn ':dockerProject:scenario-8-imagename-full:app-image:clean'
+    dependsOn ':dockerProject:scenario-9-config-cache:app-image:clean'
 }
 
 // ========================================
@@ -103,6 +119,31 @@ tasks.register('cleanDockerImages', Exec) {
         docker rmi project-scenario5-app:latest 2>/dev/null || true
         docker rmi project-scenario5-app:1.0.0 2>/dev/null || true
         docker rmi project-scenario5-app:tested 2>/dev/null || true
+
+        # Scenario 6: Repository mode images
+        docker rmi scenario6org/scenario6-app:latest 2>/dev/null || true
+        docker rmi scenario6org/scenario6-app:1.0.0 2>/dev/null || true
+        docker rmi scenario6org/scenario6-app:tested 2>/dev/null || true
+
+        # Scenario 7: Repository mode with registry images
+        docker rmi scenario7org/scenario7-app:latest 2>/dev/null || true
+        docker rmi scenario7org/scenario7-app:1.0.0 2>/dev/null || true
+        docker rmi scenario7org/scenario7-app:tested 2>/dev/null || true
+        docker rmi scenario7org/scenario7-app:stable 2>/dev/null || true
+        docker rmi localhost:5037/scenario7org/scenario7-app:latest 2>/dev/null || true
+        docker rmi localhost:5037/scenario7org/scenario7-app:1.0.0 2>/dev/null || true
+        docker rmi localhost:5037/scenario7org/scenario7-app:tested 2>/dev/null || true
+
+        # Scenario 8: Full imageName mode images
+        docker rmi localhost:5038/scenario8ns/scenario8-app:latest 2>/dev/null || true
+        docker rmi localhost:5038/scenario8ns/scenario8-app:1.0.0 2>/dev/null || true
+        docker rmi localhost:5038/scenario8ns/scenario8-app:dev 2>/dev/null || true
+        docker rmi localhost:5038/scenario8ns/scenario8-app:tested 2>/dev/null || true
+        docker rmi localhost:5038/scenario8ns/scenario8-app:verified 2>/dev/null || true
+
+        # Scenario 9: Config cache images
+        docker rmi project-scenario9-app:latest 2>/dev/null || true
+        docker rmi project-scenario9-app:tested 2>/dev/null || true
 
         echo "Cleaned up dockerProject test images"
     '''

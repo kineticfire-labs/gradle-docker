@@ -1,6 +1,35 @@
 # Remaining Work: dockerProject DSL Changes and Integration Tests
 
-## Status: NOT STARTED
+## Status: ALL STEPS COMPLETED
+
+### Completion Notes (2025-12-17)
+
+**Step 1: Implement Planned DSL Changes** - ✅ COMPLETED
+- 1.1: Used `NamedDomainObjectContainer<ProjectImageSpec>` directly instead of separate wrapper class
+- 1.2: `ProjectImageSpec` updated with `blockName`, `primary`, `repository` properties; implements `Named` interface
+- 1.3: `DockerProjectSpec` uses `images` container with `getImages()`, `getPrimaryImage()`, `isConfigured()` methods
+- 1.4: `DockerProjectExtension` has `images(Closure)` and `images(Action)` DSL methods
+- 1.5: `DockerProjectTaskGenerator` iterates all images and handles primary designation for success operations
+- 1.6: Validation exists for empty images and missing primary when multiple images defined
+- 1.7 & 1.8: Unit and functional tests work with new DSL structure
+
+**Step 2: Update Existing Integration Tests for New DSL** - ✅ COMPLETED
+- 2.1: scenario-1-build-mode uses `images { scenario1App { imageName.set('project-scenario1-app')... } }`
+- 2.2: scenario-2-sourceref-mode uses `images { scenario2Nginx { sourceRefImageName.set('nginx')... } }`
+- 2.3: scenario-3-save-publish uses `images { scenario3App { imageName.set('project-scenario3-app')... } }`
+- 2.4: scenario-4-method-lifecycle uses `images { scenario4App { imageName.set('project-scenario4-app')... } }`
+- 2.5: scenario-5-contextdir-mode uses `images { scenario5App { imageName.set('project-scenario5-app')... } }`
+
+**Step 3: Create New Integration Test Scenarios** - ✅ COMPLETED (2025-12-17)
+- 3.1: scenario-6-repository-mode - Tests `repository` property as alternative to imageName (port 9306)
+- 3.2: scenario-7-repository-registry - Tests repository mode with private registry publishing (port 9307, registry 5037)
+- 3.3: scenario-8-imagename-full - Tests full imageName mode with registry, namespace, buildArgs, labels (port 9308, registry 5038)
+- 3.4: scenario-9-config-cache - Tests configuration cache compatibility verification (port 9309)
+- Updated settings.gradle with new project includes
+- Updated dockerProject/build.gradle with new scenario dependencies
+- Updated dockerProject/README.md with new scenario documentation and feature matrix
+
+---
 
 ## Background
 
@@ -15,30 +44,17 @@ The original plan (`docker-project-workflow-dsls-config-cache.md`) described bot
 - Static task registration at configuration time
 - File-based state communication for conditional execution
 
-### What Was NOT Completed
+### What Was NOT Completed (Original List - Now Partially Done)
 
-1. **DSL not changed from `image` (singular) to `images` (plural container)**
-2. **No support for multiple images with `primary` designation**
-3. **No support for Repository Mode (`repository` property)**
-4. **Integration tests not updated for new DSL**
-5. **New integration test scenarios not created**
+1. ~~**DSL not changed from `image` (singular) to `images` (plural container)**~~ ✅ DONE
+2. ~~**No support for multiple images with `primary` designation**~~ ✅ DONE
+3. ~~**No support for Repository Mode (`repository` property)**~~ ✅ DONE (property exists)
+4. ~~**Integration tests not updated for new DSL**~~ ✅ DONE (scenarios 1-5)
+5. ~~**New integration test scenarios not created**~~ ✅ DONE (scenarios 6-9 created)
 
 ### Current State
 
-**Current DSL (OLD - still in use):**
-```groovy
-dockerProject {
-    image {
-        name.set('my-app')
-        tags.set(['latest', '1.0.0'])
-        jarFrom.set(':app:jar')
-    }
-    test { ... }
-    onSuccess { ... }
-}
-```
-
-**Planned DSL (NEW - not implemented):**
+**Current DSL (NOW IMPLEMENTED):**
 ```groovy
 dockerProject {
     images {
@@ -46,7 +62,7 @@ dockerProject {
             imageName.set('my-app')
             tags.set(['latest', '1.0.0'])
             jarFrom.set(':app:jar')
-            primary.set(true)  // receives onSuccess.additionalTags
+            primary.set(true)  // receives onSuccess.additionalTags (auto-true for single image)
         }
         testDb {
             imageName.set('test-db')
@@ -58,16 +74,16 @@ dockerProject {
 }
 ```
 
-**Existing Integration Test Scenarios:**
-- `scenario-1-build-mode` - uses OLD `image` DSL
-- `scenario-2-sourceref-mode` - uses OLD `image` DSL
-- `scenario-3-save-publish` - uses OLD `image` DSL
-- `scenario-4-method-lifecycle` - uses OLD `image` DSL
-- `scenario-5-contextdir-mode` - uses OLD `image` DSL
+**Existing Integration Test Scenarios (all updated to new DSL):**
+- `scenario-1-build-mode` - uses NEW `images { scenario1App { } }` DSL ✅
+- `scenario-2-sourceref-mode` - uses NEW `images { scenario2Nginx { } }` DSL ✅
+- `scenario-3-save-publish` - uses NEW `images { scenario3App { } }` DSL ✅
+- `scenario-4-method-lifecycle` - uses NEW `images { scenario4App { } }` DSL ✅
+- `scenario-5-contextdir-mode` - uses NEW `images { scenario5App { } }` DSL ✅
 
 ---
 
-## Step 1: Implement Planned DSL Changes
+## Step 1: Implement Planned DSL Changes ✅ COMPLETED
 
 ### 1.1 Create New Spec Classes
 
@@ -276,7 +292,7 @@ Update all functional tests in `plugin/src/functionalTest/` that test dockerProj
 
 ---
 
-## Step 2: Update Existing Integration Tests for New DSL
+## Step 2: Update Existing Integration Tests for New DSL ✅ COMPLETED
 
 ### 2.1 Update scenario-1-build-mode
 

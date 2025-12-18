@@ -28,9 +28,15 @@ Integration tests run in parallel. To avoid conflicts, each scenario uses unique
 | scenario-3-save-publish | 9302 | Save and publish on success |
 | scenario-4-method-lifecycle | 9303 | Method lifecycle mode |
 | scenario-5-contextdir-mode | 9304 | Build mode with contextDir |
+| scenario-6-repository-mode | 9306 | Repository mode (alternative to imageName) |
+| scenario-7-repository-registry | 9307 | Repository mode with registry publishing |
+| scenario-8-imagename-full | 9308 | Full imageName mode with all options |
+| scenario-9-config-cache | 9309 | Configuration cache verification |
 
 Registry ports (for publish scenarios):
 - scenario-3: 5032
+- scenario-7: 5037
+- scenario-8: 5038
 
 ## Scenario Descriptions
 
@@ -213,42 +219,199 @@ dockerProject {
 }
 ```
 
+### scenario-6-repository-mode
+
+**Purpose:** Demonstrates the `repository` property as an alternative to `imageName`.
+
+**Features Tested:**
+- `images.*.repository` - Repository-style image name (e.g., 'myorg/myapp')
+- Alternative to imageName + namespace combination
+- Docker Hub naming convention support
+
+**Key Concept:**
+The `repository` property allows specifying namespace and image name in a single property:
+- `repository.set('scenario6org/scenario6-app')` → image named `scenario6org/scenario6-app:tag`
+- Equivalent to: `imageName.set('scenario6-app')` + `namespace.set('scenario6org')`
+
+**DSL Example:**
+```groovy
+dockerProject {
+    images {
+        scenario6App {
+            repository.set('scenario6org/scenario6-app')
+            tags.set(['latest', '1.0.0'])
+            jarFrom.set(':app:jar')
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app'])
+    }
+    onSuccess {
+        additionalTags.set(['tested'])
+    }
+}
+```
+
+### scenario-7-repository-registry
+
+**Purpose:** Demonstrates repository mode combined with private registry publishing.
+
+**Features Tested:**
+- `images.*.repository` - Repository-style image name
+- `images.*.registry` - Target registry for publishing
+- `onSuccess.publishRegistry` - Publish to private registry on success
+- `onSuccess.publishTags` - Specific tags to publish
+
+**DSL Example:**
+```groovy
+dockerProject {
+    images {
+        scenario7App {
+            repository.set('scenario7org/scenario7-app')
+            registry.set('localhost:5037')
+            tags.set(['latest', '1.0.0'])
+            jarFrom.set(':app:jar')
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app'])
+    }
+    onSuccess {
+        additionalTags.set(['tested', 'stable'])
+        publishRegistry.set('localhost:5037')
+        publishTags.set(['latest', '1.0.0', 'tested'])
+    }
+}
+```
+
+### scenario-8-imagename-full
+
+**Purpose:** Demonstrates full imageName mode with all configuration options.
+
+**Features Tested:**
+- `images.*.imageName` + `registry` + `namespace` - Full image naming
+- Multiple `buildArgs` (4 build arguments)
+- Multiple `labels` (4 OCI standard labels)
+- `onSuccess.saveFile` - Save image to tar.gz
+- `onSuccess.publishRegistry` + `publishNamespace` + `publishTags` - Full publish config
+
+**DSL Example:**
+```groovy
+dockerProject {
+    images {
+        scenario8App {
+            imageName.set('scenario8-app')
+            registry.set('localhost:5038')
+            namespace.set('scenario8ns')
+            tags.set(['latest', '1.0.0', 'dev'])
+            jarFrom.set(':app:jar')
+
+            buildArgs.put('BUILD_VERSION', '1.0.0')
+            buildArgs.put('BUILD_DATE', '2025-01-15')
+            buildArgs.put('JAVA_VERSION', '21')
+            buildArgs.put('BUILDER', 'gradle-docker-plugin')
+
+            labels.put('org.opencontainers.image.title', 'Scenario 8 App')
+            labels.put('org.opencontainers.image.version', '1.0.0')
+            labels.put('org.opencontainers.image.vendor', 'Test Vendor')
+            labels.put('org.opencontainers.image.authors', 'test@example.com')
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app'])
+    }
+    onSuccess {
+        additionalTags.set(['tested', 'verified'])
+        saveFile.set('build/images/scenario8-app.tar.gz')
+        publishRegistry.set('localhost:5038')
+        publishNamespace.set('scenario8ns')
+        publishTags.set(['latest', '1.0.0', 'tested'])
+    }
+}
+```
+
+### scenario-9-config-cache
+
+**Purpose:** Explicitly verifies configuration cache compatibility.
+
+**Features Tested:**
+- Configuration cache stores and reuses correctly
+- Second run shows "Reusing configuration cache"
+- All tasks execute correctly from cached state
+- File-based state communication works with configuration cache
+
+**Verification:**
+```bash
+# First run (stores cache)
+./gradlew --configuration-cache :dockerProject:scenario-9-config-cache:app-image:runProjectscenario9appPipeline
+
+# Second run (should reuse cache - look for "Reusing configuration cache")
+./gradlew --configuration-cache :dockerProject:scenario-9-config-cache:app-image:runProjectscenario9appPipeline
+```
+
+**DSL Example:**
+```groovy
+dockerProject {
+    images {
+        scenario9App {
+            imageName.set('project-scenario9-app')
+            tags.set(['latest'])
+            jarFrom.set(':app:jar')
+        }
+    }
+    test {
+        compose.set('src/integrationTest/resources/compose/app.yml')
+        waitForHealthy.set(['app'])
+    }
+    onSuccess {
+        additionalTags.set(['tested'])
+    }
+}
+```
+
 ## Feature Coverage Matrix
 
 ### Image Configuration
 
-| Feature | scenario-1 | scenario-2 | scenario-3 | scenario-4 | scenario-5 |
-|---------|:----------:|:----------:|:----------:|:----------:|:----------:|
-| name | ✓ | ✓ | ✓ | ✓ | ✓ |
-| tags | ✓ | ✓ | ✓ | ✓ | ✓ |
-| jarFrom | ✓ | | ✓ | ✓ | |
-| contextDir | | | | | ✓ |
-| sourceRefImageName | | ✓ | | | |
-| sourceRefTag | | ✓ | | | |
-| pullIfMissing | | ✓ | | | |
-| buildArgs | ✓ | | | ✓ | ✓ |
-| labels | ✓ | | | ✓ | ✓ |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| imageName | ✓ | ✓ | ✓ | ✓ | ✓ | | | ✓ | ✓ |
+| repository | | | | | | ✓ | ✓ | | |
+| registry | | | | | | | ✓ | ✓ | |
+| namespace | | | | | | | | ✓ | |
+| tags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| jarFrom | ✓ | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ |
+| contextDir | | | | | ✓ | | | | |
+| sourceRef* | | ✓ | | | | | | | |
+| pullIfMissing | | ✓ | | | | | | | |
+| buildArgs | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| labels | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+
+Legend: s1=scenario-1, s2=scenario-2, etc.
 
 ### Test Configuration
 
-| Feature | scenario-1 | scenario-2 | scenario-3 | scenario-4 | scenario-5 |
-|---------|:----------:|:----------:|:----------:|:----------:|:----------:|
-| compose | ✓ | ✓ | ✓ | ✓ | ✓ |
-| waitForHealthy | ✓ | | ✓ | ✓ | ✓ |
-| waitForRunning | | ✓ | | | |
-| lifecycle='class' | ✓ | ✓ | ✓ | | ✓ |
-| lifecycle='method' | | | | ✓ | |
-| timeoutSeconds | | | ✓ | ✓ | |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| compose | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| waitForHealthy | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| waitForRunning | | ✓ | | | | | | | |
+| lifecycle='class' | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| lifecycle='method' | | | | ✓ | | | | | |
+| timeoutSeconds | | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ |
 
 ### Success/Failure Configuration
 
-| Feature | scenario-1 | scenario-2 | scenario-3 | scenario-4 | scenario-5 |
-|---------|:----------:|:----------:|:----------:|:----------:|:----------:|
-| additionalTags | ✓ | ✓ | ✓ | ✓ | ✓ |
-| saveFile | | | ✓ | | |
-| publishRegistry | | | ✓ | | |
-| publishNamespace | | | ✓ | | |
-| publishTags | | | ✓ | | |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| additionalTags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| saveFile | | | ✓ | | | | | ✓ | |
+| publishRegistry | | | ✓ | | | | ✓ | ✓ | |
+| publishNamespace | | | ✓ | | | | | ✓ | |
+| publishTags | | | ✓ | | | | ✓ | ✓ | |
 
 ## Running Tests
 
@@ -274,6 +437,18 @@ cd plugin-integration-test
 
 # Scenario 5: ContextDir mode
 ./gradlew -Pplugin_version=1.0.0 :dockerProject:scenario-5-contextdir-mode:app-image:integrationTest
+
+# Scenario 6: Repository mode
+./gradlew -Pplugin_version=1.0.0 :dockerProject:scenario-6-repository-mode:app-image:integrationTest
+
+# Scenario 7: Repository mode with registry
+./gradlew -Pplugin_version=1.0.0 :dockerProject:scenario-7-repository-registry:app-image:integrationTest
+
+# Scenario 8: Full imageName mode
+./gradlew -Pplugin_version=1.0.0 :dockerProject:scenario-8-imagename-full:app-image:integrationTest
+
+# Scenario 9: Config cache verification
+./gradlew -Pplugin_version=1.0.0 :dockerProject:scenario-9-config-cache:app-image:integrationTest
 ```
 
 ### Cleanup

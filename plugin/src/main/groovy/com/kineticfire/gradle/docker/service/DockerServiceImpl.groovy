@@ -247,7 +247,12 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
         println "Applying additional tags: ${additionalTags}"
         additionalTags.each { tag ->
             println "Tagging ${imageId} as ${tag}"
-            dockerClient.tagImageCmd(imageId, tag.split(':')[0], tag.split(':')[1]).exec()
+            // Use ImageRefParts to properly parse registry:port/namespace/image:tag format
+            def parts = ImageRefParts.parse(tag)
+            def fullRepoPath = parts.isRegistryQualified() ?
+                "${parts.registry}/${parts.fullRepository}" :
+                parts.fullRepository
+            dockerClient.tagImageCmd(imageId, fullRepoPath, parts.tag).exec()
         }
     }
     

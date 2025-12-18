@@ -184,6 +184,7 @@ class DockerProjectTranslator {
 
     /**
      * Derive the image name from the ProjectImageSpec or fall back to project name.
+     * Priority: imageName > legacyName > repository (extract) > sourceRefImageName > blockName > project.name
      */
     String deriveImageName(ProjectImageSpec imageSpec, Project project) {
         if (imageSpec.imageName.isPresent() && !imageSpec.imageName.get().isEmpty()) {
@@ -191,6 +192,12 @@ class DockerProjectTranslator {
         }
         if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
             return imageSpec.legacyName.get()
+        }
+        // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
+        if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
+            def repo = imageSpec.repository.get()
+            def lastSlash = repo.lastIndexOf('/')
+            return lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
         }
         if (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) {
             return imageSpec.sourceRefImageName.get()
@@ -224,13 +231,31 @@ class DockerProjectTranslator {
                 image.imageName.set(imageSpec.imageName)
             } else if (imageSpec.legacyName.isPresent() && !imageSpec.legacyName.get().isEmpty()) {
                 image.imageName.set(imageSpec.legacyName)
+            } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
+                // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
+                def repo = imageSpec.repository.get()
+                def lastSlash = repo.lastIndexOf('/')
+                def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
+                image.imageName.set(extractedImageName)
             } else {
                 // Fallback: use derived name as the Docker image name
                 image.imageName.set(derivedImageName)
             }
             image.tags.set(imageSpec.tags)
             image.registry.set(imageSpec.registry)
-            image.namespace.set(imageSpec.namespace)
+
+            // Handle namespace - repository takes precedence if set
+            if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
+                def repo = imageSpec.repository.get()
+                def lastSlash = repo.lastIndexOf('/')
+                if (lastSlash >= 0) {
+                    // Extract namespace from repository (e.g., "myorg/myapp" -> "myorg")
+                    def extractedNamespace = repo.substring(0, lastSlash)
+                    image.namespace.set(extractedNamespace)
+                }
+            } else if (imageSpec.namespace.isPresent()) {
+                image.namespace.set(imageSpec.namespace)
+            }
             image.buildArgs.putAll(imageSpec.buildArgs)
             image.labels.putAll(imageSpec.labels)
 
