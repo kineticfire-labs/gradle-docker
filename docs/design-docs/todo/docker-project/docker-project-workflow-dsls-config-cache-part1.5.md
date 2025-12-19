@@ -1,6 +1,6 @@
 # Test Coverage Analysis and Enhancement Plan
 
-## Status: STEP C COMPLETE (TagOnSuccessTask Functional Tests)
+## Status: ALL STEPS COMPLETE (A, B, C)
 
 ## Overview
 
@@ -157,11 +157,18 @@ When the placeholder logic is replaced with actual DockerService calls, add:
 
 ---
 
-### Part B: CleanupTask Functional Tests
+### Part B: CleanupTask Functional Tests ✅ COMPLETE
 
 **Goal:** Verify CleanupTask is correctly registered and configured via DSL.
 
-**File to Create:** `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/CleanupTaskFunctionalTest.groovy`
+**File Created:** `plugin/src/functionalTest/groovy/com/kineticfire/gradle/docker/CleanupTaskFunctionalTest.groovy`
+
+**Completion Notes:**
+- Created 16 functional tests covering all aspects of CleanupTask
+- Tests verify task registration, property configuration, dependencies, and edge cases
+- All tests passing (16/16)
+- Note: CleanupTask is only used in dockerWorkflows DSL (not dockerProject)
+- Discovered that AlwaysStepSpec defaults removeTestContainers=true, so cleanup task is created by default
 
 #### Step B.1: Create Test Class Structure
 
@@ -447,7 +454,7 @@ class TagOnSuccessTaskFunctionalTest extends Specification {
 
 1. **Part A: CleanupTask Unit Tests** ✅ COMPLETE (prerequisite for understanding current behavior)
 2. **Part C: TagOnSuccessTask Functional Tests** ✅ COMPLETE (simpler, fewer dependencies)
-3. **Part B: CleanupTask Functional Tests** (more complex, may need service mocking)
+3. **Part B: CleanupTask Functional Tests** ✅ COMPLETE (16 tests, all passing)
 
 ---
 
@@ -470,7 +477,7 @@ class TagOnSuccessTaskFunctionalTest extends Specification {
 | File | Action | Description | Status |
 |------|--------|-------------|--------|
 | `plugin/src/test/groovy/.../CleanupTaskTest.groovy` | Modify | Add missing unit test cases | ✅ COMPLETE |
-| `plugin/src/functionalTest/groovy/.../CleanupTaskFunctionalTest.groovy` | Create | New functional test class | Pending |
+| `plugin/src/functionalTest/groovy/.../CleanupTaskFunctionalTest.groovy` | Create | New functional test class | ✅ COMPLETE |
 | `plugin/src/functionalTest/groovy/.../TagOnSuccessTaskFunctionalTest.groovy` | Create | New functional test class | ✅ COMPLETE |
 
 ---

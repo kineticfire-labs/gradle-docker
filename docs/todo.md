@@ -1,8 +1,5 @@
 # todo
 
-Impl order: A, C, B
-A
-
 
 Help me understand the overall usage for our proposed 'dockerProject' DSL.  Start with this outline:
 dockerProject {
