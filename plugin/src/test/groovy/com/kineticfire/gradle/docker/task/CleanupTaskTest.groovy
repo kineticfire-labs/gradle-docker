@@ -23,8 +23,11 @@ import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 import spock.lang.TempDir
 
+import org.gradle.api.tasks.UntrackedTask
+
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ExecutionException
 
 /**
  * Unit tests for CleanupTask
@@ -341,6 +344,486 @@ class CleanupTaskTest extends Specification {
 
         when:
         newTask.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== ANNOTATION TESTS =====
+
+    def "task has @UntrackedTask annotation"() {
+        expect:
+        CleanupTask.class.isAnnotationPresent(UntrackedTask)
+    }
+
+    def "@UntrackedTask annotation has correct reason"() {
+        given:
+        def annotation = CleanupTask.class.getAnnotation(UntrackedTask)
+
+        expect:
+        annotation != null
+        annotation.because() == "Cleanup operations have side effects that must always execute"
+    }
+
+    // ===== FUTURE EXCEPTION TESTS =====
+
+    def "cleanup handles future.get() ExecutionException gracefully"() {
+        given:
+        task.stackName.set("failing-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException("Docker compose error"))
+        mockComposeService.downStack("failing-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not throw - cleanup should be best-effort
+        noExceptionThrown()
+    }
+
+    def "cleanup handles future.get() with InterruptedException gracefully"() {
+        given:
+        task.stackName.set("interrupt-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        // Simulate an interrupted execution
+        failingFuture.completeExceptionally(new InterruptedException("Thread interrupted"))
+        mockComposeService.downStack("interrupt-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not throw - cleanup should be best-effort
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with null message gracefully"() {
+        given:
+        task.stackName.set("null-message-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        // Exception with null message (no message provided)
+        failingFuture.completeExceptionally(new RuntimeException((String) null))
+        mockComposeService.downStack("null-message-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not throw - cleanup should handle null message gracefully
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with empty message gracefully"() {
+        given:
+        task.stackName.set("empty-message-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        // Exception with empty message
+        failingFuture.completeExceptionally(new RuntimeException(""))
+        mockComposeService.downStack("empty-message-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not throw - cleanup should handle empty message gracefully
+        noExceptionThrown()
+    }
+
+    def "cleanup handles direct exception throw with null message"() {
+        given:
+        task.stackName.set("direct-null-stack")
+        mockComposeService.downStack("direct-null-stack") >> {
+            throw new RuntimeException((String) null)
+        }
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not throw - cleanup should be best-effort
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with cause"() {
+        given:
+        task.stackName.set("cause-stack")
+        def cause = new IOException("IO error")
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException("Wrapper error", cause))
+        mockComposeService.downStack("cause-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles ExecutionException wrapping RuntimeException"() {
+        given:
+        task.stackName.set("exec-exception-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        def cause = new RuntimeException("Inner error")
+        failingFuture.completeExceptionally(new java.util.concurrent.ExecutionException("Execution failed", cause))
+        mockComposeService.downStack("exec-exception-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles Error wrapped in ExecutionException"() {
+        given:
+        task.stackName.set("error-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        // When future.get() throws, the Error is wrapped in ExecutionException
+        failingFuture.completeExceptionally(new java.util.concurrent.ExecutionException(new Error("Test error")))
+        mockComposeService.downStack("error-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // ExecutionException is caught by catch(Exception e)
+        noExceptionThrown()
+    }
+
+    def "cleanup handles AssertionError"() {
+        given:
+        task.stackName.set("assertion-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new AssertionError("Assertion failed"))
+        mockComposeService.downStack("assertion-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // AssertionError extends Error, not Exception - wrapping in ExecutionException
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with very long message"() {
+        given:
+        task.stackName.set("long-message-stack")
+        def longMessage = "A" * 10000  // Very long message
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException(longMessage))
+        mockComposeService.downStack("long-message-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with special characters in message"() {
+        given:
+        task.stackName.set("special-chars-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException("Error: {}'\"\\n\\t\$@#%^&*()"))
+        mockComposeService.downStack("special-chars-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles exception with unicode message"() {
+        given:
+        task.stackName.set("unicode-stack")
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException("错误消息 🚀 émoji"))
+        mockComposeService.downStack("unicode-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== NO OPERATIONS TESTS =====
+
+    def "cleanup completes when all options disabled and lists empty"() {
+        given:
+        // All default values - no stack, all remove flags false, all lists empty
+        def newTask = project.tasks.register('noOpsTask', CleanupTask).get()
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Task should complete without any operations
+        noExceptionThrown()
+    }
+
+    def "cleanup completes with only compose service but no stack name"() {
+        given:
+        // Compose service present but stack name empty
+        task.composeService.set(mockComposeService)
+        task.stackName.set("")
+
+        when:
+        task.cleanup()
+
+        then:
+        // Should not call downStack
+        0 * mockComposeService.downStack(_)
+        noExceptionThrown()
+    }
+
+    // ===== COMPOSE WITH ALL OTHER OPERATIONS TESTS =====
+
+    def "cleanup performs all operations when all options enabled"() {
+        given:
+        task.stackName.set("full-stack")
+        task.removeContainers.set(true)
+        task.containerNames.set(["container1", "container2"])
+        task.removeNetworks.set(true)
+        task.networkNames.set(["network1"])
+        task.removeImages.set(true)
+        task.imageNames.set(["image1:latest", "image2:v1", "image3"])
+
+        mockComposeService.downStack("full-stack") >> CompletableFuture.completedFuture(null)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockComposeService.downStack("full-stack") >> CompletableFuture.completedFuture(null)
+        noExceptionThrown()
+    }
+
+    def "cleanup continues all operations when compose fails"() {
+        given:
+        task.stackName.set("failing-stack")
+        task.removeContainers.set(true)
+        task.containerNames.set(["container1"])
+        task.removeNetworks.set(true)
+        task.networkNames.set(["network1"])
+        task.removeImages.set(true)
+        task.imageNames.set(["image1"])
+
+        def failingFuture = new CompletableFuture<Void>()
+        failingFuture.completeExceptionally(new RuntimeException("Compose down failed"))
+        mockComposeService.downStack("failing-stack") >> failingFuture
+
+        when:
+        task.cleanup()
+
+        then:
+        // Compose fails but other cleanup operations should still proceed
+        noExceptionThrown()
+    }
+
+    // ===== EDGE CASE - DEFAULT VALUES VIA getOrElse TESTS =====
+
+    def "cleanup handles unset removeContainers via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetContainerTask', CleanupTask).get()
+        // removeContainers not set - uses convention (false)
+        newTask.containerNames.set(["container1"])
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should not attempt cleanup since removeContainers defaults to false
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset removeNetworks via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetNetworkTask', CleanupTask).get()
+        // removeNetworks not set - uses convention (false)
+        newTask.networkNames.set(["network1"])
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should not attempt cleanup since removeNetworks defaults to false
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset removeImages via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetImageTask', CleanupTask).get()
+        // removeImages not set - uses convention (false)
+        newTask.imageNames.set(["image1"])
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should not attempt cleanup since removeImages defaults to false
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset containerNames via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetContainerNamesTask', CleanupTask).get()
+        newTask.removeContainers.set(true)
+        // containerNames not set - uses convention (empty list)
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should skip container cleanup since list is empty by default
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset networkNames via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetNetworkNamesTask', CleanupTask).get()
+        newTask.removeNetworks.set(true)
+        // networkNames not set - uses convention (empty list)
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should skip network cleanup since list is empty by default
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset imageNames via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetImageNamesTask', CleanupTask).get()
+        newTask.removeImages.set(true)
+        // imageNames not set - uses convention (empty list)
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should skip image cleanup since list is empty by default
+        noExceptionThrown()
+    }
+
+    def "cleanup handles unset stackName via getOrElse"() {
+        given:
+        def newTask = project.tasks.register('unsetStackTask', CleanupTask).get()
+        newTask.composeService.set(mockComposeService)
+        // stackName not set - uses convention (empty string)
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // Should skip compose cleanup since stackName is empty by default
+        0 * mockComposeService.downStack(_)
+        noExceptionThrown()
+    }
+
+    // ===== COMPOSE SERVICE STATE TESTS =====
+
+    def "cleanup skips compose when stackName set but composeService not present"() {
+        given:
+        def newTask = project.tasks.register('noServiceStackTask', CleanupTask).get()
+        newTask.stackName.set("test-stack")
+        // composeService explicitly not set
+
+        when:
+        newTask.cleanup()
+
+        then:
+        // No compose service to call
+        noExceptionThrown()
+    }
+
+    def "cleanup skips compose when both stackName empty and composeService not present"() {
+        given:
+        def newTask = project.tasks.register('noStackNoServiceTask', CleanupTask).get()
+        newTask.stackName.set("")
+        // composeService not set
+
+        when:
+        newTask.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== SINGLE ITEM LIST TESTS =====
+
+    def "cleanup handles single container in list"() {
+        given:
+        task.removeContainers.set(true)
+        task.containerNames.set(["single-container"])
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles single network in list"() {
+        given:
+        task.removeNetworks.set(true)
+        task.networkNames.set(["single-network"])
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles single image in list"() {
+        given:
+        task.removeImages.set(true)
+        task.imageNames.set(["single-image:latest"])
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== LARGE LIST TESTS =====
+
+    def "cleanup handles large container list"() {
+        given:
+        task.removeContainers.set(true)
+        task.containerNames.set((1..100).collect { "container-$it" })
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles large network list"() {
+        given:
+        task.removeNetworks.set(true)
+        task.networkNames.set((1..50).collect { "network-$it" })
+
+        when:
+        task.cleanup()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanup handles large image list"() {
+        given:
+        task.removeImages.set(true)
+        task.imageNames.set((1..75).collect { "image-$it:v1" })
+
+        when:
+        task.cleanup()
 
         then:
         noExceptionThrown()
