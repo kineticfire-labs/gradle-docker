@@ -1,7 +1,7 @@
 # todo
 
 Impl order: A, C, B
-A: The 3 missed instructions are on the logger.warn call's property access - acceptable since all branches are covered.
+A
 
 
 Help me understand the overall usage for our proposed 'dockerProject' DSL.  Start with this outline:
