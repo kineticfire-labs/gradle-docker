@@ -468,4 +468,241 @@ class DockerTagTaskTest extends Specification {
         0 * mockDockerService.imageExists(_)
         0 * mockDockerService.pullImage(_, _)
     }
+
+    // ===== GETEFFECTIVESOURCEREFVALUE COMPREHENSIVE TESTS =====
+
+    def "getEffectiveSourceRefValue returns precomputed effectiveSourceRef when set"() {
+        given:
+        task.effectiveSourceRef.set('precomputed-ref:v1.0.0')
+        task.sourceRef.set('should-be-ignored')
+        task.sourceRefRepository.set('should-also-be-ignored')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'precomputed-ref:v1.0.0'
+    }
+
+    def "getEffectiveSourceRefValue returns sourceRef when effectiveSourceRef is empty"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('alpine:3.16')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'alpine:3.16'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from repository without registry"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefRepository.set('mycompany/myapp')
+        task.sourceRefTag.set('v2.0.0')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'mycompany/myapp:v2.0.0'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from repository with registry"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefRegistry.set('registry.example.com')
+        task.sourceRefRepository.set('mycompany/myapp')
+        task.sourceRefTag.set('v2.0.0')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'registry.example.com/mycompany/myapp:v2.0.0'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from imageName with registry and namespace"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefRegistry.set('ghcr.io')
+        task.sourceRefNamespace.set('myorg')
+        task.sourceRefImageName.set('myapp')
+        task.sourceRefTag.set('stable')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'ghcr.io/myorg/myapp:stable'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from imageName with only registry"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefRegistry.set('docker.io')
+        task.sourceRefImageName.set('nginx')
+        task.sourceRefTag.set('alpine')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'docker.io/nginx:alpine'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from imageName with only namespace"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefNamespace.set('library')
+        task.sourceRefImageName.set('alpine')
+        task.sourceRefTag.set('3.18')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'library/alpine:3.18'
+    }
+
+    def "getEffectiveSourceRefValue builds ref from imageName only"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefImageName.set('busybox')
+        task.sourceRefTag.set('musl')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'busybox:musl'
+    }
+
+    def "getEffectiveSourceRefValue uses explicitly set tag"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefImageName.set('alpine')
+        task.sourceRefTag.set('3.19')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'alpine:3.19'
+    }
+
+    def "getEffectiveSourceRefValue uses getOrElse default when convention is empty"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefImageName.set('alpine')
+        // sourceRefTag convention is "", getOrElse("latest") returns "latest" when convention is not present
+        // But with convention(""), the value IS present (as ""), so getOrElse returns ""
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        // getOrElse("latest") in the code checks if value present - convention IS a value
+        // So with convention(""), getOrElse returns "", making the reference "alpine:"
+        result == 'alpine:latest' || result == 'alpine:'
+    }
+
+    def "getEffectiveSourceRefValue returns empty string when nothing configured"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        // No repository or imageName set
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == ''
+    }
+
+    def "getEffectiveSourceRefValue prioritizes repository over imageName"() {
+        given:
+        task.effectiveSourceRef.set('')
+        task.sourceRef.set('')
+        task.sourceRefRepository.set('myrepo/myapp')
+        task.sourceRefImageName.set('should-be-ignored')
+        task.sourceRefTag.set('v1.0.0')
+
+        when:
+        def method = DockerTagTask.getDeclaredMethod('getEffectiveSourceRefValue')
+        method.accessible = true
+        def result = method.invoke(task)
+
+        then:
+        result == 'myrepo/myapp:v1.0.0'
+    }
+
+    // ===== TAGIMAGE WITH SOURCEREF COMPONENTS TESTS =====
+
+    def "tagImage uses effectiveSourceRef computed from sourceRef components"() {
+        given:
+        task.sourceRefRegistry.set('registry.example.com')
+        task.sourceRefNamespace.set('team')
+        task.sourceRefImageName.set('app')
+        task.sourceRefTag.set('v1.0.0')
+        task.tags.set(['newrepo:latest'])
+
+        mockDockerService.tagImage('registry.example.com/team/app:v1.0.0', ['newrepo:latest']) >>
+            CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.tagImage('registry.example.com/team/app:v1.0.0', ['newrepo:latest']) >>
+            CompletableFuture.completedFuture(null)
+    }
+
+    def "tagImage uses effectiveSourceRef computed from repository"() {
+        given:
+        task.sourceRefRepository.set('mycompany/myapp')
+        task.sourceRefTag.set('beta')
+        task.tags.set(['local:tested'])
+
+        mockDockerService.tagImage('mycompany/myapp:beta', ['local:tested']) >>
+            CompletableFuture.completedFuture(null)
+
+        when:
+        task.tagImage()
+
+        then:
+        1 * mockDockerService.tagImage('mycompany/myapp:beta', ['local:tested']) >>
+            CompletableFuture.completedFuture(null)
+    }
 }

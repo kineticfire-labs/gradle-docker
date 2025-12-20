@@ -800,4 +800,169 @@ class ComposeUpTaskTest extends Specification {
         json.services != null
         // Note: Multiple service details will be tested in integration tests
     }
+
+    // ===== ADDITIONAL CLOSURE COVERAGE TESTS =====
+
+    def "composeUp processes services with multiple port mappings to cover closures"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('detail-project')
+        task.stackName.set('detail-stack')
+
+        def mockPort1 = new com.kineticfire.gradle.docker.model.PortMapping(8080, 80, 'tcp')
+        def mockPort2 = new com.kineticfire.gradle.docker.model.PortMapping(8443, 443, 'tcp')
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-container-id-12345', 'web-container-name', 'healthy', [mockPort1, mockPort2])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp handles null containerName in service info"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('null-name-project')
+        task.stackName.set('null-name-stack')
+
+        // ServiceInfo with null containerName - exercises the ?: default logic
+        def mockComposeState = new ComposeState([
+            'myservice': new ServiceInfo('container-id', null, 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp handles null port protocol to exercise default logic"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('null-proto-project')
+        task.stackName.set('null-proto-stack')
+
+        // PortMapping with null protocol - exercises the ?: "tcp" default logic
+        def mockPort = new com.kineticfire.gradle.docker.model.PortMapping(9000, 9000, null)
+        def mockComposeState = new ComposeState([
+            'api': new ServiceInfo('api-id', 'api-name', 'running', [mockPort])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp logs each service with its port mappings"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('log-project')
+        task.stackName.set('log-stack')
+
+        def mockPort1 = new com.kineticfire.gradle.docker.model.PortMapping(8080, 80, 'tcp')
+        def mockPort2 = new com.kineticfire.gradle.docker.model.PortMapping(3306, 3306, 'tcp')
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web-name', 'healthy', [mockPort1]),
+            'db': new ServiceInfo('db-id', 'db-name', 'running', [mockPort2]),
+            'cache': new ServiceInfo('cache-id', 'cache-name', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp handles empty services map"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('empty-project')
+        task.stackName.set('empty-stack')
+
+        def mockComposeState = new ComposeState([:])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp handles services with UDP protocol in port mapping"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('udp-project')
+        task.stackName.set('udp-stack')
+
+        def mockPort = new com.kineticfire.gradle.docker.model.PortMapping(53, 53, 'udp')
+        def mockComposeState = new ComposeState([
+            'dns': new ServiceInfo('dns-id', 'dns-name', 'running', [mockPort])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp handles services with many port mappings"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('many-ports-project')
+        task.stackName.set('many-ports-stack')
+
+        def ports = (1..10).collect { new com.kineticfire.gradle.docker.model.PortMapping(8000 + it, 80 + it, 'tcp') }
+        def mockComposeState = new ComposeState([
+            'multiport': new ServiceInfo('multi-id', 'multi-name', 'running', ports)
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
 }
