@@ -48,7 +48,8 @@ class ComposeOutputParser {
             return ServiceStatus.RUNNING
         } else if (lowerStatus.contains('exit') || lowerStatus.contains('stop')) {
             return ServiceStatus.STOPPED
-        } else if (lowerStatus.contains('restart') || lowerStatus.contains('restarting')) {
+        } else if (lowerStatus.contains('restart')) {
+            // Matches both 'restart' and 'restarting' since 'restarting' contains 'restart'
             return ServiceStatus.RESTARTING
         } else {
             return ServiceStatus.UNKNOWN
@@ -70,21 +71,51 @@ class ComposeOutputParser {
         portsString.split(',').each { portEntry ->
             def trimmed = portEntry.trim()
             if (trimmed) {
-                try {
-                    // Parse format: "0.0.0.0:9091->8080/tcp" or "9091->8080/tcp"
-                    def matcher = trimmed =~ /(?:[\d\.]+:)?(\d+)->(\d+)(?:\/(\w+))?/
-                    if (matcher.find()) {
-                        def hostPort = matcher.group(1) as Integer
-                        def containerPort = matcher.group(2) as Integer
-                        def protocol = matcher.group(3) ?: 'tcp'
-                        portMappings << new PortMapping(containerPort, hostPort, protocol)
-                    }
-                } catch (Exception e) {
-                    // Skip malformed port entries silently
+                def mapping = parseSinglePortEntry(trimmed)
+                if (mapping != null) {
+                    portMappings << mapping
                 }
             }
         }
         return portMappings
+    }
+
+    /**
+     * Parse a single port entry string into a PortMapping
+     *
+     * @param portEntry Single port entry (e.g., "0.0.0.0:9091->8080/tcp")
+     * @return PortMapping if valid, null if malformed
+     */
+    static PortMapping parseSinglePortEntry(String portEntry) {
+        // Parse format: "0.0.0.0:9091->8080/tcp" or "9091->8080/tcp"
+        def matcher = portEntry =~ /(?:[\d\.]+:)?(\d+)->(\d+)(?:\/(\w+))?/
+        if (!matcher.find()) {
+            return null
+        }
+
+        def hostPortStr = matcher.group(1)
+        def containerPortStr = matcher.group(2)
+        def protocol = matcher.group(3) ?: 'tcp'
+
+        def hostPort = safeParseInt(hostPortStr)
+        def containerPort = safeParseInt(containerPortStr)
+
+        if (hostPort == null || containerPort == null) {
+            return null
+        }
+
+        return new PortMapping(containerPort, hostPort, protocol)
+    }
+
+    /**
+     * Safely parse an integer, returning null on failure
+     */
+    private static Integer safeParseInt(String value) {
+        try {
+            return Integer.parseInt(value)
+        } catch (NumberFormatException ignored) {
+            return null
+        }
     }
 
     /**
@@ -103,19 +134,39 @@ class ComposeOutputParser {
         // Parse JSON lines (docker compose ps outputs one JSON object per line)
         jsonOutput.split('\n').each { line ->
             if (line?.trim()) {
-                try {
-                    def json = new JsonSlurper().parseText(line)
-                    def serviceInfo = parseServiceInfoFromJson(json)
-                    if (serviceInfo) {
-                        services[serviceInfo.containerName] = serviceInfo
-                    }
-                } catch (Exception e) {
-                    // Skip malformed JSON lines
+                def serviceInfo = parseJsonLine(line)
+                if (serviceInfo != null) {
+                    services[serviceInfo.containerName] = serviceInfo
                 }
             }
         }
 
         return services
+    }
+
+    /**
+     * Parse a single JSON line into a ServiceInfo
+     *
+     * @param line JSON line to parse
+     * @return ServiceInfo if valid, null if malformed
+     */
+    static ServiceInfo parseJsonLine(String line) {
+        def json = safeParseJson(line)
+        if (json == null) {
+            return null
+        }
+        return parseServiceInfoFromJson(json)
+    }
+
+    /**
+     * Safely parse JSON, returning null on failure
+     */
+    private static Map safeParseJson(String text) {
+        try {
+            return new JsonSlurper().parseText(text) as Map
+        } catch (Exception ignored) {
+            return null
+        }
     }
 
     /**

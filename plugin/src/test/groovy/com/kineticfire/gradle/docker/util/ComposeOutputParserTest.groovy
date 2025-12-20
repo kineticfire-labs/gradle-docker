@@ -66,6 +66,14 @@ class ComposeOutputParserTest extends Specification {
         result == ServiceStatus.HEALTHY
     }
 
+    def "parseServiceState handles restart status without 'ing' suffix"() {
+        when:
+        def result = ComposeOutputParser.parseServiceState("restart")
+
+        then:
+        result == ServiceStatus.RESTARTING
+    }
+
     // parsePortMappings tests
 
     def "parsePortMappings handles single port mapping"() {
@@ -166,6 +174,135 @@ class ComposeOutputParserTest extends Specification {
         mappings.size() == 2
     }
 
+    def "parsePortMappings handles empty entries between commas"() {
+        when:
+        def mappings = ComposeOutputParser.parsePortMappings(
+            "8080->80/tcp,   ,9000->90/udp"
+        )
+
+        then:
+        mappings.size() == 2
+        mappings[0].hostPort == 8080
+        mappings[1].hostPort == 9000
+    }
+
+    def "parsePortMappings handles entry that becomes empty after trim"() {
+        when:
+        def mappings = ComposeOutputParser.parsePortMappings(
+            "8080->80/tcp,  \t  ,9000->90/udp"
+        )
+
+        then:
+        mappings.size() == 2
+    }
+
+    def "parsePortMappings handles port number exceeding Integer range (triggers exception)"() {
+        when:
+        // Port number too large for Integer triggers NumberFormatException in catch block
+        def mappings = ComposeOutputParser.parsePortMappings(
+            "99999999999999999999999->80/tcp,8080->80/tcp"
+        )
+
+        then:
+        // First entry is skipped due to exception, second is parsed
+        mappings.size() == 1
+        mappings[0].hostPort == 8080
+    }
+
+    // parseSinglePortEntry tests
+
+    def "parseSinglePortEntry parses valid port mapping"() {
+        when:
+        def mapping = ComposeOutputParser.parseSinglePortEntry("0.0.0.0:8080->80/tcp")
+
+        then:
+        mapping != null
+        mapping.hostPort == 8080
+        mapping.containerPort == 80
+        mapping.protocol == "tcp"
+    }
+
+    def "parseSinglePortEntry parses port without host IP"() {
+        when:
+        def mapping = ComposeOutputParser.parseSinglePortEntry("8080->80/tcp")
+
+        then:
+        mapping != null
+        mapping.hostPort == 8080
+        mapping.containerPort == 80
+    }
+
+    def "parseSinglePortEntry returns null for invalid format"() {
+        when:
+        def mapping = ComposeOutputParser.parseSinglePortEntry("invalid-format")
+
+        then:
+        mapping == null
+    }
+
+    def "parseSinglePortEntry returns null for host port number overflow"() {
+        when:
+        // Host port number too large for Integer
+        def mapping = ComposeOutputParser.parseSinglePortEntry("99999999999999999999->80/tcp")
+
+        then:
+        mapping == null
+    }
+
+    def "parseSinglePortEntry returns null for container port number overflow"() {
+        when:
+        // Container port number too large for Integer
+        def mapping = ComposeOutputParser.parseSinglePortEntry("8080->99999999999999999999/tcp")
+
+        then:
+        mapping == null
+    }
+
+    def "parseSinglePortEntry handles default protocol"() {
+        when:
+        def mapping = ComposeOutputParser.parseSinglePortEntry("8080->80")
+
+        then:
+        mapping != null
+        mapping.protocol == "tcp"
+    }
+
+    // parseJsonLine tests
+
+    def "parseJsonLine parses valid JSON"() {
+        when:
+        def info = ComposeOutputParser.parseJsonLine('{"ID":"abc","Service":"web","State":"running"}')
+
+        then:
+        info != null
+        info.containerId == "abc"
+        info.containerName == "web"
+    }
+
+    def "parseJsonLine returns null for invalid JSON"() {
+        when:
+        def info = ComposeOutputParser.parseJsonLine("{not valid json}")
+
+        then:
+        info == null
+    }
+
+    def "parseJsonLine returns null for truncated JSON"() {
+        when:
+        def info = ComposeOutputParser.parseJsonLine('{"ID":"abc","Service":')
+
+        then:
+        info == null
+    }
+
+    def "parseJsonLine returns null for non-JSON text"() {
+        when:
+        def info = ComposeOutputParser.parseJsonLine("just plain text")
+
+        then:
+        info == null
+    }
+
     // parseServicesJson tests
 
     def "parseServicesJson handles single service"() {
@@ -236,6 +373,32 @@ class ComposeOutputParserTest extends Specification {
         services.isEmpty()
     }
 
+    def "parseServicesJson handles empty lines within valid JSON"() {
+        given:
+        def json = '''{"ID":"abc","Service":"web","State":"running"}
+
+{"ID":"def","Service":"db","State":"running"}'''
+
+        when:
+        def services = ComposeOutputParser.parseServicesJson(json)
+
+        then:
+        services.size() == 2
+        services.containsKey("web")
+        services.containsKey("db")
+    }
+
+    def "parseServicesJson handles lines with only whitespace mixed with valid JSON"() {
+        given:
+        def json = '{"ID":"abc","Service":"web","State":"running"}\n   \t   \n{"ID":"def","Service":"db","State":"running"}'
+
+        when:
+        def services = ComposeOutputParser.parseServicesJson(json)
+
+        then:
+        services.size() == 2
+    }
+
     def "parseServicesJson skips malformed JSON lines"() {
         given:
         def json = '''{"ID":"abc","Service":"web","State":"running"}
@@ -249,6 +412,35 @@ class ComposeOutputParserTest extends Specification {
         services.size() == 2
         services.containsKey("web")
         services.containsKey("db")
+    }
+
+    def "parseServicesJson skips lines with truncated JSON (triggers exception)"() {
+        given:
+        // Truncated JSON throws JsonException when parsed
+        def json = '''{"ID":"abc","Service":"web","State":"running"}
+{"ID":"xyz","Service":
+{"ID":"def","Service":"db","State":"running"}'''
+
+        when:
+        def services = ComposeOutputParser.parseServicesJson(json)
+
+        then:
+        services.size() == 2
+        services.containsKey("web")
+        services.containsKey("db")
+    }
+
+    def "parseServicesJson skips completely malformed lines"() {
+        given:
+        def json = '''not valid json at all
+{"ID":"abc","Service":"web","State":"running"}'''
+
+        when:
+        def services = ComposeOutputParser.parseServicesJson(json)
+
+        then:
+        services.size() == 1
+        services.containsKey("web")
     }
 
     def "parseServicesJson handles missing State field (uses Status fallback)"() {
