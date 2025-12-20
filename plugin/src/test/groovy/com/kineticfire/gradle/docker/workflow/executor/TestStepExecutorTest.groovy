@@ -1179,4 +1179,189 @@ class TestStepExecutorTest extends Specification {
         then:
         !gradleTestTask.systemProperties.containsKey('docker.compose.waitForHealthy.services')
     }
+
+    // ===== ADDITIONAL COVERAGE TESTS FOR setSystemPropertiesForMethodLifecycle =====
+
+    def "setSystemPropertiesForMethodLifecycle sets waitForHealthy properties when present"() {
+        given:
+        def gradleTestTask = project.tasks.create('healthyTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.waitForServices.set(['service1', 'service2'])
+        waitSpec.timeoutSeconds.set(60)
+        waitSpec.pollSeconds.set(2)
+        stackSpec.waitForHealthy.set(waitSpec)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.services'] == 'service1,service2'
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '60'
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.pollSeconds'] == '2'
+    }
+
+    def "setSystemPropertiesForMethodLifecycle sets waitForRunning properties when present"() {
+        given:
+        def gradleTestTask = project.tasks.create('runningTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.waitForServices.set(['app', 'db'])
+        waitSpec.timeoutSeconds.set(120)
+        waitSpec.pollSeconds.set(5)
+        stackSpec.waitForRunning.set(waitSpec)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.services'] == 'app,db'
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.timeoutSeconds'] == '120'
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.pollSeconds'] == '5'
+    }
+
+    def "setSystemPropertiesForMethodLifecycle sets both waitForHealthy and waitForRunning when present"() {
+        given:
+        def gradleTestTask = project.tasks.create('bothWaitTest', GradleTestTask)
+
+        def healthySpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        healthySpec.waitForServices.set(['healthy-service'])
+        healthySpec.timeoutSeconds.set(30)
+        stackSpec.waitForHealthy.set(healthySpec)
+
+        def runningSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        runningSpec.waitForServices.set(['running-service'])
+        runningSpec.timeoutSeconds.set(60)
+        stackSpec.waitForRunning.set(runningSpec)
+
+        when:
+        executor.setSystemPropertiesForMethodLifecycle(gradleTestTask, stackSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.services'] == 'healthy-service'
+        gradleTestTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '30'
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.services'] == 'running-service'
+        gradleTestTask.systemProperties['docker.compose.waitForRunning.timeoutSeconds'] == '60'
+    }
+
+    // ===== ADDITIONAL COVERAGE TESTS FOR collectComposeFilePaths =====
+
+    def "collectComposeFilePaths collects from composeFile property when set"() {
+        given:
+        def tempFile = File.createTempFile('compose', '.yml')
+        tempFile.deleteOnExit()
+        stackSpec.composeFile.set(tempFile)
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.size() == 1
+        paths[0] == tempFile.absolutePath
+    }
+
+    def "collectComposeFilePaths collects from composeFileCollection when set"() {
+        given:
+        def tempFile = File.createTempFile('compose-collection', '.yml')
+        tempFile.deleteOnExit()
+        stackSpec.composeFileCollection.from(tempFile)
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.contains(tempFile.absolutePath)
+    }
+
+    def "collectComposeFilePaths collects from all sources without duplicates"() {
+        given:
+        def tempFile1 = File.createTempFile('compose1', '.yml')
+        def tempFile2 = File.createTempFile('compose2', '.yml')
+        tempFile1.deleteOnExit()
+        tempFile2.deleteOnExit()
+        stackSpec.files.from(tempFile1)
+        stackSpec.composeFile.set(tempFile2)
+        stackSpec.composeFileCollection.from(tempFile2)  // Duplicate with composeFile
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.contains(tempFile1.absolutePath)
+        paths.contains(tempFile2.absolutePath)
+        // Duplicate should not be added
+        paths.count { it == tempFile2.absolutePath } == 1
+    }
+
+    def "collectComposeFilePaths collects from composeFileCollection with multiple files"() {
+        given:
+        def tempFile1 = File.createTempFile('collection1', '.yml')
+        def tempFile2 = File.createTempFile('collection2', '.yml')
+        tempFile1.deleteOnExit()
+        tempFile2.deleteOnExit()
+        stackSpec.composeFileCollection.from(tempFile1, tempFile2)
+
+        when:
+        def paths = executor.collectComposeFilePaths(stackSpec)
+
+        then:
+        paths.contains(tempFile1.absolutePath)
+        paths.contains(tempFile2.absolutePath)
+    }
+
+    // ===== ADDITIONAL COVERAGE TESTS FOR setWaitSpecSystemProperties =====
+
+    def "setWaitSpecSystemProperties uses convention values when not explicitly set"() {
+        given:
+        def gradleTestTask = project.tasks.create('conventionTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        // WaitSpec has convention values: timeoutSeconds=60, pollSeconds=2, waitForServices=[]
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.wait', waitSpec)
+
+        then:
+        noExceptionThrown()
+        // Empty services convention means no services property set
+        !gradleTestTask.systemProperties.containsKey('docker.compose.wait.services')
+        // But timeout and poll get their convention values
+        gradleTestTask.systemProperties['docker.compose.wait.timeoutSeconds'] == '60'
+        gradleTestTask.systemProperties['docker.compose.wait.pollSeconds'] == '2'
+    }
+
+    def "setWaitSpecSystemProperties sets all properties when all values configured"() {
+        given:
+        def gradleTestTask = project.tasks.create('allPropsTest', GradleTestTask)
+        def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
+        waitSpec.waitForServices.set(['svc1', 'svc2'])
+        waitSpec.timeoutSeconds.set(90)
+        waitSpec.pollSeconds.set(3)
+
+        when:
+        executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.wait', waitSpec)
+
+        then:
+        gradleTestTask.systemProperties['docker.compose.wait.services'] == 'svc1,svc2'
+        gradleTestTask.systemProperties['docker.compose.wait.timeoutSeconds'] == '90'
+        gradleTestTask.systemProperties['docker.compose.wait.pollSeconds'] == '3'
+    }
+
+    // ===== ADDITIONAL COVERAGE FOR execute() with test task not found =====
+
+    def "execute throws exception when test task not found"() {
+        given:
+        project.tasks.create('composeUpTestStack')
+        project.tasks.create('composeDownTestStack')
+        // Note: 'integrationTest' task exists but we use a different task name
+        def spec = project.objects.newInstance(TestStepSpec)
+        spec.stack.set(stackSpec)
+        spec.testTaskName.set('nonExistentTestTask')
+        def context = PipelineContext.create('test')
+
+        when:
+        executor.execute(spec, context)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Test task 'nonExistentTestTask' not found")
+    }
+
 }

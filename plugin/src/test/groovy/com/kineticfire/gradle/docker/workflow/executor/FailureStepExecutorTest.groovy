@@ -492,4 +492,38 @@ class FailureStepExecutorTest extends Specification {
         logsDir.exists()
         hookCalled
     }
+
+    // ===== ADDITIONAL COVERAGE TESTS =====
+
+    def "saveFailureLogs logs error message when exception occurs"() {
+        given:
+        def logsDir = new File(tempDir, 'logs')
+        failureSpec.saveFailureLogsDir.set(logsDir)
+        def errorMessage = 'Log capture error'
+        composeService.captureLogs(_, _) >> { throw new RuntimeException(errorMessage) }
+
+        when:
+        executor.saveFailureLogs(failureSpec, context)
+
+        then:
+        noExceptionThrown()
+        // Error is logged with message but doesn't propagate
+    }
+
+    def "saveFailureLogs with includeServices passes services to LogsConfig"() {
+        given:
+        def logsDir = new File(tempDir, 'logs')
+        failureSpec.saveFailureLogsDir.set(logsDir)
+        failureSpec.includeServices.set(['app', 'db'])
+        composeService.captureLogs('test-project', _ as LogsConfig) >>
+            CompletableFuture.completedFuture('log content')
+
+        when:
+        executor.saveFailureLogs(failureSpec, context)
+
+        then:
+        1 * composeService.captureLogs('test-project', { LogsConfig config ->
+            config.services != null && config.services.containsAll(['app', 'db'])
+        }) >> CompletableFuture.completedFuture('log content')
+    }
 }

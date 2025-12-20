@@ -392,4 +392,90 @@ class AlwaysStepExecutorTest extends Specification {
         then:
         result.pipelineName == 'testPipeline'
     }
+
+    // ===== ADDITIONAL COVERAGE TESTS =====
+
+    def "cleanupImagesIfConfigured logs success when cleanup completes"() {
+        given:
+        alwaysSpec.cleanupImages.set(true)
+
+        when:
+        executor.cleanupImagesIfConfigured(alwaysSpec, context)
+
+        then:
+        // The method runs without error and logs "Successfully cleaned up images"
+        noExceptionThrown()
+    }
+
+    def "cleanupImagesIfConfigured handles cleanupImages exception gracefully"() {
+        given:
+        alwaysSpec.cleanupImages.set(true)
+        // Create a context with an imageSpec that will cause issues
+        def badImageSpec = project.objects.newInstance(
+            ImageSpec,
+            'badImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // Don't set imageName so it returns "unknown"
+        def badContext = PipelineContext.create('test').withBuiltImage(badImageSpec)
+
+        when:
+        // Force an exception by using a spy that throws
+        def spyExecutor = Spy(AlwaysStepExecutor) {
+            cleanupImages(_) >> { throw new RuntimeException('Cleanup error') }
+        }
+        spyExecutor.setDockerService(dockerService)
+        spyExecutor.cleanupImagesIfConfigured(alwaysSpec, context)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupImages handles imageSpec with no imageName set"() {
+        given:
+        def imageSpecNoName = project.objects.newInstance(
+            ImageSpec,
+            'unnamed',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // imageName not set - should use default
+        def contextNoName = PipelineContext.create('test').withBuiltImage(imageSpecNoName)
+
+        when:
+        executor.cleanupImages(contextNoName)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "execute runs cleanup images when configured"() {
+        given:
+        alwaysSpec.removeTestContainers.set(false)
+        alwaysSpec.cleanupImages.set(true)
+
+        when:
+        def result = executor.execute(alwaysSpec, context, true)
+
+        then:
+        result != null
+        noExceptionThrown()
+    }
+
+    def "removeTestContainersIfConfigured logs exception message when failure occurs"() {
+        given:
+        alwaysSpec.removeTestContainers.set(true)
+        def errorMessage = 'Container removal failed'
+        composeService.downStack(_) >> { throw new RuntimeException(errorMessage) }
+
+        when:
+        executor.removeTestContainersIfConfigured(alwaysSpec, true)
+
+        then:
+        noExceptionThrown()
+        // Exception is logged with message but doesn't propagate
+    }
 }

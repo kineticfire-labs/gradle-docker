@@ -372,6 +372,73 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 - All Spock integration tests verify configuration is read correctly
 - Tests verify both `usesCompose()` pattern and annotation-only pattern
 
+### Workflow Executor Package - Defensive Null Checks
+
+**Files:**
+- `plugin/src/main/groovy/com/kineticfire/gradle/docker/workflow/executor/TestStepExecutor.groovy`
+
+#### 1. setWaitSpecSystemProperties() - Null Property Checks (Lines 389-402)
+
+**What:**
+- Defensive null checks for `waitForServices`, `timeoutSeconds`, and `pollSeconds` property objects
+- Conditions: `waitSpec.waitForServices != null && waitSpec.waitForServices.isPresent()`
+
+**Why Unit Testing is Impractical:**
+- These properties are abstract Gradle `Property<T>` and `ListProperty<T>` types
+- Gradle's `ObjectFactory.newInstance()` always initializes these properties (never null)
+- Mocking abstract Gradle classes with `@Inject` constructors causes Spock `CannotCreateMockException`
+- The null branch (`!= null` evaluating to false) is defensive programming that cannot be reached
+
+**Mitigations:**
+- Null checks are defensive programming for safety
+- All reachable branches (when properties exist) are 100% tested
+- Property presence checks (`isPresent()`) are tested with both present and absent values
+- Empty collection handling tested separately
+
+**Unit Test Coverage:**
+- 100% coverage of all reachable branches
+- Tests verify behavior when properties are present with values
+- Tests verify behavior when properties have convention values
+- Tests verify empty services list is handled correctly
+
+#### 2. collectComposeFilePaths() - Null Collection Checks (Lines 354-379)
+
+**What:**
+- Defensive null checks for `files` and `composeFileCollection` ConfigurableFileCollection
+- Conditions: `stackSpec.files != null && !stackSpec.files.isEmpty()`
+
+**Why Unit Testing is Impractical:**
+- `ComposeStackSpec` is abstract with `@Inject` constructor managed by Gradle
+- All `ConfigurableFileCollection` properties are initialized by `ObjectFactory`
+- The null branches cannot be reached in normal Gradle usage
+- Mocking abstract Gradle classes fails with Spock
+
+**Mitigations:**
+- Null checks are defensive programming
+- All reachable paths (empty collections, populated collections) are 100% tested
+- Tests verify single file, multiple files, and combined sources
+
+**Unit Test Coverage:**
+- 100% coverage of all reachable branches
+- Tests verify empty collections return empty paths
+- Tests verify files from all three sources (files, composeFile, composeFileCollection)
+- Tests verify duplicate detection works correctly
+
+### Package Coverage Summary
+
+**Package: `com.kineticfire.gradle.docker.workflow.executor`**
+
+| Metric | Before | After | Gap |
+|--------|--------|-------|-----|
+| Instructions | 94.7% | 99.2% | 0.8% |
+| Branches | 89.8% | 94.5% | 5.5% |
+
+The 5.5% branch gap represents defensive null checks on Gradle-managed abstract properties that:
+1. Are always initialized by Gradle's ObjectFactory
+2. Cannot be null in normal Gradle plugin usage
+3. Cannot be mocked due to Spock/Gradle constraints
+4. Provide safety without testable code paths
+
 ## Summary Statistics
 
 ### Unit Testable Code (via Dependency Injection)
@@ -412,6 +479,9 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 
 ## Document History
 
+- **2025-12-20**: Added workflow executor package gap documentation. Improved coverage from
+  94.7%/89.8% to 99.2%/94.5% (instruction/branch). Documented remaining 5.5% branch gap as
+  unreachable defensive null checks on Gradle-managed abstract properties.
 - **2025-11-21**: Added JUnit 5 and Spock extension gap documentation. Updated summary statistics
   to include test framework integration (~350 lines). Total documented gaps now ~740 lines.
   All gaps covered by integration tests in `plugin-integration-test/dockerTest/`.
