@@ -534,4 +534,65 @@ class PublishOperationExecutorTest extends Specification {
         1 * dockerService.pushImage('ghcr.io/myapp:1.0.0', { it.username == 'user' && it.password == 'secret' }) >>
             CompletableFuture.completedFuture(null)
     }
+
+    // ===== ADDITIONAL COVERAGE TESTS =====
+
+    def "resolvePublishTags returns empty when no publish tags configured anywhere"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, 'prod', project.objects)
+        // No publishTags on target or publishSpec
+        imageSpec.tags.set(['source-tag'])
+
+        when:
+        def result = executor.resolvePublishTags(target, publishSpec, imageSpec)
+
+        then:
+        result.isEmpty()  // Falls back to empty since neither target nor spec has tags
+    }
+
+    def "publishToTarget uses source tag when no publish tags configured"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, 'prod', project.objects)
+        target.registry.set('ghcr.io')
+        target.imageName.set('myapp')
+        // No publishTags set - should use source tag
+
+        imageSpec.tags.set(['1.0.0'])
+
+        dockerService.tagImage(_, _) >> CompletableFuture.completedFuture(null)
+        dockerService.pushImage(_, _) >> CompletableFuture.completedFuture(null)
+
+        when:
+        executor.publishToTarget('myapp:1.0.0', imageSpec, target, publishSpec, dockerService)
+
+        then:
+        1 * dockerService.tagImage('myapp:1.0.0', ['ghcr.io/myapp:1.0.0']) >> CompletableFuture.completedFuture(null)
+        1 * dockerService.pushImage('ghcr.io/myapp:1.0.0', null) >> CompletableFuture.completedFuture(null)
+    }
+
+    def "resolveAuth returns null when auth property is not present"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, 'prod', project.objects)
+        // auth not set
+
+        when:
+        def result = executor.resolveAuth(target)
+
+        then:
+        result == null
+    }
+
+    def "buildTargetReferences uses source repository when target has repository"() {
+        given:
+        def target = project.objects.newInstance(PublishTarget, 'prod', project.objects)
+        target.registry.set('ghcr.io')
+        target.repository.set('myorg/myapp')
+
+        when:
+        def result = executor.buildTargetReferences(target, imageSpec, ['1.0.0'])
+
+        then:
+        result.size() == 1
+        result[0] == 'ghcr.io/myorg/myapp:1.0.0'
+    }
 }

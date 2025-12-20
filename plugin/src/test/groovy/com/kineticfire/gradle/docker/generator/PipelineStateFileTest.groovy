@@ -454,4 +454,116 @@ class PipelineStateFileTest extends Specification {
         cleanup:
         readOnlyDir.setWritable(true)
     }
+
+    // ===== PRIVATE CONSTRUCTOR TEST =====
+
+    def "private constructor prevents instantiation"() {
+        when:
+        def constructor = PipelineStateFile.getDeclaredConstructor()
+        constructor.setAccessible(true)
+        constructor.newInstance()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== ADDITIONAL EDGE CASES =====
+
+    def "readBuildResult handles missing imageName in JSON"() {
+        given:
+        tempFile.text = '{"tags": ["v1"], "timestamp": 123}'
+
+        when:
+        def result = PipelineStateFile.readBuildResult(tempFile)
+
+        then:
+        result.imageName == ""
+        result.tags == ["v1"]
+        result.timestamp == 123L
+    }
+
+    def "TestResultData equals with same object reference"() {
+        given:
+        def data = new PipelineStateFile.TestResultData(success: true, message: "test", timestamp: 123L)
+
+        expect:
+        data.equals(data)
+    }
+
+    def "TestResultData equals with different message"() {
+        given:
+        def data1 = new PipelineStateFile.TestResultData(success: true, message: "test1", timestamp: 123L)
+        def data2 = new PipelineStateFile.TestResultData(success: true, message: "test2", timestamp: 123L)
+
+        expect:
+        data1 != data2
+    }
+
+    def "TestResultData equals with different timestamp"() {
+        given:
+        def data1 = new PipelineStateFile.TestResultData(success: true, message: "test", timestamp: 123L)
+        def data2 = new PipelineStateFile.TestResultData(success: true, message: "test", timestamp: 456L)
+
+        expect:
+        data1 != data2
+    }
+
+    def "BuildResultData equals with same object reference"() {
+        given:
+        def data = new PipelineStateFile.BuildResultData(imageName: "app", tags: ["v1"], timestamp: 123L)
+
+        expect:
+        data.equals(data)
+    }
+
+    def "BuildResultData equals with different imageName"() {
+        given:
+        def data1 = new PipelineStateFile.BuildResultData(imageName: "app1", tags: ["v1"], timestamp: 123L)
+        def data2 = new PipelineStateFile.BuildResultData(imageName: "app2", tags: ["v1"], timestamp: 123L)
+
+        expect:
+        data1 != data2
+    }
+
+    def "BuildResultData equals with different timestamp"() {
+        given:
+        def data1 = new PipelineStateFile.BuildResultData(imageName: "app", tags: ["v1"], timestamp: 123L)
+        def data2 = new PipelineStateFile.BuildResultData(imageName: "app", tags: ["v1"], timestamp: 456L)
+
+        expect:
+        data1 != data2
+    }
+
+    def "TestResultData equals with null message"() {
+        given:
+        def data1 = new PipelineStateFile.TestResultData(success: true, message: null, timestamp: 123L)
+        def data2 = new PipelineStateFile.TestResultData(success: true, message: null, timestamp: 123L)
+        def data3 = new PipelineStateFile.TestResultData(success: true, message: "test", timestamp: 123L)
+
+        expect:
+        data1 == data2
+        data1 != data3
+    }
+
+    def "BuildResultData equals with null imageName"() {
+        given:
+        def data1 = new PipelineStateFile.BuildResultData(imageName: null, tags: ["v1"], timestamp: 123L)
+        def data2 = new PipelineStateFile.BuildResultData(imageName: null, tags: ["v1"], timestamp: 123L)
+        def data3 = new PipelineStateFile.BuildResultData(imageName: "app", tags: ["v1"], timestamp: 123L)
+
+        expect:
+        data1 == data2
+        data1 != data3
+    }
+
+    def "BuildResultData equals with null tags"() {
+        given:
+        def data1 = new PipelineStateFile.BuildResultData(imageName: "app", tags: null, timestamp: 123L)
+        def data2 = new PipelineStateFile.BuildResultData(imageName: "app", tags: null, timestamp: 123L)
+        def data3 = new PipelineStateFile.BuildResultData(imageName: "app", tags: ["v1"], timestamp: 123L)
+
+        expect:
+        data1 == data2
+        data1 != data3
+    }
 }

@@ -154,4 +154,168 @@ class TaskLookupTest extends Specification {
         expect:
         lookup.findByName('') == null
     }
+
+    // ===== TASK LOOKUP FACTORY - fromTaskContainer TESTS =====
+
+    def "TaskLookupFactory fromTaskContainer creates TaskContainerLookup"() {
+        when:
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        then:
+        lookup != null
+        lookup instanceof TaskContainerLookup
+    }
+
+    // ===== TASK CONTAINER LOOKUP TESTS =====
+
+    def "TaskContainerLookup constructor accepts TaskContainer"() {
+        when:
+        def lookup = new TaskContainerLookup(project.tasks)
+
+        then:
+        lookup != null
+    }
+
+    def "TaskContainerLookup findByName returns existing task"() {
+        given:
+        def task = project.tasks.create('testTask')
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        def result = lookup.findByName('testTask')
+
+        then:
+        result == task
+    }
+
+    def "TaskContainerLookup findByName returns null for non-existent task"() {
+        given:
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        expect:
+        lookup.findByName('nonExistent') == null
+    }
+
+    def "TaskContainerLookup findByName returns null for null task name"() {
+        given:
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        expect:
+        lookup.findByName(null) == null
+    }
+
+    def "TaskContainerLookup findByName works with multiple tasks"() {
+        given:
+        def task1 = project.tasks.create('task1')
+        def task2 = project.tasks.create('task2')
+        def task3 = project.tasks.create('task3')
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        expect:
+        lookup.findByName('task1') == task1
+        lookup.findByName('task2') == task2
+        lookup.findByName('task3') == task3
+    }
+
+    def "TaskContainerLookup execute by name executes task actions"() {
+        given:
+        def actionExecuted = false
+        project.tasks.create('testTask') {
+            doLast { actionExecuted = true }
+        }
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        lookup.execute('testTask')
+
+        then:
+        actionExecuted
+    }
+
+    def "TaskContainerLookup execute by name throws IllegalArgumentException for non-existent task"() {
+        given:
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        lookup.execute('nonExistent')
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('nonExistent')
+        e.message.contains('not found')
+    }
+
+    def "TaskContainerLookup execute task runs all actions"() {
+        given:
+        def action1Executed = false
+        def action2Executed = false
+        def task = project.tasks.create('testTask') {
+            doLast { action1Executed = true }
+            doLast { action2Executed = true }
+        }
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        lookup.execute(task)
+
+        then:
+        action1Executed
+        action2Executed
+    }
+
+    def "TaskContainerLookup execute task handles task with no actions"() {
+        given:
+        def task = project.tasks.create('emptyTask')
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        lookup.execute(task)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "TaskContainerLookup execute by name runs in order"() {
+        given:
+        def executionOrder = []
+        project.tasks.create('orderedTask') {
+            doFirst { executionOrder << 'first' }
+            doLast { executionOrder << 'last' }
+        }
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        when:
+        lookup.execute('orderedTask')
+
+        then:
+        executionOrder == ['first', 'last']
+    }
+
+    def "TaskContainerLookup can be used polymorphically as TaskLookup"() {
+        given:
+        def task = project.tasks.create('polymorphicTask')
+        TaskLookup lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        expect:
+        lookup.findByName('polymorphicTask') == task
+    }
+
+    def "TaskContainerLookup handles empty string task name for findByName"() {
+        given:
+        def lookup = TaskLookupFactory.fromTaskContainer(project.tasks)
+
+        expect:
+        lookup.findByName('') == null
+    }
+
+    def "TaskContainerLookup findByName returns null when null passed"() {
+        given:
+        def lookup = new TaskContainerLookup(project.tasks)
+
+        when:
+        def result = lookup.findByName(null)
+
+        then:
+        result == null
+    }
 }

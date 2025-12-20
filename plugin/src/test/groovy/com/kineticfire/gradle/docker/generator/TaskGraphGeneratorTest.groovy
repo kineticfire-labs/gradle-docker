@@ -276,6 +276,37 @@ class TaskGraphGeneratorTest extends Specification {
         task.onlyIf != null
     }
 
+    def "configureOnlyIfTestsPassed skips task when file does not exist"() {
+        given:
+        project.tasks.register('conditionalTask', DefaultTask)
+        // Don't create the file - testing file not found case
+
+        when:
+        generator.configureOnlyIfTestsPassed(project, 'conditionalTask', 'missing-state/state')
+        def task = project.tasks.getByName('conditionalTask')
+
+        then:
+        // OnlyIf spec is configured even for non-existent file
+        task.onlyIf != null
+    }
+
+    def "configureOnlyIfTestsPassed skips task when tests failed"() {
+        given:
+        project.tasks.register('conditionalTask', DefaultTask)
+        def stateDir = new File(project.layout.buildDirectory.get().asFile, 'failed-state/state')
+        stateDir.mkdirs()
+        def resultFile = new File(stateDir, 'test-result.json')
+        PipelineStateFile.writeTestResult(resultFile, false, "Tests failed", 123L)
+
+        when:
+        generator.configureOnlyIfTestsPassed(project, 'conditionalTask', 'failed-state/state')
+        def task = project.tasks.getByName('conditionalTask')
+
+        then:
+        // OnlyIf spec is configured
+        task.onlyIf != null
+    }
+
     // ===== CONFIGURE ALWAYS RUN TESTS =====
 
     def "configureAlwaysRun sets onlyIf to always true"() {

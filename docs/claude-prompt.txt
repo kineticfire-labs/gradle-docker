@@ -4,11 +4,45 @@ the @CLAUDE.md file to understand the project and follow the guidelines exactly.
 with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
 
-
 clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
+
+
+com.kineticfire.gradle.docker.generator
+com.kineticfire.gradle.docker.workflow
+com.kineticfire.gradle.docker.workflow.executor
+
+
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Your task is to increase the unit test coverage for the package com.kineticfire.gradle.docker.workflow.executor , for both instruction
+  and branch coverage to 100%.  The current instruction coverage is 95% and current branch coverage is 90%.  The
+  project requires 100% coverage as feasible.
+
+  Analyze the code to determine how to increase unit test coverage for that package which can include:
+  - adding unit tests
+  - adding test cases to existing unit tests
+  - coverging exception-related unit tests
+  - covering edge cases in unit tests such as with inputs like empty string, null, etc.
+  - adding mocks to add unit tests
+  - refactoring code to separate untestable code from testable code, maximizing the latter
+
+  Think carefully, step-by-step:
+  - analyze the code for that specific package
+  - determine how to increase unit test coverage using those strategies above
+  - evaluate your approach and findings if they fall short of 100% instruction and branch coverage
+  - implement unit tests
+  - verify that the unit tests pass and the build works with "./gradlew clean build" from the plugin/ directory
+  - look at the JaCoCo unit test coverage metrics resulting from running the tests to determine the new test coverage
+  - if not 100% test coverage, then repeat this process
+
+  Go.
 
 
 

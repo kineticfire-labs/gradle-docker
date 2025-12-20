@@ -473,4 +473,343 @@ class TestResultCaptureTest extends Specification {
         result.executed == 0
         result.failureCount == 0
     }
+
+    // ===== ADDITIONAL EDGE CASE TESTS =====
+
+    def "captureFromTask falls back to task state when Test task has no XML reports"() {
+        given:
+        def testTask = project.tasks.create('testNoXml', Test)
+        // Don't create any reports directory
+
+        when:
+        def result = capture.captureFromTask(testTask)
+
+        then:
+        result.success
+        result.executed == 1
+        result.totalCount == 1
+    }
+
+    def "captureFailure falls back for Test task without XML reports"() {
+        given:
+        def testTask = project.tasks.create('testNoXml', Test)
+        // No reports directory
+        def exception = new RuntimeException('Test failed')
+
+        when:
+        def result = capture.captureFailure(testTask, exception)
+
+        then:
+        !result.success
+        result.failureCount == 1
+    }
+
+    def "findJUnitReportsDir returns null when outputLocation is not set"() {
+        given:
+        def testTask = project.tasks.create('testNoOutputLocation', Test)
+        // outputLocation is not explicitly set and no directory exists
+
+        when:
+        def result = capture.findJUnitReportsDir(testTask)
+
+        then:
+        result == null
+    }
+
+    def "parseJUnitXmlFile handles file with no attributes"() {
+        given:
+        def file = File.createTempFile('test', '.xml')
+        file.text = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite>
+</testsuite>'''
+
+        when:
+        def result = capture.parseJUnitXmlFile(file)
+
+        then:
+        result.tests == 0
+        result.failures == 0
+        result.errors == 0
+        result.skipped == 0
+
+        cleanup:
+        file?.delete()
+    }
+
+    def "parseJUnitXmlFile handles nested testsuite element"() {
+        given:
+        def file = File.createTempFile('test', '.xml')
+        file.text = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="5" failures="1" errors="0" skipped="1">
+    <testcase classname="com.example.Test" name="test1"/>
+    <testcase classname="com.example.Test" name="test2"/>
+</testsuite>'''
+
+        when:
+        def result = capture.parseJUnitXmlFile(file)
+
+        then:
+        result.tests == 5
+        result.failures == 1
+        result.errors == 0
+        result.skipped == 1
+
+        cleanup:
+        file?.delete()
+    }
+
+    def "safeParseInt handles whitespace input"() {
+        expect:
+        capture.safeParseInt('  ', 42) == 42
+    }
+
+    def "safeParseInt handles very large numbers"() {
+        expect:
+        capture.safeParseInt('2147483647', 0) == Integer.MAX_VALUE
+    }
+
+    def "safeParseInt handles integer overflow gracefully"() {
+        expect:
+        capture.safeParseInt('9999999999999', 0) == 0
+    }
+
+    def "captureFromJUnitXml skips non-XML files without error"() {
+        given:
+        def testTask = project.tasks.create('test', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+
+        // Create only non-XML files
+        new File(reportsDir, 'readme.txt').text = 'not an xml file'
+        new File(reportsDir, 'data.json').text = '{"key": "value"}'
+
+        when:
+        def result = capture.captureFromJUnitXml(testTask)
+
+        then:
+        result == null
+    }
+
+    def "parseJUnitXmlFiles handles all files being malformed"() {
+        given:
+        def badFile1 = File.createTempFile('bad1', '.xml')
+        badFile1.text = 'not valid xml'
+        def badFile2 = File.createTempFile('bad2', '.xml')
+        badFile2.text = '<unclosed'
+
+        when:
+        def result = capture.parseJUnitXmlFiles([badFile1, badFile2])
+
+        then:
+        result.success
+        result.totalCount == 0
+
+        cleanup:
+        badFile1?.delete()
+        badFile2?.delete()
+    }
+
+    def "captureFromTask works with custom Test task name"() {
+        given:
+        def testTask = project.tasks.create('integrationTest', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/integrationTest")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+
+        def xmlContent = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="7" failures="0" errors="0" skipped="0">
+</testsuite>'''
+        new File(reportsDir, 'TEST-integration.xml').text = xmlContent
+
+        when:
+        def result = capture.captureFromTask(testTask)
+
+        then:
+        result.success
+        result.totalCount == 7
+        result.failureCount == 0
+    }
+
+    def "captureFailure uses JUnit data when task is Test with reports"() {
+        given:
+        def testTask = project.tasks.create('testWithReports', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/testWithReports")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+
+        def xmlContent = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="10" failures="3" errors="1" skipped="0">
+</testsuite>'''
+        new File(reportsDir, 'TEST-failure.xml').text = xmlContent
+
+        def exception = new RuntimeException('Some test failed')
+
+        when:
+        def result = capture.captureFailure(testTask, exception)
+
+        then:
+        !result.success
+        result.totalCount == 10
+        result.failureCount == 4  // failures + errors
+    }
+
+    def "captureFromJUnitXml handles reports directory with subdirectories"() {
+        given:
+        def testTask = project.tasks.create('test', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/test")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+
+        // Create a subdirectory (should be ignored by listFiles filter)
+        new File(reportsDir, 'subdir').mkdirs()
+
+        def xmlContent = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="5" failures="0" errors="0" skipped="0">
+</testsuite>'''
+        new File(reportsDir, 'TEST-Test.xml').text = xmlContent
+
+        when:
+        def result = capture.captureFromJUnitXml(testTask)
+
+        then:
+        result.totalCount == 5
+    }
+
+    // ===== EXCEPTION PATH TESTS =====
+
+    def "captureFromJUnitXml returns null when reportsDir exists but has no readable files"() {
+        given:
+        def testTask = project.tasks.create('testReadable', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/testReadable")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+
+        // Create directory but no files at all
+        // The findAll will return empty list
+
+        when:
+        def result = capture.captureFromJUnitXml(testTask)
+
+        then:
+        result == null
+    }
+
+    def "findJUnitReportsDir returns null when reports.junitXml directory doesn't exist"() {
+        given:
+        def testTask = project.tasks.create('testNonExistent', Test)
+        // Configure output location to a directory that doesn't exist
+        def nonExistentDir = new File(tempDir.toFile(), "non-existent-reports")
+        configureJUnitXmlOutputLocation(testTask, nonExistentDir)
+
+        when:
+        def result = capture.findJUnitReportsDir(testTask)
+
+        then:
+        result == null
+    }
+
+    def "parseJUnitXmlFile handles zero values"() {
+        given:
+        def file = File.createTempFile('test', '.xml')
+        file.text = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="0" failures="0" errors="0" skipped="0">
+</testsuite>'''
+
+        when:
+        def result = capture.parseJUnitXmlFile(file)
+
+        then:
+        result.tests == 0
+        result.failures == 0
+        result.errors == 0
+        result.skipped == 0
+
+        cleanup:
+        file?.delete()
+    }
+
+    def "parseJUnitXmlFiles handles single file"() {
+        given:
+        def file = File.createTempFile('single', '.xml')
+        file.text = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="3" failures="1" errors="0" skipped="0">
+</testsuite>'''
+
+        when:
+        def result = capture.parseJUnitXmlFiles([file])
+
+        then:
+        result.totalCount == 3
+        result.failureCount == 1
+        result.executed == 3
+        !result.success
+
+        cleanup:
+        file?.delete()
+    }
+
+    def "captureFromTask handles Test task with empty reports directory"() {
+        given:
+        def testTask = project.tasks.create('testEmpty', Test)
+        def reportsDir = new File(project.layout.buildDirectory.asFile.get(), "test-results/testEmpty")
+        reportsDir.mkdirs()
+        configureJUnitXmlOutputLocation(testTask, reportsDir)
+        // Directory exists but is empty
+
+        when:
+        def result = capture.captureFromTask(testTask)
+
+        then:
+        result.success
+        result.executed == 1
+    }
+
+    def "safeParseInt handles positive integer string"() {
+        expect:
+        capture.safeParseInt('42', 0) == 42
+    }
+
+    def "safeParseInt handles zero string"() {
+        expect:
+        capture.safeParseInt('0', -1) == 0
+    }
+
+    def "safeParseInt handles negative integer string"() {
+        expect:
+        capture.safeParseInt('-10', 0) == -10
+    }
+
+    def "parseJUnitXmlFiles calculates success based on failure count"() {
+        given:
+        def successFile = File.createTempFile('success', '.xml')
+        successFile.text = '''<?xml version="1.0" encoding="UTF-8"?>
+<testsuite tests="10" failures="0" errors="0" skipped="2">
+</testsuite>'''
+
+        when:
+        def result = capture.parseJUnitXmlFiles([successFile])
+
+        then:
+        result.success
+        result.totalCount == 10
+        result.failureCount == 0
+        result.skipped == 2
+        result.executed == 8
+
+        cleanup:
+        successFile?.delete()
+    }
+
+    def "captureFromJUnitXml returns null when reportsDir is configured but never created"() {
+        given:
+        def testTask = project.tasks.create('testNotCreated', Test)
+        // Don't configure output location - use default which won't exist
+
+        when:
+        def result = capture.captureFromJUnitXml(testTask)
+
+        then:
+        result == null
+    }
 }

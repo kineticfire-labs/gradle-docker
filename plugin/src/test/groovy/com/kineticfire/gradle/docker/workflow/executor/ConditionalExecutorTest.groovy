@@ -287,4 +287,86 @@ class ConditionalExecutorTest extends Specification {
         then:
         result == context
     }
+
+    // ===== DEFAULT CONSTRUCTOR TESTS =====
+
+    def "default constructor creates executor with real step executors"() {
+        when:
+        def defaultExecutor = new ConditionalExecutor()
+
+        then:
+        defaultExecutor != null
+    }
+
+    def "default constructor executor can execute conditional"() {
+        given:
+        def defaultExecutor = new ConditionalExecutor()
+        def context = PipelineContext.create('test')
+        def testResult = TestResult.success(5, 5, 0)
+        def successSpec = project.objects.newInstance(SuccessStepSpec)
+
+        when:
+        def result = defaultExecutor.executeConditional(testResult, successSpec, null, context)
+
+        then:
+        result != null
+    }
+
+    // ===== SETTER METHOD TESTS =====
+
+    def "setDockerService propagates to step executors"() {
+        given:
+        def dockerService = Mock(com.kineticfire.gradle.docker.service.DockerService)
+
+        when:
+        executor.setDockerService(dockerService)
+
+        then:
+        1 * successStepExecutor.setDockerService(dockerService)
+        1 * failureStepExecutor.setDockerService(dockerService)
+    }
+
+    def "setComposeService propagates to failure step executor"() {
+        given:
+        def composeService = Mock(com.kineticfire.gradle.docker.service.ComposeService)
+
+        when:
+        executor.setComposeService(composeService)
+
+        then:
+        1 * failureStepExecutor.setComposeService(composeService)
+    }
+
+    def "setComposeProjectName propagates to failure step executor"() {
+        when:
+        executor.setComposeProjectName('my-project')
+
+        then:
+        1 * failureStepExecutor.setComposeProjectName('my-project')
+    }
+
+    def "setDockerService with null is allowed"() {
+        when:
+        executor.setDockerService(null)
+
+        then:
+        1 * successStepExecutor.setDockerService(null)
+        1 * failureStepExecutor.setDockerService(null)
+    }
+
+    def "setComposeService with null is allowed"() {
+        when:
+        executor.setComposeService(null)
+
+        then:
+        1 * failureStepExecutor.setComposeService(null)
+    }
+
+    def "setComposeProjectName with null is allowed"() {
+        when:
+        executor.setComposeProjectName(null)
+
+        then:
+        1 * failureStepExecutor.setComposeProjectName(null)
+    }
 }

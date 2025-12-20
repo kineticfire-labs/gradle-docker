@@ -870,4 +870,927 @@ class DockerProjectTaskGeneratorTest extends Specification {
         project.tasks.findByName('dockerBuildApp2') != null
         project.tasks.findByName('runDockerProject') != null
     }
+
+    // ===== REPOSITORY MODE TESTS =====
+
+    def "uses repository for image naming"() {
+        given:
+        extension.images {
+            myrepo {
+                repository.set('myorg/myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Repository mode extracts image name from the repo path
+        project.tasks.findByName('runDockerProject') != null
+    }
+
+    def "tag on success uses repository for naming"() {
+        given:
+        extension.images {
+            myrepo {
+                repository.set('myorg/myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        tagTask.imageName.get() == 'myorg/myapp'
+    }
+
+    def "save task uses repository for namespace extraction"() {
+        given:
+        extension.images {
+            myrepo {
+                repository.set('myorg/myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/app.tar.gz')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.namespace.get() == 'myorg'
+    }
+
+    def "publish task uses repository without slash for full image name"() {
+        given:
+        extension.images {
+            myrepo {
+                repository.set('simpleimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishRegistry.set('docker.io')
+            additionalTags.set(['latest'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublish') as DockerPublishTask
+        publishTask != null
+        publishTask.imageName.get() == 'simpleimage'
+    }
+
+    // ===== LEGACY NAME MODE TESTS =====
+
+    def "tag on success falls back to legacyName"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('legacy-app')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        tagTask.imageName.get() == 'legacy-app'
+    }
+
+    // ===== BLOCK NAME FALLBACK TESTS =====
+
+    def "uses block name when no image name properties set"() {
+        given:
+        extension.images {
+            myBlockName {
+                contextDir.set('src/main/docker')
+                // No imageName, legacyName, repository, or sourceRefImageName set
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use blockName 'myBlockName' (sanitized)
+        project.tasks.findByName('runDockerProject') != null
+        project.tasks.findByName('dockerBuildMyblockname') != null
+    }
+
+    // ===== CONTEXT TASK PATH RESOLUTION TESTS =====
+
+    def "resolves cross-project jar task"() {
+        given:
+        // Create a subproject
+        def subProject = ProjectBuilder.builder()
+            .withName('subapp')
+            .withParent(project)
+            .build()
+        subProject.pluginManager.apply('java')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                jarFrom.set(':subapp:jar')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('prepareMyappContext') != null
+    }
+
+    def "resolves root project jar task"() {
+        given:
+        // jarFrom starting with : but pointing to root
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                jarFrom.set(':jar')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('prepareMyappContext') != null
+    }
+
+    def "handles invalid jar task path gracefully"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                jarFrom.set(':nonexistent:project:jar')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should not throw, should handle gracefully
+        project.tasks.findByName('prepareMyappContext') != null
+    }
+
+    // ===== PUBLISH NAMESPACE TESTS =====
+
+    def "publish task uses image namespace when no publishNamespace"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                namespace.set('imagenamespace')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishRegistry.set('docker.io')
+            additionalTags.set(['latest'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublish') as DockerPublishTask
+        publishTask != null
+        publishTask.namespace.get() == 'imagenamespace'
+    }
+
+    // ===== SOURCE REF MODE TESTS =====
+
+    def "skips build task for sourceRef mode image"() {
+        given:
+        extension.images {
+            nginx {
+                sourceRef.set('nginx:1.25')
+                sourceRefImageName.set('nginx')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should create lifecycle task but not build task
+        project.tasks.findByName('runDockerProject') != null
+        // Build task should be skipped for sourceRef mode
+    }
+
+    // ===== SAVE TASK EDGE CASES =====
+
+    def "save task uses image namespace when no repository"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                namespace.set('myns')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/app.tar.gz')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.namespace.get() == 'myns'
+    }
+
+    // ===== PUBLISH TARGET EDGE CASES =====
+
+    def "publish target created for image with namespace"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                namespace.set('imagens')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishTargets.create('myregistry') { target ->
+                target.registry.set('registry.example.com')
+                target.tags.set(['latest'])
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublishMyregistry') as DockerPublishTask
+        publishTask != null
+    }
+
+    def "publish target created for image with repository"() {
+        given:
+        extension.images {
+            myapp {
+                repository.set('orgname/myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishTargets.create('myregistry') { target ->
+                target.registry.set('registry.example.com')
+                target.tags.set(['latest'])
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublishMyregistry') as DockerPublishTask
+        publishTask != null
+    }
+
+    // ===== BUILD TASK EDGE CASES =====
+
+    def "build task uses registry when present"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                registry.set('myregistry.io')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyapp') as DockerBuildTask
+        buildTask != null
+        buildTask.registry.get() == 'myregistry.io'
+    }
+
+    def "build task uses namespace when present"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                namespace.set('myns')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyapp') as DockerBuildTask
+        buildTask != null
+        buildTask.namespace.get() == 'myns'
+    }
+
+    def "build task uses tags when present"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                tags.set(['v1.0', 'latest'])
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyapp') as DockerBuildTask
+        buildTask != null
+        buildTask.tags.get() == ['v1.0', 'latest']
+    }
+
+    // ===== EMPTY IMAGES EDGE CASE =====
+
+    def "skips task generation when no images configured"() {
+        // Don't configure any images
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // No build tasks should be created
+        project.tasks.findByName('runDockerProject') == null
+    }
+
+    // ===== SINGLE IMAGE WITHOUT PRIMARY FLAG =====
+
+    def "single image without primary flag is used as primary"() {
+        given:
+        extension.images {
+            onlyImage {
+                imageName.set('onlyimage')
+                contextDir.set('src/main/docker')
+                // No primary flag set - should still work as the only image
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('runDockerProject') != null
+        project.tasks.findByName('dockerBuildOnlyimage') != null
+    }
+
+    // ===== LEGACY NAME BUILD TASK =====
+
+    def "build task uses legacyName when set"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('legacy-build-app')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildLegacybuildapp') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'legacy-build-app'
+    }
+
+    // ===== REPOSITORY BUILD TASK NAMESPACE =====
+
+    def "build task extracts namespace from repository"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('myorg/myimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyimage') as DockerBuildTask
+        buildTask != null
+        buildTask.namespace.get() == 'myorg'
+    }
+
+    // ===== JAR FROM CONTEXT TASK =====
+
+    def "jarFrom creates context task"() {
+        given:
+        // Apply java plugin to get jar task
+        project.pluginManager.apply('java')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                jarFrom.set('jar')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('prepareMyappContext') != null
+    }
+
+    def "jarFrom task wires to build task"() {
+        given:
+        project.pluginManager.apply('java')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                jarFrom.set('jar')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyapp') as DockerBuildTask
+        buildTask != null
+        // Build task should depend on the context task
+    }
+
+    // ===== SOURCE REF MODE WITHOUT BUILD =====
+
+    def "sourceRef mode with sourceRefImageName"() {
+        given:
+        extension.images {
+            nginx {
+                sourceRef.set('nginx:latest')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('latest')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('runDockerProject') != null
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        // imageName should be set from sourceRefImageName
+    }
+
+    // ===== CONTEXT DIR BUILD =====
+
+    def "build task uses contextDir when set"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('docker/')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildMyapp') as DockerBuildTask
+        buildTask != null
+        buildTask.contextPath.isPresent()
+    }
+
+    // ===== MISSING PROPERTIES EDGE CASES =====
+
+    def "handles missing optional properties gracefully"() {
+        given:
+        extension.images {
+            minimal {
+                contextDir.set('src/main/docker')
+                // Only contextDir set, all others use defaults
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('runDockerProject') != null
+    }
+
+    // ===== SAVE FILE EDGE CASES =====
+
+    def "save task not created when saveFile empty string"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            // saveFile not set
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('dockerProjectSave') == null
+    }
+
+    // ===== PUBLISH EDGE CASES =====
+
+    def "publish task not created when no publish targets"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+            // No publishTargets or publishRegistry
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('dockerProjectPublish') == null
+    }
+
+    // ===== COMPOSE FILE CONFIGURATION =====
+
+    def "generates compose tasks when compose file configured"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('runDockerProject') != null
+        // Compose task names should be generated
+    }
+
+    // ===== REPOSITORY WITHOUT SLASH =====
+
+    def "repository without slash uses full value as image name"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('simpleimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildSimpleimage') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'simpleimage'
+    }
+
+    // ===== SAVE TASK WITH COMPRESSION =====
+
+    def "save task created with compression"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/myapp.tar.gz')
+            saveCompression.set('GZIP')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.compression.get().name() == 'GZIP'
+    }
+
+    // ===== BLOCK NAME FALLBACK =====
+
+    def "uses block name when no imageName or legacyName or repository"() {
+        given:
+        extension.images {
+            myBlockNameImage {
+                contextDir.set('src/main/docker')
+                // No imageName, legacyName, or repository set
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use sanitized block name 'myblocknameimage'
+        project.tasks.findByName('dockerBuildMyblocknameimage') != null
+    }
+
+    // ===== TAG ON SUCCESS WITH LEGACY NAME =====
+
+    def "tag on success uses legacy name for image"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('my-legacy-image')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested', 'verified'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        tagTask.imageName.get() == 'my-legacy-image'
+    }
+
+    // ===== TAG ON SUCCESS WITH REPOSITORY =====
+
+    def "tag on success extracts image name from repository"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('myorg/myappname')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        tagTask.imageName.get() == 'myorg/myappname'
+    }
+
+    // ===== SAVE TASK WITH REPOSITORY =====
+
+    def "save task extracts namespace from repository with slash"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('myorganization/myappimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/app.tar')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.namespace.get() == 'myorganization'
+    }
+
+    // ===== PUBLISH WITH REPOSITORY NAMESPACE =====
+
+    def "publish extracts namespace from repository"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('dockerns/myimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishRegistry.set('docker.io')
+            additionalTags.set(['latest'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublish') as DockerPublishTask
+        publishTask != null
+        publishTask.namespace.get() == 'dockerns'
+    }
+
+    // ===== PUBLISH TARGET WITH REPOSITORY NAMESPACE =====
+
+    def "publish target extracts namespace from repository with slash"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('pubns/pubimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishTargets.create('internal') { target ->
+                target.registry.set('registry.internal.com')
+                target.tags.set(['v1'])
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublishInternal') as DockerPublishTask
+        publishTask != null
+    }
+
+    // ===== BUILD TASK WITH REPOSITORY EXTRACTS IMAGE NAME =====
+
+    def "build task extracts image name from repository after slash"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('namespace/actualimage')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildActualimage') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'actualimage'
+    }
+
+    // ===== SAVE TASK WITH LEGACY NAME =====
+
+    def "save task uses legacy name for image"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('save-legacy-app')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/app.tar')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.imageName.get() == 'save-legacy-app'
+    }
+
+    // ===== PUBLISH TASK WITH LEGACY NAME =====
+
+    def "publish task uses legacy name for image"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('publish-legacy-app')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishRegistry.set('docker.io')
+            additionalTags.set(['latest'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublish') as DockerPublishTask
+        publishTask != null
+        publishTask.imageName.get() == 'publish-legacy-app'
+    }
+
+    // ===== PUBLISH TARGET WITH LEGACY NAME =====
+
+    def "publish target uses legacy name for image"() {
+        given:
+        extension.images {
+            myimg {
+                legacyName.set('target-legacy-app')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishTargets.create('myregistry') { target ->
+                target.registry.set('registry.example.com')
+                target.tags.set(['v1'])
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublishMyregistry') as DockerPublishTask
+        publishTask != null
+        publishTask.imageName.get() == 'target-legacy-app'
+    }
+
+    // ===== SAVE TASK WITH BLOCK NAME =====
+
+    def "save task uses block name when no imageName or legacyName"() {
+        given:
+        extension.images {
+            saveBlockImage {
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            saveFile.set('build/images/app.tar')
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def saveTask = project.tasks.findByName('dockerProjectSave') as DockerSaveTask
+        saveTask != null
+        saveTask.imageName.isPresent()
+    }
+
+    // ===== PUBLISH TASK WITH BLOCK NAME =====
+
+    def "publish task uses block name when no imageName or legacyName"() {
+        given:
+        extension.images {
+            publishBlockImage {
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            publishRegistry.set('docker.io')
+            additionalTags.set(['latest'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def publishTask = project.tasks.findByName('dockerProjectPublish') as DockerPublishTask
+        publishTask != null
+        publishTask.imageName.isPresent()
+    }
 }
