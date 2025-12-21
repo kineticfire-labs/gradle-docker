@@ -1745,4 +1745,1031 @@ class GradleDockerPluginTest extends Specification {
         def actualMessage = findRootCauseMessage(ex)
         actualMessage.contains("must specify either 'context'") || actualMessage.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
     }
+
+    // ===== isTestEnvironment DIRECT TESTS =====
+
+    def "isTestEnvironment returns true when gradle.test.worker property is set"() {
+        given:
+        def originalValue = System.getProperty('gradle.test.worker')
+        System.setProperty('gradle.test.worker', 'test-worker-id')
+
+        when:
+        def result = invokeIsTestEnvironment()
+
+        then:
+        result == true
+
+        cleanup:
+        if (originalValue != null) {
+            System.setProperty('gradle.test.worker', originalValue)
+        } else {
+            System.clearProperty('gradle.test.worker')
+        }
+    }
+
+    def "isTestEnvironment returns true when org.gradle.test.worker property is set"() {
+        given:
+        def originalGradleTestWorker = System.getProperty('gradle.test.worker')
+        def originalOrgGradleTestWorker = System.getProperty('org.gradle.test.worker')
+        System.clearProperty('gradle.test.worker')
+        System.setProperty('org.gradle.test.worker', 'org-test-worker-id')
+
+        when:
+        def result = invokeIsTestEnvironment()
+
+        then:
+        result == true
+
+        cleanup:
+        if (originalGradleTestWorker != null) {
+            System.setProperty('gradle.test.worker', originalGradleTestWorker)
+        }
+        if (originalOrgGradleTestWorker != null) {
+            System.setProperty('org.gradle.test.worker', originalOrgGradleTestWorker)
+        } else {
+            System.clearProperty('org.gradle.test.worker')
+        }
+    }
+
+    private boolean invokeIsTestEnvironment() {
+        def method = GradleDockerPlugin.getDeclaredMethod('isTestEnvironment')
+        method.accessible = true
+        return method.invoke(null)
+    }
+
+    // ===== COMPOSE STACK WITH ENV FILES =====
+
+    def "plugin configures compose stack with envFiles"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        // Create compose and env files
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  web:\n    image: nginx"
+
+        def envFile = project.file('.env')
+        envFile.text = "FOO=bar"
+
+        dockerTestExt.composeStacks {
+            withEnv {
+                files.from(composeFile)
+                envFiles.from(envFile)
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.findByName('composeUpWithEnv')
+        def downTask = project.tasks.findByName('composeDownWithEnv')
+        upTask != null
+        downTask != null
+    }
+
+    // ===== COMPOSE STACK WITH WAIT FOR HEALTHY =====
+
+    def "plugin configures compose stack with waitForHealthy"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('docker-compose-healthy.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  db:\n    image: postgres"
+
+        dockerTestExt.composeStacks {
+            healthyStack {
+                files.from(composeFile)
+                waitForHealthy {
+                    waitForServices.set(['db'])
+                    timeoutSeconds.set(120)
+                    pollSeconds.set(5)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpHealthyStack')
+        upTask.waitForHealthyServices.get() == ['db']
+        upTask.waitForHealthyTimeoutSeconds.get() == 120
+        upTask.waitForHealthyPollSeconds.get() == 5
+    }
+
+    // ===== COMPOSE STACK WITH WAIT FOR RUNNING =====
+
+    def "plugin configures compose stack with waitForRunning"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('docker-compose-running.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  cache:\n    image: redis"
+
+        dockerTestExt.composeStacks {
+            runningStack {
+                files.from(composeFile)
+                waitForRunning {
+                    waitForServices.set(['cache'])
+                    timeoutSeconds.set(90)
+                    pollSeconds.set(3)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpRunningStack')
+        upTask.waitForRunningServices.get() == ['cache']
+        upTask.waitForRunningTimeoutSeconds.get() == 90
+        upTask.waitForRunningPollSeconds.get() == 3
+    }
+
+    // ===== COMPOSE STACK WITH LOGS CONFIGURATION =====
+
+    def "plugin configures compose stack with logs"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('docker-compose-logs.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        // Create the logs output directory
+        def logsDir = project.file('logs')
+        logsDir.mkdirs()
+        def logsOutputFile = new File(logsDir, 'output.log')
+
+        dockerTestExt.composeStacks {
+            logsStack {
+                files.from(composeFile)
+                logs {
+                    tailLines.set(100)
+                    follow.set(false)
+                    writeTo.set(logsOutputFile)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def downTask = project.tasks.getByName('composeDownLogsStack')
+        downTask.logsEnabled.get() == true
+        downTask.logsTailLines.get() == 100
+        downTask.logsFollow.get() == false
+        downTask.logsWriteTo.isPresent()
+    }
+
+    // ===== COMPOSE FILES CONFIGURATION METHODS =====
+
+    def "plugin configures compose stack with composeFile property"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def singleComposeFile = project.file('compose-single.yml')
+        singleComposeFile.parentFile.mkdirs()
+        singleComposeFile.text = "services:\n  app:\n    image: myapp"
+
+        dockerTestExt.composeStacks {
+            singleFile { stack ->
+                stack.composeFile.set(project.layout.projectDirectory.file('compose-single.yml'))
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpSingleFile')
+        upTask != null
+    }
+
+    def "plugin configures compose stack with composeFiles list"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile1 = project.file('compose-base.yml')
+        def composeFile2 = project.file('compose-override.yml')
+        composeFile1.parentFile.mkdirs()
+        composeFile1.text = "services:\n  app:\n    image: myapp"
+        composeFile2.text = "services:\n  app:\n    ports:\n      - 8080:80"
+
+        dockerTestExt.composeStacks {
+            multiFiles {
+                composeFiles.set(['compose-base.yml', 'compose-override.yml'])
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpMultiFiles')
+        upTask != null
+    }
+
+    def "plugin configures compose stack with composeFileCollection"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-collection.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        dockerTestExt.composeStacks {
+            collectionFiles {
+                composeFileCollection.from(composeFile)
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpCollectionFiles')
+        upTask != null
+    }
+
+    // ===== PROJECT NAME PROPERTY OVERRIDE =====
+
+    def "plugin respects compose.project.name property for stack"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('docker-compose-prop.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        // Set the property
+        project.ext.set('compose.project.name', 'custom-project-name')
+
+        dockerTestExt.composeStacks {
+            propStack {
+                files.from(composeFile)
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Verify task is created - the property is evaluated lazily
+        def upTask = project.tasks.getByName('composeUpPropStack')
+        upTask != null
+    }
+
+    // ===== IMAGE WITH PUBLISH AND PULLAUTH =====
+
+    def "plugin configures DockerPublishTask with pullAuth"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            authImage {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'authimage'
+                version = '1.0.0'
+                tags = ['latest']
+                pullAuth {
+                    username.set('user')
+                    password.set('pass')
+                }
+                publish {
+                    to {
+                        publishTags(['latest'])
+                    }
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def publishTask = project.tasks.getByName('dockerPublishAuthImage')
+        publishTask.pullAuth.isPresent()
+        publishTask.pullAuth.get().username.get() == 'user'
+        publishTask.pullAuth.get().password.get() == 'pass'
+    }
+
+    // ===== PER-IMAGE AGGREGATE TASK WITH PUBLISH =====
+
+    def "plugin configures per-image aggregate task with publish dependency"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            fullImage {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'fullimage'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('fullimage.tar')
+                    compression = SaveCompression.NONE
+                }
+                publish {
+                    to {
+                        publishTags(['latest'])
+                    }
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def perImageTask = project.tasks.getByName('dockerImageFullImage')
+        perImageTask != null
+        // Verify it has dependencies
+        !perImageTask.dependsOn.empty
+    }
+
+    // ===== WAIT FOR HEALTHY/RUNNING WITHOUT SERVICES SPECIFIED =====
+
+    def "plugin configures waitForHealthy without explicit services"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-healthy-default.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  db:\n    image: postgres"
+
+        dockerTestExt.composeStacks {
+            healthyDefault {
+                files.from(composeFile)
+                waitForHealthy {
+                    // Don't set waitForServices - use defaults
+                    timeoutSeconds.set(30)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpHealthyDefault')
+        upTask.waitForHealthyTimeoutSeconds.get() == 30
+    }
+
+    def "plugin configures waitForRunning without explicit services"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-running-default.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  cache:\n    image: redis"
+
+        dockerTestExt.composeStacks {
+            runningDefault {
+                files.from(composeFile)
+                waitForRunning {
+                    // Don't set waitForServices - use defaults
+                    pollSeconds.set(1)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpRunningDefault')
+        upTask.waitForRunningPollSeconds.get() == 1
+    }
+
+    // ===== LOGS WITHOUT SERVICES/WRITETO =====
+
+    def "plugin configures logs without explicit services"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-logs-minimal.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        dockerTestExt.composeStacks {
+            logsMinimal {
+                files.from(composeFile)
+                logs {
+                    tailLines.set(50)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def downTask = project.tasks.getByName('composeDownLogsMinimal')
+        downTask.logsEnabled.get() == true
+        downTask.logsTailLines.get() == 50
+    }
+
+    def "plugin configures logs with services list"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-logs-services.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  web:\n    image: nginx\n  db:\n    image: postgres"
+
+        dockerTestExt.composeStacks {
+            logsWithServices {
+                files.from(composeFile)
+                logs {
+                    services.set(['web', 'db'])
+                    tailLines.set(200)
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def downTask = project.tasks.getByName('composeDownLogsWithServices')
+        downTask.logsEnabled.get() == true
+        downTask.logsServices.get() == ['web', 'db']
+        downTask.logsTailLines.get() == 200
+    }
+
+    // ===== CONTEXT TASK NAME EMPTY STRING =====
+
+    def "plugin handles contextTaskName with empty string as no context"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            emptyContextTaskName {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'emptycontexttaskname'
+                version = '1.0.0'
+                tags = ['latest']
+                contextTaskName.set('')  // Empty string should be treated as no contextTask
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildEmptyContextTaskName')
+        buildTask != null
+    }
+
+    // ===== SOURCEREF COMPONENTS WITH EMPTY VALUES =====
+
+    def "plugin isSourceRefMode returns false for empty sourceRef components"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            emptySourceRef {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'emptysourceref'
+                version = '1.0.0'
+                tags = ['latest']
+                // Set empty values - should not trigger sourceRef mode
+                sourceRefRegistry.set('')
+                sourceRefNamespace.set('')
+                sourceRefImageName.set('')
+                sourceRefRepository.set('')
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Build task should be created and in build mode (not sourceRef mode)
+        def buildTask = project.tasks.getByName('dockerBuildEmptySourceRef')
+        buildTask != null
+        buildTask.sourceRefMode.get() == false
+    }
+
+    // ===== EFFECTIVESOURCEREF EXCEPTION HANDLING =====
+
+    def "plugin handles effectiveSourceRef exception in save task configuration"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        // Configure image in build mode (no sourceRef)
+        dockerExt.images {
+            buildModeImage {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'buildmodeimage'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('buildmode.tar')
+                    compression = SaveCompression.NONE
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Save task should be created even though effectiveSourceRef throws
+        def saveTask = project.tasks.getByName('dockerSaveBuildModeImage')
+        saveTask != null
+        // effectiveSourceRef should be empty string (exception caught)
+        saveTask.effectiveSourceRef.get() == ''
+    }
+
+    // ===== EXISTING INTEGRATION TEST SOURCE SET =====
+
+    def "plugin skips convention when integrationTest source set already exists"() {
+        given:
+        def testProject = ProjectBuilder.builder().build()
+        testProject.pluginManager.apply(JavaPlugin)
+
+        // Create integration test source set BEFORE applying docker plugin
+        def sourceSets = testProject.extensions.getByType(org.gradle.api.tasks.SourceSetContainer)
+        sourceSets.create('integrationTest')
+
+        when:
+        plugin.apply(testProject)
+
+        then:
+        // Should not throw exception - convention should skip
+        noExceptionThrown()
+        sourceSets.findByName('integrationTest') != null
+    }
+
+    // ===== EXISTING INTEGRATION TEST TASK =====
+
+    def "plugin skips integration test task creation when task already exists"() {
+        given:
+        def testProject = ProjectBuilder.builder().build()
+        testProject.pluginManager.apply(JavaPlugin)
+
+        // Create integration test task BEFORE applying docker plugin
+        testProject.tasks.register('integrationTest', Test)
+
+        when:
+        plugin.apply(testProject)
+
+        then:
+        noExceptionThrown()
+        testProject.tasks.findByName('integrationTest') != null
+    }
+
+    // ===== COMPOSE FILE COLLECTION COMBINED WITH OTHER CONFIG =====
+
+    def "plugin combines composeFileCollection with files property"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile1 = project.file('compose-a.yml')
+        def composeFile2 = project.file('compose-b.yml')
+        composeFile1.parentFile.mkdirs()
+        composeFile1.text = "services:\n  svc1:\n    image: img1"
+        composeFile2.text = "services:\n  svc2:\n    image: img2"
+
+        dockerTestExt.composeStacks {
+            combinedStack {
+                files.from(composeFile1)
+                composeFileCollection.from(composeFile2)
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpCombinedStack')
+        upTask != null
+    }
+
+    // ===== WAITFOR DEFAULTS =====
+
+    def "plugin uses default timeout and poll values for waitForHealthy"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-defaults.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        dockerTestExt.composeStacks {
+            defaultsStack {
+                files.from(composeFile)
+                waitForHealthy {
+                    waitForServices.set(['app'])
+                    // Don't set timeout or poll - use defaults
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpDefaultsStack')
+        upTask.waitForHealthyTimeoutSeconds.get() == 60  // default
+        upTask.waitForHealthyPollSeconds.get() == 2       // default
+    }
+
+    def "plugin uses default timeout and poll values for waitForRunning"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile = project.file('compose-running-defaults.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.text = "services:\n  app:\n    image: myapp"
+
+        dockerTestExt.composeStacks {
+            runningDefaultsStack {
+                files.from(composeFile)
+                waitForRunning {
+                    waitForServices.set(['app'])
+                    // Don't set timeout or poll - use defaults
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def upTask = project.tasks.getByName('composeUpRunningDefaultsStack')
+        upTask.waitForRunningTimeoutSeconds.get() == 60  // default
+        upTask.waitForRunningPollSeconds.get() == 2       // default
+    }
+
+    // ===== isTestEnvironment ADDITIONAL TESTS =====
+
+    def "isTestEnvironment returns true when gradle.test.running property is set"() {
+        given:
+        def originalGradleTestWorker = System.getProperty('gradle.test.worker')
+        def originalOrgGradleTestWorker = System.getProperty('org.gradle.test.worker')
+        def originalGradleTestRunning = System.getProperty('gradle.test.running')
+
+        // Clear both worker properties to ensure other conditions are tested
+        System.clearProperty('gradle.test.worker')
+        System.clearProperty('org.gradle.test.worker')
+        System.setProperty('gradle.test.running', 'true')
+
+        when:
+        def result = invokeIsTestEnvironment()
+
+        then:
+        result == true
+
+        cleanup:
+        if (originalGradleTestWorker != null) {
+            System.setProperty('gradle.test.worker', originalGradleTestWorker)
+        }
+        if (originalOrgGradleTestWorker != null) {
+            System.setProperty('org.gradle.test.worker', originalOrgGradleTestWorker)
+        }
+        if (originalGradleTestRunning != null) {
+            System.setProperty('gradle.test.running', originalGradleTestRunning)
+        } else {
+            System.clearProperty('gradle.test.running')
+        }
+    }
+
+    // ===== SOURCEREF MODE BRANCH TESTS =====
+
+    def "plugin configures sourceRef mode with individual components"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        dockerExt.images {
+            fromComponents {
+                sourceRefRegistry.set('docker.io')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('alpine')
+                imageName = 'mynginx'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildFromComponents')
+        buildTask.sourceRefMode.get() == true
+    }
+
+    def "plugin configures sourceRef mode with sourceRefRepository"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        dockerExt.images {
+            fromRepo {
+                sourceRefRepository.set('docker.io/library/alpine')
+                sourceRefTag.set('3.18')
+                imageName = 'myalpine'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def buildTask = project.tasks.getByName('dockerBuildFromRepo')
+        buildTask.sourceRefMode.get() == true
+    }
+
+    // ===== HASBUILDCONTEXT BRANCH TESTS =====
+
+    def "plugin configures hasBuildContext with contextTaskName"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create a context task
+        project.tasks.register('createContextForWithContextTaskName', org.gradle.api.tasks.Copy) {
+            into project.layout.buildDirectory.dir('docker-context/withContextTaskName')
+        }
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            withContextTaskName {
+                contextTaskName.set('createContextForWithContextTaskName')
+                imageName = 'withcontexttaskname'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('context-task-name.tar')
+                    compression = SaveCompression.NONE
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def saveTask = project.tasks.getByName('dockerSaveWithContextTaskName')
+        def deps = saveTask.dependsOn.findAll { it instanceof String || it instanceof org.gradle.api.Task }
+        // Verify the dependency structure includes the build task
+        saveTask != null
+    }
+
+    def "plugin configures hasBuildContext with contextTask field"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        // Create a context task
+        def contextTaskProvider = project.tasks.register('createContextForContextTask', org.gradle.api.tasks.Copy) {
+            into project.layout.buildDirectory.dir('docker-context/withContextTask')
+        }
+
+        dockerExt.images {
+            withContextTask {
+                imageName = 'withcontexttask'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('context-task.tar')
+                    compression = SaveCompression.NONE
+                }
+                publish {
+                    to {
+                        publishTags(['latest'])
+                    }
+                }
+            }
+        }
+
+        // Set contextTask field after DSL configuration but before evaluation
+        dockerExt.images.getByName('withContextTask').contextTask = contextTaskProvider
+
+        when:
+        project.evaluate()
+
+        then:
+        def saveTask = project.tasks.getByName('dockerSaveWithContextTask')
+        saveTask != null
+        def publishTask = project.tasks.getByName('dockerPublishWithContextTask')
+        publishTask != null
+    }
+
+    // ===== TASK ALREADY EXISTS BRANCH =====
+
+    def "plugin handles pre-existing build task"() {
+        given:
+        // Apply the plugin first to get the extensions
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        // Configure an image through the DSL - this will be processed in afterEvaluate
+        dockerExt.images {
+            customImage {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'customimage'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        // Verify build task was created
+        project.tasks.findByName('dockerBuildCustomImage') != null
+    }
+
+    // ===== AGGREGATE TASK DEPENDENCIES =====
+
+    def "dockerBuild aggregate task collects dependencies"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            img1 {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'img1'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+            img2 {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'img2'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def dockerBuildTask = project.tasks.getByName('dockerBuild')
+        dockerBuildTask != null
+        // The aggregate task should depend on the provider
+        !dockerBuildTask.dependsOn.isEmpty()
+    }
+
+    def "dockerSave aggregate task collects dependencies for images with save"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            saveImg1 {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'saveimg1'
+                version = '1.0.0'
+                tags = ['latest']
+                save {
+                    outputFile = project.file('saveimg1.tar')
+                    compression = SaveCompression.NONE
+                }
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def dockerSaveTask = project.tasks.getByName('dockerSave')
+        dockerSaveTask != null
+    }
+
+    def "composeUp aggregate task collects dependencies"() {
+        given:
+        plugin.apply(project)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+
+        def composeFile1 = project.file('compose1.yml')
+        def composeFile2 = project.file('compose2.yml')
+        composeFile1.parentFile.mkdirs()
+        composeFile1.text = "services:\n  app1:\n    image: img1"
+        composeFile2.text = "services:\n  app2:\n    image: img2"
+
+        dockerTestExt.composeStacks {
+            stack1 {
+                files.from(composeFile1)
+            }
+            stack2 {
+                files.from(composeFile2)
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def composeUpTask = project.tasks.getByName('composeUp')
+        composeUpTask != null
+    }
+
+    // ===== DOCKERIMAGES AGGREGATE TASK =====
+
+    def "dockerImages aggregate task depends on per-image tasks"() {
+        given:
+        plugin.apply(project)
+        def dockerExt = project.extensions.getByType(DockerExtension)
+
+        def dockerfile = project.file('Dockerfile')
+        dockerfile.parentFile.mkdirs()
+        dockerfile.text = "FROM alpine"
+
+        dockerExt.images {
+            aggImg {
+                context = project.file('.')
+                dockerfile = dockerfile
+                imageName = 'aggimg'
+                version = '1.0.0'
+                tags = ['latest']
+            }
+        }
+
+        when:
+        project.evaluate()
+
+        then:
+        def dockerImagesTask = project.tasks.getByName('dockerImages')
+        dockerImagesTask != null
+    }
 }

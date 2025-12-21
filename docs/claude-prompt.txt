@@ -10,6 +10,7 @@ clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
 
+com.kineticfire.gradle.docker
 com.kineticfire.gradle.docker.generator
 com.kineticfire.gradle.docker.task
 com.kineticfire.gradle.docker.util
@@ -23,8 +24,8 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
   the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
   with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
-  Your task is to increase the unit test coverage for the package com.kineticfire.gradle.docker.util , for both instruction
-  and branch coverage to 100%.  The current instruction coverage is 97% and current branch coverage is 97%.  The
+  Your task is to increase the unit test coverage for the package com.kineticfire.gradle.docker , for both instruction
+  and branch coverage to 100%.  The current instruction coverage is 84% and current branch coverage is 60%.  The
   project requires 100% coverage as feasible.
 
   Analyze the code to determine how to increase unit test coverage for that package which can include:

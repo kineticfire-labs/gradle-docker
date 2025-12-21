@@ -89,9 +89,10 @@ abstract class ComposeStackSpec {
         waitForHealthy.set(waitSpec)
     }
     
-    void logs(@DelegatesTo(LogsSpec) Closure closure) {
+    void logs(@DelegatesTo(value = LogsSpec, strategy = Closure.DELEGATE_FIRST) Closure closure) {
         def logsSpec = objectFactory.newInstance(LogsSpec)
         closure.delegate = logsSpec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
         closure.call()
         logs.set(logsSpec)
     }
