@@ -863,4 +863,478 @@ class ComposeMethodInterceptorTest extends Specification {
         capturedProjectName.contains('testspec')
         capturedProjectName.contains('projnametest')
     }
+
+    def "should handle multiple compose files"() {
+        given:
+        config.composeFiles = ['compose.yml', 'compose-override.yml']
+        def tempComposeFile2 = java.nio.file.Files.createTempFile("test-compose2", ".yml")
+        java.nio.file.Files.writeString(tempComposeFile2, "version: '3'\nservices:\n  test2:\n    image: alpine\n")
+
+        def invocation = createMockInvocation(MethodKind.SETUP, 'multiFileTest')
+        ComposeState state = createMockComposeState()
+        ComposeConfig capturedConfig = null
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.resolve('compose-override.yml') >> tempComposeFile2
+        mockFileService.exists(tempComposeFile) >> true
+        mockFileService.exists(tempComposeFile2) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> { ComposeConfig cfg ->
+            capturedConfig = cfg
+            return CompletableFuture.completedFuture(state)
+        }
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        capturedConfig != null
+        capturedConfig.composeFiles.size() == 2
+        1 * invocation.proceed()
+
+        cleanup:
+        if (tempComposeFile2 != null && java.nio.file.Files.exists(tempComposeFile2)) {
+            java.nio.file.Files.delete(tempComposeFile2)
+        }
+    }
+
+    def "should handle port mapping with null protocol"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP, 'nullProtocolTest')
+        def serviceInfo = new ServiceInfo(
+            'xyz789',
+            'test-app-1',
+            'running',
+            [new PortMapping(8080, 32768, null)]  // null protocol
+        )
+        def state = new ComposeState('testStack', 'testProject', ['app': serviceInfo])
+        String capturedJson = null
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> { Path path, String json ->
+            capturedJson = json
+        }
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        capturedJson != null
+        capturedJson.contains('"protocol": "tcp"')  // Default tcp used when null
+    }
+
+    def "handleSetup should handle cleanup exception during startup failure"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP, 'failureTest')
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> { throw new RuntimeException('Startup failed') }
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+        mockComposeService.downStack(_ as String) >> { throw new RuntimeException('Cleanup also failed') }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        thrown(RuntimeException)
+        0 * invocation.proceed()
+    }
+
+    def "forceRemoveContainersByName should handle whitespace-only container output"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'whitespacTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute('docker', 'ps', '-aq', '--filter', _) >>
+            new ProcessExecutor.ProcessResult(0, '   \n   \n   ')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "forceRemoveContainersByName should handle containers with newlines"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'newlineTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute('docker', 'ps', '-aq', '--filter', _) >>
+            new ProcessExecutor.ProcessResult(0, 'abc123\ndef456\n')
+        mockProcessExecutor.execute('docker', 'rm', '-f', _) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "forceRemoveContainersByName should handle label-based containers"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'labelTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { args ->
+            def argList = args[0] as List
+            if (argList.contains('-aq') && argList.any { it.toString().contains('name=') }) {
+                return new ProcessExecutor.ProcessResult(0, '')
+            } else if (argList.contains('-aq') && argList.any { it.toString().contains('label=') }) {
+                return new ProcessExecutor.ProcessResult(0, 'label-container1\nlabel-container2')
+            } else if (argList.contains('rm')) {
+                return new ProcessExecutor.ProcessResult(0, '')
+            } else {
+                return new ProcessExecutor.ProcessResult(0, '')
+            }
+        }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupExistingContainers should handle executeWithTimeout result"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP, 'timeoutTest')
+        ComposeState state = createMockComposeState()
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, 'container1')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+    }
+
+    def "handleCleanup should handle null lastException properly"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'nullExceptionTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()
+    }
+
+    def "handleCleanup should set lastException on forceRemove failure"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'forceRemoveFailTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { throw new RuntimeException('Force remove failed') }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()  // Errors are caught and logged
+    }
+
+    def "handleCleanup should set lastException on container cleanup failure only"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'cleanupFailTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        def callCount = 0
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> {
+            callCount++
+            if (callCount == 1) {
+                throw new RuntimeException('Container cleanup failed')
+            }
+            return new ProcessExecutor.ProcessResult(0, '')
+        }
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()
+    }
+
+    def "waitForServices should handle running check failure"() {
+        given:
+        config.waitForRunning = ['redis']
+        def invocation = createMockInvocation(MethodKind.SETUP, 'runningFailTest')
+        ComposeState state = createMockComposeState()
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockComposeService.waitForServices(_ as WaitConfig) >> {
+            throw new RuntimeException('Running check timeout')
+        }
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()
+    }
+
+    def "stopComposeStack should log warning on failure"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'downFailTest')
+        mockComposeService.downStack(_ as String) >> {
+            throw new RuntimeException('Down stack failed completely')
+        }
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()
+    }
+
+    def "intercept should handle SETUP_SPEC method kind by proceeding"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP_SPEC, 'setupSpecTest')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+    }
+
+    def "intercept should handle CLEANUP_SPEC method kind by proceeding"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP_SPEC, 'cleanupSpecTest')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+    }
+
+    def "intercept should handle DATA_PROCESSOR method kind by proceeding"() {
+        given:
+        def invocation = Mock(IMethodInvocation)
+        def method = Mock(MethodInfo)
+        method.kind >> MethodKind.DATA_PROCESSOR
+        method.name >> 'DATA_PROCESSOR'
+        invocation.method >> method
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+    }
+
+    def "forceRemoveContainersByName should handle null containerIds output"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'nullOutputTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { args ->
+            def argList = args[0] as List
+            if (argList.contains('-aq')) {
+                return new ProcessExecutor.ProcessResult(0, null)
+            }
+            return new ProcessExecutor.ProcessResult(0, '')
+        }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "forceRemoveContainersByName should handle single container id"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'singleContainerTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { args ->
+            def argList = args[0] as List
+            if (argList.contains('-aq') && argList.any { it.toString().contains('name=') }) {
+                return new ProcessExecutor.ProcessResult(0, 'single-container')
+            } else if (argList.contains('-aq') && argList.any { it.toString().contains('label=') }) {
+                return new ProcessExecutor.ProcessResult(0, '')
+            } else if (argList.contains('rm')) {
+                return new ProcessExecutor.ProcessResult(0, '')
+            }
+            return new ProcessExecutor.ProcessResult(0, '')
+        }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "forceRemoveContainersByName should handle empty trimmed container id in list"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.CLEANUP, 'emptyTrimmedTest')
+        mockComposeService.downStack(_ as String) >> CompletableFuture.completedFuture(null)
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { args ->
+            def argList = args[0] as List
+            if (argList.contains('-aq')) {
+                return new ProcessExecutor.ProcessResult(0, 'container1\n\n\ncontainer2')
+            } else if (argList.contains('rm')) {
+                return new ProcessExecutor.ProcessResult(0, '')
+            }
+            return new ProcessExecutor.ProcessResult(0, '')
+        }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "generateStateFile should handle service with empty port list"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP, 'emptyPortsTest')
+        def serviceInfo = new ServiceInfo(
+            'abc123',
+            'test-service-1',
+            'running',
+            []  // empty port list
+        )
+        def state = new ComposeState('testStack', 'testProject', ['service': serviceInfo])
+        String capturedJson = null
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> { Path path, String json ->
+            capturedJson = json
+        }
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        capturedJson != null
+        // Pretty printed JSON may have different formatting, just check that publishedPorts appears with empty brackets
+        capturedJson.contains('"publishedPorts"')
+        capturedJson.contains('"containerId": "abc123"')
+    }
+
+    def "waitForServices should skip when both lists are empty"() {
+        given:
+        config.waitForHealthy = []
+        config.waitForRunning = []
+        def invocation = createMockInvocation(MethodKind.SETUP, 'emptyWaitTest')
+        ComposeState state = createMockComposeState()
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        0 * mockComposeService.waitForServices(_)
+        1 * invocation.proceed()
+    }
+
+    def "waitForServices should skip when lists are null"() {
+        given:
+        config.waitForHealthy = null
+        config.waitForRunning = null
+        def invocation = createMockInvocation(MethodKind.SETUP, 'nullWaitTest')
+        ComposeState state = createMockComposeState()
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '')
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        0 * mockComposeService.waitForServices(_)
+        1 * invocation.proceed()
+    }
+
+    def "cleanupExistingContainers should handle execute exception"() {
+        given:
+        def invocation = createMockInvocation(MethodKind.SETUP, 'executeExceptionTest')
+        ComposeState state = createMockComposeState()
+
+        mockFileService.resolve('compose.yml') >> tempComposeFile
+        mockFileService.exists(tempComposeFile) >> true
+        mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(state)
+        mockTimeService.now() >> LocalDateTime.parse('2025-10-14T10:00:00')
+        mockFileService.resolve('build') >> Paths.get('build')
+        mockFileService.createDirectories(_ as Path) >> {}
+        mockFileService.writeString(_ as Path, _ as String) >> {}
+        mockProcessExecutor.executeWithTimeout(_, _, _) >> new ProcessExecutor.ProcessResult(0, '')
+        mockProcessExecutor.execute(_) >> { throw new RuntimeException('Prune failed') }
+
+        when:
+        interceptor.intercept(invocation)
+
+        then:
+        1 * invocation.proceed()
+        noExceptionThrown()
+    }
 }

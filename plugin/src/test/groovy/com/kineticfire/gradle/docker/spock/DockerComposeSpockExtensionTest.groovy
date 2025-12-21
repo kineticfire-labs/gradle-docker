@@ -374,6 +374,772 @@ class DockerComposeSpockExtensionTest extends Specification {
         result == 'my-complex-__test-name'  // Multiple hyphens collapsed, but underscores preserved
     }
 
+    def "sanitizeProjectName should handle string with only underscores"() {
+        when:
+        def result = DockerComposeSpockExtension.sanitizeProjectName('___')
+
+        then:
+        // Underscores are preserved but start is non-alphanumeric so prefix is added
+        result == 'test-___'
+    }
+
+    def "sanitizeProjectName should handle mixed leading characters"() {
+        when:
+        def result = DockerComposeSpockExtension.sanitizeProjectName('123abc')
+
+        then:
+        result == '123abc'
+    }
+
+    // Tests for system property configuration
+
+    def "visitSpecAnnotation should use system property for stackName"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'sysPropStack'
+            getProperty('docker.compose.files', _) >> 'compose-from-sysprop.yml'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+        1 * mockSpec.addSetupSpecInterceptor(_)
+    }
+
+    def "visitSpecAnnotation should detect conflict when stackName in both system property and annotation"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'sysPropStack'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: 'annotationStack', composeFile: 'compose.yml')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Configuration conflict for Stack name')
+    }
+
+    def "visitSpecAnnotation should detect conflict when compose files in both system property and annotation"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'sysprop-compose.yml'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: 'annotation-compose.yml')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Configuration conflict for compose files')
+    }
+
+    def "visitSpecAnnotation should detect conflict when compose files array in annotation and system property set"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'sysprop-compose.yml'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '', composeFiles: ['file1.yml', 'file2.yml'] as String[])
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Configuration conflict for compose files')
+    }
+
+    def "visitSpecAnnotation should use composeFiles array from annotation"() {
+        given:
+        def annotation = createAnnotation(
+            stackName: 'testStack',
+            composeFile: '',
+            composeFiles: ['compose1.yml', 'compose2.yml'] as String[]
+        )
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+        1 * mockSpec.addSetupSpecInterceptor(_)
+    }
+
+    def "visitSpecAnnotation should parse comma-separated compose files from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'file1.yml, file2.yml, file3.yml'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should throw exception for invalid lifecycle in system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.lifecycle', _) >> 'invalid'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Invalid lifecycle mode in system property")
+    }
+
+    def "visitSpecAnnotation should use lifecycle CLASS from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.lifecycle', _) >> 'class'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+        1 * mockSpec.addSetupSpecInterceptor(_)
+    }
+
+    def "visitSpecAnnotation should use lifecycle METHOD from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.lifecycle', _) >> 'method'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+        1 * mockSpec.addSetupInterceptor(_)
+    }
+
+    def "visitSpecAnnotation should throw exception for invalid timeout in system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.timeoutSeconds', _) >> 'notanumber'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Invalid timeout value in system property")
+    }
+
+    def "visitSpecAnnotation should use timeout from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.timeoutSeconds', _) >> '120'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use running timeout from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.timeoutSeconds', _) >> ''
+            getProperty('docker.compose.waitForRunning.timeoutSeconds', _) >> '90'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should throw exception for invalid poll seconds in system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.pollSeconds', _) >> 'notanumber'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains("Invalid poll value in system property")
+    }
+
+    def "visitSpecAnnotation should use poll seconds from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.pollSeconds', _) >> '5'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use running poll seconds from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.pollSeconds', _) >> ''
+            getProperty('docker.compose.waitForRunning.pollSeconds', _) >> '3'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should detect conflict when waitForHealthy in both system property and annotation"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.services', _) >> 'web,db'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '', waitForHealthy: ['api'] as String[])
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Configuration conflict for waitForHealthy')
+    }
+
+    def "visitSpecAnnotation should detect conflict when waitForRunning in both system property and annotation"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForRunning.services', _) >> 'redis,cache'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '', waitForRunning: ['queue'] as String[])
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalStateException)
+        e.message.contains('Configuration conflict for waitForRunning')
+    }
+
+    def "visitSpecAnnotation should use waitForHealthy from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.services', _) >> 'web, db, api'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use waitForRunning from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForRunning.services', _) >> 'redis, queue'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use projectName from system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.projectName', _) >> 'customProject'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should handle empty spec name"() {
+        given:
+        mockSpec = Stub(SpecInfo) {
+            getName() >> ''
+        }
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // Edge case tests for Groovy truthiness branches
+
+    def "visitSpecAnnotation should throw for null annotation stackName"() {
+        given:
+        def annotation = createAnnotation(stackName: null, composeFile: 'compose.yml')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Stack name not configured')
+    }
+
+    def "visitSpecAnnotation should handle null annotation composeFile"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: null)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should handle null waitForHealthy array"() {
+        given:
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml', waitForHealthy: null)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should handle null waitForRunning array"() {
+        given:
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml', waitForRunning: null)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should handle null system property returns"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty(_, _) >> null  // All properties return null
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: 'testStack', composeFile: 'compose.yml')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should handle empty composeFiles array from annotation"() {
+        given:
+        def annotation = createAnnotation(
+            stackName: 'testStack',
+            composeFile: 'single.yml',
+            composeFiles: [] as String[]
+        )
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use annotation lifecycle when system property is null"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.lifecycle', _) >> null
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml', lifecycle: LifecycleMode.METHOD)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        1 * mockSpec.addSetupInterceptor(_)
+    }
+
+    def "visitSpecAnnotation should use annotation timeout when system property is null"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.waitForHealthy.timeoutSeconds', _) >> null
+            getProperty('docker.compose.waitForRunning.timeoutSeconds', _) >> null
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml', timeoutSeconds: 120)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should use annotation poll when system property is null"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.waitForHealthy.pollSeconds', _) >> null
+            getProperty('docker.compose.waitForRunning.pollSeconds', _) >> null
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: 'test', composeFile: 'compose.yml', pollSeconds: 5)
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should throw for invalid running timeout in system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.timeoutSeconds', _) >> ''
+            getProperty('docker.compose.waitForRunning.timeoutSeconds', _) >> 'invalid'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Invalid timeout value')
+    }
+
+    def "visitSpecAnnotation should throw for invalid running poll in system property"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> 'compose.yml'
+            getProperty('docker.compose.waitForHealthy.pollSeconds', _) >> ''
+            getProperty('docker.compose.waitForRunning.pollSeconds', _) >> 'invalid'
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '')
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Invalid poll value')
+    }
+
+    def "visitSpecAnnotation should handle null composeFiles in annotation"() {
+        given:
+        def annotation = createAnnotation(
+            stackName: 'testStack',
+            composeFile: 'single.yml',
+            composeFiles: null
+        )
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "visitSpecAnnotation should throw when missing both composeFile and compose files system prop"() {
+        given:
+        mockSystemPropertyService = Stub(SystemPropertyService) {
+            getProperty('docker.compose.stack', _) >> 'testStack'
+            getProperty('docker.compose.files', _) >> ''
+            getProperty(_, _) >> { String key, String defaultValue -> defaultValue }
+        }
+        extension = new DockerComposeSpockExtension(
+            mockComposeService,
+            mockProcessExecutor,
+            mockFileService,
+            mockSystemPropertyService,
+            mockTimeService
+        )
+        def annotation = createAnnotation(stackName: '', composeFile: '', composeFiles: [] as String[])
+
+        when:
+        extension.visitSpecAnnotation(annotation, mockSpec)
+
+        then:
+        def e = thrown(IllegalArgumentException)
+        e.message.contains('Compose file(s) not configured')
+    }
+
     // Helper method to create mock ComposeUp annotation
     private ComposeUp createAnnotation(Map params) {
         def defaults = [
