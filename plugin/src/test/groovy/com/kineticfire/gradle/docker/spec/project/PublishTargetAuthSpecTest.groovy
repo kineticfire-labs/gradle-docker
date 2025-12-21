@@ -123,4 +123,24 @@ class PublishTargetAuthSpecTest extends Specification {
         spec.username.get() == 'docker-user'
         spec.password.get() == 'docker-token-12345'
     }
+
+    // ===== ISCONFIGURED BRANCH COVERAGE TESTS =====
+
+    def "isConfigured evaluates username first when username is not empty"() {
+        when:
+        spec.username.set('user')
+        spec.password.set('pass')
+
+        then:
+        spec.isConfigured()
+    }
+
+    def "isConfigured short-circuits when username empty"() {
+        when:
+        spec.username.set('')
+        spec.password.set('pass')
+
+        then:
+        !spec.isConfigured()
+    }
 }

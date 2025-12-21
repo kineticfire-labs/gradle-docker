@@ -129,4 +129,22 @@ class DockerWorkflowsExtensionTest extends Specification {
         PipelineSpec pipeline = extension.pipelines.getByName('pipelineWithDefaultDescription')
         pipeline.description.get() == ""
     }
+
+    // ===== COVERAGE ENHANCEMENT TESTS =====
+
+    def "can use Action-based pipelines configuration method"() {
+        when:
+        extension.pipelines(new org.gradle.api.Action<org.gradle.api.NamedDomainObjectContainer<PipelineSpec>>() {
+            @Override
+            void execute(org.gradle.api.NamedDomainObjectContainer<PipelineSpec> pipelines) {
+                pipelines.create('actionPipeline') { pipeline ->
+                    pipeline.description.set('Pipeline configured via Action method')
+                }
+            }
+        })
+
+        then:
+        extension.pipelines.size() == 1
+        extension.pipelines.getByName('actionPipeline').description.get() == 'Pipeline configured via Action method'
+    }
 }

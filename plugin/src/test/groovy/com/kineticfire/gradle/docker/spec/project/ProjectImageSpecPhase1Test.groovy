@@ -370,6 +370,27 @@ class ProjectImageSpecPhase1Test extends Specification {
         refSpec.computeReference() == ''
     }
 
+    def "SourceRefSpec computeReference with only tag does not append colon"() {
+        given:
+        def refSpec = new ProjectImageSpec.SourceRefSpec()
+        refSpec.tag = 'latest'  // Only tag set, no name/namespace/registry/repository
+
+        expect:
+        // Tag should not be appended if ref is empty
+        refSpec.computeReference() == ''
+    }
+
+    def "SourceRefSpec computeReference without namespace"() {
+        given:
+        def refSpec = new ProjectImageSpec.SourceRefSpec()
+        refSpec.registry = 'docker.io'
+        refSpec.name = 'nginx'
+        refSpec.tag = 'latest'
+
+        expect:
+        refSpec.computeReference() == 'docker.io/nginx:latest'
+    }
+
     // ===== DEPRECATED LEGACY NAME PROPERTY TEST =====
 
     def "deprecated legacyName property is optional"() {

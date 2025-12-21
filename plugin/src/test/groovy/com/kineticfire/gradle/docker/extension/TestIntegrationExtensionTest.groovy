@@ -312,4 +312,295 @@ class TestIntegrationExtensionTest extends Specification {
         where:
         lifecycle << ['CLASS', 'Class', 'CLASS', 'Class', 'METHOD', 'Method']
     }
+
+    // ===== COVERAGE ENHANCEMENT TESTS =====
+
+    def "usesCompose fails with helpful message when stack not found but other stacks exist"() {
+        given:
+        // Apply plugin to get full setup
+        project.pluginManager.apply('com.kineticfire.gradle.docker')
+
+        // Get the extension created by the plugin
+        def testIntegrationExt = project.extensions.getByType(TestIntegrationExtension)
+
+        // Create a compose stack (but not the one we'll request)
+        def dockerTestExt = project.extensions.getByType(DockerTestExtension)
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            existingStack {
+                files.from(composeFile)
+            }
+            anotherStack {
+                files.from(composeFile)
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'nonExistentStack', 'class')
+
+        then:
+        def ex = thrown(IllegalArgumentException)
+        ex.message.contains("Compose stack 'nonExistentStack' not found")
+        ex.message.contains("Available stacks:")
+        ex.message.contains("existingStack")
+        ex.message.contains("anotherStack")
+    }
+
+    def "usesCompose with Lifecycle enum configures class lifecycle correctly"() {
+        given:
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        // Create compose stack
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'testStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.stack'] == 'testStack'
+        testTask.systemProperties['docker.compose.lifecycle'] == 'class'
+    }
+
+    def "usesCompose with Lifecycle enum configures method lifecycle correctly"() {
+        given:
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        // Create compose stack
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            testStack {
+                files.from(composeFile)
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'testStack', com.kineticfire.gradle.docker.Lifecycle.METHOD)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.stack'] == 'testStack'
+        testTask.systemProperties['docker.compose.lifecycle'] == 'method'
+    }
+
+    def "usesCompose configures waitForHealthy system properties"() {
+        given:
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        // Create compose stack with waitForHealthy config
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            healthyStack {
+                files.from(composeFile)
+                waitForHealthy {
+                    waitForServices.set(['db', 'redis'])
+                    timeoutSeconds.set(120)
+                    pollSeconds.set(5)
+                }
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'healthyStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.waitForHealthy.services'] == 'db,redis'
+        testTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '120'
+        testTask.systemProperties['docker.compose.waitForHealthy.pollSeconds'] == '5'
+    }
+
+    def "usesCompose configures waitForRunning system properties"() {
+        given:
+        // Manually create extensions without applying the full plugin
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        // Create compose stack with waitForRunning config
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            runningStack {
+                files.from(composeFile)
+                waitForRunning {
+                    waitForServices.set(['app', 'worker'])
+                    timeoutSeconds.set(90)
+                    pollSeconds.set(3)
+                }
+            }
+        }
+
+        // Create test task
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'runningStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.waitForRunning.services'] == 'app,worker'
+        testTask.systemProperties['docker.compose.waitForRunning.timeoutSeconds'] == '90'
+        testTask.systemProperties['docker.compose.waitForRunning.pollSeconds'] == '3'
+    }
+
+    def "usesCompose configures waitForHealthy with default values"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            defaultsStack {
+                files.from(composeFile)
+                waitForHealthy {
+                    // Only set services, use defaults for timeoutSeconds and pollSeconds
+                    waitForServices.set(['db'])
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'defaultsStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.waitForHealthy.services'] == 'db'
+        testTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '60'
+        testTask.systemProperties['docker.compose.waitForHealthy.pollSeconds'] == '2'
+    }
+
+    def "usesCompose configures waitForRunning with default values"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            defaultsStack {
+                files.from(composeFile)
+                waitForRunning {
+                    // Only set services, use defaults for timeoutSeconds and pollSeconds
+                    waitForServices.set(['app'])
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'defaultsStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.waitForRunning.services'] == 'app'
+        testTask.systemProperties['docker.compose.waitForRunning.timeoutSeconds'] == '60'
+        testTask.systemProperties['docker.compose.waitForRunning.pollSeconds'] == '2'
+    }
+
+    def "usesCompose with method lifecycle does not auto-wire task dependencies"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            methodStack {
+                files.from(composeFile)
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'methodStack', com.kineticfire.gradle.docker.Lifecycle.METHOD)
+
+        then:
+        noExceptionThrown()
+        // Method lifecycle should NOT wire task dependencies
+        !testTask.dependsOn.any { it.toString().contains('composeUp') }
+    }
+
+    def "usesCompose with empty waitForServices uses empty string"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            emptyServicesStack {
+                files.from(composeFile)
+                waitForHealthy {
+                    // Empty services list
+                    waitForServices.set([])
+                    timeoutSeconds.set(30)
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'emptyServicesStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+        testTask.systemProperties['docker.compose.waitForHealthy.services'] == ''
+    }
 }

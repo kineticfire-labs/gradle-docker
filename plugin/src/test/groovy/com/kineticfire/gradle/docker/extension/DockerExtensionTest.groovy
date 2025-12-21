@@ -1182,4 +1182,729 @@ class DockerExtensionTest extends Specification {
         extension.extractImageName('registry.io/namespace/name:tag') == 'registry.io/namespace/name'
         extension.extractImageName('registry.io:5000/namespace/name:tag') == 'registry.io:5000/namespace/name'
     }
+
+    // ===== COVERAGE ENHANCEMENT TESTS =====
+
+    def "validate fails when sourceRef uses both repository and namespace+imageName approaches"() {
+        given:
+        extension.images {
+            mixedApproach {
+                // Use both repository approach AND namespace+imageName approach - should fail
+                sourceRefRepository.set('library/alpine')
+                sourceRefNamespace.set('library')
+                sourceRefImageName.set('alpine')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Cannot use both repository approach and namespace+imageName approach")
+    }
+
+    def "validate fails when sourceRef has namespace without imageName"() {
+        given:
+        extension.images {
+            namespaceOnly {
+                sourceRefNamespace.set('library')
+                // Missing sourceRefImageName - should fail
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+    }
+
+    def "validatePublishTarget with ImageSpec fails with invalid tag format"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.tags.set(['v1.0.0'])
+
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'testTarget',
+            project.objects
+        )
+        publishTarget.getPublishTags().set(['.invalid-starts-with-dot'])
+
+        when:
+        extension.validatePublishTarget(publishTarget, imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+    }
+
+    def "validateSaveConfiguration fails when outputFile uses default convention path"() {
+        given:
+        def saveSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.SaveSpec,
+            project.objects,
+            project.layout
+        )
+        saveSpec.compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        // Leave outputFile at default convention value
+
+        when:
+        extension.validateSaveConfiguration(saveSpec, 'testImage')
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("outputFile parameter is required")
+    }
+
+    def "validateSaveConfiguration passes with explicitly set outputFile"() {
+        given:
+        def saveSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.SaveSpec,
+            project.objects,
+            project.layout
+        )
+        saveSpec.compression.set(com.kineticfire.gradle.docker.model.SaveCompression.GZIP)
+        saveSpec.outputFile.set(project.layout.buildDirectory.file('custom/my-image.tar'))
+
+        when:
+        extension.validateSaveConfiguration(saveSpec, 'testImage')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "isValidImageReference returns false for invalid tag format in reference"() {
+        expect:
+        // Tag starting with dot is invalid
+        extension.isValidImageReference('image:.invalid') == false
+        // Tag starting with dash is invalid
+        extension.isValidImageReference('image:-invalid') == false
+    }
+
+    def "isValidImageReference handles reference exceeding maximum length"() {
+        given:
+        // Create a reference that exceeds 255 characters total (name + tag > 255)
+        def longName = 'a' * 248  // 248 chars for name
+        def longRef = "${longName}:tag123"  // +7 = 255, we need > 255
+
+        expect:
+        // This should still pass - it's 255 chars
+        extension.isValidImageReference(longRef) == true
+
+        and:
+        // Now with a longer name - 256+ chars total should fail
+        def tooLongName = 'a' * 250
+        def tooLongRef = "${tooLongName}:tag123"  // 257 total
+        extension.isValidImageReference(tooLongRef) == false
+    }
+
+    def "validate handles image with context not present"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // Set up sourceRef so we don't need context
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate handles contextTaskName present and non-empty"() {
+        given:
+        def copyTask = project.tasks.register('buildContextTask', org.gradle.api.tasks.Copy)
+
+        extension.images {
+            contextTaskNameImage {
+                imageName.set('context-task-name-app')
+                tags.set(['latest'])
+                contextTaskName.set('buildContextTask')
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate handles sourceRef present but empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRef.set('')  // Empty sourceRef
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        // Should fail because no context, contextTask, or valid sourceRef
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+    }
+
+    def "validate handles sourceRefRepository present and non-empty"() {
+        given:
+        extension.images {
+            sourceRefRepoImage {
+                sourceRefRepository.set('library/nginx')
+                sourceRefTag.set('latest')
+                tags.set(['v1.0.0'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate handles buildArgs with sourceRef throws error"() {
+        given:
+        extension.images {
+            mixedConfig {
+                sourceRef.set('alpine:3.16')
+                buildArgs.set([BUILD_DATE: '2025-01-01'])
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    }
+
+    def "validate handles labels with sourceRef throws error"() {
+        given:
+        extension.images {
+            labeledSourceRef {
+                sourceRef.set('alpine:3.16')
+                labels.set([maintainer: 'test@example.com'])
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Cannot mix Build Mode and SourceRef Mode")
+    }
+
+    def "validate handles empty buildArgs and labels with sourceRef passes"() {
+        given:
+        extension.images {
+            cleanSourceRef {
+                sourceRef.set('alpine:3.16')
+                buildArgs.set([:])  // Empty map
+                labels.set([:])     // Empty map
+                imageName.set('test')
+                tags.set(['latest'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "isValidImageReference handles exactly two colons with port"() {
+        expect:
+        // Registry with port and tag
+        extension.isValidImageReference('localhost:5000/app:tag') == true
+        // More than two colons should fail
+        extension.isValidImageReference('image:tag:extra') == false
+    }
+
+    def "validateNomenclature fails when no naming approach with hasSourceRef false"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // Don't set any naming properties - should fail
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify some form of image naming")
+    }
+
+    def "validateNomenclature handles repository and namespace mutual exclusivity with no publish config"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.namespace.set('myorg')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("mutual exclusivity violation")
+        ex.message.contains("cannot specify both 'repository' and 'namespace'")
+    }
+
+    def "validatePublishTarget with String validates tag format"() {
+        given:
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'testTarget',
+            project.objects
+        )
+        publishTarget.getPublishTags().set(['.invalid-tag'])
+
+        when:
+        extension.validatePublishTarget(publishTarget, 'testImage')
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("Invalid tag format")
+    }
+
+    def "validatePublishTarget with String passes for valid configuration"() {
+        given:
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'testTarget',
+            project.objects
+        )
+        publishTarget.getPublishTags().set(['v1.0.0', 'latest'])
+
+        when:
+        extension.validatePublishTarget(publishTarget, 'testImage')
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePublishTarget with ImageSpec allows tag inheritance from source"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.tags.set(['v1.0.0', 'latest'])  // Source has tags
+
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'testTarget',
+            project.objects
+        )
+        // Empty publish tags - should inherit from source
+
+        when:
+        extension.validatePublishTarget(publishTarget, imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validatePublishTarget with ImageSpec fails when no source tags for inheritance"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // No source tags
+
+        def publishTarget = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishTarget,
+            'testTarget',
+            project.objects
+        )
+        // Empty publish tags and no source tags
+
+        when:
+        extension.validatePublishTarget(publishTarget, imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag")
+    }
+
+    def "validateImageSpec handles context not present and sourceRefImageName only"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        // Set sourceRefImageName only (without sourceRefNamespace)
+        imageSpec.sourceRefImageName.set('alpine')
+        imageSpec.sourceRefTag.set('latest')
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['v1.0.0'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateImageSpec handles contextTaskName present but empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.contextTaskName.set('')  // Empty context task name
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        // Should fail - empty contextTaskName doesn't count as having context
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify either 'context', 'contextTask', or 'sourceRef'")
+    }
+
+    def "validateNomenclature handles sourceRef present and empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRef.set('')  // Empty sourceRef
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles sourceRefRepository present and empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefRepository.set('')  // Empty sourceRefRepository
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles sourceRefNamespace present and empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefNamespace.set('')  // Empty sourceRefNamespace
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles sourceRefImageName present and empty"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefImageName.set('')  // Empty sourceRefImageName
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature fails without tags or publish targets when not using sourceRef"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.imageName.set('test')
+        // No tags and no publish targets
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        def ex = thrown(GradleException)
+        ex.message.contains("must specify at least one tag or have publish targets")
+    }
+
+    def "validateImageSpec handles sourceRefImageName empty with sourceRefNamespace"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefNamespace.set('library')
+        imageSpec.sourceRefImageName.set('')  // Empty
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        // Should fail - sourceRefNamespace without sourceRefImageName
+        def ex = thrown(GradleException)
+        ex.message.contains("When using namespace+imageName approach, both namespace and imageName are required")
+    }
+
+    def "validateImageSpec with buildArgs not present but sourceRef has source ref"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRef.set('alpine:3.16')
+        // buildArgs not set at all
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateImageSpec with labels not present but sourceRef has source ref"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRef.set('alpine:3.16')
+        // labels not set at all
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateImageSpec(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles hasSourceRefRepository true path"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefRepository.set('library/alpine')
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles hasSourceRefNamespace true path"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefNamespace.set('library')
+        imageSpec.sourceRefImageName.set('alpine')
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles hasSourceRefImageName true path"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRefImageName.set('alpine')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature handles only sourceRef present"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.sourceRef.set('alpine:3.16')
+        imageSpec.imageName.set('test')
+        imageSpec.tags.set(['latest'])
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateNomenclature passes when publish is present"() {
+        given:
+        def imageSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.ImageSpec,
+            'testImage',
+            project.objects,
+            project.providers,
+            project.layout
+        )
+        imageSpec.imageName.set('test')
+        // Set up publish spec - the publish.isPresent() check should return true
+        def publishSpec = project.objects.newInstance(
+            com.kineticfire.gradle.docker.spec.PublishSpec,
+            project.objects
+        )
+        imageSpec.publish.set(publishSpec)
+
+        when:
+        extension.validateNomenclature(imageSpec)
+
+        then:
+        // hasPublishTargets is true, so no exception should be thrown even without tags
+        noExceptionThrown()
+    }
+
+    def "validateImageSpec handles multiple hasSourceRef branches"() {
+        given:
+        extension.images {
+            multiSourceRef {
+                // Test with sourceRefImageName only (no namespace)
+                sourceRefImageName.set('nginx')
+                sourceRefTag.set('alpine')
+                tags.set(['v1.0.0'])
+            }
+        }
+
+        when:
+        extension.validate()
+
+        then:
+        noExceptionThrown()
+    }
 }

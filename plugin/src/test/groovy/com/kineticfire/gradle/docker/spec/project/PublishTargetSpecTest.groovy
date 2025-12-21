@@ -218,4 +218,44 @@ class PublishTargetSpecTest extends Specification {
         spec1.registry.get() == 'docker.io'
         spec2.registry.get() == 'registry.example.com'
     }
+
+    // ===== AUTH ACTION BRANCH COVERAGE TESTS =====
+
+    def "auth action with explicit Action creates auth spec"() {
+        when:
+        spec.auth({ authSpec ->
+            authSpec.username.set('actionuser')
+            authSpec.password.set('actionpass')
+        } as org.gradle.api.Action)
+
+        then:
+        spec.auth != null
+        spec.auth.username.get() == 'actionuser'
+        spec.auth.password.get() == 'actionpass'
+    }
+
+    def "auth action can be called multiple times without recreating"() {
+        when:
+        spec.auth({ authSpec ->
+            authSpec.username.set('user1')
+        } as org.gradle.api.Action)
+        spec.auth({ authSpec ->
+            authSpec.password.set('pass1')
+        } as org.gradle.api.Action)
+
+        then:
+        spec.auth != null
+        spec.auth.username.get() == 'user1'
+        spec.auth.password.get() == 'pass1'
+    }
+
+    // ===== ISCONFIGURED BRANCH COVERAGE TESTS =====
+
+    def "isConfigured returns false when registry is explicitly set to empty"() {
+        when:
+        spec.registry.set('')
+
+        then:
+        !spec.isConfigured()
+    }
 }

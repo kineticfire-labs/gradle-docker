@@ -379,4 +379,25 @@ class DockerProjectExtensionTest extends Specification {
         def ext = testProject.extensions.getByType(DockerProjectExtension)
         ext.spec.images.getByName('projectApp').imageName.get() == 'project-app'
     }
+
+    // ===== COVERAGE ENHANCEMENT TESTS =====
+
+    def "getImages returns the images container directly"() {
+        when:
+        extension.images {
+            myApp {
+                imageName.set('my-app')
+            }
+            myDb {
+                imageName.set('my-db')
+            }
+        }
+        def imagesContainer = extension.images
+
+        then:
+        imagesContainer != null
+        imagesContainer.size() == 2
+        imagesContainer.getByName('myApp').imageName.get() == 'my-app'
+        imagesContainer.getByName('myDb').imageName.get() == 'my-db'
+    }
 }

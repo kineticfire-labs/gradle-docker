@@ -317,4 +317,135 @@ class ProjectSuccessSpecTest extends Specification {
         successSpec.saveFile.get() == '/absolute/path/to/build/docker/images/my-app-v1.0.0.tar.gz'
         successSpec.inferCompression() == SaveCompression.GZIP
     }
+
+    // ===== SAVE MAP BRANCH COVERAGE TESTS =====
+
+    def "save with map sets only compression when file not provided"() {
+        when:
+        // Pre-set saveFile, then call save with only compression
+        successSpec.saveFile.set('image.tar')
+        successSpec.save(compression: 'gzip')
+
+        then:
+        successSpec.saveFile.get() == 'image.tar'
+        successSpec.saveCompression.get() == 'gzip'
+    }
+
+    def "save with empty map does not change properties"() {
+        given:
+        successSpec.saveFile.set('original.tar')
+        successSpec.saveCompression.set('none')
+
+        when:
+        successSpec.save([:])
+
+        then:
+        successSpec.saveFile.get() == 'original.tar'
+        successSpec.saveCompression.get() == 'none'
+    }
+
+    // ===== PUBLISH ACTION BRANCH COVERAGE TESTS =====
+
+    def "publish action configures targets"() {
+        when:
+        successSpec.publish({ container ->
+            container.create('actionTarget') { target ->
+                target.registry.set('action-registry.io')
+                target.namespace.set('action-ns')
+            }
+        } as org.gradle.api.Action)
+
+        then:
+        successSpec.publishTargets.size() == 1
+        def target = successSpec.publishTargets.findByName('actionTarget')
+        target.registry.get() == 'action-registry.io'
+        target.namespace.get() == 'action-ns'
+    }
+
+    // ===== HASFLATPUBLISHCONFIG BRANCH COVERAGE TESTS =====
+
+    def "hasFlatPublishConfig returns false when publishRegistry is present but empty"() {
+        when:
+        successSpec.publishRegistry.set('')
+
+        then:
+        !successSpec.hasFlatPublishConfig()
+    }
+
+    def "hasFlatPublishConfig returns false when publishNamespace is present but empty"() {
+        when:
+        successSpec.publishNamespace.set('')
+
+        then:
+        !successSpec.hasFlatPublishConfig()
+    }
+
+    def "hasFlatPublishConfig returns true when only publishNamespace is set"() {
+        when:
+        successSpec.publishNamespace.set('myorg')
+
+        then:
+        successSpec.hasFlatPublishConfig()
+    }
+
+    def "hasFlatPublishConfig evaluates all conditions in order"() {
+        when:
+        // Set empty values for registry and namespace, but set publishTags
+        successSpec.publishRegistry.set('')
+        successSpec.publishNamespace.set('')
+        successSpec.publishTags.set(['v1.0'])
+
+        then:
+        successSpec.hasFlatPublishConfig()
+    }
+
+    def "hasFlatPublishConfig returns false when all are empty or default"() {
+        expect:
+        // All default/empty values
+        !successSpec.hasFlatPublishConfig()
+    }
+
+    // ===== INFERCOMPRESSION BRANCH COVERAGE TESTS =====
+
+    def "inferCompression with .tgz extension"() {
+        when:
+        successSpec.saveFile.set('image.tgz')
+
+        then:
+        successSpec.inferCompression() == SaveCompression.GZIP
+    }
+
+    def "inferCompression with .tbz2 extension"() {
+        when:
+        successSpec.saveFile.set('image.tbz2')
+
+        then:
+        successSpec.inferCompression() == SaveCompression.BZIP2
+    }
+
+    def "inferCompression with .txz extension"() {
+        when:
+        successSpec.saveFile.set('image.txz')
+
+        then:
+        successSpec.inferCompression() == SaveCompression.XZ
+    }
+
+    def "inferCompression with explicit saveCompression set to non-empty value"() {
+        when:
+        successSpec.saveFile.set('image.unknown')
+        successSpec.saveCompression.set('gzip')
+
+        then:
+        successSpec.inferCompression() == SaveCompression.GZIP
+    }
+
+    def "inferCompression with saveCompression set but empty falls back to filename inference"() {
+        when:
+        successSpec.saveFile.set('image.tar.xz')
+        successSpec.saveCompression.set('')
+
+        then:
+        successSpec.inferCompression() == SaveCompression.XZ
+    }
 }

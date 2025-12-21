@@ -492,7 +492,7 @@ abstract class DockerExtension {
                 // Publish tags should be valid tag names, not full image references
                 if (!isValidTagFormat(publishTag)) {
                     throw new GradleException(
-                        "Invalid tag format '${publishTag}' in publish target '${publishTarget.name}' for image '${imageName}'. " +
+                        "Invalid tag format '${publishTag}' in publish target '${publishTarget.name}' for image '${imageSpec.name}'. " +
                         "Tags must be alphanumeric with dots, hyphens, underscores, cannot start with '.' or '-', and be ≤128 chars"
                     )
                 }

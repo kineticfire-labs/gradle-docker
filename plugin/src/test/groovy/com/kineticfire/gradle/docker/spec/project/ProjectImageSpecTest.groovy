@@ -370,4 +370,249 @@ class ProjectImageSpecTest extends Specification {
         imageSpec.isSourceRefMode() == true
         imageSpec.isBuildMode() == false
     }
+
+    // ===== PULLAUTH BRANCH COVERAGE TESTS =====
+
+    def "pullAuth closure can be called multiple times without recreating"() {
+        when:
+        imageSpec.pullAuth {
+            username.set('user1')
+        }
+        imageSpec.pullAuth {
+            password.set('pass1')
+        }
+
+        then:
+        imageSpec.pullAuth != null
+        imageSpec.pullAuth.username.get() == 'user1'
+        imageSpec.pullAuth.password.get() == 'pass1'
+    }
+
+    def "pullAuth action can be called multiple times without recreating"() {
+        when:
+        imageSpec.pullAuth({ auth ->
+            auth.username.set('actionuser1')
+        } as org.gradle.api.Action)
+        imageSpec.pullAuth({ auth ->
+            auth.password.set('actionpass1')
+        } as org.gradle.api.Action)
+
+        then:
+        imageSpec.pullAuth != null
+        imageSpec.pullAuth.username.get() == 'actionuser1'
+        imageSpec.pullAuth.password.get() == 'actionpass1'
+    }
+
+    // ===== MODE DETECTION BRANCH COVERAGE TESTS =====
+
+    def "isSourceRefMode returns false when sourceRef is present but empty"() {
+        when:
+        imageSpec.sourceRef.set('')
+
+        then:
+        imageSpec.isSourceRefMode() == false
+    }
+
+    def "isSourceRefMode returns false when sourceRefRepository is present but empty"() {
+        when:
+        imageSpec.sourceRefRepository.set('')
+
+        then:
+        imageSpec.isSourceRefMode() == false
+    }
+
+    def "isSourceRefMode returns false when sourceRefImageName is present but empty"() {
+        when:
+        imageSpec.sourceRefImageName.set('')
+
+        then:
+        imageSpec.isSourceRefMode() == false
+    }
+
+    def "isBuildMode returns false when jarFrom is present but empty"() {
+        when:
+        imageSpec.jarFrom.set('')
+
+        then:
+        imageSpec.isBuildMode() == false
+    }
+
+    def "isBuildMode returns false when contextDir is present but empty"() {
+        when:
+        imageSpec.contextDir.set('')
+
+        then:
+        imageSpec.isBuildMode() == false
+    }
+
+    def "isBuildMode returns false when contextTaskName is present but empty"() {
+        when:
+        imageSpec.contextTaskName.set('')
+
+        then:
+        imageSpec.isBuildMode() == false
+    }
+
+    // ===== VERSION DERIVATION BRANCH COVERAGE TESTS =====
+
+    def "deriveVersion returns empty string when version is present but empty"() {
+        when:
+        imageSpec.version.set('')
+        imageSpec.tags.set(['latest'])
+
+        then:
+        imageSpec.deriveVersion() == ''
+    }
+
+    // ===== SOURCEREF DSL BRANCH COVERAGE TESTS =====
+
+    def "sourceRef closure without registry"() {
+        when:
+        imageSpec.sourceRef {
+            namespace = 'library'
+            name = 'nginx'
+            tag = 'latest'
+        }
+
+        then:
+        imageSpec.sourceRef.get() == 'library/nginx:latest'
+        imageSpec.sourceRefRegistry.get() == ''  // Not set because registry was empty
+        imageSpec.sourceRefNamespace.get() == 'library'
+        imageSpec.sourceRefImageName.get() == 'nginx'
+        imageSpec.sourceRefTag.get() == 'latest'
+    }
+
+    def "sourceRef closure with only name no namespace"() {
+        when:
+        imageSpec.sourceRef {
+            name = 'nginx'
+        }
+
+        then:
+        imageSpec.sourceRef.get() == 'nginx'
+        imageSpec.sourceRefImageName.get() == 'nginx'
+    }
+
+    def "sourceRef closure with no tag"() {
+        when:
+        imageSpec.sourceRef {
+            registry = 'docker.io'
+            name = 'nginx'
+        }
+
+        then:
+        imageSpec.sourceRef.get() == 'docker.io/nginx'
+    }
+
+    // ===== GETEFFECTIVESOURCEREF BRANCH COVERAGE TESTS =====
+
+    def "getEffectiveSourceRef returns empty string when sourceRef is present but empty"() {
+        when:
+        imageSpec.sourceRef.set('')
+
+        then:
+        imageSpec.getEffectiveSourceRef() == ''
+    }
+
+    def "getEffectiveSourceRef without repository uses namespace and name"() {
+        when:
+        imageSpec.sourceRefRegistry.set('docker.io')
+        imageSpec.sourceRefNamespace.set('library')
+        imageSpec.sourceRefImageName.set('nginx')
+        imageSpec.sourceRefTag.set('latest')
+        // sourceRefRepository is not set
+
+        then:
+        imageSpec.getEffectiveSourceRef() == 'docker.io/library/nginx:latest'
+    }
+
+    def "getEffectiveSourceRef when sourceRefRepository is present but empty"() {
+        when:
+        imageSpec.sourceRefRegistry.set('docker.io')
+        imageSpec.sourceRefNamespace.set('library')
+        imageSpec.sourceRefImageName.set('nginx')
+        imageSpec.sourceRefTag.set('latest')
+        imageSpec.sourceRefRepository.set('')  // Explicitly set to empty
+
+        then:
+        // Should use namespace+name since repository is empty
+        imageSpec.getEffectiveSourceRef() == 'docker.io/library/nginx:latest'
+    }
+
+    // ===== ISBUILDMODE ADDITIONAL BRANCH COVERAGE =====
+
+    def "isBuildMode returns true when contextTaskName is set with value"() {
+        when:
+        imageSpec.contextTaskName.set('prepareContext')
+
+        then:
+        imageSpec.isBuildMode() == true
+    }
+
+    def "isBuildMode evaluates contextTaskName when others are empty"() {
+        when:
+        // Ensure jarFrom and contextDir are empty (convention)
+        imageSpec.jarFrom.set('')
+        imageSpec.contextDir.set('')
+        imageSpec.contextTaskName.set('myTask')
+
+        then:
+        imageSpec.isBuildMode() == true
+    }
+
+    // ===== DERIVEVERSION ADDITIONAL BRANCH COVERAGE =====
+
+    def "deriveVersion when version property is not present"() {
+        // version has a convention of empty string
+        expect:
+        imageSpec.deriveVersion() == ''
+    }
+
+    def "deriveVersion returns explicitly set version"() {
+        when:
+        imageSpec.version.set('2.0.0')
+
+        then:
+        imageSpec.deriveVersion() == '2.0.0'
+    }
+
+    // ===== ISSOURCEREFMODE SHORT-CIRCUIT COVERAGE =====
+
+    def "isSourceRefMode evaluates all conditions in order with empty first two"() {
+        when:
+        // First two conditions should fail, third should succeed
+        imageSpec.sourceRef.set('')
+        imageSpec.sourceRefRepository.set('')
+        imageSpec.sourceRefImageName.set('nginx')
+
+        then:
+        imageSpec.isSourceRefMode() == true
+    }
+
+    def "isSourceRefMode returns true from first condition"() {
+        when:
+        imageSpec.sourceRef.set('docker.io/nginx:latest')
+
+        then:
+        imageSpec.isSourceRefMode() == true
+    }
+
+    def "isSourceRefMode returns true from second condition"() {
+        when:
+        imageSpec.sourceRef.set('')
+        imageSpec.sourceRefRepository.set('library/nginx')
+
+        then:
+        imageSpec.isSourceRefMode() == true
+    }
+
+    // ===== GETEFFECTIVESOURCEREF SHORT-CIRCUIT COVERAGE =====
+
+    def "getEffectiveSourceRef returns value from explicitly set sourceRef"() {
+        when:
+        imageSpec.sourceRef.set('explicit-ref/image:tag')
+
+        then:
+        imageSpec.getEffectiveSourceRef() == 'explicit-ref/image:tag'
+    }
 }

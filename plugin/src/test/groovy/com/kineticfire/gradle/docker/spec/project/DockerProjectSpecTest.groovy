@@ -389,4 +389,215 @@ class DockerProjectSpecTest extends Specification {
         then:
         dockerProjectSpec.primaryImage == null
     }
+
+    def "getPrimaryImage returns null when imagesContainer is null"() {
+        expect:
+        // Before calling initializeNestedSpecs, imagesContainer is null
+        dockerProjectSpec.primaryImage == null
+    }
+
+    // ===== ISCONFIGURED BRANCH COVERAGE TESTS =====
+
+    def "isConfigured returns true when image with legacyName is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                legacyName.set('my-legacy-app')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns true when image with jarFrom is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                jarFrom.set(':app:jar')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns true when image with contextDir is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                contextDir.set('docker/context')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns true when image with repository is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                repository.set('myorg/myapp')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns false when image has empty imageName"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                imageName.set('')
+            }
+        }
+
+        then:
+        // imageName is set but empty, so we need other properties
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty legacyName"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                legacyName.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty sourceRef"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRef.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty sourceRefImageName"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRefImageName.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty sourceRefRepository"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRefRepository.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty jarFrom"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                jarFrom.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty contextDir"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                contextDir.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns false when image has empty repository"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                repository.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured evaluates all properties in order when none match"() {
+        when:
+        // Create image with no meaningful configuration at all
+        // This tests all the negative branches in isConfigured
+        dockerProjectSpec.images {
+            emptyImage {
+                // All properties remain at their defaults or empty
+                imageName.set('')
+                legacyName.set('')
+                sourceRef.set('')
+                sourceRefImageName.set('')
+                sourceRefRepository.set('')
+                jarFrom.set('')
+                contextDir.set('')
+                repository.set('')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == false
+    }
+
+    def "isConfigured returns true when image with sourceRef is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRef.set('docker.io/library/nginx:latest')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns true when image with sourceRefImageName is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRefImageName.set('nginx')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
+
+    def "isConfigured returns true when image with sourceRefRepository is added"() {
+        when:
+        dockerProjectSpec.images {
+            myImage {
+                sourceRefRepository.set('library/nginx')
+            }
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+    }
 }
