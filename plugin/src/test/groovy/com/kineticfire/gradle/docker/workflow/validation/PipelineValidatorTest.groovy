@@ -437,6 +437,33 @@ class PipelineValidatorTest extends Specification {
         noExceptionThrown()
     }
 
+    def "validateTestTaskReference fails when task does not exist"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.testTaskName.set('nonExistentTask')
+
+        when:
+        validator.validateTestTaskReference(pipelineName: 'testPipeline', testSpec: testSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("references test task 'nonExistentTask'")
+        e.message.contains("no such task exists in the project")
+    }
+
+    def "validateTestTaskReference error message includes suggestion"() {
+        given:
+        def testSpec = project.objects.newInstance(TestStepSpec)
+        testSpec.testTaskName.set('myMissingTask')
+
+        when:
+        validator.validateTestTaskReference(pipelineName: 'myPipeline', testSpec: testSpec)
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Suggestion:")
+    }
+
     // ===== VALIDATE ALL TESTS =====
 
     def "validateAll passes for empty collection"() {
@@ -746,6 +773,51 @@ class PipelineValidatorTest extends Specification {
         testSpec.testTaskName.set('integrationTest')
         testSpec.stack.set(stackSpec)
         testSpec.lifecycle.set(WorkflowLifecycle.METHOD)
+
+        when:
+        validator.validate(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    // ===== NULL SPEC BRANCH COVERAGE TESTS =====
+    // These tests use Groovy metaClass to intercept property calls and simulate null returns
+
+    def "validateBuildStep returns early when build property returns null via metaClass"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'nullBuildPipeline')
+        def buildProperty = pipelineSpec.build
+        // Use metaClass to intercept getOrNull() and return null
+        buildProperty.metaClass.getOrNull = { -> null }
+
+        when:
+        validator.validateBuildStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestStep returns early when test property returns null via metaClass"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'nullTestPipeline')
+        def testProperty = pipelineSpec.test
+        // Use metaClass to intercept getOrNull() and return null
+        testProperty.metaClass.getOrNull = { -> null }
+
+        when:
+        validator.validateTestStep(pipelineSpec)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate handles null build and test property returns via metaClass"() {
+        given:
+        def pipelineSpec = project.objects.newInstance(PipelineSpec, 'nullSpecsPipeline')
+        // Intercept both properties
+        pipelineSpec.build.metaClass.getOrNull = { -> null }
+        pipelineSpec.test.metaClass.getOrNull = { -> null }
 
         when:
         validator.validate(pipelineSpec)
