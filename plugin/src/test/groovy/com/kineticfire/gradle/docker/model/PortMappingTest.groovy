@@ -146,11 +146,13 @@ class PortMappingTest extends Specification {
         def mapping2 = new PortMapping(8080, 80, "tcp")
         def mapping3 = new PortMapping(8080, 80, "udp")
         def mapping4 = new PortMapping(3000, 80, "tcp")
+        def mapping5 = new PortMapping(8080, 8080, "tcp") // same container port, different host port
 
         expect:
         mapping1 == mapping2
         mapping1 != mapping3 // different protocol
         mapping1 != mapping4 // different container port
+        mapping1 != mapping5 // different host port (same container port)
         mapping1 != null
         mapping1 == mapping1 // self equality
     }

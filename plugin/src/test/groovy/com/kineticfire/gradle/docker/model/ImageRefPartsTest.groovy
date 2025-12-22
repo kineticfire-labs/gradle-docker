@@ -450,4 +450,126 @@ class ImageRefPartsTest extends Specification {
         parts.repository == 'nginx'
         parts.tag == '1.21.3-alpine'
     }
+
+    // ===== CONSTRUCTOR EDGE CASE TESTS =====
+
+    def "constructor handles null repository"() {
+        when:
+        def parts = new ImageRefParts("docker.io", "library", null, "latest")
+
+        then:
+        parts.registry == "docker.io"
+        parts.namespace == "library"
+        parts.repository == "unknown"
+        parts.tag == "latest"
+    }
+
+    def "constructor handles null namespace"() {
+        when:
+        def parts = new ImageRefParts("docker.io", null, "nginx", "latest")
+
+        then:
+        parts.registry == "docker.io"
+        parts.namespace == null
+        parts.repository == "nginx"
+        parts.tag == "latest"
+    }
+
+    def "constructor handles null registry"() {
+        when:
+        def parts = new ImageRefParts(null, "library", "nginx", "latest")
+
+        then:
+        parts.registry == null
+        parts.namespace == "library"
+        parts.repository == "nginx"
+        parts.tag == "latest"
+        !parts.isRegistryQualified()
+    }
+
+    def "constructor handles null tag"() {
+        when:
+        def parts = new ImageRefParts("docker.io", "library", "nginx", null)
+
+        then:
+        parts.registry == "docker.io"
+        parts.namespace == "library"
+        parts.repository == "nginx"
+        parts.tag == "latest"
+    }
+
+    def "getFullRepository handles null namespace"() {
+        when:
+        def parts = new ImageRefParts("docker.io", null, "nginx", "latest")
+
+        then:
+        parts.fullRepository == "nginx"
+    }
+
+    // ===== PORT VS TAG DISAMBIGUATION TESTS =====
+
+    def "parse image with port in path and slash after colon"() {
+        // Test where potentialTag contains '/' so tag extraction is skipped
+        when:
+        def parts = ImageRefParts.parse('localhost:5000/path/to/image')
+
+        then:
+        // The tag extraction is skipped because '/' appears after the last ':'
+        // but that's not the case here - the last colon is part of localhost:5000
+        // This tests the branch where potentialTag.contains('/') is true
+        parts.registry == 'localhost:5000'
+        parts.namespace == 'path/to'
+        parts.repository == 'image'
+        parts.tag == 'latest'
+    }
+
+    def "parse reference with registry port and nested path"() {
+        when:
+        def parts = ImageRefParts.parse('registry.example.com:5000/org/team/service:v2.0')
+
+        then:
+        parts.registry == 'registry.example.com:5000'
+        parts.namespace == 'org/team'
+        parts.repository == 'service'
+        parts.tag == 'v2.0'
+    }
+
+    def "parse reference where potential tag contains slash skips tag extraction"() {
+        // Test case where what follows the colon contains a slash
+        // This should skip tag extraction because it's likely a path, not a tag
+        // Example: "repo:path/to/something" - the ":path/to/something" looks like a path
+        when:
+        def parts = ImageRefParts.parse('something:8080/path')
+
+        then:
+        // "something" has a colon, and after that is "8080/path" which contains '/'
+        // So tag extraction should be skipped
+        parts.registry == 'something:8080'
+        parts.repository == 'path'
+        parts.tag == 'latest'
+    }
+
+    // ===== TWO PATH PARTS EDGE CASES =====
+
+    def "parse with exactly two parts where first looks like registry"() {
+        when:
+        def parts = ImageRefParts.parse('my.registry.com/myapp')
+
+        then:
+        parts.registry == 'my.registry.com'
+        parts.namespace == ''
+        parts.repository == 'myapp'
+        parts.tag == 'latest'
+    }
+
+    def "parse with exactly two parts where first is namespace"() {
+        when:
+        def parts = ImageRefParts.parse('myorg/myapp')
+
+        then:
+        parts.registry == ''
+        parts.namespace == 'myorg'
+        parts.repository == 'myapp'
+        parts.tag == 'latest'
+    }
 }

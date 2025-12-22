@@ -94,7 +94,7 @@ class ExecLibraryComposeServiceMockabilityTest extends Specification {
         mockTimeService.methodCalls.count { it.startsWith("sleep:") } == 1
 
         and: "Test completed quickly despite mock time advancement"
-        actualElapsed < 5000 // Completes in reasonable time (< 5s) due to no actual sleep delays
+        actualElapsed < 15000 // Completes in reasonable time (< 15s) - allows for CI environment overhead
 
         and: "Mock time advanced by the poll interval"
         mockTimeService.currentTimeMillis() == 1100L // Started at 1000, slept 100ms

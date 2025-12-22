@@ -1067,4 +1067,207 @@ class JUnitComposeServiceAsyncTest extends Specification {
         result.getServices()["web"] != null
         noExceptionThrown()
     }
+
+    // =====================================================
+    // Additional tests for 100% branch coverage
+    // =====================================================
+
+    def "captureLogs with zero tailLines"() {
+        given:
+        // Explicitly set tailLines to 0 to cover the else branch
+        def config = new LogsConfig(["web"], 0, false)
+
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "Logs without tail")
+
+        when:
+        def result = service.captureLogs("test-project", config).get()
+
+        then:
+        result == "Logs without tail"
+    }
+
+    def "captureLogs with negative tailLines"() {
+        given:
+        // Negative tailLines should not add --tail option
+        def config = new LogsConfig(["web"], -10, false)
+
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "Logs without tail")
+
+        when:
+        def result = service.captureLogs("test-project", config).get()
+
+        then:
+        result == "Logs without tail"
+    }
+
+    def "waitForServices with empty services list times out"() {
+        given:
+        // Empty services list - should immediately succeed since all (0) services are ready
+        def config = new WaitConfig(
+            "test-project",
+            [],  // Empty services list
+            Duration.ofMillis(200),
+            Duration.ofMillis(50),
+            ServiceStatus.RUNNING
+        )
+
+        when:
+        def result = service.waitForServices(config).get()
+
+        then:
+        result == ServiceStatus.RUNNING
+    }
+
+    def "checkServiceReady returns true for output containing only 'up'"() {
+        given:
+        def config = new WaitConfig(
+            "test-project",
+            ["web"],
+            Duration.ofSeconds(10),
+            Duration.ofMillis(100),
+            ServiceStatus.RUNNING
+        )
+
+        // Output contains 'up' but not 'running'
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "NAME    STATUS\nweb     Up 3 hours")
+
+        when:
+        def result = service.waitForServices(config).get()
+
+        then:
+        result == ServiceStatus.RUNNING
+    }
+
+    def "checkServiceReady returns true for output containing only 'running'"() {
+        given:
+        def config = new WaitConfig(
+            "test-project",
+            ["web"],
+            Duration.ofSeconds(10),
+            Duration.ofMillis(100),
+            ServiceStatus.RUNNING
+        )
+
+        // Output contains 'running' but not 'up'
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "NAME    STATUS\nweb     running (healthy)")
+
+        when:
+        def result = service.waitForServices(config).get()
+
+        then:
+        result == ServiceStatus.RUNNING
+    }
+
+    def "parseServiceState handles 'restart' without 'restarting'"() {
+        given:
+        def config = new ComposeConfig([tempComposeFile], "test-project", "test-stack")
+
+        mockExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Started")
+        // Use "restart" without "restarting" to cover that specific branch
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '{"ID":"abc123","Service":"web","State":"restart pending"}')
+
+        when:
+        def result = service.upStack(config).get()
+
+        then:
+        result.getServices()["web"] != null
+        result.getServices()["web"].state == "restarting"
+    }
+
+    def "parseServiceState handles stopped with 'stop'"() {
+        given:
+        def config = new ComposeConfig([tempComposeFile], "test-project", "test-stack")
+
+        mockExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Started")
+        // Use "stop" instead of "exit" to cover that branch
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '{"ID":"abc123","Service":"web","State":"stopped"}')
+
+        when:
+        def result = service.upStack(config).get()
+
+        then:
+        result.getServices()["web"] != null
+        result.getServices()["web"].state == "stopped"
+    }
+
+    def "waitForServices handles InterruptedException properly"() {
+        given:
+        def config = new WaitConfig(
+            "test-project",
+            ["web"],
+            Duration.ofSeconds(10),
+            Duration.ofMillis(100),
+            ServiceStatus.RUNNING
+        )
+
+        // Create a CompletableFuture that will be interrupted
+        def callCount = 0
+        mockExecutor.execute(_) >> {
+            callCount++
+            if (callCount >= 2) {
+                // Simulate interrupted exception being thrown on subsequent calls
+                Thread.currentThread().interrupt()
+                throw new InterruptedException("Thread interrupted during sleep")
+            }
+            // First call returns "not ready" to enter the polling loop
+            return new ProcessExecutor.ProcessResult(0, "NAME    STATUS\nweb     Starting")
+        }
+
+        when:
+        service.waitForServices(config).get()
+
+        then:
+        ExecutionException ex = thrown()
+        ex.cause instanceof RuntimeException
+        (ex.cause.message.contains("Interrupted") || ex.cause.message.contains("Error waiting"))
+    }
+
+    def "captureLogs with services non-null non-empty"() {
+        given:
+        // Explicitly test non-null, non-empty services list
+        def config = new LogsConfig(["web", "db", "redis"], 0, false)
+
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "Multi-service logs")
+
+        when:
+        def result = service.captureLogs("test-project", config).get()
+
+        then:
+        result == "Multi-service logs"
+    }
+
+    def "upStack handles single JSON line output"() {
+        given:
+        def config = new ComposeConfig([tempComposeFile], "test-project", "test-stack")
+
+        mockExecutor.executeInDirectory(_, _) >> new ProcessExecutor.ProcessResult(0, "Started")
+        // Single JSON line without any empty lines
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, '{"ID":"abc123","Service":"web","State":"running"}')
+
+        when:
+        def result = service.upStack(config).get()
+
+        then:
+        result.getServices().size() == 1
+        result.getServices()["web"] != null
+    }
+
+    def "waitForServices handles single service check"() {
+        given:
+        def config = new WaitConfig(
+            "test-project",
+            ["single-service"],
+            Duration.ofSeconds(10),
+            Duration.ofMillis(100),
+            ServiceStatus.RUNNING
+        )
+
+        mockExecutor.execute(_) >> new ProcessExecutor.ProcessResult(0, "up and running")
+
+        when:
+        def result = service.waitForServices(config).get()
+
+        then:
+        result == ServiceStatus.RUNNING
+    }
 }

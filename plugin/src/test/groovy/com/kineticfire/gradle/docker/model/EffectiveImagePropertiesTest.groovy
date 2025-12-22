@@ -398,4 +398,260 @@ class EffectiveImagePropertiesTest extends Specification {
         then:
         thrown(IllegalStateException)
     }
+
+    // ===== FROMTASKPROPERTIES TESTS =====
+
+    def "fromTaskProperties handles direct sourceRef"() {
+        given:
+        // Create a real task using project.tasks.create for proper Gradle integration
+        def task = project.tasks.create("testPublish", DockerPublishTask)
+        task.sourceRef.set("docker.io/library/nginx:1.21")
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        result.registry == "docker.io"
+        result.namespace == "library"
+        result.imageName == "nginx"
+        result.tags == ["1.21"]
+    }
+
+    def "fromTaskProperties handles sourceRef components with repository"() {
+        given:
+        def task = project.tasks.create("testPublish2", DockerPublishTask)
+        task.sourceRef.set("")
+        task.sourceRefRegistry.set("ghcr.io")
+        task.sourceRefRepository.set("myorg/myapp")
+        task.sourceRefImageName.set("")
+        task.sourceRefTag.set("v1.0")
+        task.sourceRefNamespace.set("")
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        result.registry == "ghcr.io"
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.tags == ["v1.0"]
+    }
+
+    def "fromTaskProperties handles sourceRef components with imageName"() {
+        given:
+        def task = project.tasks.create("testPublish3", DockerPublishTask)
+        task.sourceRef.set("")
+        task.sourceRefRegistry.set("docker.io")
+        task.sourceRefNamespace.set("library")
+        task.sourceRefImageName.set("nginx")
+        task.sourceRefRepository.set("")
+        task.sourceRefTag.set("")
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        result.registry == "docker.io"
+        result.namespace == "library"
+        result.imageName == "nginx"
+        result.tags == ["latest"]
+    }
+
+    def "fromTaskProperties handles sourceRef components without registry"() {
+        given:
+        def task = project.tasks.create("testPublish4", DockerPublishTask)
+        task.sourceRef.set("")
+        task.sourceRefRegistry.set("")
+        task.sourceRefNamespace.set("myorg")
+        task.sourceRefImageName.set("myapp")
+        task.sourceRefRepository.set("")
+        task.sourceRefTag.set("v2.0")
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.tags == ["v2.0"]
+    }
+
+    def "fromTaskProperties uses build mode fallback when no sourceRef"() {
+        given:
+        def task = project.tasks.create("testPublish5", DockerPublishTask)
+        task.sourceRef.set("")
+        task.sourceRefRegistry.set("")
+        task.sourceRefNamespace.set("")
+        task.sourceRefImageName.set("")
+        task.sourceRefRepository.set("")
+        task.sourceRefTag.set("")
+        task.registry.set("")
+        task.namespace.set("")
+        task.imageName.set("")
+        task.repository.set("")
+        task.tags.set([])
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        // Falls back to build mode which returns empty values
+        result != null
+        result.registry == ""
+        result.namespace == ""
+        result.imageName == ""
+        result.repository == ""
+        result.tags == []
+    }
+
+    def "fromTaskProperties handles build mode fallback with values"() {
+        given:
+        def task = project.tasks.create("testPublish6", DockerPublishTask)
+        task.sourceRef.set("")
+        task.sourceRefRegistry.set("")
+        task.sourceRefNamespace.set("")
+        task.sourceRefImageName.set("")
+        task.sourceRefRepository.set("")
+        task.sourceRefTag.set("")
+        task.registry.set("docker.io")
+        task.namespace.set("myorg")
+        task.imageName.set("myapp")
+        task.repository.set("")
+        task.tags.set(["latest", "v1.0"])
+
+        when:
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        result.registry == "docker.io"
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.repository == ""
+        result.tags == ["latest", "v1.0"]
+    }
+
+    def "fromTaskProperties throws when sourceRef components have no imageName or repository"() {
+        given:
+        // This tests the exception path in buildFromSourceRefComponents(DockerPublishTask)
+        // when hasSourceRefComponents returns true but neither imageName nor repository is set
+        def task = project.tasks.create("testPublish7", DockerPublishTask)
+        task.sourceRef.set("")
+        // Set registry which doesn't trigger hasSourceRefComponents
+        task.sourceRefRegistry.set("docker.io")
+        // Neither repository nor imageName is set - but this alone won't trigger hasSourceRefComponents
+        task.sourceRefRepository.set("")
+        task.sourceRefImageName.set("")
+        task.sourceRefNamespace.set("")
+        task.sourceRefTag.set("")
+        task.registry.set("")
+        task.namespace.set("")
+        task.imageName.set("")
+        task.repository.set("")
+        task.tags.set([])
+
+        when:
+        // This should fall back to build mode since hasSourceRefComponents will return false
+        // (neither sourceRefRepository nor sourceRefImageName is set)
+        def result = EffectiveImageProperties.fromTaskProperties(task)
+
+        then:
+        // Falls back to build mode with empty values
+        result != null
+        result.registry == ""
+        result.imageName == ""
+    }
+
+    // ===== FROMSOURCEREFCOMPONENTS TESTS =====
+
+    def "fromSourceRefComponents with repository"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            "ghcr.io", "", "", "myorg/myapp", "v1.0"
+        )
+
+        then:
+        result.registry == "ghcr.io"
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.tags == ["v1.0"]
+    }
+
+    def "fromSourceRefComponents with repository no registry"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            "", "", "", "myorg/myapp", "latest"
+        )
+
+        then:
+        result.registry == ""
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.tags == ["latest"]
+    }
+
+    def "fromSourceRefComponents with imageName and namespace"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            "docker.io", "library", "nginx", "", "1.21"
+        )
+
+        then:
+        result.registry == "docker.io"
+        result.namespace == "library"
+        result.imageName == "nginx"
+        result.tags == ["1.21"]
+    }
+
+    def "fromSourceRefComponents with imageName only"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            "", "", "nginx", "", "latest"
+        )
+
+        then:
+        result.imageName == "nginx"
+        result.tags == ["latest"]
+    }
+
+    def "fromSourceRefComponents defaults tag to latest"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            "", "", "nginx", "", ""
+        )
+
+        then:
+        result.imageName == "nginx"
+        result.tags == ["latest"]
+    }
+
+    def "fromSourceRefComponents defaults tag to latest for null"() {
+        when:
+        def result = EffectiveImageProperties.fromSourceRefComponents(
+            null, null, "nginx", null, null
+        )
+
+        then:
+        result.imageName == "nginx"
+        result.tags == ["latest"]
+    }
+
+    def "fromSourceRefComponents throws exception when no repository or imageName"() {
+        when:
+        EffectiveImageProperties.fromSourceRefComponents(
+            "docker.io", "library", "", "", "latest"
+        )
+
+        then:
+        thrown(IllegalArgumentException)
+    }
+
+    def "fromSourceRefComponents handles all null values"() {
+        when:
+        EffectiveImageProperties.fromSourceRefComponents(
+            null, null, null, null, null
+        )
+
+        then:
+        thrown(IllegalArgumentException)
+    }
 }

@@ -155,7 +155,7 @@ class JUnitComposeServiceTest extends Specification {
         invokeParseServiceState(status) == ServiceStatus.STOPPED
 
         where:
-        status << ["exit", "exited", "stopped", "Exited (0)"]
+        status << ["exit", "exited", "stopped", "Exited (0)", "stop", "STOP", "EXIT"]
     }
 
     def "parseServiceState returns RESTARTING for status containing 'restart'"() {
@@ -163,7 +163,7 @@ class JUnitComposeServiceTest extends Specification {
         invokeParseServiceState(status) == ServiceStatus.RESTARTING
 
         where:
-        status << ["restarting", "Restarting"]
+        status << ["restarting", "Restarting", "restart pending", "restart", "RESTART"]
     }
 
     def "parseServiceState returns UNKNOWN for unrecognized status"() {

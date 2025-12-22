@@ -212,9 +212,35 @@ class EffectiveImageProperties {
      * Create EffectiveImageProperties from sourceRef components
      */
     static EffectiveImageProperties fromSourceRefComponents(String registry, String namespace, String imageName, String repository, String tag) {
-        // Use existing buildFromSourceRefComponents method with default tags
-        def effectiveProps = buildFromSourceRefComponents(registry, namespace, imageName, repository, tag)
-        return effectiveProps
+        def effectiveTag = (tag == null || tag.isEmpty()) ? "latest" : tag
+        def effectiveRegistry = registry ?: ""
+        def effectiveNamespace = namespace ?: ""
+        def effectiveImageName = imageName ?: ""
+        def effectiveRepository = repository ?: ""
+
+        // Repository approach takes precedence (mirrors build mode logic)
+        if (!effectiveRepository.isEmpty()) {
+            def baseRef = effectiveRegistry.isEmpty() ? effectiveRepository : "${effectiveRegistry}/${effectiveRepository}"
+            def fullRef = "${baseRef}:${effectiveTag}"
+            return parseFromDirectSourceRef(fullRef)
+        }
+
+        // Fall back to namespace + imageName approach
+        if (effectiveImageName.isEmpty()) {
+            throw new IllegalArgumentException("Either repository or imageName must be specified")
+        }
+
+        def reference = ""
+        if (!effectiveRegistry.isEmpty()) {
+            reference += effectiveRegistry + "/"
+        }
+        if (!effectiveNamespace.isEmpty()) {
+            reference += effectiveNamespace + "/"
+        }
+        reference += effectiveImageName
+        reference += ":" + effectiveTag
+
+        return parseFromDirectSourceRef(reference)
     }
 
     /**

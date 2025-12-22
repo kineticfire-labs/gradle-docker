@@ -61,11 +61,6 @@ class ImageRefParts {
             }
         }
 
-        // Handle edge case where fullPath is empty (like ":tag")
-        if (fullPath.isEmpty()) {
-            return new ImageRefParts("", "", "unknown", tag)
-        }
-
         def pathParts = fullPath.split('/')
         def parsedRegistry = ""
         def namespace = ""
