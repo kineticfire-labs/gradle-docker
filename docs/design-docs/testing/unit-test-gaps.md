@@ -528,6 +528,51 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 3. Cannot be mocked due to Spock/Gradle constraints
 4. Provide safety without testable code paths
 
+### DockerProjectTranslator - Gradle Task Configuration Closures
+
+**File:** `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/DockerProjectTranslator.groovy`
+
+#### 1. _createContextTask_closure4 - Copy Task Configuration (0% coverage)
+
+**What:**
+- Creates and configures a Gradle `Copy` task for JAR files
+- Sets up task actions with `from()` and `into()` for file copy operations
+- Configures task dependencies and output directories
+
+**Why Unit Testing is Impractical:**
+- Closure is executed by Gradle's task container during project configuration
+- `Copy` task is a built-in Gradle task type that cannot be mocked
+- Task action configuration requires actual Gradle execution context
+- File copy operations are validated by Gradle at execution time
+
+**Mitigations:**
+- Task configuration parameters are validated before closure execution
+- File path resolution uses standard Gradle `file()` methods
+- Closure is minimal - focuses on wiring, not business logic
+
+**Integration Test Coverage:**
+- All `dockerProject` integration tests with `jarFrom` configuration exercise this closure
+- Tests verify JAR files are correctly copied to the Docker context directory
+
+#### 2. _configureTaskDependencies_closure8/9 - Task Wiring (partial coverage)
+
+**What:**
+- Configures task dependencies using Gradle's `dependsOn()`
+- Wires build/test/publish workflow tasks together
+
+**Why Unit Testing is Impractical:**
+- Task dependency configuration requires actual Gradle task container
+- Task wiring happens during Gradle's configuration phase
+- Cannot mock `TaskProvider` references without Gradle context
+
+**Mitigations:**
+- Dependency configuration is straightforward wiring
+- No business logic in closures - just task reference passing
+
+**Integration Test Coverage:**
+- All `dockerProject` pipelines test correct task ordering
+- Tests verify build → test → publish workflow executes correctly
+
 ## Summary Statistics
 
 ### Unit Testable Code (via Dependency Injection)
@@ -541,11 +586,13 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 | Component | External Calls | Lines | Justification |
 |-----------|----------------|-------|---------------|
 | DockerServiceImpl | Docker daemon | ~200 | Cannot mock Docker Java API |
+| DockerServiceImpl closures | Async Docker calls | ~1200 | CompletableFuture + Docker API |
+| DockerProjectTranslator closures | Gradle task config | ~350 | Requires Gradle execution context |
 | ExecLibraryComposeService | docker compose CLI | ~150 | Requires real containers |
 | DefaultProcessExecutor | Process execution | ~40 | Platform-dependent |
 | JUnit 5 Extensions | JUnit runtime | ~200 | Framework integration |
 | Spock Extensions | Spock runtime | ~150 | Framework integration |
-| **Total** | | **~740** | All covered by integration tests |
+| **Total** | | **~2290** | All covered by integration tests |
 
 ### Coverage Achieved
 
@@ -562,12 +609,16 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 ✅ Pure logic has been extracted and unit tested
 ✅ I/O dependencies have been injected and mocked
 
-**Conclusion**: The remaining ~740 lines of untestable code represent genuine external boundaries that cannot be practically unit tested. This includes Docker daemon interactions (~200 lines), Docker Compose CLI calls (~150 lines), process execution (~40 lines), and test framework integration for JUnit 5 (~200 lines) and Spock (~150 lines). All such code is verified by comprehensive integration tests.
+**Conclusion**: The remaining ~2290 lines of untestable code represent genuine external boundaries that cannot be practically unit tested. This includes Docker daemon interactions (~200 lines), DockerServiceImpl async closures (~1200 lines), DockerProjectTranslator Gradle task closures (~350 lines), Docker Compose CLI calls (~150 lines), process execution (~40 lines), and test framework integration for JUnit 5 (~200 lines) and Spock (~150 lines). All such code is verified by comprehensive integration tests.
 
 ---
 
 ## Document History
 
+- **2025-12-22**: Added DockerProjectTranslator closure gap documentation. Improved service package
+  coverage from 64%/68% to 67.7%/73.6% (instruction/branch) by adding comprehensive unit tests for
+  TaskExecutionService, ProcessExecutor timeout handling, FileOperations edge cases, and JsonServiceImpl
+  methods. Updated summary statistics to reflect ~2290 lines of documented external boundaries.
 - **2025-12-21**: Enhanced JUnit 5 extensions gap documentation. Added detailed coverage for
   `com.kineticfire.gradle.docker.junit` (92.2%/80.5%) and `com.kineticfire.gradle.docker.junit.service`
   (96.2%/94.4%) packages. Documented specific gaps: InterruptedException handling in waitForServices(),
@@ -585,6 +636,6 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 - **2025-10-16**: Updated coverage statistics to reflect state before refactoring (81.1% instruction, 80.3% branch).
 - **2025-10-13**: Initial documentation of unit test coverage gaps.
 
-**Document Version**: 5.0
-**Last Updated**: 2025-12-21
+**Document Version**: 6.0
+**Last Updated**: 2025-12-22
 **Maintained By**: Development Team

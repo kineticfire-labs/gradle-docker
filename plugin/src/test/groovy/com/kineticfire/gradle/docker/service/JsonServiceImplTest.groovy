@@ -349,4 +349,189 @@ class JsonServiceImplTest extends Specification {
         Files.exists(outputFile)
         Files.exists(nestedDir)
     }
+
+    // ===== toJson Tests =====
+
+    def "toJson handles null object"() {
+        expect:
+        service.toJson(null) == "null"
+    }
+
+    def "toJson serializes simple map"() {
+        given:
+        def obj = [name: 'test', value: 123]
+
+        when:
+        def json = service.toJson(obj)
+
+        then:
+        json.contains('"name":"test"')
+        json.contains('"value":123')
+    }
+
+    def "toJson serializes list"() {
+        given:
+        def obj = [1, 2, 3]
+
+        when:
+        def json = service.toJson(obj)
+
+        then:
+        json == '[1,2,3]'
+    }
+
+    def "toJson serializes nested objects"() {
+        given:
+        def obj = [outer: [inner: [value: 'nested']]]
+
+        when:
+        def json = service.toJson(obj)
+
+        then:
+        json.contains('outer')
+        json.contains('inner')
+        json.contains('nested')
+    }
+
+    // ===== fromJson Tests =====
+
+    def "fromJson handles null json string"() {
+        expect:
+        service.fromJson(null, String) == null
+    }
+
+    def "fromJson handles empty json string"() {
+        expect:
+        service.fromJson('', String) == null
+    }
+
+    def "fromJson handles whitespace-only json string"() {
+        expect:
+        service.fromJson('   ', String) == null
+    }
+
+    def "fromJson deserializes to map"() {
+        given:
+        def json = '{"name":"test","value":42}'
+
+        when:
+        def result = service.fromJson(json, Map)
+
+        then:
+        result.name == 'test'
+        result.value == 42
+    }
+
+    // ===== parseJsonArray Tests =====
+
+    def "parseJsonArray handles null input"() {
+        expect:
+        service.parseJsonArray(null) == []
+    }
+
+    def "parseJsonArray handles empty input"() {
+        expect:
+        service.parseJsonArray('') == []
+    }
+
+    def "parseJsonArray handles whitespace-only input"() {
+        expect:
+        service.parseJsonArray('   \t\n  ') == []
+    }
+
+    def "parseJsonArray parses array of objects"() {
+        given:
+        def json = '[{"id":1,"name":"first"},{"id":2,"name":"second"}]'
+
+        when:
+        def result = service.parseJsonArray(json)
+
+        then:
+        result.size() == 2
+        result[0].id == 1
+        result[0].name == 'first'
+        result[1].id == 2
+        result[1].name == 'second'
+    }
+
+    // ===== parseJson Tests =====
+
+    def "parseJson handles null input"() {
+        expect:
+        service.parseJson(null) == null
+    }
+
+    def "parseJson handles empty input"() {
+        expect:
+        service.parseJson('') == null
+    }
+
+    def "parseJson handles whitespace-only input"() {
+        expect:
+        service.parseJson('   ') == null
+    }
+
+    def "parseJson parses object"() {
+        given:
+        def json = '{"key":"value"}'
+
+        when:
+        def result = service.parseJson(json)
+
+        then:
+        result instanceof Map
+        result.key == 'value'
+    }
+
+    def "parseJson parses array"() {
+        given:
+        def json = '[1,2,3]'
+
+        when:
+        def result = service.parseJson(json)
+
+        then:
+        result instanceof List
+        result == [1, 2, 3]
+    }
+
+    def "parseJson parses primitive string"() {
+        given:
+        def json = '"hello"'
+
+        when:
+        def result = service.parseJson(json)
+
+        then:
+        result == 'hello'
+    }
+
+    def "parseJson parses primitive number"() {
+        given:
+        def json = '42'
+
+        when:
+        def result = service.parseJson(json)
+
+        then:
+        result == 42
+    }
+
+    def "parseJson parses boolean"() {
+        expect:
+        service.parseJson('true') == true
+        service.parseJson('false') == false
+    }
+
+    // ===== getObjectMapper Tests =====
+
+    def "getObjectMapper returns non-null ObjectMapper"() {
+        expect:
+        service.getObjectMapper() != null
+    }
+
+    def "getObjectMapper returns same instance on multiple calls"() {
+        expect:
+        service.getObjectMapper() == service.getObjectMapper()
+    }
 }

@@ -22,6 +22,7 @@ com.kineticfire.gradle.docker.workflow
 com.kineticfire.gradle.docker.workflow.executor
 
 com.kineticfire.gradle.docker.workflow.validation
+com.kineticfire.gradle.docker.service
 
 
 
@@ -32,7 +33,7 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
   with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
   Your task is to increase the unit test coverage for the package com.kineticfire.gradle.docker.service , for both instruction
-  and branch coverage to 100%.  The current instruction coverage is 64% and current branch coverage is 68%.  The
+  and branch coverage to 100%.  The current instruction coverage is 68% and current branch coverage is 74%.  The
   project requires 100% coverage as feasible.
 
   Analyze the code to determine how to increase unit test coverage for that package which can include:

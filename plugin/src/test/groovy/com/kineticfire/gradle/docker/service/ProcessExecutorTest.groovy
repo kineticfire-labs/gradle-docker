@@ -133,4 +133,76 @@ class ProcessExecutorTest extends Specification {
         then:
         thrown(RuntimeException)
     }
+
+    def "DefaultProcessExecutor throws exception on timeout"() {
+        given:
+        def executor = new DefaultProcessExecutor()
+        // Use sleep command with a very short timeout to trigger timeout handling
+        def command = ['sleep', '10']  // 10 seconds sleep
+
+        when:
+        // 100ms timeout should cause the 10 second sleep to timeout
+        executor.execute(command, null, Duration.ofMillis(100))
+
+        then:
+        def ex = thrown(RuntimeException)
+        // Check either the main message or the cause message for timeout indication
+        ex.message.contains("timed out") || ex.message.contains("Failed to execute") ||
+            (ex.cause != null && ex.cause.message.contains("timed out"))
+    }
+
+    def "DefaultProcessExecutor execute with two args uses default timeout"() {
+        given:
+        def executor = new DefaultProcessExecutor()
+
+        when:
+        def result = executor.execute(['echo', 'test'], tempDir)
+
+        then:
+        result.isSuccess()
+        result.stdout.trim() == 'test'
+    }
+
+    def "DefaultProcessExecutor execute with single arg uses default timeout and null working dir"() {
+        given:
+        def executor = new DefaultProcessExecutor()
+
+        when:
+        def result = executor.execute(['echo', 'single arg test'])
+
+        then:
+        result.isSuccess()
+        result.stdout.trim() == 'single arg test'
+    }
+
+    def "DefaultProcessExecutor handles null working directory"() {
+        given:
+        def executor = new DefaultProcessExecutor()
+
+        when:
+        def result = executor.execute(['echo', 'null dir test'], null, Duration.ofMinutes(1))
+
+        then:
+        result.isSuccess()
+        result.stdout.trim() == 'null dir test'
+    }
+
+    def "ProcessResult handles empty stdout and stderr"() {
+        given:
+        def result = new ProcessResult(0, "", "")
+
+        expect:
+        result.stdout == ""
+        result.stderr == ""
+        result.isSuccess()
+    }
+
+    def "ProcessResult handles whitespace-only stdout"() {
+        given:
+        def result = new ProcessResult(0, "   \n   ", "")
+
+        expect:
+        result.stdout == "   \n   "
+        result.isSuccess()
+    }
 }

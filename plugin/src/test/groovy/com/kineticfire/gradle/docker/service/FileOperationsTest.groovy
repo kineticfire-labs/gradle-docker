@@ -90,12 +90,84 @@ class FileOperationsTest extends Specification {
     def "toFile converts Path to File correctly"() {
         given:
         def path = tempDir.resolve("test.txt")
-        
+
         when:
         def file = fileOps.toFile(path)
-        
+
         then:
         file instanceof File
         file.toPath() == path
+    }
+
+    def "writeText handles empty content"() {
+        given:
+        def filePath = tempDir.resolve("empty.txt")
+
+        when:
+        fileOps.writeText(filePath, "")
+        def content = fileOps.readText(filePath)
+
+        then:
+        content == ""
+    }
+
+    def "writeText handles multiline content"() {
+        given:
+        def filePath = tempDir.resolve("multiline.txt")
+        def content = "line1\nline2\nline3"
+
+        when:
+        fileOps.writeText(filePath, content)
+        def readContent = fileOps.readText(filePath)
+
+        then:
+        readContent == content
+    }
+
+    def "writeText handles unicode content"() {
+        given:
+        def filePath = tempDir.resolve("unicode.txt")
+        def content = "Hello 世界 🌍"
+
+        when:
+        fileOps.writeText(filePath, content)
+        def readContent = fileOps.readText(filePath)
+
+        then:
+        readContent == content
+    }
+
+    def "createDirectories handles existing directory"() {
+        given:
+        def path = tempDir.resolve("existing")
+        Files.createDirectories(path)
+
+        when:
+        fileOps.createDirectories(path)
+
+        then:
+        noExceptionThrown()
+        fileOps.exists(path)
+    }
+
+    def "exists returns true for directories"() {
+        given:
+        def dirPath = tempDir.resolve("testdir")
+        fileOps.createDirectories(dirPath)
+
+        expect:
+        fileOps.exists(dirPath)
+    }
+
+    def "delete removes empty directory"() {
+        given:
+        def dirPath = tempDir.resolve("deletedir")
+        fileOps.createDirectories(dirPath)
+
+        when:
+        fileOps.delete(dirPath)
+
+        then:
+        !fileOps.exists(dirPath)
     }
 }

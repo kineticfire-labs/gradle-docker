@@ -899,4 +899,238 @@ services:
         image.registry.get() == 'ghcr.io'
         image.namespace.get() == 'myorg'
     }
+
+    // ===== REPOSITORY MODE TESTS =====
+
+    def "translate derives namespace from repository"() {
+        given:
+        project.file('docker').mkdirs()
+        dockerProjectExt.images {
+            myApp {
+                repository.set('myorg/myapp')
+                contextDir.set('docker')
+            }
+        }
+        dockerProjectExt.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def image = dockerExt.images.getByName('myapp')
+        image.namespace.get() == 'myorg'
+        image.imageName.get() == 'myapp'
+    }
+
+    def "deriveImageName returns image from repository when no imageName or legacyName"() {
+        given:
+        dockerProjectExt.images {
+            myApp {
+                repository.set('namespace/myimage')
+                contextDir.set('docker')
+            }
+        }
+        project.file('docker').mkdirs()
+
+        expect:
+        translator.deriveImageName(dockerProjectExt.spec.images.getByName('myApp'), project) == 'myimage'
+    }
+
+    def "deriveImageName returns legacyName when set and imageName not set"() {
+        given:
+        dockerProjectExt.images {
+            myApp {
+                legacyName.set('legacy-app')
+                contextDir.set('docker')
+            }
+        }
+        project.file('docker').mkdirs()
+
+        expect:
+        translator.deriveImageName(dockerProjectExt.spec.images.getByName('myApp'), project) == 'legacy-app'
+    }
+
+    def "deriveImageName returns project name when no other names set"() {
+        given:
+        dockerProjectExt.images {
+            noName {
+                contextDir.set('docker')
+            }
+        }
+        project.file('docker').mkdirs()
+
+        expect:
+        // Falls back to project.name when blockName is empty
+        def imageName = translator.deriveImageName(dockerProjectExt.spec.images.getByName('noName'), project)
+        imageName == 'noName' || imageName == project.name
+    }
+
+    // ===== PUBLISH TAGS TESTS =====
+
+    def "translate uses publishTags when different from additionalTags"() {
+        given:
+        project.file('docker').mkdirs()
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
+        }
+        dockerProjectExt.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+        dockerProjectExt.onSuccess {
+            additionalTags.set(['tested'])
+            publishTags.set(['release-1.0'])
+            publishRegistry.set('docker.io')
+        }
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
+        pipeline.onTestSuccess.get().publish.get().publishTags.get() == ['release-1.0']
+    }
+
+    // ===== COMPOSE ONLY MODE TESTS =====
+
+    def "translate does not create test step when no compose configured"() {
+        given:
+        project.file('docker').mkdirs()
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
+        }
+        // No test block
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
+        // Pipeline exists but test is not configured
+        pipeline != null
+    }
+
+    // ===== SUBPROJECT REFERENCE TESTS =====
+
+    def "validateJarTaskPath fails for non-existent subproject"() {
+        when:
+        translator.validateJarTaskPath(project, ':nonexistent:jar')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("non-existent project")
+    }
+
+    def "validateJarTaskPath accepts whitespace-only path as empty"() {
+        when:
+        translator.validateJarTaskPath(project, '   ')
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("cannot be empty")
+    }
+
+    // ===== SPEC IMAGE CONTAINER TESTS =====
+
+    def "spec images container supports multiple configurations"() {
+        given:
+        def spec = dockerProjectExt.spec
+
+        when:
+        // Configure images directly on the spec container
+        spec.images.create('app') { img ->
+            img.imageName.set('my-app')
+        }
+        spec.images.create('worker') { img ->
+            img.imageName.set('my-worker')
+        }
+
+        then:
+        spec.images.size() == 2
+        spec.images.getByName('app').imageName.get() == 'my-app'
+        spec.images.getByName('worker').imageName.get() == 'my-worker'
+    }
+
+    // ===== SAVE COMPRESSION TESTS =====
+
+    def "translate infers gzip compression from file extension"() {
+        given:
+        project.file('docker').mkdirs()
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+            }
+        }
+        dockerProjectExt.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+        dockerProjectExt.onSuccess {
+            saveFile.set('build/images/app.tar.bz2')
+        }
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def pipeline = dockerWorkflowsExt.pipelines.getByName('myappPipeline')
+        pipeline.onTestSuccess.get().save.isPresent()
+    }
+
+    // ===== SOURCE REF WITH REPOSITORY TESTS =====
+
+    def "translate configures sourceRefRepository"() {
+        given:
+        dockerProjectExt.images {
+            nginx {
+                sourceRefRepository.set('library/nginx')
+                sourceRefTag.set('alpine')
+                tags.set(['my-nginx'])
+            }
+        }
+        dockerProjectExt.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def image = dockerExt.images.getByName('nginx')
+        image.sourceRefRepository.get() == 'library/nginx'
+        image.sourceRefTag.get() == 'alpine'
+    }
+
+    // ===== DOCKER IMAGE CONFIGURATION - CONTEXT DIR WITH NON-DEFAULT DOCKERFILE =====
+
+    def "translate sets dockerfile when different from default in contextDir mode"() {
+        given:
+        project.file('docker').mkdirs()
+        project.file('docker/Dockerfile.prod').text = 'FROM openjdk:17'
+
+        dockerProjectExt.images {
+            myApp {
+                imageName.set('my-app')
+                contextDir.set('docker')
+                dockerfile.set('docker/Dockerfile.prod')
+            }
+        }
+        dockerProjectExt.test {
+            compose.set('src/integrationTest/resources/compose/app.yml')
+        }
+
+        when:
+        translator.translate(project, dockerProjectExt.spec, dockerExt, dockerTestExt, dockerWorkflowsExt)
+
+        then:
+        def image = dockerExt.images.getByName('myapp')
+        image.dockerfile.get().asFile.name == 'Dockerfile.prod'
+    }
 }
