@@ -16,6 +16,8 @@
 
 package com.kineticfire.gradle.docker.generator
 
+import groovy.transform.Immutable
+
 /**
  * Standardized task naming utilities for the dockerProject and dockerWorkflows DSLs.
  *
@@ -31,6 +33,57 @@ package com.kineticfire.gradle.docker.generator
  * All names follow camelCase convention with the action verb first.
  */
 final class TaskNamingUtils {
+
+    /**
+     * Immutable data class representing parsed repository components.
+     *
+     * A repository string like "myorg/sub/myapp" is parsed into:
+     * - namespace: "myorg/sub" (everything before the last slash)
+     * - imageName: "myapp" (everything after the last slash)
+     *
+     * For simple names like "myapp" (no slash):
+     * - namespace: "" (empty string)
+     * - imageName: "myapp"
+     */
+    @Immutable
+    static class RepositoryParts {
+        String namespace
+        String imageName
+
+        /**
+         * Check if a namespace was extracted from the repository.
+         * @return true if namespace is non-empty
+         */
+        boolean hasNamespace() {
+            return namespace != null && !namespace.isEmpty()
+        }
+    }
+
+    /**
+     * Parse a repository string into namespace and imageName components.
+     *
+     * Examples:
+     * - "myapp" → namespace: "", imageName: "myapp"
+     * - "myorg/myapp" → namespace: "myorg", imageName: "myapp"
+     * - "myorg/sub/myapp" → namespace: "myorg/sub", imageName: "myapp"
+     * - null or "" → namespace: "", imageName: ""
+     *
+     * @param repository The repository string to parse
+     * @return RepositoryParts containing namespace and imageName
+     */
+    static RepositoryParts parseRepository(String repository) {
+        if (repository == null || repository.isEmpty()) {
+            return new RepositoryParts('', '')
+        }
+        def lastSlash = repository.lastIndexOf('/')
+        if (lastSlash >= 0) {
+            return new RepositoryParts(
+                repository.substring(0, lastSlash),
+                repository.substring(lastSlash + 1)
+            )
+        }
+        return new RepositoryParts('', repository)
+    }
 
     private TaskNamingUtils() {
         // Utility class - prevent instantiation

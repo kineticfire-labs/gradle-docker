@@ -199,9 +199,8 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         }
         // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
         if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-            def repo = imageSpec.repository.get()
-            def lastSlash = repo.lastIndexOf('/')
-            return lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
+            def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+            return repoParts.imageName
         }
         // Block name from DSL (e.g., "myApp" from images { myApp { } })
         if (imageSpec.blockName.isPresent() && !imageSpec.blockName.get().isEmpty()) {
@@ -253,10 +252,8 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 task.imageName.set(imageSpec.legacyName)
             } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                 // Repository mode - extract image name (e.g., "myorg/myapp" -> "myapp")
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
-                task.imageName.set(extractedImageName)
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                task.imageName.set(repoParts.imageName)
             } else {
                 task.imageName.set(sanitizedImageName)
             }
@@ -272,10 +269,9 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             }
             if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                 // Repository mode - extract namespace (e.g., "myorg/myapp" -> "myorg")
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                if (lastSlash >= 0) {
-                    task.namespace.set(repo.substring(0, lastSlash))
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                if (repoParts.hasNamespace()) {
+                    task.namespace.set(repoParts.namespace)
                 }
             } else if (imageSpec.namespace.isPresent()) {
                 task.namespace.set(imageSpec.namespace)
@@ -491,20 +487,17 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 task.imageName.set(imageSpec.legacyName)
             } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                 // Repository mode - extract image name (e.g., "myorg/myapp" -> "myapp")
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
-                task.imageName.set(extractedImageName)
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                task.imageName.set(repoParts.imageName)
             } else {
                 task.imageName.set(sanitizedImageName)
             }
 
             // Configure namespace - handle repository mode
             if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                if (lastSlash >= 0) {
-                    task.namespace.set(repo.substring(0, lastSlash))
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                if (repoParts.hasNamespace()) {
+                    task.namespace.set(repoParts.namespace)
                 }
             } else if (imageSpec.namespace.isPresent()) {
                 task.namespace.set(imageSpec.namespace)
@@ -565,10 +558,8 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                         task.imageName.set(imageSpec.legacyName)
                     } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                         // Repository mode - extract image name (e.g., "myorg/myapp" -> "myapp")
-                        def repo = imageSpec.repository.get()
-                        def lastSlash = repo.lastIndexOf('/')
-                        def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
-                        task.imageName.set(extractedImageName)
+                        def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                        task.imageName.set(repoParts.imageName)
                     } else {
                         task.imageName.set(sanitizedImageName)
                     }
@@ -580,10 +571,9 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     if (successSpec.publishNamespace.isPresent()) {
                         task.namespace.set(successSpec.publishNamespace)
                     } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-                        def repo = imageSpec.repository.get()
-                        def lastSlash = repo.lastIndexOf('/')
-                        if (lastSlash >= 0) {
-                            task.namespace.set(repo.substring(0, lastSlash))
+                        def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                        if (repoParts.hasNamespace()) {
+                            task.namespace.set(repoParts.namespace)
                         }
                     } else if (imageSpec.namespace.isPresent()) {
                         task.namespace.set(imageSpec.namespace)
@@ -632,10 +622,8 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                         task.imageName.set(imageSpec.legacyName)
                     } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                         // Repository mode - extract image name (e.g., "myorg/myapp" -> "myapp")
-                        def repo = imageSpec.repository.get()
-                        def lastSlash = repo.lastIndexOf('/')
-                        def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
-                        task.imageName.set(extractedImageName)
+                        def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                        task.imageName.set(repoParts.imageName)
                     } else {
                         task.imageName.set(sanitizedImageName)
                     }
@@ -649,10 +637,9 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     if (targetSpec.namespace.isPresent()) {
                         task.namespace.set(targetSpec.namespace)
                     } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-                        def repo = imageSpec.repository.get()
-                        def lastSlash = repo.lastIndexOf('/')
-                        if (lastSlash >= 0) {
-                            task.namespace.set(repo.substring(0, lastSlash))
+                        def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                        if (repoParts.hasNamespace()) {
+                            task.namespace.set(repoParts.namespace)
                         }
                     } else if (imageSpec.namespace.isPresent()) {
                         task.namespace.set(imageSpec.namespace)

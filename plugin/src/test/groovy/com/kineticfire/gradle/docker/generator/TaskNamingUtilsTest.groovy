@@ -411,6 +411,132 @@ class TaskNamingUtilsTest extends Specification {
         TaskNamingUtils.normalizeName("-_-_-") == ""
     }
 
+    // ===== PARSE REPOSITORY TESTS =====
+
+    def "parseRepository handles null input"() {
+        when:
+        def result = TaskNamingUtils.parseRepository(null)
+
+        then:
+        result.namespace == ""
+        result.imageName == ""
+        !result.hasNamespace()
+    }
+
+    def "parseRepository handles empty string"() {
+        when:
+        def result = TaskNamingUtils.parseRepository("")
+
+        then:
+        result.namespace == ""
+        result.imageName == ""
+        !result.hasNamespace()
+    }
+
+    def "parseRepository handles simple image name without slash"() {
+        when:
+        def result = TaskNamingUtils.parseRepository("myapp")
+
+        then:
+        result.namespace == ""
+        result.imageName == "myapp"
+        !result.hasNamespace()
+    }
+
+    def "parseRepository handles namespace and image name"() {
+        when:
+        def result = TaskNamingUtils.parseRepository("myorg/myapp")
+
+        then:
+        result.namespace == "myorg"
+        result.imageName == "myapp"
+        result.hasNamespace()
+    }
+
+    def "parseRepository handles nested namespace"() {
+        when:
+        def result = TaskNamingUtils.parseRepository("myorg/sub/myapp")
+
+        then:
+        result.namespace == "myorg/sub"
+        result.imageName == "myapp"
+        result.hasNamespace()
+    }
+
+    def "parseRepository handles deeply nested namespace"() {
+        when:
+        def result = TaskNamingUtils.parseRepository("docker.io/myorg/team/project/myapp")
+
+        then:
+        result.namespace == "docker.io/myorg/team/project"
+        result.imageName == "myapp"
+        result.hasNamespace()
+    }
+
+    def "parseRepository handles various repository formats"() {
+        expect:
+        def result = TaskNamingUtils.parseRepository(input)
+        result.namespace == expectedNamespace
+        result.imageName == expectedImageName
+
+        where:
+        input                       | expectedNamespace          | expectedImageName
+        "alpine"                    | ""                         | "alpine"
+        "library/alpine"            | "library"                  | "alpine"
+        "myuser/myapp"              | "myuser"                   | "myapp"
+        "gcr.io/project/image"      | "gcr.io/project"           | "image"
+        "registry.example.com/ns/app" | "registry.example.com/ns"| "app"
+    }
+
+    // ===== REPOSITORY PARTS IMMUTABILITY TESTS =====
+
+    def "RepositoryParts is immutable"() {
+        given:
+        def parts = new TaskNamingUtils.RepositoryParts("myorg", "myapp")
+
+        expect:
+        parts.namespace == "myorg"
+        parts.imageName == "myapp"
+        parts.hasNamespace()
+    }
+
+    def "RepositoryParts hasNamespace returns false for empty namespace"() {
+        given:
+        def parts = new TaskNamingUtils.RepositoryParts("", "myapp")
+
+        expect:
+        !parts.hasNamespace()
+    }
+
+    def "RepositoryParts hasNamespace returns false for null namespace"() {
+        given:
+        def parts = new TaskNamingUtils.RepositoryParts(null, "myapp")
+
+        expect:
+        !parts.hasNamespace()
+    }
+
+    def "RepositoryParts equals and hashCode work correctly"() {
+        given:
+        def parts1 = new TaskNamingUtils.RepositoryParts("myorg", "myapp")
+        def parts2 = new TaskNamingUtils.RepositoryParts("myorg", "myapp")
+        def parts3 = new TaskNamingUtils.RepositoryParts("other", "myapp")
+
+        expect:
+        parts1 == parts2
+        parts1.hashCode() == parts2.hashCode()
+        parts1 != parts3
+    }
+
+    def "RepositoryParts toString provides useful output"() {
+        given:
+        def parts = new TaskNamingUtils.RepositoryParts("myorg", "myapp")
+
+        expect:
+        parts.toString().contains("myorg")
+        parts.toString().contains("myapp")
+    }
+
     // ===== PRIVATE CONSTRUCTOR TEST =====
 
     def "private constructor prevents instantiation"() {

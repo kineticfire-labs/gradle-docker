@@ -9,6 +9,14 @@ clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
+P1 - done
+P5
+P4
+P8
+P7
+P6
+P3
+P2
 
 
 

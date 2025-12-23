@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.service
 
 import com.kineticfire.gradle.docker.Lifecycle
 import com.kineticfire.gradle.docker.extension.DockerExtension
+import com.kineticfire.gradle.docker.generator.TaskNamingUtils
 import com.kineticfire.gradle.docker.extension.DockerTestExtension
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
@@ -195,9 +196,8 @@ class DockerProjectTranslator {
         }
         // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
         if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-            def repo = imageSpec.repository.get()
-            def lastSlash = repo.lastIndexOf('/')
-            return lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
+            def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+            return repoParts.imageName
         }
         if (imageSpec.sourceRefImageName.isPresent() && !imageSpec.sourceRefImageName.get().isEmpty()) {
             return imageSpec.sourceRefImageName.get()
@@ -233,10 +233,8 @@ class DockerProjectTranslator {
                 image.imageName.set(imageSpec.legacyName)
             } else if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
                 // Repository mode - extract image name from repository (e.g., "myorg/myapp" -> "myapp")
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                def extractedImageName = lastSlash >= 0 ? repo.substring(lastSlash + 1) : repo
-                image.imageName.set(extractedImageName)
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                image.imageName.set(repoParts.imageName)
             } else {
                 // Fallback: use derived name as the Docker image name
                 image.imageName.set(derivedImageName)
@@ -246,12 +244,9 @@ class DockerProjectTranslator {
 
             // Handle namespace - repository takes precedence if set
             if (imageSpec.repository.isPresent() && !imageSpec.repository.get().isEmpty()) {
-                def repo = imageSpec.repository.get()
-                def lastSlash = repo.lastIndexOf('/')
-                if (lastSlash >= 0) {
-                    // Extract namespace from repository (e.g., "myorg/myapp" -> "myorg")
-                    def extractedNamespace = repo.substring(0, lastSlash)
-                    image.namespace.set(extractedNamespace)
+                def repoParts = TaskNamingUtils.parseRepository(imageSpec.repository.get())
+                if (repoParts.hasNamespace()) {
+                    image.namespace.set(repoParts.namespace)
                 }
             } else if (imageSpec.namespace.isPresent()) {
                 image.namespace.set(imageSpec.namespace)
