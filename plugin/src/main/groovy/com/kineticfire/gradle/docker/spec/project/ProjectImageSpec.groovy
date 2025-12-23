@@ -507,6 +507,95 @@ abstract class ProjectImageSpec implements Named {
         return spec.computeReference()
     }
 
+    // === VALIDATION ===
+
+    /**
+     * Validates the image spec configuration for mutual exclusivity rules.
+     *
+     * Validation rules:
+     * 1. imageName and repository are mutually exclusive
+     * 2. jarFrom, contextTask, contextDir, and sourceRef mode are mutually exclusive
+     * 3. pullPolicy is only valid in Source Reference Mode
+     *
+     * @throws org.gradle.api.GradleException if validation fails
+     */
+    void validate() {
+        validateImageNameAndRepository()
+        validateContextSourceExclusivity()
+        validatePullPolicyMode()
+    }
+
+    /**
+     * Validates that imageName and repository are not both set.
+     * These are mutually exclusive ways to specify the image name.
+     */
+    private void validateImageNameAndRepository() {
+        boolean hasImageName = imageName.isPresent() && !imageName.get().isEmpty()
+        boolean hasRepository = repository.isPresent() && !repository.get().isEmpty()
+
+        if (hasImageName && hasRepository) {
+            throw new org.gradle.api.GradleException(
+                "Configuration error in image '${name}': " +
+                "'imageName' and 'repository' are mutually exclusive. " +
+                "Use 'imageName' for the simple image name (e.g., 'myapp'), or " +
+                "'repository' for namespace/imageName format (e.g., 'myorg/myapp'). " +
+                "Remove one of these properties."
+            )
+        }
+    }
+
+    /**
+     * Validates that only one context/source method is configured.
+     * jarFrom, contextTask, contextDir, and sourceRef mode are mutually exclusive.
+     */
+    private void validateContextSourceExclusivity() {
+        List<String> configuredSources = []
+
+        if (jarFrom.isPresent() && !jarFrom.get().isEmpty()) {
+            configuredSources << 'jarFrom'
+        }
+        if (contextTaskName.isPresent() && !contextTaskName.get().isEmpty()) {
+            configuredSources << 'contextTask'
+        }
+        if (contextDir.isPresent() && !contextDir.get().isEmpty()) {
+            configuredSources << 'contextDir'
+        }
+        if (isSourceRefMode()) {
+            configuredSources << 'sourceRef (or sourceRef components)'
+        }
+
+        if (configuredSources.size() > 1) {
+            throw new org.gradle.api.GradleException(
+                "Configuration error in image '${name}': " +
+                "Multiple source/context methods configured: ${configuredSources.join(', ')}. " +
+                "These are mutually exclusive. Choose exactly one: " +
+                "'jarFrom' (copy JAR to context), " +
+                "'contextTask' (use task output as context), " +
+                "'contextDir' (use directory as context), or " +
+                "'sourceRef' (use existing image, skip build). " +
+                "Remove all but one of these properties."
+            )
+        }
+    }
+
+    /**
+     * Validates that pullPolicy is only configured in Source Reference Mode.
+     * pullPolicy has no effect in Build Mode since the image is built locally.
+     */
+    private void validatePullPolicyMode() {
+        // Check if pullPolicy has been explicitly changed from the default NEVER
+        boolean hasPullPolicy = pullPolicy.isPresent() && pullPolicy.get() != PullPolicy.NEVER
+
+        if (hasPullPolicy && !isSourceRefMode()) {
+            throw new org.gradle.api.GradleException(
+                "Configuration error in image '${name}': " +
+                "'pullPolicy' is only applicable in Source Reference Mode. " +
+                "Currently configured as '${pullPolicy.get()}' but no sourceRef is configured. " +
+                "Either remove 'pullPolicy' or configure a 'sourceRef' to use an existing image."
+            )
+        }
+    }
+
     /**
      * Inner class for component-based source reference configuration.
      */

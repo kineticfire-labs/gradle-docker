@@ -100,6 +100,11 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             return
         }
 
+        // Validate each image spec for mutual exclusivity rules
+        allImages.each { imageSpec ->
+            imageSpec.validate()
+        }
+
         // Validate and get primary image
         def primaryImage = spec.primaryImage
         if (primaryImage == null && allImages.size() > 1) {

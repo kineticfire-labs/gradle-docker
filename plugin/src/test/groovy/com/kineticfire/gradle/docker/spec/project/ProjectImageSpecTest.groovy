@@ -615,4 +615,399 @@ class ProjectImageSpecTest extends Specification {
         then:
         imageSpec.getEffectiveSourceRef() == 'explicit-ref/image:tag'
     }
+
+    // ===== VALIDATION TESTS =====
+
+    // --- validate() method tests ---
+
+    def "validate passes with valid build mode configuration using jarFrom"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes with valid build mode configuration using contextDir"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes with valid build mode configuration using contextTask"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.contextTaskName.set('prepareContext')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes with valid sourceRef mode configuration"() {
+        when:
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.IF_MISSING)
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes with repository instead of imageName"() {
+        when:
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when no context/source is configured (default build)"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // --- imageName and repository mutual exclusivity tests ---
+
+    def "validate fails when both imageName and repository are set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.imageName.set('myapp')
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("'imageName' and 'repository' are mutually exclusive")
+        e.message.contains("testImage")
+    }
+
+    def "validate passes when only imageName is set"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when only repository is set"() {
+        when:
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when imageName is empty and repository is set"() {
+        when:
+        imageSpec.imageName.set('')
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when repository is empty and imageName is set"() {
+        when:
+        imageSpec.imageName.set('myapp')
+        imageSpec.repository.set('')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // --- context/source mutual exclusivity tests ---
+
+    def "validate fails when jarFrom and contextDir are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("jarFrom")
+        e.message.contains("contextDir")
+    }
+
+    def "validate fails when jarFrom and contextTask are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.contextTaskName.set('prepareContext')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("jarFrom")
+        e.message.contains("contextTask")
+    }
+
+    def "validate fails when jarFrom and sourceRef are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("jarFrom")
+        e.message.contains("sourceRef")
+    }
+
+    def "validate fails when contextDir and contextTask are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.contextTaskName.set('prepareContext')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("contextDir")
+        e.message.contains("contextTask")
+    }
+
+    def "validate fails when contextDir and sourceRef are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("contextDir")
+        e.message.contains("sourceRef")
+    }
+
+    def "validate fails when contextTask and sourceRef are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.contextTaskName.set('prepareContext')
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("contextTask")
+        e.message.contains("sourceRef")
+    }
+
+    def "validate fails when three source methods are configured"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+    }
+
+    def "validate fails when all four source methods are configured"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.contextTaskName.set('prepareContext')
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+    }
+
+    def "validate passes when empty jarFrom with other source"() {
+        when:
+        imageSpec.jarFrom.set('')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when empty contextDir with other source"() {
+        when:
+        imageSpec.contextDir.set('')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when empty contextTaskName with other source"() {
+        when:
+        imageSpec.contextTaskName.set('')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // --- sourceRef component triggers sourceRef mode ---
+
+    def "validate fails when jarFrom and sourceRefImageName are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.sourceRefImageName.set('nginx')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("jarFrom")
+        e.message.contains("sourceRef")
+    }
+
+    def "validate fails when contextDir and sourceRefRepository are both set"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.sourceRefRepository.set('library/nginx')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Multiple source/context methods configured")
+        e.message.contains("contextDir")
+        e.message.contains("sourceRef")
+    }
+
+    // --- pullPolicy validation tests ---
+
+    def "validate fails when pullPolicy is IF_MISSING without sourceRef"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.IF_MISSING)
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("'pullPolicy' is only applicable in Source Reference Mode")
+        e.message.contains("IF_MISSING")
+    }
+
+    def "validate fails when pullPolicy is ALWAYS without sourceRef"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.ALWAYS)
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("'pullPolicy' is only applicable in Source Reference Mode")
+        e.message.contains("ALWAYS")
+    }
+
+    def "validate passes when pullPolicy is NEVER without sourceRef"() {
+        when:
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.NEVER)
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when pullPolicy is IF_MISSING with sourceRef"() {
+        when:
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.IF_MISSING)
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when pullPolicy is ALWAYS with sourceRef"() {
+        when:
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.ALWAYS)
+        imageSpec.sourceRef.set('docker.io/library/nginx:latest')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes when pullPolicy is IF_MISSING with sourceRefImageName"() {
+        when:
+        imageSpec.pullPolicy.set(com.kineticfire.gradle.docker.PullPolicy.IF_MISSING)
+        imageSpec.sourceRefImageName.set('nginx')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validate passes with default pullPolicy NEVER and no sourceRef"() {
+        when:
+        // Default pullPolicy is NEVER, which should be valid in build mode
+        imageSpec.imageName.set('myapp')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.validate()
+
+        then:
+        noExceptionThrown()
+    }
+
+    // --- Error message clarity tests ---
+
+    def "validation error messages include image name"() {
+        when:
+        imageSpec.setName('myTestImage')
+        imageSpec.imageName.set('myapp')
+        imageSpec.repository.set('myorg/myapp')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("myTestImage")
+    }
+
+    def "validation error messages are actionable with suggestions"() {
+        when:
+        imageSpec.setName('testImage')
+        imageSpec.jarFrom.set(':app:jar')
+        imageSpec.contextDir.set('docker/context')
+        imageSpec.validate()
+
+        then:
+        def e = thrown(org.gradle.api.GradleException)
+        e.message.contains("Choose exactly one")
+        e.message.contains("Remove all but one")
+    }
 }
