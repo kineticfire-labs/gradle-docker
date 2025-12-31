@@ -173,7 +173,9 @@ final class PipelineStateFile {
             def json = JsonOutput.prettyPrint(JsonOutput.toJson(data))
             
             // Write to temp file first for atomic operation
-            tempFile = new File(file.parentFile, "${file.name}.tmp")
+            // Use unique suffix to prevent concurrent writes from interfering with each other
+            def uniqueSuffix = "${Thread.currentThread().id}-${System.nanoTime()}"
+            tempFile = new File(file.parentFile, "${file.name}.${uniqueSuffix}.tmp")
             tempFile.text = json
             
             // Attempt atomic move

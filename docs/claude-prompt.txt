@@ -13,7 +13,7 @@ P1 - done
 P5 - done
 P4 - done
 P8 - done
-P7
+P7 - done
 P6
 P3
 P2

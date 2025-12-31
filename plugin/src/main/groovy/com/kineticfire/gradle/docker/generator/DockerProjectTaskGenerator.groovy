@@ -190,8 +190,37 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
     }
 
     /**
-     * Derive the image name from the spec or project name.
-     * Priority: imageName > name (deprecated) > repository > blockName > sourceRefImageName > project.name
+     * Derive the image name from the spec using a priority-based fallback strategy.
+     *
+     * The image name is resolved using the following priority order (highest to lowest):
+     *
+     * 1. **imageName** (highest priority) - Explicit image name configured via `imageName.set("...")`.
+     *    Rationale: When a user explicitly sets the image name, it should always be honored
+     *    as the definitive choice, regardless of other configurations.
+     *
+     * 2. **legacyName** - Deprecated 'name' property (renamed for Named interface compatibility).
+     *    Rationale: Provides backward compatibility for older configurations that used the
+     *    'name' property before it was deprecated in favor of 'imageName'.
+     *
+     * 3. **repository** - Extracts image name from repository string (e.g., "myorg/myapp" → "myapp").
+     *    Rationale: In repository mode, users specify the full image path; the image name is
+     *    derived from the last path segment, enabling a single-property configuration style.
+     *
+     * 4. **blockName** - DSL block name (e.g., "myApp" from `images { myApp { } }`).
+     *    Rationale: Convention-over-configuration: the DSL block name is a natural identifier
+     *    that users intentionally choose, making it a sensible default when no explicit name is set.
+     *
+     * 5. **sourceRefImageName** - Image name from source reference mode configuration.
+     *    Rationale: In source reference mode (pulling existing images), the source image name
+     *    serves as the logical identifier for the image being processed.
+     *
+     * 6. **project.name** (lowest priority) - Gradle project name as ultimate fallback.
+     *    Rationale: Provides a reasonable default for minimal configurations where no image
+     *    naming is specified, using the project name as a sensible last resort.
+     *
+     * @param imageSpec The image specification containing naming configuration
+     * @param project The Gradle project (for fallback to project name)
+     * @return The resolved image name, never null
      */
     private String deriveImageName(ProjectImageSpec imageSpec, Project project) {
         // Explicit imageName takes highest priority
@@ -698,43 +727,66 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
         def resultFile = project.layout.buildDirectory.file("${STATE_DIR}/test-result.json")
 
-        // Cache task lookups to avoid multiple findByName calls for the same task
-        def composeUpTask = composeUpTaskName != null ? project.tasks.findByName(composeUpTaskName) : null
-        def composeDownTask = composeDownTaskName != null ? project.tasks.findByName(composeDownTaskName) : null
-        def testTask = project.tasks.findByName(testTaskName)
-
         // Wire compose tasks if configured
-        if (composeUpTask != null) {
+        if (composeUpTaskName != null && taskExists(project, composeUpTaskName)) {
             // composeUp depends on ALL build tasks (all images must be built first)
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
             }
 
             // Test task depends on composeUp, finalizedBy composeDown
-            if (testTask != null) {
+            if (taskExists(project, testTaskName)) {
                 def lifecycle = testSpec.lifecycle.getOrElse(Lifecycle.CLASS)
                 if (lifecycle == Lifecycle.CLASS) {
                     wireTaskDependency(project, testTaskName, composeUpTaskName)
-                    if (composeDownTask != null) {
+                    if (composeDownTaskName != null && taskExists(project, composeDownTaskName)) {
                         wireFinalizedBy(project, testTaskName, composeDownTaskName)
                     }
                 }
 
                 // Configure test task to write result file
-                configureTestTaskResultFile(testTask, resultFile)
+                project.tasks.named(testTaskName).configure { task ->
+                    if (task instanceof org.gradle.api.tasks.testing.Test) {
+                        task.outputs.file(resultFile)
+                        task.doLast {
+                            def success = task.state.failure == null
+                            def message = success ? "Tests passed" : (task.state.failure?.message ?: "Tests failed")
+                            PipelineStateFile.writeTestResult(
+                                resultFile.get().asFile,
+                                success,
+                                message,
+                                System.currentTimeMillis()
+                            )
+                        }
+                    }
+                }
             }
-        } else if (testTask != null) {
+        } else if (taskExists(project, testTaskName)) {
             // No compose - test depends directly on ALL build tasks
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, testTaskName, buildTaskProvider.name)
             }
 
             // Configure test task to write result file
-            configureTestTaskResultFile(testTask, resultFile)
+            project.tasks.named(testTaskName).configure { task ->
+                if (task instanceof org.gradle.api.tasks.testing.Test) {
+                    task.outputs.file(resultFile)
+                    task.doLast {
+                        def success = task.state.failure == null
+                        def message = success ? "Tests passed" : (task.state.failure?.message ?: "Tests failed")
+                        PipelineStateFile.writeTestResult(
+                            resultFile.get().asFile,
+                            success,
+                            message,
+                            System.currentTimeMillis()
+                        )
+                    }
+                }
+            }
         }
 
         // Tag on success depends on test
-        if (testTask != null) {
+        if (taskExists(project, testTaskName)) {
             tagOnSuccessTaskProvider.configure { task ->
                 task.dependsOn(testTaskName)
                 task.mustRunAfter(testTaskName)
@@ -756,29 +808,6 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 } else {
                     task.dependsOn(tagOnSuccessTaskProvider)
                 }
-            }
-        }
-    }
-
-    /**
-     * Configure a test task to write its result to a file.
-     * Extracted as a helper to avoid code duplication.
-     *
-     * @param testTask The test task to configure
-     * @param resultFile The provider for the result file location
-     */
-    private void configureTestTaskResultFile(Task testTask, def resultFile) {
-        if (testTask instanceof org.gradle.api.tasks.testing.Test) {
-            testTask.outputs.file(resultFile)
-            testTask.doLast {
-                def success = testTask.state.failure == null
-                def message = success ? "Tests passed" : (testTask.state.failure?.message ?: "Tests failed")
-                PipelineStateFile.writeTestResult(
-                    resultFile.get().asFile,
-                    success,
-                    message,
-                    System.currentTimeMillis()
-                )
             }
         }
     }

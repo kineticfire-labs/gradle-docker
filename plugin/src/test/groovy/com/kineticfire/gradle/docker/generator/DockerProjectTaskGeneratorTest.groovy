@@ -1793,4 +1793,268 @@ class DockerProjectTaskGeneratorTest extends Specification {
         publishTask != null
         publishTask.imageName.isPresent()
     }
+
+    // ===== IMAGE NAME PRIORITY TESTS =====
+    // These tests verify the priority order documented in deriveImageName():
+    // 1. imageName (highest) > 2. legacyName > 3. repository > 4. blockName > 5. sourceRefImageName > 6. project.name
+    // Note: imageName and repository are mutually exclusive per validation rules, so we cannot test them together
+
+    def "imageName takes priority over legacyName"() {
+        given:
+        extension.images {
+            myimg {
+                imageName.set('priority-image')
+                legacyName.set('should-be-ignored')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildPriorityimage') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'priority-image'
+    }
+
+    def "imageName takes priority over blockName"() {
+        given:
+        extension.images {
+            blockNameIgnored {
+                imageName.set('explicit-wins')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildExplicitwins') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'explicit-wins'
+    }
+
+    def "legacyName takes priority over blockName"() {
+        given:
+        extension.images {
+            blockNameIgnored {
+                legacyName.set('legacy-wins')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildLegacywins') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'legacy-wins'
+    }
+
+    def "repository takes priority over blockName"() {
+        given:
+        extension.images {
+            blockNameShouldBeIgnored {
+                repository.set('org/repo-takes-priority')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Task name uses sanitized image name derived from repository
+        def buildTask = project.tasks.findByName('dockerBuildRepotakespriority') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'repo-takes-priority'
+    }
+
+    def "blockName used when no other name properties set"() {
+        given:
+        extension.images {
+            myBlockName {
+                contextDir.set('src/main/docker')
+                // No imageName, legacyName, repository, or sourceRefImageName set
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use blockName 'myBlockName' (sanitized to 'myblockname')
+        project.tasks.findByName('dockerBuildMyblockname') != null
+    }
+
+    def "sourceRef mode creates tag task without build task"() {
+        given:
+        // In sourceRef mode, build task is skipped since we use an existing image
+        extension.images {
+            nginx {
+                sourceRef.set('nginx:1.25')
+                sourceRefImageName.set('nginx')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Tag task should be created for sourceRef mode
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        // imageName property should be present (value derived from block name or sourceRefImageName)
+        tagTask.imageName.isPresent()
+        // Lifecycle task should exist
+        project.tasks.findByName('runDockerProject') != null
+    }
+
+    def "task naming uses deriveImageName with empty string fallthrough"() {
+        given:
+        // When imageName is set to empty string, deriveImageName() falls through to legacyName
+        // This affects task naming (uses sanitized derived name)
+        extension.images {
+            myimg {
+                imageName.set('')  // Empty string causes deriveImageName to fall through
+                legacyName.set('fallback-to-legacy')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Task is named using deriveImageName() which falls through empty imageName to legacyName
+        // 'fallback-to-legacy' sanitized becomes 'fallbacktolegacy', capitalized becomes 'Fallbacktolegacy'
+        def buildTask = project.tasks.findByName('dockerBuildFallbacktolegacy') as DockerBuildTask
+        buildTask != null
+        // Lifecycle task should exist
+        project.tasks.findByName('runDockerProject') != null
+    }
+
+    def "empty legacyName falls through to blockName"() {
+        given:
+        extension.images {
+            useBlockName {
+                legacyName.set('')  // Empty string should fall through
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use sanitized blockName 'useblockname'
+        project.tasks.findByName('dockerBuildUseblockname') != null
+    }
+
+    def "empty repository falls through to blockName"() {
+        given:
+        extension.images {
+            useThisBlockName {
+                repository.set('')  // Empty string should fall through
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use sanitized blockName
+        project.tasks.findByName('dockerBuildUsethisblockname') != null
+    }
+
+    def "imageName and legacyName priority - imageName wins"() {
+        given:
+        // Test that when both imageName and legacyName are set, imageName wins
+        extension.images {
+            blockIgnored {
+                imageName.set('winner')
+                legacyName.set('loser')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildWinner') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'winner'
+    }
+
+    def "nested repository path extracts only final segment as image name"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('org/subgroup/nested/final-image')
+                contextDir.set('src/main/docker')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def buildTask = project.tasks.findByName('dockerBuildFinalimage') as DockerBuildTask
+        buildTask != null
+        buildTask.imageName.get() == 'final-image'
+        buildTask.namespace.get() == 'org/subgroup/nested'
+    }
+
+    def "tag on success task uses imageName when set"() {
+        given:
+        extension.images {
+            myimg {
+                imageName.set('tagged-app')
+                namespace.set('myns')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        // TagOnSuccessTask should include namespace in the imageName
+        tagTask.imageName.get() == 'myns/tagged-app'
+    }
+
+    def "tag on success task uses repository when imageName not set"() {
+        given:
+        extension.images {
+            myimg {
+                repository.set('myorg/tagged-repo')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        // TagOnSuccessTask uses full repository for imageName
+        tagTask.imageName.get() == 'myorg/tagged-repo'
+    }
 }
