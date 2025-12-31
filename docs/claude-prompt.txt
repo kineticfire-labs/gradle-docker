@@ -12,7 +12,7 @@ clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 P1 - done
 P5 - done
 P4 - done
-P8
+P8 - done
 P7
 P6
 P3

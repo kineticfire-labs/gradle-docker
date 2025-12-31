@@ -698,66 +698,43 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
         def resultFile = project.layout.buildDirectory.file("${STATE_DIR}/test-result.json")
 
+        // Cache task lookups to avoid multiple findByName calls for the same task
+        def composeUpTask = composeUpTaskName != null ? project.tasks.findByName(composeUpTaskName) : null
+        def composeDownTask = composeDownTaskName != null ? project.tasks.findByName(composeDownTaskName) : null
+        def testTask = project.tasks.findByName(testTaskName)
+
         // Wire compose tasks if configured
-        if (composeUpTaskName != null && taskExists(project, composeUpTaskName)) {
+        if (composeUpTask != null) {
             // composeUp depends on ALL build tasks (all images must be built first)
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
             }
 
             // Test task depends on composeUp, finalizedBy composeDown
-            if (taskExists(project, testTaskName)) {
+            if (testTask != null) {
                 def lifecycle = testSpec.lifecycle.getOrElse(Lifecycle.CLASS)
                 if (lifecycle == Lifecycle.CLASS) {
                     wireTaskDependency(project, testTaskName, composeUpTaskName)
-                    if (composeDownTaskName != null && taskExists(project, composeDownTaskName)) {
+                    if (composeDownTask != null) {
                         wireFinalizedBy(project, testTaskName, composeDownTaskName)
                     }
                 }
 
                 // Configure test task to write result file
-                project.tasks.named(testTaskName).configure { task ->
-                    if (task instanceof org.gradle.api.tasks.testing.Test) {
-                        task.outputs.file(resultFile)
-                        task.doLast {
-                            def success = task.state.failure == null
-                            def message = success ? "Tests passed" : (task.state.failure?.message ?: "Tests failed")
-                            PipelineStateFile.writeTestResult(
-                                resultFile.get().asFile,
-                                success,
-                                message,
-                                System.currentTimeMillis()
-                            )
-                        }
-                    }
-                }
+                configureTestTaskResultFile(testTask, resultFile)
             }
-        } else if (taskExists(project, testTaskName)) {
+        } else if (testTask != null) {
             // No compose - test depends directly on ALL build tasks
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, testTaskName, buildTaskProvider.name)
             }
 
             // Configure test task to write result file
-            project.tasks.named(testTaskName).configure { task ->
-                if (task instanceof org.gradle.api.tasks.testing.Test) {
-                    task.outputs.file(resultFile)
-                    task.doLast {
-                        def success = task.state.failure == null
-                        def message = success ? "Tests passed" : (task.state.failure?.message ?: "Tests failed")
-                        PipelineStateFile.writeTestResult(
-                            resultFile.get().asFile,
-                            success,
-                            message,
-                            System.currentTimeMillis()
-                        )
-                    }
-                }
-            }
+            configureTestTaskResultFile(testTask, resultFile)
         }
 
         // Tag on success depends on test
-        if (taskExists(project, testTaskName)) {
+        if (testTask != null) {
             tagOnSuccessTaskProvider.configure { task ->
                 task.dependsOn(testTaskName)
                 task.mustRunAfter(testTaskName)
@@ -779,6 +756,29 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                 } else {
                     task.dependsOn(tagOnSuccessTaskProvider)
                 }
+            }
+        }
+    }
+
+    /**
+     * Configure a test task to write its result to a file.
+     * Extracted as a helper to avoid code duplication.
+     *
+     * @param testTask The test task to configure
+     * @param resultFile The provider for the result file location
+     */
+    private void configureTestTaskResultFile(Task testTask, def resultFile) {
+        if (testTask instanceof org.gradle.api.tasks.testing.Test) {
+            testTask.outputs.file(resultFile)
+            testTask.doLast {
+                def success = testTask.state.failure == null
+                def message = success ? "Tests passed" : (testTask.state.failure?.message ?: "Tests failed")
+                PipelineStateFile.writeTestResult(
+                    resultFile.get().asFile,
+                    success,
+                    message,
+                    System.currentTimeMillis()
+                )
             }
         }
     }

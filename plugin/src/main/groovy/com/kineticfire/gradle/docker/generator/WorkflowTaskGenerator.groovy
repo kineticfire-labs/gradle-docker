@@ -549,26 +549,26 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
      * Configure test task to write result file.
      */
     private void configureTestResultCapture(Project project, String testTaskName, String stateDir) {
-        if (!taskExists(project, testTaskName)) {
+        // Cache task lookup to avoid separate taskExists and named calls
+        def testTask = project.tasks.findByName(testTaskName)
+        if (testTask == null) {
             LOGGER.debug("Test task '{}' not found, skipping result capture configuration", testTaskName)
             return
         }
 
         def resultFile = project.layout.buildDirectory.file("${stateDir}/test-result.json")
 
-        project.tasks.named(testTaskName).configure { task ->
-            if (task instanceof org.gradle.api.tasks.testing.Test) {
-                task.outputs.file(resultFile)
-                task.doLast {
-                    def success = task.state.failure == null
-                    def message = success ? "Tests passed" : (task.state.failure?.message ?: "Tests failed")
-                    PipelineStateFile.writeTestResult(
-                        resultFile.get().asFile,
-                        success,
-                        message,
-                        System.currentTimeMillis()
-                    )
-                }
+        if (testTask instanceof org.gradle.api.tasks.testing.Test) {
+            testTask.outputs.file(resultFile)
+            testTask.doLast {
+                def success = testTask.state.failure == null
+                def message = success ? "Tests passed" : (testTask.state.failure?.message ?: "Tests failed")
+                PipelineStateFile.writeTestResult(
+                    resultFile.get().asFile,
+                    success,
+                    message,
+                    System.currentTimeMillis()
+                )
             }
         }
     }
@@ -593,37 +593,43 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         def lifecycle = testSpec.lifecycle.getOrElse(WorkflowLifecycle.CLASS)
         def delegateStackManagement = testSpec.delegateStackManagement.getOrElse(false)
 
+        // Cache task lookups to avoid multiple findByName calls for the same task
+        def buildTask = buildTaskName != null ? project.tasks.findByName(buildTaskName) : null
+        def composeUpTask = composeUpTaskName != null ? project.tasks.findByName(composeUpTaskName) : null
+        def composeDownTask = composeDownTaskName != null ? project.tasks.findByName(composeDownTaskName) : null
+        def testTask = project.tasks.findByName(testTaskName)
+
         // If METHOD lifecycle or delegating stack management, don't wire compose tasks
         if (lifecycle == WorkflowLifecycle.METHOD || delegateStackManagement) {
             // Test depends on build
-            if (buildTaskName != null && taskExists(project, buildTaskName) && taskExists(project, testTaskName)) {
+            if (buildTask != null && testTask != null) {
                 wireTaskDependency(project, testTaskName, buildTaskName)
             }
         } else {
             // CLASS lifecycle - wire compose tasks
-            if (composeUpTaskName != null && taskExists(project, composeUpTaskName)) {
+            if (composeUpTask != null) {
                 // composeUp depends on build
-                if (buildTaskName != null && taskExists(project, buildTaskName)) {
+                if (buildTask != null) {
                     wireTaskDependency(project, composeUpTaskName, buildTaskName)
                 }
 
                 // Test depends on composeUp
-                if (taskExists(project, testTaskName)) {
+                if (testTask != null) {
                     wireTaskDependency(project, testTaskName, composeUpTaskName)
 
                     // Test finalizedBy composeDown
-                    if (composeDownTaskName != null && taskExists(project, composeDownTaskName)) {
+                    if (composeDownTask != null) {
                         wireFinalizedBy(project, testTaskName, composeDownTaskName)
                     }
                 }
-            } else if (buildTaskName != null && taskExists(project, buildTaskName) && taskExists(project, testTaskName)) {
+            } else if (buildTask != null && testTask != null) {
                 // No compose - test depends directly on build
                 wireTaskDependency(project, testTaskName, buildTaskName)
             }
         }
 
         // Tag on success depends on test
-        if (tagOnSuccessTaskProvider != null && taskExists(project, testTaskName)) {
+        if (tagOnSuccessTaskProvider != null && testTask != null) {
             tagOnSuccessTaskProvider.configure { task ->
                 task.dependsOn(testTaskName)
                 task.mustRunAfter(testTaskName)
@@ -649,7 +655,7 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
         }
 
         // Cleanup runs after everything (finalizedBy)
-        if (cleanupTaskProvider != null && taskExists(project, testTaskName)) {
+        if (cleanupTaskProvider != null && testTask != null) {
             wireFinalizedBy(project, testTaskName, cleanupTaskProvider.name)
         }
     }
