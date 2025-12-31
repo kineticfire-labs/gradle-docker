@@ -467,6 +467,115 @@ class PipelineStateFileTest extends Specification {
         noExceptionThrown()
     }
 
+    // ===== ATOMIC WRITE TESTS =====
+
+    def "writeToFile does not leave temp file after successful write"() {
+        when:
+        PipelineStateFile.writeTestResult(tempFile, true, "Test", 123L)
+
+        then:
+        tempFile.exists()
+        !new File(tempFile.parentFile, "${tempFile.name}.tmp").exists()
+    }
+
+    def "writeToFile cleans up temp file on failure"() {
+        given:
+        // Create a file that can't be replaced (directory with same name)
+        def targetDir = tempDir.resolve("test-state.json").toFile()
+        targetDir.mkdirs()
+        def expectedTempFile = new File(targetDir.parentFile, "${targetDir.name}.tmp")
+
+        when:
+        PipelineStateFile.writeState(targetDir, [key: "value"])
+
+        then:
+        thrown(IllegalStateException)
+        // Temp file should be cleaned up even after failure
+        !expectedTempFile.exists()
+
+        cleanup:
+        targetDir.deleteDir()
+    }
+
+    def "atomicMoveFile can be called directly via reflection"() {
+        given:
+        def sourceFile = tempDir.resolve("source.json").toFile()
+        def targetFile = tempDir.resolve("target.json").toFile()
+        sourceFile.text = '{"test": "value"}'
+        
+        def method = PipelineStateFile.getDeclaredMethod("atomicMoveFile", File, File)
+        method.setAccessible(true)
+
+        when:
+        method.invoke(null, sourceFile, targetFile)
+
+        then:
+        !sourceFile.exists()
+        targetFile.exists()
+        targetFile.text == '{"test": "value"}'
+    }
+
+    def "cleanupTempFile handles null file safely"() {
+        given:
+        def method = PipelineStateFile.getDeclaredMethod("cleanupTempFile", File)
+        method.setAccessible(true)
+
+        when:
+        method.invoke(null, [null] as Object[])
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupTempFile handles non-existent file safely"() {
+        given:
+        def nonExistent = tempDir.resolve("non-existent.tmp").toFile()
+        def method = PipelineStateFile.getDeclaredMethod("cleanupTempFile", File)
+        method.setAccessible(true)
+
+        when:
+        method.invoke(null, nonExistent)
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "cleanupTempFile deletes existing temp file"() {
+        given:
+        def existingTemp = tempDir.resolve("existing.tmp").toFile()
+        existingTemp.text = "temp content"
+        def method = PipelineStateFile.getDeclaredMethod("cleanupTempFile", File)
+        method.setAccessible(true)
+
+        when:
+        method.invoke(null, existingTemp)
+
+        then:
+        !existingTemp.exists()
+    }
+
+    def "multiple concurrent writes to same file do not corrupt data"() {
+        given:
+        def results = Collections.synchronizedList([])
+        def threads = (1..10).collect { i ->
+            Thread.start {
+                PipelineStateFile.writeTestResult(tempFile, true, "Thread $i", System.currentTimeMillis())
+                results.add(i)
+            }
+        }
+
+        when:
+        threads*.join()
+
+        then:
+        results.size() == 10
+        tempFile.exists()
+        // Final file should be valid JSON
+        def result = PipelineStateFile.readTestResult(tempFile)
+        result.success == true
+        result.message.startsWith("Thread ")
+    }
+
     // ===== ADDITIONAL EDGE CASES =====
 
     def "readBuildResult handles missing imageName in JSON"() {
