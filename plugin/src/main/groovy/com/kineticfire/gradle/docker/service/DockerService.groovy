@@ -78,6 +78,30 @@ interface DockerService {
     CompletableFuture<Void> pullImage(String imageRef, AuthConfig auth)
     
     /**
+     * Remove a container by ID or name.
+     * This is a best-effort operation; failures are logged but do not throw exceptions.
+     * @param containerId Container ID or name to remove
+     * @return CompletableFuture with boolean indicating success (true) or failure (false)
+     */
+    CompletableFuture<Boolean> removeContainer(String containerId)
+    
+    /**
+     * Remove a network by ID or name.
+     * This is a best-effort operation; failures are logged but do not throw exceptions.
+     * @param networkId Network ID or name to remove
+     * @return CompletableFuture with boolean indicating success (true) or failure (false)
+     */
+    CompletableFuture<Boolean> removeNetwork(String networkId)
+    
+    /**
+     * Remove an image by reference (name:tag or ID).
+     * This is a best-effort operation; failures are logged but do not throw exceptions.
+     * @param imageRef Image reference to remove
+     * @return CompletableFuture with boolean indicating success (true) or failure (false)
+     */
+    CompletableFuture<Boolean> removeImage(String imageRef)
+    
+    /**
      * Clean up resources and close connections
      */
     void close()

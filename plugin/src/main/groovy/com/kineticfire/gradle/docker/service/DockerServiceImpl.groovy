@@ -562,6 +562,76 @@ abstract class DockerServiceImpl implements BuildService<BuildServiceParameters.
     }
 
     @Override
+    CompletableFuture<Boolean> removeContainer(String containerId) {
+        return CompletableFuture.supplyAsync({
+            try {
+                if (!containerId || containerId.trim().isEmpty()) {
+                    println "Skipping container removal: empty container ID"
+                    return false
+                }
+                println "Removing container: ${containerId}"
+                dockerClient.removeContainerCmd(containerId)
+                    .withForce(true)
+                    .exec()
+                println "Successfully removed container: ${containerId}"
+                return true
+            } catch (NotFoundException e) {
+                println "Container not found (already removed?): ${containerId}"
+                return true // Consider not-found as success for cleanup purposes
+            } catch (Exception e) {
+                System.err.println("Failed to remove container '${containerId}': ${e.message}")
+                return false
+            }
+        }, executorService)
+    }
+    
+    @Override
+    CompletableFuture<Boolean> removeNetwork(String networkId) {
+        return CompletableFuture.supplyAsync({
+            try {
+                if (!networkId || networkId.trim().isEmpty()) {
+                    println "Skipping network removal: empty network ID"
+                    return false
+                }
+                println "Removing network: ${networkId}"
+                dockerClient.removeNetworkCmd(networkId).exec()
+                println "Successfully removed network: ${networkId}"
+                return true
+            } catch (NotFoundException e) {
+                println "Network not found (already removed?): ${networkId}"
+                return true // Consider not-found as success for cleanup purposes
+            } catch (Exception e) {
+                System.err.println("Failed to remove network '${networkId}': ${e.message}")
+                return false
+            }
+        }, executorService)
+    }
+    
+    @Override
+    CompletableFuture<Boolean> removeImage(String imageRef) {
+        return CompletableFuture.supplyAsync({
+            try {
+                if (!imageRef || imageRef.trim().isEmpty()) {
+                    println "Skipping image removal: empty image reference"
+                    return false
+                }
+                println "Removing image: ${imageRef}"
+                dockerClient.removeImageCmd(imageRef)
+                    .withForce(true)
+                    .exec()
+                println "Successfully removed image: ${imageRef}"
+                return true
+            } catch (NotFoundException e) {
+                println "Image not found (already removed?): ${imageRef}"
+                return true // Consider not-found as success for cleanup purposes
+            } catch (Exception e) {
+                System.err.println("Failed to remove image '${imageRef}': ${e.message}")
+                return false
+            }
+        }, executorService)
+    }
+
+    @Override
     void close() {
         try {
             if (executorService && !executorService.isShutdown()) {

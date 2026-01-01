@@ -149,37 +149,36 @@ abstract class CleanupTask extends DefaultTask {
             }
         }
 
-        // Note: The following operations require DockerService methods that may need to be added.
-        // For now, we log what would be done. When DockerService is extended with these methods,
-        // the actual cleanup can be performed.
-
         // Cleanup containers if requested
         if (removeContainers.getOrElse(false)) {
             def containers = containerNames.getOrElse([])
-            if (!containers.isEmpty()) {
-                logger.lifecycle("Would remove {} container(s)", containers.size())
-                // Future: Iterate containers and remove them via DockerService
-                successCount++
+            if (!containers.isEmpty() && dockerService.isPresent()) {
+                logger.lifecycle("Removing {} container(s)", containers.size())
+                def results = removeContainers(containers)
+                successCount += results.successes
+                failureCount += results.failures
             }
         }
 
         // Cleanup networks if requested
         if (removeNetworks.getOrElse(false)) {
             def networks = networkNames.getOrElse([])
-            if (!networks.isEmpty()) {
-                logger.lifecycle("Would remove {} network(s)", networks.size())
-                // Future: Iterate networks and remove them via DockerService
-                successCount++
+            if (!networks.isEmpty() && dockerService.isPresent()) {
+                logger.lifecycle("Removing {} network(s)", networks.size())
+                def results = removeNetworks(networks)
+                successCount += results.successes
+                failureCount += results.failures
             }
         }
 
         // Cleanup images if requested
         if (removeImages.getOrElse(false)) {
             def images = imageNames.getOrElse([])
-            if (!images.isEmpty()) {
-                logger.lifecycle("Would remove {} image(s)", images.size())
-                // Future: Iterate images and remove them via DockerService
-                successCount++
+            if (!images.isEmpty() && dockerService.isPresent()) {
+                logger.lifecycle("Removing {} image(s)", images.size())
+                def results = removeImages(images)
+                successCount += results.successes
+                failureCount += results.failures
             }
         }
 
@@ -187,5 +186,107 @@ abstract class CleanupTask extends DefaultTask {
 
         // Cleanup tasks should not fail the build even if some operations fail.
         // The warnings logged above provide visibility into any issues.
+    }
+    
+    /**
+     * Result holder for cleanup operations.
+     * Tracks successful and failed cleanup counts.
+     */
+    protected static class CleanupResult {
+        int successes = 0
+        int failures = 0
+    }
+    
+    /**
+     * Remove containers via DockerService.
+     * Best-effort: continues on failure, logs warnings.
+     * 
+     * @param containers List of container IDs or names to remove
+     * @return CleanupResult with success and failure counts
+     */
+    protected CleanupResult removeContainers(List<String> containers) {
+        def result = new CleanupResult()
+        def service = dockerService.get()
+        
+        containers.each { containerId ->
+            try {
+                def future = service.removeContainer(containerId)
+                def success = future.get()
+                if (success) {
+                    result.successes++
+                    logger.lifecycle("Removed container: {}", containerId)
+                } else {
+                    result.failures++
+                    logger.warn("Failed to remove container: {}", containerId)
+                }
+            } catch (Exception e) {
+                result.failures++
+                logger.warn("Error removing container '{}': {}", containerId, e.message)
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * Remove networks via DockerService.
+     * Best-effort: continues on failure, logs warnings.
+     * 
+     * @param networks List of network IDs or names to remove
+     * @return CleanupResult with success and failure counts
+     */
+    protected CleanupResult removeNetworks(List<String> networks) {
+        def result = new CleanupResult()
+        def service = dockerService.get()
+        
+        networks.each { networkId ->
+            try {
+                def future = service.removeNetwork(networkId)
+                def success = future.get()
+                if (success) {
+                    result.successes++
+                    logger.lifecycle("Removed network: {}", networkId)
+                } else {
+                    result.failures++
+                    logger.warn("Failed to remove network: {}", networkId)
+                }
+            } catch (Exception e) {
+                result.failures++
+                logger.warn("Error removing network '{}': {}", networkId, e.message)
+            }
+        }
+        
+        return result
+    }
+    
+    /**
+     * Remove images via DockerService.
+     * Best-effort: continues on failure, logs warnings.
+     * 
+     * @param images List of image references to remove
+     * @return CleanupResult with success and failure counts
+     */
+    protected CleanupResult removeImages(List<String> images) {
+        def result = new CleanupResult()
+        def service = dockerService.get()
+        
+        images.each { imageRef ->
+            try {
+                def future = service.removeImage(imageRef)
+                def success = future.get()
+                if (success) {
+                    result.successes++
+                    logger.lifecycle("Removed image: {}", imageRef)
+                } else {
+                    result.failures++
+                    logger.warn("Failed to remove image: {}", imageRef)
+                }
+            } catch (Exception e) {
+                result.failures++
+                logger.warn("Error removing image '{}': {}", imageRef, e.message)
+            }
+        }
+        
+        return result
     }
 }

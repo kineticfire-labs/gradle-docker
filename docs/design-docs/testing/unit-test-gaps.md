@@ -182,6 +182,72 @@ We apply the "**Impure Shell, Pure Core**" pattern:
 **Integration Test Coverage:**
 - Implicitly tested in all docker scenarios (check if image exists before/after build)
 
+#### 7. removeContainer() - Container Removal
+
+**What:**
+- Executes `dockerClient.removeContainerCmd(containerId).withForce(true).exec()`
+- Removes Docker containers by ID or name
+- Best-effort cleanup operation (returns success/failure boolean)
+
+**Why Unit Testing is Impractical:**
+- Requires Docker daemon
+- Requires actual running containers to remove
+- Cannot mock Docker Java API's `RemoveContainerCmdImpl`
+
+**Mitigations:**
+- Method is minimal (~20 lines) with only Docker API calls
+- Returns boolean for easy mocking in CleanupTask tests
+- NotFoundException treated as success for cleanup purposes
+- All CleanupTask integration with this method is testable via mocks
+
+**Integration Test Coverage:**
+- All dockerTest integration scenarios that use CleanupTask verify container removal
+- Compose down scenarios implicitly test cleanup functionality
+
+#### 8. removeNetwork() - Network Removal
+
+**What:**
+- Executes `dockerClient.removeNetworkCmd(networkId).exec()`
+- Removes Docker networks by ID or name
+- Best-effort cleanup operation (returns success/failure boolean)
+
+**Why Unit Testing is Impractical:**
+- Requires Docker daemon
+- Requires actual networks to remove
+- Cannot mock Docker Java API's `RemoveNetworkCmdImpl`
+
+**Mitigations:**
+- Method is minimal (~20 lines) with only Docker API calls
+- Returns boolean for easy mocking in CleanupTask tests
+- NotFoundException treated as success for cleanup purposes
+- All CleanupTask integration with this method is testable via mocks
+
+**Integration Test Coverage:**
+- Integration scenarios that create and cleanup networks verify removal
+- Compose down scenarios implicitly test network cleanup
+
+#### 9. removeImage() - Image Removal
+
+**What:**
+- Executes `dockerClient.removeImageCmd(imageRef).withForce(true).exec()`
+- Removes Docker images by reference (name:tag or ID)
+- Best-effort cleanup operation (returns success/failure boolean)
+
+**Why Unit Testing is Impractical:**
+- Requires Docker daemon
+- Requires actual images to remove
+- Cannot mock Docker Java API's `RemoveImageCmdImpl`
+
+**Mitigations:**
+- Method is minimal (~20 lines) with only Docker API calls
+- Returns boolean for easy mocking in CleanupTask tests
+- NotFoundException treated as success for cleanup purposes
+- All CleanupTask integration with this method is testable via mocks
+
+**Integration Test Coverage:**
+- Integration scenarios with cleanup tasks verify image removal
+- Build and cleanup workflows test full lifecycle
+
 ### ExecLibraryComposeService - Process Execution
 
 **File:** `plugin/src/main/groovy/com/kineticfire/gradle/docker/service/ExecLibraryComposeService.groovy`
@@ -656,14 +722,14 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 
 | Component | External Calls | Lines | Justification |
 |-----------|----------------|-------|---------------|
-| DockerServiceImpl | Docker daemon | ~200 | Cannot mock Docker Java API |
+| DockerServiceImpl | Docker daemon | ~260 | Cannot mock Docker Java API |
 | DockerServiceImpl closures | Async Docker calls | ~1200 | CompletableFuture + Docker API |
 | DockerProjectTranslator closures | Gradle task config | ~350 | Requires Gradle execution context |
 | ExecLibraryComposeService | docker compose CLI | ~150 | Requires real containers |
 | DefaultProcessExecutor | Process execution | ~40 | Platform-dependent |
 | JUnit 5 Extensions | JUnit runtime | ~200 | Framework integration |
 | Spock Extensions | Spock runtime | ~150 | Framework integration |
-| **Total** | | **~2290** | All covered by integration tests |
+| **Total** | | **~2350** | All covered by integration tests |
 
 ### Coverage Achieved
 
@@ -680,12 +746,17 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 ✅ Pure logic has been extracted and unit tested
 ✅ I/O dependencies have been injected and mocked
 
-**Conclusion**: The remaining ~2290 lines of untestable code represent genuine external boundaries that cannot be practically unit tested. This includes Docker daemon interactions (~200 lines), DockerServiceImpl async closures (~1200 lines), DockerProjectTranslator Gradle task closures (~350 lines), Docker Compose CLI calls (~150 lines), process execution (~40 lines), and test framework integration for JUnit 5 (~200 lines) and Spock (~150 lines). All such code is verified by comprehensive integration tests.
+**Conclusion**: The remaining ~2350 lines of untestable code represent genuine external boundaries that cannot be practically unit tested. This includes Docker daemon interactions (~260 lines, including removal operations), DockerServiceImpl async closures (~1200 lines), DockerProjectTranslator Gradle task closures (~350 lines), Docker Compose CLI calls (~150 lines), process execution (~40 lines), and test framework integration for JUnit 5 (~200 lines) and Spock (~150 lines). All such code is verified by comprehensive integration tests.
 
 ---
 
 ## Document History
 
+- **2026-01-01**: Added DockerServiceImpl removal methods documentation. Implemented removeContainer(),
+  removeNetwork(), and removeImage() methods for CleanupTask support (~60 lines). Updated CleanupTask
+  to use actual DockerService calls instead of placeholder logging. Updated unit tests to verify
+  DockerService method invocations. Updated summary statistics to reflect ~2350 lines of documented
+  external boundaries.
 - **2025-12-22**: Improved `com.kineticfire.gradle.docker.junit.service` package coverage from 96.2%/94.4%
   to 96.7%/95.2% (instruction/branch). Added 12 new test cases to JUnitComposeServiceAsyncTest covering:
   tailLines edge cases, empty/null services, 'up' vs 'running' checks, 'restart' vs 'restarting' parsing,
@@ -710,6 +781,6 @@ The 5.5% branch gap represents defensive null checks on Gradle-managed abstract 
 - **2025-10-16**: Updated coverage statistics to reflect state before refactoring (81.1% instruction, 80.3% branch).
 - **2025-10-13**: Initial documentation of unit test coverage gaps.
 
-**Document Version**: 6.0
-**Last Updated**: 2025-12-22
+**Document Version**: 6.1
+**Last Updated**: 2026-01-01
 **Maintained By**: Development Team

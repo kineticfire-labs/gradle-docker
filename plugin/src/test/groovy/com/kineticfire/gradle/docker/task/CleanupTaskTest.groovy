@@ -179,17 +179,19 @@ class CleanupTaskTest extends Specification {
 
     // ===== CONTAINER CLEANUP TESTS =====
 
-    def "cleanup logs container removal when enabled"() {
+    def "cleanup removes containers when enabled"() {
         given:
         task.removeContainers.set(true)
         task.containerNames.set(["container1", "container2"])
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeContainer("container2") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
-        // Currently a placeholder - validates the configuration path
-        noExceptionThrown()
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeContainer("container2") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup skips container removal when disabled"() {
@@ -201,21 +203,53 @@ class CleanupTaskTest extends Specification {
         task.cleanup()
 
         then:
+        0 * mockDockerService.removeContainer(_)
+    }
+    
+    def "cleanup handles container removal failure gracefully"() {
+        given:
+        task.removeContainers.set(true)
+        task.containerNames.set(["container1"])
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(false)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(false)
         noExceptionThrown()
     }
-
-    // ===== NETWORK CLEANUP TESTS =====
-
-    def "cleanup logs network removal when enabled"() {
+    
+    def "cleanup handles container removal exception gracefully"() {
         given:
-        task.removeNetworks.set(true)
-        task.networkNames.set(["network1", "network2"])
+        task.removeContainers.set(true)
+        task.containerNames.set(["container1"])
+        def failingFuture = new CompletableFuture<Boolean>()
+        failingFuture.completeExceptionally(new RuntimeException("Container removal failed"))
+        mockDockerService.removeContainer("container1") >> failingFuture
 
         when:
         task.cleanup()
 
         then:
         noExceptionThrown()
+    }
+
+    // ===== NETWORK CLEANUP TESTS =====
+
+    def "cleanup removes networks when enabled"() {
+        given:
+        task.removeNetworks.set(true)
+        task.networkNames.set(["network1", "network2"])
+        mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeNetwork("network2") >> CompletableFuture.completedFuture(true)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeNetwork("network2") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup skips network removal when disabled"() {
@@ -227,15 +261,30 @@ class CleanupTaskTest extends Specification {
         task.cleanup()
 
         then:
+        0 * mockDockerService.removeNetwork(_)
+    }
+    
+    def "cleanup handles network removal failure gracefully"() {
+        given:
+        task.removeNetworks.set(true)
+        task.networkNames.set(["network1"])
+        mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(false)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(false)
         noExceptionThrown()
     }
-
-    // ===== IMAGE CLEANUP TESTS =====
-
-    def "cleanup logs image removal when enabled"() {
+    
+    def "cleanup handles network removal exception gracefully"() {
         given:
-        task.removeImages.set(true)
-        task.imageNames.set(["image1:latest", "image2:v1"])
+        task.removeNetworks.set(true)
+        task.networkNames.set(["network1"])
+        def failingFuture = new CompletableFuture<Boolean>()
+        failingFuture.completeExceptionally(new RuntimeException("Network removal failed"))
+        mockDockerService.removeNetwork("network1") >> failingFuture
 
         when:
         task.cleanup()
@@ -244,10 +293,56 @@ class CleanupTaskTest extends Specification {
         noExceptionThrown()
     }
 
+    // ===== IMAGE CLEANUP TESTS =====
+
+    def "cleanup removes images when enabled"() {
+        given:
+        task.removeImages.set(true)
+        task.imageNames.set(["image1:latest", "image2:v1"])
+        mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image2:v1") >> CompletableFuture.completedFuture(true)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image2:v1") >> CompletableFuture.completedFuture(true)
+    }
+
     def "cleanup skips image removal when disabled"() {
         given:
         task.removeImages.set(false)
         task.imageNames.set(["image1"])
+
+        when:
+        task.cleanup()
+
+        then:
+        0 * mockDockerService.removeImage(_)
+    }
+    
+    def "cleanup handles image removal failure gracefully"() {
+        given:
+        task.removeImages.set(true)
+        task.imageNames.set(["image1:latest"])
+        mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(false)
+
+        when:
+        task.cleanup()
+
+        then:
+        1 * mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(false)
+        noExceptionThrown()
+    }
+    
+    def "cleanup handles image removal exception gracefully"() {
+        given:
+        task.removeImages.set(true)
+        task.imageNames.set(["image1:latest"])
+        def failingFuture = new CompletableFuture<Boolean>()
+        failingFuture.completeExceptionally(new RuntimeException("Image removal failed"))
+        mockDockerService.removeImage("image1:latest") >> failingFuture
 
         when:
         task.cleanup()
@@ -269,13 +364,18 @@ class CleanupTaskTest extends Specification {
         task.imageNames.set(["image1"])
 
         mockComposeService.downStack("test-stack") >> CompletableFuture.completedFuture(null)
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image1") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
         1 * mockComposeService.downStack("test-stack") >> CompletableFuture.completedFuture(null)
-        noExceptionThrown()
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image1") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup completes even when compose fails"() {
@@ -287,12 +387,14 @@ class CleanupTaskTest extends Specification {
         mockComposeService.downStack("failing-stack") >> {
             throw new RuntimeException("Compose failed")
         }
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
-        // Should complete without throwing
+        // Compose fails but other cleanup operations should still proceed
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
         noExceptionThrown()
     }
 
@@ -592,13 +694,24 @@ class CleanupTaskTest extends Specification {
         task.imageNames.set(["image1:latest", "image2:v1", "image3"])
 
         mockComposeService.downStack("full-stack") >> CompletableFuture.completedFuture(null)
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeContainer("container2") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image2:v1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image3") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
         1 * mockComposeService.downStack("full-stack") >> CompletableFuture.completedFuture(null)
-        noExceptionThrown()
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeContainer("container2") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image1:latest") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image2:v1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image3") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup continues all operations when compose fails"() {
@@ -614,12 +727,18 @@ class CleanupTaskTest extends Specification {
         def failingFuture = new CompletableFuture<Void>()
         failingFuture.completeExceptionally(new RuntimeException("Compose down failed"))
         mockComposeService.downStack("failing-stack") >> failingFuture
+        mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        mockDockerService.removeImage("image1") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
         // Compose fails but other cleanup operations should still proceed
+        1 * mockDockerService.removeContainer("container1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeNetwork("network1") >> CompletableFuture.completedFuture(true)
+        1 * mockDockerService.removeImage("image1") >> CompletableFuture.completedFuture(true)
         noExceptionThrown()
     }
 
@@ -759,36 +878,39 @@ class CleanupTaskTest extends Specification {
         given:
         task.removeContainers.set(true)
         task.containerNames.set(["single-container"])
+        mockDockerService.removeContainer("single-container") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        1 * mockDockerService.removeContainer("single-container") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup handles single network in list"() {
         given:
         task.removeNetworks.set(true)
         task.networkNames.set(["single-network"])
+        mockDockerService.removeNetwork("single-network") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        1 * mockDockerService.removeNetwork("single-network") >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup handles single image in list"() {
         given:
         task.removeImages.set(true)
         task.imageNames.set(["single-image:latest"])
+        mockDockerService.removeImage("single-image:latest") >> CompletableFuture.completedFuture(true)
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        1 * mockDockerService.removeImage("single-image:latest") >> CompletableFuture.completedFuture(true)
     }
 
     // ===== LARGE LIST TESTS =====
@@ -796,36 +918,48 @@ class CleanupTaskTest extends Specification {
     def "cleanup handles large container list"() {
         given:
         task.removeContainers.set(true)
-        task.containerNames.set((1..100).collect { "container-$it" })
+        def containers = (1..100).collect { "container-$it" }
+        task.containerNames.set(containers)
+        containers.each { container ->
+            mockDockerService.removeContainer(container) >> CompletableFuture.completedFuture(true)
+        }
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        100 * mockDockerService.removeContainer(_) >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup handles large network list"() {
         given:
         task.removeNetworks.set(true)
-        task.networkNames.set((1..50).collect { "network-$it" })
+        def networks = (1..50).collect { "network-$it" }
+        task.networkNames.set(networks)
+        networks.each { network ->
+            mockDockerService.removeNetwork(network) >> CompletableFuture.completedFuture(true)
+        }
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        50 * mockDockerService.removeNetwork(_) >> CompletableFuture.completedFuture(true)
     }
 
     def "cleanup handles large image list"() {
         given:
         task.removeImages.set(true)
-        task.imageNames.set((1..75).collect { "image-$it:v1" })
+        def images = (1..75).collect { "image-$it:v1" }
+        task.imageNames.set(images)
+        images.each { image ->
+            mockDockerService.removeImage(image) >> CompletableFuture.completedFuture(true)
+        }
 
         when:
         task.cleanup()
 
         then:
-        noExceptionThrown()
+        75 * mockDockerService.removeImage(_) >> CompletableFuture.completedFuture(true)
     }
 }

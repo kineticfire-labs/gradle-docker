@@ -163,6 +163,21 @@ class DockerServiceTest extends Specification {
         }
 
         @Override
+        CompletableFuture<Boolean> removeContainer(String containerId) {
+            return CompletableFuture.completedFuture(true)
+        }
+
+        @Override
+        CompletableFuture<Boolean> removeNetwork(String networkId) {
+            return CompletableFuture.completedFuture(true)
+        }
+
+        @Override
+        CompletableFuture<Boolean> removeImage(String imageRef) {
+            return CompletableFuture.completedFuture(true)
+        }
+
+        @Override
         void close() {
             // No-op for testing
         }
