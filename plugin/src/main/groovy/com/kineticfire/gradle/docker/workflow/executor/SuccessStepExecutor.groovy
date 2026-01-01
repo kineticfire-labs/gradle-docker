@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.operation.PublishOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
@@ -111,7 +112,9 @@ class SuccessStepExecutor {
         executePublishOperation(successSpec, context)
 
         // Execute afterSuccess hook if configured
-        executeAfterSuccessHook(successSpec)
+        // Use a generic task name for the success step since it spans multiple operations
+        def taskName = "workflow${context.pipelineName.capitalize()}Success"
+        executeAfterSuccessHook(successSpec, taskName, context.pipelineName)
 
         LOGGER.lifecycle("Success path completed for pipeline: {}", context.pipelineName)
         return context
@@ -216,20 +219,28 @@ class SuccessStepExecutor {
     }
 
     /**
-     * Execute the afterSuccess hook if configured
+     * Execute the afterSuccess hook if configured.
+     *
+     * @param successSpec The success step specification
+     * @param taskName The name of the success step task
+     * @param pipelineName The name of the pipeline
      */
-    void executeAfterSuccessHook(SuccessStepSpec successSpec) {
+    void executeAfterSuccessHook(SuccessStepSpec successSpec, String taskName, String pipelineName) {
         if (successSpec.afterSuccess.isPresent()) {
             LOGGER.info("Executing afterSuccess hook")
-            executeHook(successSpec.afterSuccess.get())
+            def hookContext = HookContext.after(taskName, pipelineName)
+            executeHook(successSpec.afterSuccess.get(), hookContext)
         }
     }
 
     /**
-     * Execute a hook action
-     * Separated for testability
+     * Execute a hook action with context.
+     * Separated for testability.
+     *
+     * @param hook The hook action to execute
+     * @param hookContext The context to pass to the hook
      */
-    void executeHook(Action<Void> hook) {
-        hook.execute(null)
+    void executeHook(Action<HookContext> hook, HookContext hookContext) {
+        hook.execute(hookContext)
     }
 }

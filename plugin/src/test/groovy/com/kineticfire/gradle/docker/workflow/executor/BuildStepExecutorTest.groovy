@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.spec.ImageSpec
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import org.gradle.api.Action
@@ -257,19 +258,36 @@ class BuildStepExecutorTest extends Specification {
     def "executeBeforeBuildHook executes hook when present"() {
         given:
         def hookExecuted = false
-        def hook = { hookExecuted = true } as Action<Void>
+        def hook = { HookContext ctx -> hookExecuted = true } as Action<HookContext>
         buildStepSpec.beforeBuild.set(hook)
 
         when:
-        executor.executeBeforeBuildHook(buildStepSpec)
+        executor.executeBeforeBuildHook(buildStepSpec, 'dockerBuildTestImage', 'testPipeline')
 
         then:
         hookExecuted
     }
 
+    def "executeBeforeBuildHook passes correct context"() {
+        given:
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        buildStepSpec.beforeBuild.set(hook)
+
+        when:
+        executor.executeBeforeBuildHook(buildStepSpec, 'dockerBuildTestImage', 'testPipeline')
+
+        then:
+        receivedContext != null
+        receivedContext.taskName == 'dockerBuildTestImage'
+        receivedContext.pipelineName == 'testPipeline'
+        receivedContext.phase == 'before'
+        receivedContext.timestamp > 0
+    }
+
     def "executeBeforeBuildHook does nothing when hook not present"() {
         when:
-        executor.executeBeforeBuildHook(buildStepSpec)
+        executor.executeBeforeBuildHook(buildStepSpec, 'task', 'pipeline')
 
         then:
         noExceptionThrown()
@@ -278,34 +296,52 @@ class BuildStepExecutorTest extends Specification {
     def "executeAfterBuildHook executes hook when present"() {
         given:
         def hookExecuted = false
-        def hook = { hookExecuted = true } as Action<Void>
+        def hook = { HookContext ctx -> hookExecuted = true } as Action<HookContext>
         buildStepSpec.afterBuild.set(hook)
 
         when:
-        executor.executeAfterBuildHook(buildStepSpec)
+        executor.executeAfterBuildHook(buildStepSpec, 'dockerBuildTestImage', 'testPipeline')
 
         then:
         hookExecuted
     }
 
+    def "executeAfterBuildHook passes correct context"() {
+        given:
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        buildStepSpec.afterBuild.set(hook)
+
+        when:
+        executor.executeAfterBuildHook(buildStepSpec, 'dockerBuildTestImage', 'testPipeline')
+
+        then:
+        receivedContext != null
+        receivedContext.taskName == 'dockerBuildTestImage'
+        receivedContext.pipelineName == 'testPipeline'
+        receivedContext.phase == 'after'
+        receivedContext.timestamp > 0
+    }
+
     def "executeAfterBuildHook does nothing when hook not present"() {
         when:
-        executor.executeAfterBuildHook(buildStepSpec)
+        executor.executeAfterBuildHook(buildStepSpec, 'task', 'pipeline')
 
         then:
         noExceptionThrown()
     }
 
-    def "executeHook executes action with null parameter"() {
+    def "executeHook executes action with HookContext"() {
         given:
-        def receivedParam = 'notNull'
-        def hook = { param -> receivedParam = param } as Action<Void>
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        def hookContext = HookContext.before('testTask', 'testPipeline')
 
         when:
-        executor.executeHook(hook)
+        executor.executeHook(hook, hookContext)
 
         then:
-        receivedParam == null
+        receivedContext == hookContext
     }
 
     // ===== EXECUTE TESTS =====
@@ -337,8 +373,8 @@ class BuildStepExecutorTest extends Specification {
         given:
         def executionOrder = []
 
-        def beforeHook = { executionOrder << 'before' } as Action<Void>
-        def afterHook = { executionOrder << 'after' } as Action<Void>
+        def beforeHook = { HookContext ctx -> executionOrder << 'before' } as Action<HookContext>
+        def afterHook = { HookContext ctx -> executionOrder << 'after' } as Action<HookContext>
         buildStepSpec.beforeBuild.set(beforeHook)
         buildStepSpec.afterBuild.set(afterHook)
 
@@ -353,6 +389,32 @@ class BuildStepExecutorTest extends Specification {
 
         then:
         executionOrder == ['before', 'task', 'after']
+    }
+
+    def "execute passes correct context to hooks"() {
+        given:
+        HookContext beforeContext = null
+        HookContext afterContext = null
+
+        def beforeHook = { HookContext ctx -> beforeContext = ctx } as Action<HookContext>
+        def afterHook = { HookContext ctx -> afterContext = ctx } as Action<HookContext>
+        buildStepSpec.beforeBuild.set(beforeHook)
+        buildStepSpec.afterBuild.set(afterHook)
+
+        project.tasks.create('dockerBuildTestImage')
+
+        def context = PipelineContext.create('myPipeline')
+
+        when:
+        executor.execute(buildStepSpec, context)
+
+        then:
+        beforeContext.taskName == 'dockerBuildTestImage'
+        beforeContext.pipelineName == 'myPipeline'
+        beforeContext.phase == 'before'
+        afterContext.taskName == 'dockerBuildTestImage'
+        afterContext.pipelineName == 'myPipeline'
+        afterContext.phase == 'after'
     }
 
     def "execute returns context with built image"() {
@@ -400,7 +462,7 @@ class BuildStepExecutorTest extends Specification {
 
     def "execute propagates hook exceptions"() {
         given:
-        def hook = { throw new RuntimeException('Hook failed') } as Action<Void>
+        def hook = { HookContext ctx -> throw new RuntimeException('Hook failed') } as Action<HookContext>
         buildStepSpec.beforeBuild.set(hook)
         project.tasks.create('dockerBuildTestImage')
         def context = PipelineContext.create('test')

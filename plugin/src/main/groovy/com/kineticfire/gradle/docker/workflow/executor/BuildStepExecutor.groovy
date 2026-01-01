@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.workflow.executor
 
 import com.kineticfire.gradle.docker.spec.workflow.BuildStepSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import org.gradle.api.Action
@@ -62,17 +63,17 @@ class BuildStepExecutor {
 
         def imageSpec = buildSpec.image.get()
         def imageName = imageSpec.name
+        def buildTaskName = computeBuildTaskName(imageName)
         LOGGER.lifecycle("Executing build step for image: {}", imageName)
 
         // Execute beforeBuild hook if configured
-        executeBeforeBuildHook(buildSpec)
+        executeBeforeBuildHook(buildSpec, buildTaskName, context.pipelineName)
 
         // Execute the docker build task
-        def buildTaskName = computeBuildTaskName(imageName)
         executeBuildTask(buildTaskName)
 
         // Execute afterBuild hook if configured
-        executeAfterBuildHook(buildSpec)
+        executeAfterBuildHook(buildSpec, buildTaskName, context.pipelineName)
 
         // Update context with built image
         return context.withBuiltImage(imageSpec)
@@ -143,29 +144,42 @@ class BuildStepExecutor {
 
     /**
      * Execute the beforeBuild hook if configured.
+     *
+     * @param buildSpec The build step specification
+     * @param taskName The name of the build task
+     * @param pipelineName The name of the pipeline
      */
-    void executeBeforeBuildHook(BuildStepSpec buildSpec) {
+    void executeBeforeBuildHook(BuildStepSpec buildSpec, String taskName, String pipelineName) {
         if (buildSpec.beforeBuild.isPresent()) {
             LOGGER.info("Executing beforeBuild hook")
-            executeHook(buildSpec.beforeBuild.get())
+            def hookContext = HookContext.before(taskName, pipelineName)
+            executeHook(buildSpec.beforeBuild.get(), hookContext)
         }
     }
 
     /**
      * Execute the afterBuild hook if configured.
+     *
+     * @param buildSpec The build step specification
+     * @param taskName The name of the build task
+     * @param pipelineName The name of the pipeline
      */
-    void executeAfterBuildHook(BuildStepSpec buildSpec) {
+    void executeAfterBuildHook(BuildStepSpec buildSpec, String taskName, String pipelineName) {
         if (buildSpec.afterBuild.isPresent()) {
             LOGGER.info("Executing afterBuild hook")
-            executeHook(buildSpec.afterBuild.get())
+            def hookContext = HookContext.after(taskName, pipelineName)
+            executeHook(buildSpec.afterBuild.get(), hookContext)
         }
     }
 
     /**
-     * Execute a hook action.
+     * Execute a hook action with context.
      * Separated for testability.
+     *
+     * @param hook The hook action to execute
+     * @param hookContext The context to pass to the hook
      */
-    void executeHook(Action<Void> hook) {
-        hook.execute(null)
+    void executeHook(Action<HookContext> hook, HookContext hookContext) {
+        hook.execute(hookContext)
     }
 }

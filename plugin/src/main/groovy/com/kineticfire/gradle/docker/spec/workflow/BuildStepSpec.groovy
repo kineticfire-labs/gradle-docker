@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.spec.workflow
 
 import com.kineticfire.gradle.docker.spec.ImageSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import org.gradle.api.Action
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.MapProperty
@@ -51,12 +52,20 @@ abstract class BuildStepSpec {
     abstract MapProperty<String, String> getBuildArgs()
 
     /**
-     * Hook executed before the build step runs
+     * Hook executed before the build step runs.
+     *
+     * <p>Receives a {@link HookContext} with information about the current execution context.</p>
+     *
+     * @see HookContext
      */
-    abstract Property<Action<Void>> getBeforeBuild()
+    abstract Property<Action<HookContext>> getBeforeBuild()
 
     /**
-     * Hook executed after the build step completes successfully
+     * Hook executed after the build step completes successfully.
+     *
+     * <p>Receives a {@link HookContext} with information about the current execution context.</p>
+     *
+     * @see HookContext
      */
-    abstract Property<Action<Void>> getAfterBuild()
+    abstract Property<Action<HookContext>> getAfterBuild()
 }

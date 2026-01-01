@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.spec.workflow
 
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.TestResult
 import org.gradle.api.Action
 import org.gradle.api.model.ObjectFactory
@@ -64,9 +65,13 @@ abstract class TestStepSpec {
     abstract Property<Integer> getTimeoutMinutes()
 
     /**
-     * Hook executed before the test step runs (before composeUp)
+     * Hook executed before the test step runs (before composeUp).
+     *
+     * <p>Receives a {@link HookContext} with information about the current execution context.</p>
+     *
+     * @see HookContext
      */
-    abstract Property<Action<Void>> getBeforeTest()
+    abstract Property<Action<HookContext>> getBeforeTest()
 
     /**
      * Hook executed after the test step completes (receives TestResult)

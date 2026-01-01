@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import com.kineticfire.gradle.docker.workflow.TestResult
@@ -110,9 +111,11 @@ class TestStepExecutor {
         TestResult testResult = null
         Exception testException = null
 
+        def pipelineName = context.pipelineName
+
         try {
             // Execute beforeTest hook if configured
-            executeBeforeTestHook(testSpec)
+            executeBeforeTestHook(testSpec, testTaskName, pipelineName)
 
             // Execute compose up only when we manage lifecycle (not when delegating or METHOD lifecycle)
             if (!shouldDelegateCompose) {
@@ -144,7 +147,7 @@ class TestStepExecutor {
         }
 
         // Execute afterTest hook if configured (receives TestResult)
-        executeAfterTestHook(testSpec, testResult)
+        executeAfterTestHook(testSpec, testResult, testTaskName, pipelineName)
 
         // Re-throw exception after cleanup if test failed with exception
         if (testException != null) {
@@ -268,18 +271,28 @@ class TestStepExecutor {
 
     /**
      * Execute the beforeTest hook if configured.
+     *
+     * @param testSpec The test step specification
+     * @param taskName The name of the test task
+     * @param pipelineName The name of the pipeline
      */
-    void executeBeforeTestHook(TestStepSpec testSpec) {
+    void executeBeforeTestHook(TestStepSpec testSpec, String taskName, String pipelineName) {
         if (testSpec.beforeTest.isPresent()) {
             LOGGER.info("Executing beforeTest hook")
-            executeHook(testSpec.beforeTest.get())
+            def hookContext = HookContext.before(taskName, pipelineName)
+            executeHook(testSpec.beforeTest.get(), hookContext)
         }
     }
 
     /**
      * Execute the afterTest hook if configured (receives TestResult).
+     *
+     * @param testSpec The test step specification
+     * @param testResult The test result
+     * @param taskName The name of the test task
+     * @param pipelineName The name of the pipeline
      */
-    void executeAfterTestHook(TestStepSpec testSpec, TestResult testResult) {
+    void executeAfterTestHook(TestStepSpec testSpec, TestResult testResult, String taskName, String pipelineName) {
         if (testSpec.afterTest.isPresent()) {
             LOGGER.info("Executing afterTest hook with result: {}", testResult)
             testSpec.afterTest.get().execute(testResult)
@@ -287,11 +300,14 @@ class TestStepExecutor {
     }
 
     /**
-     * Execute a hook action.
+     * Execute a hook action with context.
      * Separated for testability.
+     *
+     * @param hook The hook action to execute
+     * @param hookContext The context to pass to the hook
      */
-    void executeHook(Action<Void> hook) {
-        hook.execute(null)
+    void executeHook(Action<HookContext> hook, HookContext hookContext) {
+        hook.execute(hookContext)
     }
 
     /**

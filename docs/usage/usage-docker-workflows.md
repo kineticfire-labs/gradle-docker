@@ -173,12 +173,22 @@ The `build` step specifies which Docker image to build:
 ```groovy
 build {
     image = docker.images.myApp  // Required: reference to an image defined in docker DSL
+    
+    // Optional hooks
+    beforeBuild { context ->
+        println "Starting build for ${context.taskName} in pipeline ${context.pipelineName}"
+    }
+    afterBuild { context ->
+        println "Build completed at ${new Date(context.timestamp)}"
+    }
 }
 ```
 
 | Property | Type | Required | Description |
 |----------|------|----------|-------------|
 | `image` | ImageSpec | Yes | Reference to an image defined in the `docker` DSL |
+| `beforeBuild` | Action<HookContext> | No | Hook executed before the build starts |
+| `afterBuild` | Action<HookContext> | No | Hook executed after the build completes |
 
 ### test Step
 
@@ -192,6 +202,15 @@ test {
     testTaskName = 'integrationTest'          // Name of the test task to run
     lifecycle = WorkflowLifecycle.CLASS       // Container lifecycle (default: CLASS)
     delegateStackManagement = false           // Default: false
+    
+    // Optional hooks
+    beforeTest { context ->
+        println "Starting tests for pipeline ${context.pipelineName}"
+    }
+    afterTest { testResult ->
+        // afterTest receives TestResult, not HookContext
+        println "Tests completed: ${testResult.success ? 'PASSED' : 'FAILED'}"
+    }
 }
 ```
 
@@ -201,6 +220,8 @@ test {
 | `testTaskName` | String | Yes | - | Name of the Gradle test task to execute |
 | `lifecycle` | WorkflowLifecycle | No | `CLASS` | Container lifecycle: `CLASS` or `METHOD` |
 | `delegateStackManagement` | boolean | No | `false` | If `true`, skip compose up/down; delegate to `testIntegration` |
+| `beforeTest` | Action<HookContext> | No | - | Hook executed before testing starts |
+| `afterTest` | Action<TestResult> | No | - | Hook executed after testing completes (receives TestResult) |
 
 **Lifecycle Values:**
 - `WorkflowLifecycle.CLASS` - Containers start once before all tests and stop after all complete (default)
@@ -216,6 +237,11 @@ The `onTestSuccess` step defines actions to execute only when tests pass:
 onTestSuccess {
     additionalTags = ['tested', 'verified']  // Tags to apply on success
     publish = true                            // Whether to publish the image
+    
+    // Optional hook
+    afterSuccess { context ->
+        println "All success operations completed for pipeline ${context.pipelineName}"
+    }
 }
 ```
 
@@ -223,6 +249,33 @@ onTestSuccess {
 |----------|------|----------|---------|-------------|
 | `additionalTags` | List<String> | No | `[]` | Tags to add to the image when tests pass |
 | `publish` | boolean | No | `false` | Whether to publish the image to a registry |
+| `afterSuccess` | Action<HookContext> | No | - | Hook executed after all success operations complete |
+
+### Hook Context
+
+All hooks (except `afterTest`) receive a `HookContext` object with the following properties:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `taskName` | String | The name of the task being executed |
+| `pipelineName` | String | The name of the pipeline |
+| `timestamp` | long | Timestamp (ms since epoch) when the hook was invoked |
+| `phase` | String | Either "before" or "after" |
+
+**Example:**
+
+```groovy
+build {
+    image = docker.images.myApp
+    
+    beforeBuild { context ->
+        println "Task: ${context.taskName}"           // e.g., "dockerBuildMyApp"
+        println "Pipeline: ${context.pipelineName}"   // e.g., "ciPipeline"
+        println "Phase: ${context.phase}"             // "before"
+        println "Time: ${new Date(context.timestamp)}"
+    }
+}
+```
 
 ---
 

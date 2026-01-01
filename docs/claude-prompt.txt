@@ -14,7 +14,7 @@ P5 - done
 P4 - done
 P8 - done
 P7 - done
-P6
+P6 - done
 P3
 P2
 

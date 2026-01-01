@@ -25,6 +25,7 @@ import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.operation.PublishOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.SaveOperationExecutor
 import com.kineticfire.gradle.docker.workflow.operation.TagOperationExecutor
+import com.kineticfire.gradle.docker.workflow.HookContext
 import org.gradle.api.Action
 import org.gradle.api.GradleException
 import org.gradle.api.Project
@@ -386,7 +387,7 @@ class SuccessStepExecutorTest extends Specification {
 
     def "executeAfterSuccessHook does nothing when hook not configured"() {
         when:
-        executor.executeAfterSuccessHook(successSpec)
+        executor.executeAfterSuccessHook(successSpec, 'workflowTestSuccess', 'testPipeline')
 
         then:
         noExceptionThrown()
@@ -395,28 +396,46 @@ class SuccessStepExecutorTest extends Specification {
     def "executeAfterSuccessHook executes hook when configured"() {
         given:
         def hookCalled = false
-        def hook = { hookCalled = true } as Action<Void>
+        def hook = { HookContext ctx -> hookCalled = true } as Action<HookContext>
         successSpec.afterSuccess.set(hook)
 
         when:
-        executor.executeAfterSuccessHook(successSpec)
+        executor.executeAfterSuccessHook(successSpec, 'workflowTestSuccess', 'testPipeline')
 
         then:
         hookCalled
     }
 
-    // ===== EXECUTE HOOK TESTS =====
-
-    def "executeHook executes action with null parameter"() {
+    def "executeAfterSuccessHook passes correct context"() {
         given:
-        def receivedParam = 'not-null'
-        def hook = { param -> receivedParam = param } as Action<Void>
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        successSpec.afterSuccess.set(hook)
 
         when:
-        executor.executeHook(hook)
+        executor.executeAfterSuccessHook(successSpec, 'workflowTestSuccess', 'testPipeline')
 
         then:
-        receivedParam == null
+        receivedContext != null
+        receivedContext.taskName == 'workflowTestSuccess'
+        receivedContext.pipelineName == 'testPipeline'
+        receivedContext.phase == 'after'
+        receivedContext.timestamp > 0
+    }
+
+    // ===== EXECUTE HOOK TESTS =====
+
+    def "executeHook executes action with HookContext"() {
+        given:
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        def hookContext = HookContext.after('testTask', 'testPipeline')
+
+        when:
+        executor.executeHook(hook, hookContext)
+
+        then:
+        receivedContext == hookContext
     }
 
     // ===== FULL EXECUTION FLOW TESTS =====
@@ -425,7 +444,7 @@ class SuccessStepExecutorTest extends Specification {
         given:
         successSpec.additionalTags.set(['stable'])
         def hookCalled = false
-        successSpec.afterSuccess.set({ hookCalled = true } as Action<Void>)
+        successSpec.afterSuccess.set({ HookContext ctx -> hookCalled = true } as Action<HookContext>)
 
         when:
         def result = executor.execute(successSpec, context)

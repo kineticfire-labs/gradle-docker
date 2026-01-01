@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.generator
 
 import com.kineticfire.gradle.docker.extension.DockerWorkflowsExtension
 import com.kineticfire.gradle.docker.service.DockerService
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.spec.workflow.PipelineSpec
 import com.kineticfire.gradle.docker.spec.workflow.SuccessStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
@@ -214,7 +215,8 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             if (buildSpec.beforeBuild.isPresent()) {
                 task.doFirst {
                     LOGGER.lifecycle("Executing beforeBuild hook for pipeline '{}'", pipelineSpec.name)
-                    buildSpec.beforeBuild.get().execute(null)
+                    def hookContext = HookContext.before(buildTaskName, pipelineSpec.name)
+                    buildSpec.beforeBuild.get().execute(hookContext)
                 }
             }
 
@@ -222,7 +224,8 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             if (buildSpec.afterBuild.isPresent()) {
                 task.doLast {
                     LOGGER.lifecycle("Executing afterBuild hook for pipeline '{}'", pipelineSpec.name)
-                    buildSpec.afterBuild.get().execute(null)
+                    def hookContext = HookContext.after(buildTaskName, pipelineSpec.name)
+                    buildSpec.afterBuild.get().execute(hookContext)
                 }
             }
         }
@@ -247,7 +250,8 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             if (testSpec.beforeTest.isPresent()) {
                 task.doFirst {
                     LOGGER.lifecycle("Executing beforeTest hook for pipeline '{}'", pipelineSpec.name)
-                    testSpec.beforeTest.get().execute(null)
+                    def hookContext = HookContext.before(testTaskName, pipelineSpec.name)
+                    testSpec.beforeTest.get().execute(hookContext)
                 }
             }
 
@@ -332,7 +336,8 @@ class WorkflowTaskGenerator extends TaskGraphGenerator {
             if (successSpec.afterSuccess.isPresent()) {
                 task.doLast {
                     LOGGER.lifecycle("Executing afterSuccess hook for pipeline '{}'", pipelineSpec.name)
-                    successSpec.afterSuccess.get().execute(null)
+                    def hookContext = HookContext.after(taskName, pipelineSpec.name)
+                    successSpec.afterSuccess.get().execute(hookContext)
                 }
             }
         }

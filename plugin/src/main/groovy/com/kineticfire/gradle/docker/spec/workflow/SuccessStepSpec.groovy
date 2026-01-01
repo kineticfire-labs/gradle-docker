@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.spec.workflow
 
 import com.kineticfire.gradle.docker.spec.PublishSpec
 import com.kineticfire.gradle.docker.spec.SaveSpec
+import com.kineticfire.gradle.docker.workflow.HookContext
 import groovy.lang.Closure
 import groovy.lang.DelegatesTo
 import org.gradle.api.Action
@@ -62,9 +63,13 @@ abstract class SuccessStepSpec {
     abstract Property<PublishSpec> getPublish()
 
     /**
-     * Hook executed after all success operations complete
+     * Hook executed after all success operations complete.
+     *
+     * <p>Receives a {@link HookContext} with information about the current execution context.</p>
+     *
+     * @see HookContext
      */
-    abstract Property<Action<Void>> getAfterSuccess()
+    abstract Property<Action<HookContext>> getAfterSuccess()
 
     /**
      * Configure save operation using a closure

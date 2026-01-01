@@ -19,6 +19,7 @@ package com.kineticfire.gradle.docker.workflow.executor
 import com.kineticfire.gradle.docker.spec.ComposeStackSpec
 import com.kineticfire.gradle.docker.spec.workflow.TestStepSpec
 import com.kineticfire.gradle.docker.spec.workflow.WorkflowLifecycle
+import com.kineticfire.gradle.docker.workflow.HookContext
 import com.kineticfire.gradle.docker.workflow.PipelineContext
 import com.kineticfire.gradle.docker.workflow.TaskLookup
 import com.kineticfire.gradle.docker.workflow.TestResult
@@ -387,19 +388,36 @@ class TestStepExecutorTest extends Specification {
     def "executeBeforeTestHook executes hook when present"() {
         given:
         def hookExecuted = false
-        def hook = { hookExecuted = true } as Action<Void>
+        def hook = { HookContext ctx -> hookExecuted = true } as Action<HookContext>
         testStepSpec.beforeTest.set(hook)
 
         when:
-        executor.executeBeforeTestHook(testStepSpec)
+        executor.executeBeforeTestHook(testStepSpec, 'integrationTest', 'testPipeline')
 
         then:
         hookExecuted
     }
 
+    def "executeBeforeTestHook passes correct context"() {
+        given:
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        testStepSpec.beforeTest.set(hook)
+
+        when:
+        executor.executeBeforeTestHook(testStepSpec, 'integrationTest', 'testPipeline')
+
+        then:
+        receivedContext != null
+        receivedContext.taskName == 'integrationTest'
+        receivedContext.pipelineName == 'testPipeline'
+        receivedContext.phase == 'before'
+        receivedContext.timestamp > 0
+    }
+
     def "executeBeforeTestHook does nothing when hook not present"() {
         when:
-        executor.executeBeforeTestHook(testStepSpec)
+        executor.executeBeforeTestHook(testStepSpec, 'task', 'pipeline')
 
         then:
         noExceptionThrown()
@@ -413,7 +431,7 @@ class TestStepExecutorTest extends Specification {
         def testResult = new TestResult(true, 10, 0, 0, 0, 10)
 
         when:
-        executor.executeAfterTestHook(testStepSpec, testResult)
+        executor.executeAfterTestHook(testStepSpec, testResult, 'integrationTest', 'testPipeline')
 
         then:
         receivedResult == testResult
@@ -424,22 +442,23 @@ class TestStepExecutorTest extends Specification {
         def testResult = new TestResult(true, 10, 0, 0, 0, 10)
 
         when:
-        executor.executeAfterTestHook(testStepSpec, testResult)
+        executor.executeAfterTestHook(testStepSpec, testResult, 'task', 'pipeline')
 
         then:
         noExceptionThrown()
     }
 
-    def "executeHook executes action with null parameter"() {
+    def "executeHook executes action with HookContext"() {
         given:
-        def receivedParam = 'notNull'
-        def hook = { param -> receivedParam = param } as Action<Void>
+        HookContext receivedContext = null
+        def hook = { HookContext ctx -> receivedContext = ctx } as Action<HookContext>
+        def hookContext = HookContext.before('testTask', 'testPipeline')
 
         when:
-        executor.executeHook(hook)
+        executor.executeHook(hook, hookContext)
 
         then:
-        receivedParam == null
+        receivedContext == hookContext
     }
 
     // ===== EXECUTE TESTS =====
@@ -471,7 +490,7 @@ class TestStepExecutorTest extends Specification {
         given:
         def executionOrder = []
 
-        def beforeHook = { executionOrder << 'before' } as Action<Void>
+        def beforeHook = { HookContext ctx -> executionOrder << 'before' } as Action<HookContext>
         def afterHook = { TestResult r -> executionOrder << 'after' } as Action<TestResult>
         testStepSpec.beforeTest.set(beforeHook)
         testStepSpec.afterTest.set(afterHook)
@@ -608,7 +627,7 @@ class TestStepExecutorTest extends Specification {
 
     def "execute propagates hook exceptions"() {
         given:
-        def hook = { throw new RuntimeException('Hook failed') } as Action<Void>
+        def hook = { HookContext ctx -> throw new RuntimeException('Hook failed') } as Action<HookContext>
         testStepSpec.beforeTest.set(hook)
         project.tasks.create('composeUpTestStack')
         project.tasks.create('composeDownTestStack')
@@ -753,7 +772,7 @@ class TestStepExecutorTest extends Specification {
     def "execute still runs beforeTest hook when delegateStackManagement is true"() {
         given:
         def hookExecuted = false
-        def beforeHook = { hookExecuted = true } as Action<Void>
+        def beforeHook = { HookContext ctx -> hookExecuted = true } as Action<HookContext>
 
         def spec = project.objects.newInstance(TestStepSpec)
         spec.testTaskName.set('integrationTest')
@@ -833,7 +852,7 @@ class TestStepExecutorTest extends Specification {
         given:
         def executionOrder = []
 
-        def beforeHook = { executionOrder << 'before' } as Action<Void>
+        def beforeHook = { HookContext ctx -> executionOrder << 'before' } as Action<HookContext>
         def afterHook = { TestResult r -> executionOrder << 'after' } as Action<TestResult>
 
         def spec = project.objects.newInstance(TestStepSpec)
@@ -964,7 +983,7 @@ class TestStepExecutorTest extends Specification {
         given:
         def executionOrder = []
 
-        def beforeHook = { executionOrder << 'before' } as Action<Void>
+        def beforeHook = { HookContext ctx -> executionOrder << 'before' } as Action<HookContext>
         def afterHook = { TestResult r -> executionOrder << 'after' } as Action<TestResult>
 
         def spec = project.objects.newInstance(TestStepSpec)
