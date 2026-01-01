@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.extension
 
 import com.kineticfire.gradle.docker.spec.project.DockerProjectSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectTestConfigSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectFailureSpec
@@ -108,6 +109,40 @@ abstract class DockerProjectExtension {
      */
     void images(Action<NamedDomainObjectContainer<ProjectImageSpec>> action) {
         spec.images(action)
+    }
+
+    /**
+     * Get the tests container for multiple test configurations.
+     *
+     * @return The named domain object container of test config specs
+     */
+    NamedDomainObjectContainer<ProjectTestConfigSpec> getTests() {
+        return spec.tests
+    }
+
+    /**
+     * Configure multiple test configurations using a closure.
+     * Each named block inside the closure creates a new test configuration.
+     *
+     * Note: Using tests { } is mutually exclusive with test { }.
+     * Use one or the other, not both.
+     *
+     * @param closure Configuration closure for the tests container
+     */
+    void tests(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {
+        spec.tests(closure)
+    }
+
+    /**
+     * Configure multiple test configurations using an Action.
+     *
+     * Note: Using tests { } is mutually exclusive with test { }.
+     * Use one or the other, not both.
+     *
+     * @param action Configuration action for the tests container
+     */
+    void tests(Action<NamedDomainObjectContainer<ProjectTestConfigSpec>> action) {
+        spec.tests(action)
     }
 
     void test(@DelegatesTo(ProjectTestSpec) Closure closure) {

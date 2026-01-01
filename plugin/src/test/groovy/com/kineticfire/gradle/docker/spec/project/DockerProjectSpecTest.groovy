@@ -600,4 +600,243 @@ class DockerProjectSpecTest extends Specification {
         then:
         dockerProjectSpec.isConfigured() == true
     }
+
+    // ===== TESTS CONTAINER TESTS =====
+
+    def "tests container is created when initializeNestedSpecs is called"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+
+        then:
+        dockerProjectSpec.tests != null
+        dockerProjectSpec.tests.size() == 0
+    }
+
+    def "tests closure creates named test config specs"() {
+        when:
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('src/integrationTest/resources/compose/api.yml')
+                lifecycle.set(Lifecycle.CLASS)
+            }
+        }
+
+        then:
+        dockerProjectSpec.tests.size() == 1
+        dockerProjectSpec.tests.getByName('apiTests').compose.get() == 'src/integrationTest/resources/compose/api.yml'
+        dockerProjectSpec.tests.getByName('apiTests').lifecycle.get() == Lifecycle.CLASS
+    }
+
+    def "tests action creates named test config specs"() {
+        when:
+        dockerProjectSpec.tests({ tests ->
+            tests.create('statefulTests') { testSpec ->
+                testSpec.compose.set('src/integrationTest/resources/compose/stateful.yml')
+                testSpec.lifecycle.set(Lifecycle.METHOD)
+            }
+        } as org.gradle.api.Action)
+
+        then:
+        dockerProjectSpec.tests.getByName('statefulTests').compose.get() == 'src/integrationTest/resources/compose/stateful.yml'
+        dockerProjectSpec.tests.getByName('statefulTests').lifecycle.get() == Lifecycle.METHOD
+    }
+
+    def "multiple test configs can be created"() {
+        when:
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+                lifecycle.set(Lifecycle.CLASS)
+                testClasses.set(['com.example.api.**'])
+            }
+            statefulTests {
+                compose.set('compose/stateful.yml')
+                lifecycle.set(Lifecycle.METHOD)
+                testClasses.set(['com.example.stateful.**'])
+            }
+        }
+
+        then:
+        dockerProjectSpec.tests.size() == 2
+        dockerProjectSpec.tests.getByName('apiTests').testClasses.get() == ['com.example.api.**']
+        dockerProjectSpec.tests.getByName('statefulTests').testClasses.get() == ['com.example.stateful.**']
+    }
+
+    // ===== HAS TEST CONFIGURED TESTS =====
+
+    def "hasTestConfigured returns false before initialization"() {
+        expect:
+        dockerProjectSpec.hasTestConfigured() == false
+    }
+
+    def "hasTestConfigured returns false when test compose not set"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+
+        then:
+        dockerProjectSpec.hasTestConfigured() == false
+    }
+
+    def "hasTestConfigured returns true when test compose is set"() {
+        when:
+        dockerProjectSpec.test {
+            compose.set('docker-compose.yml')
+        }
+
+        then:
+        dockerProjectSpec.hasTestConfigured() == true
+    }
+
+    def "hasTestConfigured returns false when test compose is empty"() {
+        when:
+        dockerProjectSpec.test {
+            compose.set('')
+        }
+
+        then:
+        dockerProjectSpec.hasTestConfigured() == false
+    }
+
+    // ===== HAS MULTIPLE TESTS CONFIGURED TESTS =====
+
+    def "hasMultipleTestsConfigured returns false before initialization"() {
+        expect:
+        dockerProjectSpec.hasMultipleTestsConfigured() == false
+    }
+
+    def "hasMultipleTestsConfigured returns false when tests container is empty"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+
+        then:
+        dockerProjectSpec.hasMultipleTestsConfigured() == false
+    }
+
+    def "hasMultipleTestsConfigured returns true when tests container has configs"() {
+        when:
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+
+        then:
+        dockerProjectSpec.hasMultipleTestsConfigured() == true
+    }
+
+    // ===== VALIDATE TEST CONFIGURATION TESTS =====
+
+    def "validateTestConfiguration does not throw when neither test nor tests configured"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+        dockerProjectSpec.validateTestConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestConfiguration does not throw when only test configured"() {
+        when:
+        dockerProjectSpec.test {
+            compose.set('docker-compose.yml')
+        }
+        dockerProjectSpec.validateTestConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestConfiguration does not throw when only tests configured"() {
+        when:
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+        dockerProjectSpec.validateTestConfiguration()
+
+        then:
+        noExceptionThrown()
+    }
+
+    def "validateTestConfiguration throws when both test and tests configured"() {
+        when:
+        dockerProjectSpec.test {
+            compose.set('docker-compose.yml')
+        }
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+        dockerProjectSpec.validateTestConfiguration()
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot use both 'test { }' and 'tests { }'")
+    }
+
+    // ===== TESTS IDEMPOTENCY TESTS =====
+
+    def "getTests is idempotent"() {
+        when:
+        dockerProjectSpec.initializeNestedSpecs()
+        def firstTests = dockerProjectSpec.tests
+        def secondTests = dockerProjectSpec.tests
+
+        then:
+        firstTests.is(secondTests)
+    }
+
+    // ===== COMBINED CONFIGURATION TESTS =====
+
+    def "complete multiple tests configuration"() {
+        when:
+        dockerProjectSpec.images {
+            myService {
+                imageName.set('my-service')
+                jarFrom.set(':service:jar')
+            }
+        }
+        dockerProjectSpec.tests {
+            apiTests {
+                compose.set('src/integrationTest/resources/compose/api.yml')
+                waitForHealthy.set(['app'])
+                lifecycle.set(Lifecycle.CLASS)
+                testClasses.set(['com.example.api.**'])
+                timeoutSeconds.set(120)
+                pollSeconds.set(5)
+            }
+            statefulTests {
+                compose.set('src/integrationTest/resources/compose/stateful.yml')
+                waitForRunning.set(['db'])
+                lifecycle.set(Lifecycle.METHOD)
+                testClasses.set(['com.example.stateful.**'])
+            }
+        }
+        dockerProjectSpec.onSuccess {
+            additionalTags.set(['tested', 'stable'])
+        }
+
+        then:
+        dockerProjectSpec.isConfigured() == true
+        dockerProjectSpec.hasMultipleTestsConfigured() == true
+        dockerProjectSpec.tests.size() == 2
+
+        def apiTest = dockerProjectSpec.tests.getByName('apiTests')
+        apiTest.compose.get() == 'src/integrationTest/resources/compose/api.yml'
+        apiTest.waitForHealthy.get() == ['app']
+        apiTest.lifecycle.get() == Lifecycle.CLASS
+        apiTest.testClasses.get() == ['com.example.api.**']
+        apiTest.timeoutSeconds.get() == 120
+        apiTest.pollSeconds.get() == 5
+        apiTest.getTestTaskName() == 'ApiTestsIntegrationTest'
+
+        def statefulTest = dockerProjectSpec.tests.getByName('statefulTests')
+        statefulTest.compose.get() == 'src/integrationTest/resources/compose/stateful.yml'
+        statefulTest.waitForRunning.get() == ['db']
+        statefulTest.lifecycle.get() == Lifecycle.METHOD
+        statefulTest.testClasses.get() == ['com.example.stateful.**']
+        statefulTest.getTestTaskName() == 'StatefulTestsIntegrationTest'
+    }
 }

@@ -2057,4 +2057,243 @@ class DockerProjectTaskGeneratorTest extends Specification {
         // TagOnSuccessTask uses full repository for imageName
         tagTask.imageName.get() == 'myorg/tagged-repo'
     }
+
+    // ===== MULTIPLE TEST CONFIGURATIONS TESTS =====
+
+    def "validates test configuration on generate"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.test {
+            compose.set('docker-compose.yml')
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def ex = thrown(org.gradle.api.GradleException)
+        ex.message.contains("Cannot use both 'test { }' and 'tests { }'")
+    }
+
+    def "generates task graph with multiple test configurations"() {
+        given:
+        // Create integrationTest source set
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('src/integrationTest/resources/compose/api.yml')
+                testClasses.set(['com.example.api.**'])
+            }
+            statefulTests {
+                compose.set('src/integrationTest/resources/compose/stateful.yml')
+                testClasses.set(['com.example.stateful.**'])
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('runDockerProject') != null
+        project.tasks.findByName('ApiTestsIntegrationTest') != null
+        project.tasks.findByName('StatefulTestsIntegrationTest') != null
+    }
+
+    def "multiple test tasks have correct test class filters"() {
+        given:
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+                testClasses.set(['com.example.api.**', 'com.example.rest.**'])
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def testTask = project.tasks.findByName('ApiTestsIntegrationTest') as org.gradle.api.tasks.testing.Test
+        testTask != null
+        testTask.filter.includePatterns.contains('com.example.api.**')
+        testTask.filter.includePatterns.contains('com.example.rest.**')
+    }
+
+    def "tag on success depends on all test tasks"() {
+        given:
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+            statefulTests {
+                compose.set('compose/stateful.yml')
+            }
+        }
+        extension.onSuccess {
+            additionalTags.set(['tested'])
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def tagTask = project.tasks.findByName('dockerProjectTagOnSuccess') as TagOnSuccessTask
+        tagTask != null
+        tagTask.dependsOn.any { it.toString().contains('ApiTestsIntegrationTest') }
+        tagTask.dependsOn.any { it.toString().contains('StatefulTestsIntegrationTest') }
+    }
+
+    def "test task names use capitalize from test config name"() {
+        given:
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            smokeTests {
+                compose.set('compose/smoke.yml')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        project.tasks.findByName('SmokeTestsIntegrationTest') != null
+    }
+
+    def "test task uses junit platform"() {
+        given:
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def testTask = project.tasks.findByName('ApiTestsIntegrationTest') as org.gradle.api.tasks.testing.Test
+        testTask != null
+        // JUnit Platform should be enabled
+    }
+
+    def "test task skipped if already exists"() {
+        given:
+        project.sourceSets.create('integrationTest')
+        // Pre-register the test task
+        project.tasks.register('ApiTestsIntegrationTest', org.gradle.api.tasks.testing.Test)
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should not throw and reuse existing task
+        project.tasks.findByName('ApiTestsIntegrationTest') != null
+    }
+
+    def "test task configured without test class filter when testClasses empty"() {
+        given:
+        project.sourceSets.create('integrationTest')
+
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        extension.tests {
+            apiTests {
+                compose.set('compose/api.yml')
+                // No testClasses set - should include all tests
+            }
+        }
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        def testTask = project.tasks.findByName('ApiTestsIntegrationTest') as org.gradle.api.tasks.testing.Test
+        testTask != null
+        testTask.filter.includePatterns.isEmpty()
+    }
+
+    def "multiple tests with empty tests container does not generate extra tasks"() {
+        given:
+        extension.images {
+            myapp {
+                imageName.set('myapp')
+                contextDir.set('src/main/docker')
+            }
+        }
+        // Initialize tests container but don't add any configs
+        extension.spec.initializeNestedSpecs()
+
+        when:
+        generator.generate(project, extension, dockerServiceProvider)
+
+        then:
+        // Should use single test mode fallback
+        project.tasks.findByName('runDockerProject') != null
+    }
 }

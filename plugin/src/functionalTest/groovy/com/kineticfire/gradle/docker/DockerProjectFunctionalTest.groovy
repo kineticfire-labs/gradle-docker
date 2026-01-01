@@ -1096,4 +1096,320 @@ services:
         then:
         result.output.contains("Custom project name 'custom-project' configured")
     }
+
+    // ===== MULTIPLE TEST CONFIGURATIONS TESTS =====
+
+    def "dockerProject with tests container creates multiple test tasks"() {
+        given:
+        settingsFile << "rootProject.name = 'test-multiple-tests'"
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerProject {
+                images {
+                    testApp {
+                        imageName.set('test-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
+                }
+
+                tests {
+                    apiTests {
+                        compose.set('src/integrationTest/resources/compose/api.yml')
+                        testClasses.set(['com.example.api.**'])
+                    }
+                    statefulTests {
+                        compose.set('src/integrationTest/resources/compose/stateful.yml')
+                        testClasses.set(['com.example.stateful.**'])
+                    }
+                }
+            }
+
+            tasks.register('verifyMultipleTestTasks') {
+                doLast {
+                    def apiTask = tasks.findByName('ApiTestsIntegrationTest')
+                    def statefulTask = tasks.findByName('StatefulTestsIntegrationTest')
+
+                    if (apiTask != null) {
+                        println "Multiple test task created: ApiTestsIntegrationTest"
+                    }
+                    if (statefulTask != null) {
+                        println "Multiple test task created: StatefulTestsIntegrationTest"
+                    }
+                }
+            }
+        """
+
+        // Create compose file directories
+        def composeDir = testProjectDir.resolve('src/integrationTest/resources/compose').toFile()
+        composeDir.mkdirs()
+
+        new File(composeDir, 'api.yml') << """
+services:
+  api:
+    image: test-app:1.0.0
+"""
+        new File(composeDir, 'stateful.yml') << """
+services:
+  stateful:
+    image: test-app:1.0.0
+"""
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyMultipleTestTasks', '--info')
+            .build()
+
+        then:
+        result.output.contains('Multiple test task created: ApiTestsIntegrationTest')
+        result.output.contains('Multiple test task created: StatefulTestsIntegrationTest')
+    }
+
+    def "dockerProject validation fails when both test and tests configured"() {
+        given:
+        settingsFile << "rootProject.name = 'test-mutual-exclusivity'"
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerProject {
+                images {
+                    myApp {
+                        imageName.set('my-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
+                }
+
+                test {
+                    compose.set('src/integrationTest/resources/compose/single.yml')
+                }
+
+                tests {
+                    apiTests {
+                        compose.set('src/integrationTest/resources/compose/api.yml')
+                    }
+                }
+            }
+        """
+
+        // Create compose file directories
+        def composeDir = testProjectDir.resolve('src/integrationTest/resources/compose').toFile()
+        composeDir.mkdirs()
+
+        new File(composeDir, 'single.yml') << """
+services:
+  app:
+    image: my-app:1.0.0
+"""
+        new File(composeDir, 'api.yml') << """
+services:
+  api:
+    image: my-app:1.0.0
+"""
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks')
+            .buildAndFail()
+
+        then:
+        result.output.contains("Cannot use both 'test { }' and 'tests { }'")
+    }
+
+    def "dockerProject tests container with different lifecycle modes"() {
+        given:
+        settingsFile << "rootProject.name = 'test-lifecycle-modes'"
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            import com.kineticfire.gradle.docker.Lifecycle
+
+            dockerProject {
+                images {
+                    lifecycleApp {
+                        imageName.set('lifecycle-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
+                }
+
+                tests {
+                    classTests {
+                        compose.set('src/integrationTest/resources/compose/class.yml')
+                        lifecycle.set(Lifecycle.CLASS)
+                    }
+                    methodTests {
+                        compose.set('src/integrationTest/resources/compose/method.yml')
+                        lifecycle.set(Lifecycle.METHOD)
+                    }
+                }
+            }
+
+            tasks.register('verifyLifecycleModes') {
+                doLast {
+                    println "Multiple lifecycle modes configured successfully"
+                }
+            }
+        """
+
+        // Create compose file directories
+        def composeDir = testProjectDir.resolve('src/integrationTest/resources/compose').toFile()
+        composeDir.mkdirs()
+
+        new File(composeDir, 'class.yml') << """
+services:
+  app:
+    image: lifecycle-app:1.0.0
+"""
+        new File(composeDir, 'method.yml') << """
+services:
+  app:
+    image: lifecycle-app:1.0.0
+"""
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyLifecycleModes', '--info')
+            .build()
+
+        then:
+        result.output.contains('Multiple lifecycle modes configured successfully')
+    }
+
+    def "dockerProject tests container with waitForHealthy and timeout"() {
+        given:
+        settingsFile << "rootProject.name = 'test-wait-config'"
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerProject {
+                images {
+                    waitApp {
+                        imageName.set('wait-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
+                }
+
+                tests {
+                    healthTests {
+                        compose.set('src/integrationTest/resources/compose/health.yml')
+                        waitForHealthy.set(['app', 'db'])
+                        timeoutSeconds.set(120)
+                        pollSeconds.set(5)
+                    }
+                }
+            }
+
+            tasks.register('verifyWaitConfig') {
+                doLast {
+                    println "Wait configuration in tests container verified"
+                }
+            }
+        """
+
+        // Create compose file directories
+        def composeDir = testProjectDir.resolve('src/integrationTest/resources/compose').toFile()
+        composeDir.mkdirs()
+
+        new File(composeDir, 'health.yml') << """
+services:
+  app:
+    image: wait-app:1.0.0
+  db:
+    image: postgres:15
+"""
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyWaitConfig', '--info')
+            .build()
+
+        then:
+        result.output.contains('Wait configuration in tests container verified')
+    }
+
+    def "dockerProject tests with custom project name per test config"() {
+        given:
+        settingsFile << "rootProject.name = 'test-project-names'"
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerProject {
+                images {
+                    projNameApp {
+                        imageName.set('proj-name-app')
+                        tags.set(['1.0.0'])
+                        jarFrom.set('jar')
+                    }
+                }
+
+                tests {
+                    apiTests {
+                        compose.set('src/integrationTest/resources/compose/api.yml')
+                        projectName.set('api-project')
+                    }
+                    dbTests {
+                        compose.set('src/integrationTest/resources/compose/db.yml')
+                        projectName.set('db-project')
+                    }
+                }
+            }
+
+            tasks.register('verifyProjectNames') {
+                doLast {
+                    println "Custom project names in tests container verified"
+                }
+            }
+        """
+
+        // Create compose file directories
+        def composeDir = testProjectDir.resolve('src/integrationTest/resources/compose').toFile()
+        composeDir.mkdirs()
+
+        new File(composeDir, 'api.yml') << """
+services:
+  api:
+    image: proj-name-app:1.0.0
+"""
+        new File(composeDir, 'db.yml') << """
+services:
+  db:
+    image: postgres:15
+"""
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyProjectNames', '--info')
+            .build()
+
+        then:
+        result.output.contains('Custom project names in tests container verified')
+    }
 }

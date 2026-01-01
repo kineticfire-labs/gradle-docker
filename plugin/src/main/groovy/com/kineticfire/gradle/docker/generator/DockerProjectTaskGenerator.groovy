@@ -21,6 +21,7 @@ import com.kineticfire.gradle.docker.extension.DockerProjectExtension
 import com.kineticfire.gradle.docker.service.DockerService
 import com.kineticfire.gradle.docker.spec.project.ProjectImageSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectSuccessSpec
+import com.kineticfire.gradle.docker.spec.project.ProjectTestConfigSpec
 import com.kineticfire.gradle.docker.spec.project.ProjectTestSpec
 import com.kineticfire.gradle.docker.spec.project.PublishTargetSpec
 import com.kineticfire.gradle.docker.task.CleanupTask
@@ -105,6 +106,9 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             imageSpec.validate()
         }
 
+        // Validate test configuration (test {} and tests {} are mutually exclusive)
+        spec.validateTestConfiguration()
+
         // Validate and get primary image
         def primaryImage = spec.primaryImage
         if (primaryImage == null && allImages.size() > 1) {
@@ -148,16 +152,27 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
 
         LOGGER.lifecycle("dockerProject: Primary image is '{}', generating pipeline tasks", primaryImageName)
 
-        // 2. Register compose tasks if test is configured
+        // 2. Handle test configuration (single or multiple)
         def composeUpTaskName = null
         def composeDownTaskName = null
-        if (testSpec.compose.isPresent() && !testSpec.compose.get().isEmpty()) {
+        List<String> allTestTaskNames = []
+
+        if (spec.hasMultipleTestsConfigured()) {
+            // Multiple test configurations - generate tasks for each
+            LOGGER.lifecycle("dockerProject: Generating tasks for {} test configurations", spec.tests.size())
+            allTestTaskNames = generateMultipleTestTasks(project, spec, primarySanitizedName, buildTaskProviders)
+        } else if (testSpec.compose.isPresent() && !testSpec.compose.get().isEmpty()) {
+            // Single test configuration with compose
             def stackName = "${primarySanitizedName}Test"
             composeUpTaskName = TaskNamingUtils.composeUpTaskName(stackName)
             composeDownTaskName = TaskNamingUtils.composeDownTaskName(stackName)
+            allTestTaskNames = [testSpec.testTaskName.getOrElse('integrationTest')]
 
             // Note: composeUp/composeDown tasks are registered by DockerTestExtension
             // We just wire dependencies here
+        } else {
+            // Single test without compose
+            allTestTaskNames = [testSpec.testTaskName.getOrElse('integrationTest')]
         }
 
         // 3. Register tag on success task (for primary image only)
@@ -175,11 +190,21 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         def publishTaskProviders = registerPublishTasks(project, primaryImage, successSpec, primarySanitizedName, dockerServiceProvider)
 
         // 6. Wire task dependencies - all build tasks feed into the pipeline
-        wireTaskDependencies(
-            project, testSpec, primarySanitizedName,
-            buildTaskProviders, composeUpTaskName, composeDownTaskName,
-            tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProviders
-        )
+        if (spec.hasMultipleTestsConfigured()) {
+            // For multiple tests, wire each test config's dependencies
+            wireMultipleTestDependencies(
+                project, spec, primarySanitizedName,
+                buildTaskProviders, allTestTaskNames,
+                tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProviders
+            )
+        } else {
+            // Single test configuration
+            wireTaskDependencies(
+                project, testSpec, primarySanitizedName,
+                buildTaskProviders, composeUpTaskName, composeDownTaskName,
+                tagOnSuccessTaskProvider, saveTaskProvider, publishTaskProviders
+            )
+        }
 
         // 7. Create lifecycle task
         def lifecycleTaskProvider = createLifecycleTask(
@@ -706,6 +731,208 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         }
 
         return taskProviders
+    }
+
+    /**
+     * Generate test tasks for multiple test configurations.
+     *
+     * For each ProjectTestConfigSpec in the tests { } container:
+     * - Generates a test task named {configName}IntegrationTest
+     * - Generates corresponding composeUp{ConfigName} and composeDown{ConfigName} tasks
+     * - Applies test class filtering if testClasses is configured
+     *
+     * @param project The Gradle project
+     * @param spec The DockerProjectSpec containing the tests container
+     * @param primarySanitizedName The sanitized name of the primary image
+     * @param buildTaskProviders Map of image name -> build task provider
+     * @return List of all test task names generated
+     */
+    private List<String> generateMultipleTestTasks(
+            Project project,
+            com.kineticfire.gradle.docker.spec.project.DockerProjectSpec spec,
+            String primarySanitizedName,
+            Map<String, TaskProvider<DockerBuildTask>> buildTaskProviders) {
+
+        List<String> testTaskNames = []
+
+        spec.tests.each { ProjectTestConfigSpec testConfig ->
+            def configName = testConfig.name
+            def capitalizedConfigName = TaskNamingUtils.capitalize(configName)
+            def testTaskName = testConfig.getTestTaskName()
+
+            LOGGER.lifecycle("dockerProject: Generating test task '{}' for config '{}'", testTaskName, configName)
+
+            // Generate compose task names for this test config
+            def stackName = "${primarySanitizedName}${capitalizedConfigName}"
+            def composeUpTaskName = TaskNamingUtils.composeUpTaskName(stackName)
+            def composeDownTaskName = TaskNamingUtils.composeDownTaskName(stackName)
+
+            // Register the test task if it doesn't exist
+            if (!taskExists(project, testTaskName)) {
+                project.tasks.register(testTaskName, org.gradle.api.tasks.testing.Test) { task ->
+                    task.group = TASK_GROUP
+                    task.description = "Run ${configName} integration tests"
+
+                    // Configure test classpath from integrationTest source set
+                    def sourceSet = project.sourceSets.findByName('integrationTest')
+                    if (sourceSet != null) {
+                        task.testClassesDirs = sourceSet.output.classesDirs
+                        task.classpath = sourceSet.runtimeClasspath
+                    }
+
+                    // Apply test class filters if configured
+                    def testClasses = testConfig.testClasses.get()
+                    if (!testClasses.isEmpty()) {
+                        testClasses.each { pattern ->
+                            task.filter.includeTestsMatching(pattern)
+                        }
+                    }
+
+                    // Configure test framework
+                    task.useJUnitPlatform()
+                }
+            }
+
+            testTaskNames << testTaskName
+
+            // Note: Compose tasks are registered by DockerTestExtension
+            // We only track the task names here for dependency wiring
+        }
+
+        return testTaskNames
+    }
+
+    /**
+     * Wire dependencies for multiple test configurations.
+     *
+     * Each test configuration gets its own dependency chain:
+     * buildTasks -> composeUp{ConfigName} -> {configName}IntegrationTest -> composeDown{ConfigName}
+     *
+     * All test tasks must pass before tagOnSuccess runs.
+     *
+     * @param project The Gradle project
+     * @param spec The DockerProjectSpec containing the tests container
+     * @param primarySanitizedName The sanitized name of the primary image
+     * @param buildTaskProviders Map of image name -> build task provider
+     * @param allTestTaskNames List of all test task names
+     * @param tagOnSuccessTaskProvider Provider for the tag on success task
+     * @param saveTaskProvider Provider for the save task (may be null)
+     * @param publishTaskProviders List of publish task providers
+     */
+    private void wireMultipleTestDependencies(
+            Project project,
+            com.kineticfire.gradle.docker.spec.project.DockerProjectSpec spec,
+            String primarySanitizedName,
+            Map<String, TaskProvider<DockerBuildTask>> buildTaskProviders,
+            List<String> allTestTaskNames,
+            TaskProvider<TagOnSuccessTask> tagOnSuccessTaskProvider,
+            TaskProvider<DockerSaveTask> saveTaskProvider,
+            List<TaskProvider<DockerPublishTask>> publishTaskProviders) {
+
+        def resultFile = project.layout.buildDirectory.file("${STATE_DIR}/test-result.json")
+
+        // Track all test tasks for final result aggregation
+        List<String> completedTestTasks = []
+
+        spec.tests.each { ProjectTestConfigSpec testConfig ->
+            def configName = testConfig.name
+            def capitalizedConfigName = TaskNamingUtils.capitalize(configName)
+            def testTaskName = testConfig.getTestTaskName()
+
+            // Calculate compose task names
+            def stackName = "${primarySanitizedName}${capitalizedConfigName}"
+            def composeUpTaskName = TaskNamingUtils.composeUpTaskName(stackName)
+            def composeDownTaskName = TaskNamingUtils.composeDownTaskName(stackName)
+
+            // Wire compose dependencies if compose is configured for this test
+            if (testConfig.compose.isPresent() && !testConfig.compose.get().isEmpty()) {
+                if (taskExists(project, composeUpTaskName)) {
+                    // composeUp depends on ALL build tasks
+                    buildTaskProviders.values().each { buildTaskProvider ->
+                        wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
+                    }
+
+                    // Test task depends on composeUp
+                    if (taskExists(project, testTaskName)) {
+                        def lifecycle = testConfig.lifecycle.getOrElse(Lifecycle.CLASS)
+                        if (lifecycle == Lifecycle.CLASS) {
+                            wireTaskDependency(project, testTaskName, composeUpTaskName)
+                            if (taskExists(project, composeDownTaskName)) {
+                                wireFinalizedBy(project, testTaskName, composeDownTaskName)
+                            }
+                        }
+                    }
+                }
+            } else if (taskExists(project, testTaskName)) {
+                // No compose - test depends directly on ALL build tasks
+                buildTaskProviders.values().each { buildTaskProvider ->
+                    wireTaskDependency(project, testTaskName, buildTaskProvider.name)
+                }
+            }
+
+            completedTestTasks << testTaskName
+        }
+
+        // Configure each test task to write result file on completion
+        // The last test task writes the final aggregated result
+        allTestTaskNames.eachWithIndex { testTaskName, index ->
+            if (taskExists(project, testTaskName)) {
+                project.tasks.named(testTaskName).configure { task ->
+                    if (task instanceof org.gradle.api.tasks.testing.Test) {
+                        // Last test task is responsible for final result file
+                        if (index == allTestTaskNames.size() - 1) {
+                            task.outputs.file(resultFile)
+                        }
+
+                        task.doLast {
+                            // Check if this is the last test task - write cumulative result
+                            if (index == allTestTaskNames.size() - 1) {
+                                // Aggregate results from all tests
+                                boolean allPassed = allTestTaskNames.every { name ->
+                                    def testTask = project.tasks.findByName(name)
+                                    testTask?.state?.failure == null
+                                }
+                                def message = allPassed ? "All tests passed" : "Some tests failed"
+                                PipelineStateFile.writeTestResult(
+                                    resultFile.get().asFile,
+                                    allPassed,
+                                    message,
+                                    System.currentTimeMillis()
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Tag on success depends on ALL test tasks
+        allTestTaskNames.each { testTaskName ->
+            if (taskExists(project, testTaskName)) {
+                tagOnSuccessTaskProvider.configure { task ->
+                    task.dependsOn(testTaskName)
+                    task.mustRunAfter(testTaskName)
+                }
+            }
+        }
+
+        // Save depends on tag on success
+        if (saveTaskProvider != null) {
+            saveTaskProvider.configure { task ->
+                task.dependsOn(tagOnSuccessTaskProvider)
+            }
+        }
+
+        // Publish tasks depend on save (if present) or tag on success
+        publishTaskProviders.each { publishTaskProvider ->
+            publishTaskProvider.configure { task ->
+                if (saveTaskProvider != null) {
+                    task.dependsOn(saveTaskProvider)
+                } else {
+                    task.dependsOn(tagOnSuccessTaskProvider)
+                }
+            }
+        }
     }
 
     /**

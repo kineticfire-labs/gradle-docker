@@ -65,6 +65,9 @@ abstract class DockerProjectSpec {
     // Images container for multi-image support
     private NamedDomainObjectContainer<ProjectImageSpec> imagesContainer
 
+    // Tests container for multiple test configurations support
+    private NamedDomainObjectContainer<ProjectTestConfigSpec> testsContainer
+
     // Lazy-initialized nested specs to avoid calling .convention() on uninitialized abstract properties
     private ProjectTestSpec testSpec
     private ProjectSuccessSpec successSpec
@@ -93,6 +96,13 @@ abstract class DockerProjectSpec {
                 return spec
             }
         }
+        if (testsContainer == null) {
+            // Create tests container for multiple test configurations
+            def factory = this.objectFactory
+            testsContainer = factory.domainObjectContainer(ProjectTestConfigSpec) { String name ->
+                factory.newInstance(ProjectTestConfigSpec, name)
+            }
+        }
         if (testSpec == null) {
             testSpec = objectFactory.newInstance(ProjectTestSpec)
             test.set(testSpec)
@@ -116,6 +126,35 @@ abstract class DockerProjectSpec {
     NamedDomainObjectContainer<ProjectImageSpec> getImages() {
         initializeNestedSpecs()
         return imagesContainer
+    }
+
+    /**
+     * Get the tests container for multiple test configurations.
+     * Each test configuration is defined with a named block inside tests { }.
+     *
+     * Example:
+     * <pre>
+     * dockerProject {
+     *     tests {
+     *         apiTests {
+     *             compose = 'src/integrationTest/resources/compose/api.yml'
+     *             lifecycle = Lifecycle.CLASS
+     *             testClasses = ['com.example.api.**']
+     *         }
+     *         statefulTests {
+     *             compose = 'src/integrationTest/resources/compose/stateful.yml'
+     *             lifecycle = Lifecycle.METHOD
+     *             testClasses = ['com.example.stateful.**']
+     *         }
+     *     }
+     * }
+     * </pre>
+     *
+     * @return The named domain object container of test config specs
+     */
+    NamedDomainObjectContainer<ProjectTestConfigSpec> getTests() {
+        initializeNestedSpecs()
+        return testsContainer
     }
 
     abstract Property<ProjectTestSpec> getTest()
@@ -143,6 +182,33 @@ abstract class DockerProjectSpec {
     void images(Action<NamedDomainObjectContainer<ProjectImageSpec>> action) {
         initializeNestedSpecs()
         action.execute(imagesContainer)
+    }
+
+    /**
+     * Configure multiple test configurations using a closure.
+     * Each named block inside the closure creates a new test configuration.
+     *
+     * Note: Using tests { } is mutually exclusive with test { }.
+     * Use one or the other, not both.
+     *
+     * @param closure Configuration closure for the tests container
+     */
+    void tests(@DelegatesTo(NamedDomainObjectContainer) Closure closure) {
+        initializeNestedSpecs()
+        testsContainer.configure(closure)
+    }
+
+    /**
+     * Configure multiple test configurations using an Action.
+     *
+     * Note: Using tests { } is mutually exclusive with test { }.
+     * Use one or the other, not both.
+     *
+     * @param action Configuration action for the tests container
+     */
+    void tests(Action<NamedDomainObjectContainer<ProjectTestConfigSpec>> action) {
+        initializeNestedSpecs()
+        action.execute(testsContainer)
     }
 
     void test(@DelegatesTo(ProjectTestSpec) Closure closure) {
@@ -198,6 +264,44 @@ abstract class DockerProjectSpec {
             (img.jarFrom.isPresent() && !img.jarFrom.get().isEmpty()) ||
             (img.contextDir.isPresent() && !img.contextDir.get().isEmpty()) ||
             (img.repository.isPresent() && !img.repository.get().isEmpty())
+        }
+    }
+
+    /**
+     * Check if the single test configuration (test { }) has been configured.
+     *
+     * @return true if test { } has compose file configured
+     */
+    boolean hasTestConfigured() {
+        if (testSpec == null) {
+            return false
+        }
+        return testSpec.compose.isPresent() && !testSpec.compose.get().isEmpty()
+    }
+
+    /**
+     * Check if multiple test configurations (tests { }) have been configured.
+     *
+     * @return true if tests { } container has at least one configuration
+     */
+    boolean hasMultipleTestsConfigured() {
+        return testsContainer != null && !testsContainer.isEmpty()
+    }
+
+    /**
+     * Validate that test { } and tests { } are not both configured.
+     *
+     * This validation is called during task generation to ensure mutual exclusivity.
+     *
+     * @throws org.gradle.api.GradleException if both test and tests are configured
+     */
+    void validateTestConfiguration() {
+        if (hasTestConfigured() && hasMultipleTestsConfigured()) {
+            throw new org.gradle.api.GradleException(
+                "Invalid dockerProject configuration: Cannot use both 'test { }' and 'tests { }' blocks. " +
+                "Use 'test { }' for a single test configuration or 'tests { }' for multiple named " +
+                "test configurations with different lifecycle modes and test class patterns."
+            )
         }
     }
 
