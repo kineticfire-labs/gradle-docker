@@ -1,0 +1,324 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * dockerProject Integration Test: Scenario 10 - Multiple Test Configurations
+ *
+ * This scenario demonstrates the `tests { }` DSL for defining multiple named
+ * test configurations with different lifecycle modes and test class patterns.
+ *
+ * What this tests:
+ * - tests { } DSL (mutually exclusive with test { })
+ * - Multiple named test configurations
+ * - Different lifecycle modes per configuration (CLASS vs METHOD)
+ * - Different compose files per configuration
+ * - Test class filtering via testClasses patterns
+ * - Separate composeUp/composeDown tasks per configuration
+ *
+ * Port allocation (per README conventions):
+ * - 9310: apiTests configuration
+ * - 9311: statefulTests configuration
+ *
+ * Generated task names:
+ * - ApiTestsIntegrationTest (from 'apiTests' config)
+ * - StatefulTestsIntegrationTest (from 'statefulTests' config)
+ * - composeUpScenario10appApitests / composeDownScenario10appApitests
+ * - composeUpScenario10appStatefultests / composeDownScenario10appStatefultests
+ */
+
+plugins {
+    id 'groovy'
+    id 'com.kineticfire.gradle.docker'
+}
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation libs.groovy.all
+    testImplementation libs.spock.core
+    testRuntimeOnly libs.junit.platform.launcher
+}
+
+// =============================================================================
+// DOCKER PROJECT DSL: Multiple Test Configurations
+// =============================================================================
+// Demonstrates the tests { } DSL which allows defining multiple named test
+// configurations. Each configuration can have its own compose file, lifecycle
+// mode, and test class filtering pattern.
+dockerProject {
+    // images block: Define Docker image to build
+    images {
+        // Named block 'scenario10App' - used for task naming
+        scenario10App {
+            // Image name (must be unique across integration tests)
+            imageName.set('project-scenario10-app')
+
+            // Tags to apply to the built image
+            tags.set(['latest', '1.0.0'])
+
+            // jarFrom: Reference the JAR from app subproject
+            jarFrom.set(':app:jar')
+
+            // Build arguments
+            buildArgs.put('BUILD_VERSION', '1.0.0')
+
+            // Labels
+            labels.put('org.opencontainers.image.title', 'Project Scenario 10 App')
+            labels.put('org.opencontainers.image.version', '1.0.0')
+        }
+    }
+
+    // tests block: Define MULTIPLE named test configurations
+    // NOTE: This is mutually exclusive with test { } - use one or the other!
+    //
+    // Each named configuration generates:
+    // - A test task named {configName}IntegrationTest (e.g., ApiTestsIntegrationTest)
+    // - composeUp/composeDown tasks for that configuration
+    tests {
+        // Configuration 1: API Tests with CLASS lifecycle
+        // CLASS lifecycle means containers start once per test class and are shared
+        // across all test methods in that class. More efficient for stateless tests.
+        apiTests {
+            // Path to compose file for this test configuration
+            compose.set('src/integrationTest/resources/compose/api.yml')
+
+            // CLASS lifecycle: containers shared across methods in a test class
+            lifecycle.set(com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+            // Services to wait for before running tests
+            waitForHealthy.set(['app'])
+
+            // Timeout and poll settings
+            timeoutSeconds.set(60)
+            pollSeconds.set(2)
+
+            // Test class patterns - only tests matching these patterns run with this config
+            // Uses Gradle Test.filter.includeTestsMatching() syntax
+            testClasses.set(['com.kineticfire.test.api.**'])
+        }
+
+        // Configuration 2: Stateful Tests with METHOD lifecycle
+        // METHOD lifecycle means containers restart for each test method.
+        // Use this for tests that modify state and need isolation.
+        statefulTests {
+            // Separate compose file with different port
+            compose.set('src/integrationTest/resources/compose/stateful.yml')
+
+            // METHOD lifecycle: containers restart for each test method
+            lifecycle.set(com.kineticfire.gradle.docker.Lifecycle.METHOD)
+
+            // Services to wait for
+            waitForHealthy.set(['app'])
+
+            // Timeout and poll settings
+            timeoutSeconds.set(60)
+            pollSeconds.set(2)
+
+            // Test class patterns for stateful tests
+            testClasses.set(['com.kineticfire.test.stateful.**'])
+        }
+    }
+
+    // onSuccess block: Actions when ALL tests pass
+    onSuccess {
+        // Additional tags to apply when tests succeed
+        additionalTags.set(['tested'])
+    }
+}
+
+// =============================================================================
+// Docker Test DSL: Manual Compose Stack Configuration
+// =============================================================================
+// NOTE: The tests {} DSL feature in dockerProject requires manually configuring
+// the corresponding dockerTest compose stacks. The stack names must match the
+// pattern: {primarySanitizedImageName}{CapitalizedConfigName}
+// For scenario10App image:
+//   - apiTests config → Scenario10appApitests
+//   - statefulTests config → Scenario10appStatefultests
+dockerTest {
+    composeStacks {
+        // Compose stack for apiTests configuration
+        Scenario10appApitests {
+            files.from('src/integrationTest/resources/compose/api.yml')
+            projectName.set('project-scenario10-api')
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+
+        // Compose stack for statefulTests configuration
+        Scenario10appStatefultests {
+            files.from('src/integrationTest/resources/compose/stateful.yml')
+            projectName.set('project-scenario10-stateful')
+            waitForHealthy {
+                waitForServices.set(['app'])
+                timeoutSeconds.set(60)
+                pollSeconds.set(2)
+            }
+        }
+    }
+}
+
+// =============================================================================
+// Integration Test Dependencies
+// =============================================================================
+dependencies {
+    integrationTestImplementation files("${rootProject.projectDir}/buildSrc/build/classes/groovy/main")
+    integrationTestImplementation libs.rest.assured
+    integrationTestImplementation libs.rest.assured.json.path
+}
+
+// Configure both integration test tasks with system properties
+afterEvaluate {
+    // Configure API tests
+    tasks.matching { it.name == 'ApiTestsIntegrationTest' }.configureEach {
+        systemProperty 'COMPOSE_PROJECT_NAME', 'project-scenario10-api'
+        systemProperty 'IMAGE_NAME', 'project-scenario10-app'
+        systemProperty 'PORT', '9310'
+    }
+
+    // Configure Stateful tests
+    tasks.matching { it.name == 'StatefulTestsIntegrationTest' }.configureEach {
+        systemProperty 'COMPOSE_PROJECT_NAME', 'project-scenario10-stateful'
+        systemProperty 'IMAGE_NAME', 'project-scenario10-app'
+        systemProperty 'PORT', '9311'
+    }
+}
+
+// =============================================================================
+// Task Orchestration
+// =============================================================================
+// Wire dependencies for multiple test configurations
+// NOTE: Use string-based task paths (not project().tasks) for configuration cache compatibility
+afterEvaluate {
+    // Task name uses sanitized image name: project-scenario10-app -> Projectscenario10app
+    def buildTaskName = 'dockerBuildProjectscenario10app'
+
+    // Ensure image is built before compose up for API tests
+    if (tasks.findByName('composeUpScenario10appApitests')) {
+        tasks.named('composeUpScenario10appApitests') {
+            dependsOn tasks.named(buildTaskName)
+            dependsOn ':app:jar'
+        }
+
+        // API tests depend on compose up, finalized by compose down
+        tasks.matching { it.name == 'ApiTestsIntegrationTest' }.configureEach {
+            dependsOn tasks.named('composeUpScenario10appApitests')
+            finalizedBy tasks.named('composeDownScenario10appApitests')
+        }
+    }
+
+    // Ensure image is built before compose up for Stateful tests
+    if (tasks.findByName('composeUpScenario10appStatefultests')) {
+        tasks.named('composeUpScenario10appStatefultests') {
+            dependsOn tasks.named(buildTaskName)
+            dependsOn ':app:jar'
+        }
+
+        // Stateful tests depend on compose up, finalized by compose down
+        tasks.matching { it.name == 'StatefulTestsIntegrationTest' }.configureEach {
+            dependsOn tasks.named('composeUpScenario10appStatefultests')
+            finalizedBy tasks.named('composeDownScenario10appStatefultests')
+        }
+    }
+}
+
+// =============================================================================
+// Aggregate Integration Test Task
+// =============================================================================
+// Configure the existing integrationTest task (created by the plugin convention)
+// to run all test configurations. Since each named test config has its own task,
+// we exclude all tests from this aggregator task and just use it to run the others.
+afterEvaluate {
+    tasks.named('integrationTest').configure {
+        description = 'Run all multiple test configuration integration tests'
+        // This task just aggregates - don't run tests directly (they run in their own tasks)
+        filter.excludeTestsMatching('*')
+        filter.setFailOnNoMatchingTests(false)
+        dependsOn tasks.matching { it.name == 'ApiTestsIntegrationTest' }
+        dependsOn tasks.matching { it.name == 'StatefulTestsIntegrationTest' }
+    }
+}
+
+// =============================================================================
+// Verification Task: Run the full pipeline and verify results
+// =============================================================================
+tasks.register('runProjectIntegrationTest') {
+    description = 'Run the dockerProject pipeline and verify results'
+    group = 'verification'
+
+    // Ensure JAR is built first (use string path for configuration cache compatibility)
+    dependsOn ':app:jar'
+
+    // Run the pipeline (task name is 'run{SanitizedImageName}Pipeline')
+    dependsOn tasks.named('runProjectscenario10appPipeline')
+
+    doLast {
+        // Verify the 'tested' tag was applied
+        def process = new ProcessBuilder('docker', 'images', '-q', 'project-scenario10-app:tested')
+            .redirectErrorStream(true)
+            .start()
+        def imageId = process.inputStream.text.trim()
+        def exitCode = process.waitFor()
+
+        if (exitCode != 0 || imageId.isEmpty()) {
+            throw new GradleException("Expected image 'project-scenario10-app:tested' not found! " +
+                "The onSuccess additionalTags may not have been applied.")
+        }
+        logger.lifecycle("SUCCESS: Image 'project-scenario10-app:tested' found with ID: ${imageId}")
+    }
+}
+
+// =============================================================================
+// Cleanup Tasks
+// =============================================================================
+tasks.register('cleanupProject') {
+    description = 'Clean up Docker resources from dockerProject test'
+    group = 'verification'
+
+    doLast {
+        def runCommand = { List<String> cmd ->
+            try {
+                def process = new ProcessBuilder(cmd).redirectErrorStream(true).start()
+                process.inputStream.text
+                process.waitFor()
+            } catch (Exception e) {
+                logger.debug("Command failed (ignored): ${cmd.join(' ')}: ${e.message}")
+            }
+        }
+
+        // Remove test containers for both configurations
+        runCommand(['docker', 'compose', '-p', 'project-scenario10-api', 'down', '-v'])
+        runCommand(['docker', 'compose', '-p', 'project-scenario10-stateful', 'down', '-v'])
+
+        // Remove test images
+        ['latest', '1.0.0', 'tested'].each { tag ->
+            runCommand(['docker', 'rmi', "project-scenario10-app:${tag}"])
+        }
+    }
+}
+
+tasks.register('cleanAll') {
+    description = 'Clean all scenario resources'
+    group = 'build'
+    dependsOn 'clean'
+    dependsOn 'cleanupProject'
+}

@@ -1,0 +1,52 @@
+/*
+ * (c) Copyright 2023-2025 gradle-docker Contributors. All rights reserved.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+/**
+ * Scenario 10: Multiple Test Configurations
+ *
+ * Demonstrates:
+ * - The `tests { }` DSL for defining multiple named test configurations
+ * - Different lifecycle modes per test configuration (CLASS vs METHOD)
+ * - Different compose files per test configuration
+ * - Test class filtering via testClasses patterns
+ *
+ * Ports allocated:
+ * - 9310: apiTests configuration
+ * - 9311: statefulTests configuration
+ *
+ * This scenario uses the `tests { }` block which is mutually exclusive with `test { }`.
+ * Each named test configuration generates a separate test task:
+ * - apiTests → ApiTestsIntegrationTest
+ * - statefulTests → StatefulTestsIntegrationTest
+ */
+
+plugins {
+    id 'base'
+}
+
+description = 'DockerProject Scenario 10: Multiple Test Configurations'
+
+// Aggregate task to run all scenario tests
+tasks.register('integrationTest') {
+    group = 'verification'
+    description = 'Run all multiple test configuration integration tests'
+    dependsOn ':dockerProject:scenario-10-multiple-tests:app-image:integrationTest'
+}
+
+// Aggregate task to clean all subprojects
+tasks.named('clean') {
+    dependsOn ':dockerProject:scenario-10-multiple-tests:app-image:clean'
+}

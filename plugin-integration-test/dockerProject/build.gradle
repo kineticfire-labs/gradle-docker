@@ -61,6 +61,9 @@ tasks.register('integrationTest') {
     // Scenario 9: Configuration cache verification
     dependsOn ':dockerProject:scenario-9-config-cache:app-image:integrationTest'
 
+    // Scenario 10: Multiple test configurations (tests {} DSL)
+    dependsOn ':dockerProject:scenario-10-multiple-tests:app-image:integrationTest'
+
     doLast {
         logger.lifecycle("All dockerProject tests complete")
     }
@@ -80,6 +83,7 @@ tasks.named('clean') {
     dependsOn ':dockerProject:scenario-7-repository-registry:app-image:clean'
     dependsOn ':dockerProject:scenario-8-imagename-full:app-image:clean'
     dependsOn ':dockerProject:scenario-9-config-cache:app-image:clean'
+    dependsOn ':dockerProject:scenario-10-multiple-tests:app-image:clean'
 }
 
 // ========================================
@@ -144,6 +148,11 @@ tasks.register('cleanDockerImages', Exec) {
         # Scenario 9: Config cache images
         docker rmi project-scenario9-app:latest 2>/dev/null || true
         docker rmi project-scenario9-app:tested 2>/dev/null || true
+
+        # Scenario 10: Multiple test configurations images
+        docker rmi project-scenario10-app:latest 2>/dev/null || true
+        docker rmi project-scenario10-app:1.0.0 2>/dev/null || true
+        docker rmi project-scenario10-app:tested 2>/dev/null || true
 
         echo "Cleaned up dockerProject test images"
     '''

@@ -32,6 +32,7 @@ Integration tests run in parallel. To avoid conflicts, each scenario uses unique
 | scenario-7-repository-registry | 9307 | Repository mode with registry publishing |
 | scenario-8-imagename-full | 9308 | Full imageName mode with all options |
 | scenario-9-config-cache | 9309 | Configuration cache verification |
+| scenario-10-multiple-tests | 9310, 9311 | Multiple test configurations (tests {} DSL) |
 
 Registry ports (for publish scenarios):
 - scenario-3: 5032
@@ -372,46 +373,97 @@ dockerProject {
 }
 ```
 
+### scenario-10-multiple-tests
+
+**Purpose:** Demonstrates the `tests { }` DSL for multiple named test configurations with different lifecycle modes.
+
+**Features Tested:**
+- `tests { }` container for multiple named test configurations
+- Mutual exclusivity with `test { }` (use one or the other)
+- Different lifecycle modes per configuration (CLASS vs METHOD)
+- Different compose files per configuration
+- Test class filtering via `testClasses` patterns
+- Separate composeUp/composeDown tasks per configuration
+- Generated test tasks: `{configName}IntegrationTest`
+
+**Port Allocation:**
+- 9310: apiTests configuration (CLASS lifecycle)
+- 9311: statefulTests configuration (METHOD lifecycle)
+
+**DSL Example:**
+```groovy
+dockerProject {
+    images {
+        scenario10App {
+            imageName.set('project-scenario10-app')
+            tags.set(['latest', '1.0.0'])
+            jarFrom.set(':app:jar')
+        }
+    }
+    // tests {} is mutually exclusive with test {}
+    tests {
+        apiTests {
+            compose.set('src/integrationTest/resources/compose/api.yml')
+            lifecycle.set(Lifecycle.CLASS)  // Containers shared across test methods
+            waitForHealthy.set(['app'])
+            testClasses.set(['com.kineticfire.test.api.**'])
+        }
+        statefulTests {
+            compose.set('src/integrationTest/resources/compose/stateful.yml')
+            lifecycle.set(Lifecycle.METHOD)  // Containers restart for each test
+            waitForHealthy.set(['app'])
+            testClasses.set(['com.kineticfire.test.stateful.**'])
+        }
+    }
+    onSuccess {
+        additionalTags.set(['tested'])
+    }
+}
+```
+
 ## Feature Coverage Matrix
 
 ### Image Configuration
 
-| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
-|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| imageName | ✓ | ✓ | ✓ | ✓ | ✓ | | | ✓ | ✓ |
-| repository | | | | | | ✓ | ✓ | | |
-| registry | | | | | | | ✓ | ✓ | |
-| namespace | | | | | | | | ✓ | |
-| tags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| jarFrom | ✓ | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ |
-| contextDir | | | | | ✓ | | | | |
-| sourceRef* | | ✓ | | | | | | | |
-| pullIfMissing | | ✓ | | | | | | | |
-| buildArgs | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| labels | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| imageName | ✓ | ✓ | ✓ | ✓ | ✓ | | | ✓ | ✓ | ✓ |
+| repository | | | | | | ✓ | ✓ | | | |
+| registry | | | | | | | ✓ | ✓ | | |
+| namespace | | | | | | | | ✓ | | |
+| tags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| jarFrom | ✓ | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| contextDir | | | | | ✓ | | | | | |
+| sourceRef* | | ✓ | | | | | | | | |
+| pullIfMissing | | ✓ | | | | | | | | |
+| buildArgs | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| labels | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | | ✓ |
 
 Legend: s1=scenario-1, s2=scenario-2, etc.
 
 ### Test Configuration
 
-| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
-|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| compose | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| waitForHealthy | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| waitForRunning | | ✓ | | | | | | | |
-| lifecycle='class' | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ |
-| lifecycle='method' | | | | ✓ | | | | | |
-| timeoutSeconds | | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| test {} | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | |
+| tests {} | | | | | | | | | | ✓ |
+| compose | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| waitForHealthy | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| waitForRunning | | ✓ | | | | | | | | |
+| lifecycle='class' | ✓ | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| lifecycle='method' | | | | ✓ | | | | | | ✓ |
+| timeoutSeconds | | | ✓ | ✓ | | ✓ | ✓ | ✓ | ✓ | ✓ |
+| testClasses | | | | | | | | | | ✓ |
 
 ### Success/Failure Configuration
 
-| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 |
-|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| additionalTags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| saveFile | | | ✓ | | | | | ✓ | |
-| publishRegistry | | | ✓ | | | | ✓ | ✓ | |
-| publishNamespace | | | ✓ | | | | | ✓ | |
-| publishTags | | | ✓ | | | | ✓ | ✓ | |
+| Feature | s1 | s2 | s3 | s4 | s5 | s6 | s7 | s8 | s9 | s10 |
+|---------|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| additionalTags | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| saveFile | | | ✓ | | | | | ✓ | | |
+| publishRegistry | | | ✓ | | | | ✓ | ✓ | | |
+| publishNamespace | | | ✓ | | | | | ✓ | | |
+| publishTags | | | ✓ | | | | ✓ | ✓ | | |
 
 ## Running Tests
 
