@@ -36,6 +36,8 @@ import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.tasks.TaskAction
 import org.gradle.api.tasks.UntrackedTask
 
+import java.net.HttpURLConnection
+import java.net.URL
 import java.time.Duration
 import java.time.Instant
 
@@ -128,6 +130,10 @@ abstract class ComposeUpTask extends DefaultTask {
             // Wait for services to be ready
             performWaitIfConfigured(stackName, projectName)
 
+            // Verify HTTP readiness via mapped ports (addresses race condition where
+            // Docker reports healthy but external port forwarding isn't fully ready)
+            verifyHttpReadiness(composeState)
+
             // Generate state file for test consumption
             generateStateFile(stackName, projectName, composeState)
 
@@ -182,6 +188,86 @@ abstract class ComposeUpTask extends DefaultTask {
             waitFuture.get()
 
             logger.lifecycle("All services are RUNNING")
+        }
+    }
+
+    /**
+     * Verifies HTTP readiness by making actual HTTP requests via the mapped ports.
+     * This addresses a race condition where Docker reports a container as healthy
+     * (internal health check passes) but the external port forwarding isn't fully ready.
+     */
+    private void verifyHttpReadiness(ComposeState composeState) {
+        if (!waitForHealthyServices.isPresent() || waitForHealthyServices.get().isEmpty()) {
+            return
+        }
+
+        def healthyServices = waitForHealthyServices.get()
+        int maxAttempts = 10
+        int delayMs = 1000
+        int connectTimeoutMs = 3000
+        int readTimeoutMs = 3000
+
+        logger.lifecycle("Verifying HTTP readiness for services: {}", healthyServices)
+
+        for (String serviceName in healthyServices) {
+            def serviceInfo = composeState.services[serviceName]
+            if (serviceInfo == null) {
+                logger.warn("Service '{}' not found in compose state", serviceName)
+                continue
+            }
+
+            // Find HTTP port (typically 8080)
+            def httpPort = serviceInfo.publishedPorts.find { port ->
+                port.containerPort == 8080
+            }
+
+            if (httpPort == null) {
+                logger.info("No HTTP port (8080) mapping found for service '{}'", serviceName)
+                continue
+            }
+
+            int hostPort = httpPort.hostPort
+            String healthUrl = "http://localhost:${hostPort}/health"
+
+            boolean ready = false
+            Exception lastException = null
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(healthUrl).openConnection()
+                    conn.setConnectTimeout(connectTimeoutMs)
+                    conn.setReadTimeout(readTimeoutMs)
+                    conn.setRequestMethod("GET")
+
+                    int responseCode = conn.getResponseCode()
+                    conn.disconnect()
+
+                    if (responseCode >= 200 && responseCode < 400) {
+                        logger.lifecycle("HTTP readiness verified for '{}' on port {} (attempt {})",
+                            serviceName, hostPort, attempt)
+                        ready = true
+                        break
+                    } else {
+                        logger.info("HTTP readiness check returned {} for '{}' (attempt {})",
+                            responseCode, serviceName, attempt)
+                    }
+                } catch (Exception e) {
+                    lastException = e
+                    if (attempt < maxAttempts) {
+                        logger.info("HTTP readiness attempt {} failed for '{}': {}",
+                            attempt, serviceName, e.message)
+                        Thread.sleep(delayMs)
+                    }
+                }
+            }
+
+            if (!ready) {
+                logger.warn("HTTP readiness verification failed for '{}' after {} attempts",
+                    serviceName, maxAttempts)
+                if (lastException != null) {
+                    logger.warn("Last error: {}", lastException.message)
+                }
+            }
         }
     }
 

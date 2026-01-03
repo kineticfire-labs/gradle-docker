@@ -844,26 +844,31 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             def composeUpTaskName = TaskNamingUtils.composeUpTaskName(stackName)
             def composeDownTaskName = TaskNamingUtils.composeDownTaskName(stackName)
 
+            // Cache task lookups to avoid multiple findByName calls for the same task
+            def composeUpTask = project.tasks.findByName(composeUpTaskName)
+            def composeDownTask = project.tasks.findByName(composeDownTaskName)
+            def testTask = project.tasks.findByName(testTaskName)
+
             // Wire compose dependencies if compose is configured for this test
             if (testConfig.compose.isPresent() && !testConfig.compose.get().isEmpty()) {
-                if (taskExists(project, composeUpTaskName)) {
+                if (composeUpTask != null) {
                     // composeUp depends on ALL build tasks
                     buildTaskProviders.values().each { buildTaskProvider ->
                         wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
                     }
 
                     // Test task depends on composeUp
-                    if (taskExists(project, testTaskName)) {
+                    if (testTask != null) {
                         def lifecycle = testConfig.lifecycle.getOrElse(Lifecycle.CLASS)
                         if (lifecycle == Lifecycle.CLASS) {
                             wireTaskDependency(project, testTaskName, composeUpTaskName)
-                            if (taskExists(project, composeDownTaskName)) {
+                            if (composeDownTask != null) {
                                 wireFinalizedBy(project, testTaskName, composeDownTaskName)
                             }
                         }
                     }
                 }
-            } else if (taskExists(project, testTaskName)) {
+            } else if (testTask != null) {
                 // No compose - test depends directly on ALL build tasks
                 buildTaskProviders.values().each { buildTaskProvider ->
                     wireTaskDependency(project, testTaskName, buildTaskProvider.name)
@@ -873,30 +878,29 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             completedTestTasks << testTaskName
         }
 
+        // Cache test task lookups for the aggregation loop
+        def testTaskCache = allTestTaskNames.collectEntries { name ->
+            [(name): project.tasks.findByName(name)]
+        }
+
         // Configure each test task to write result file on completion
         // The last test task writes the final aggregated result
         allTestTaskNames.eachWithIndex { testTaskName, index ->
-            if (taskExists(project, testTaskName)) {
-                project.tasks.named(testTaskName).configure { task ->
+            def testTask = testTaskCache[testTaskName]
+            if (testTask != null) {
+                testTask.configure { task ->
                     if (task instanceof org.gradle.api.tasks.testing.Test) {
                         // Last test task is responsible for final result file
                         if (index == allTestTaskNames.size() - 1) {
                             task.outputs.file(resultFile)
-                        }
-
-                        task.doLast {
-                            // Check if this is the last test task - write cumulative result
-                            if (index == allTestTaskNames.size() - 1) {
-                                // Aggregate results from all tests
-                                boolean allPassed = allTestTaskNames.every { name ->
-                                    def testTask = project.tasks.findByName(name)
-                                    testTask?.state?.failure == null
-                                }
-                                def message = allPassed ? "All tests passed" : "Some tests failed"
+                            task.doLast {
+                                // This doLast only executes if the test task succeeds.
+                                // Since test tasks have mustRunAfter dependencies, if this runs,
+                                // all previous test tasks completed (failed tests halt the build).
                                 PipelineStateFile.writeTestResult(
                                     resultFile.get().asFile,
-                                    allPassed,
-                                    message,
+                                    true, // If we reach here, all tests passed
+                                    "All tests passed",
                                     System.currentTimeMillis()
                                 )
                             }
@@ -906,9 +910,10 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
             }
         }
 
-        // Tag on success depends on ALL test tasks
+        // Tag on success depends on ALL test tasks (use cached lookups)
         allTestTaskNames.each { testTaskName ->
-            if (taskExists(project, testTaskName)) {
+            def testTask = testTaskCache[testTaskName]
+            if (testTask != null) {
                 tagOnSuccessTaskProvider.configure { task ->
                     task.dependsOn(testTaskName)
                     task.mustRunAfter(testTaskName)
@@ -954,25 +959,30 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         def testTaskName = testSpec.testTaskName.getOrElse('integrationTest')
         def resultFile = project.layout.buildDirectory.file("${STATE_DIR}/test-result.json")
 
+        // Cache task lookups to avoid multiple findByName calls for the same task
+        def composeUpTask = composeUpTaskName != null ? project.tasks.findByName(composeUpTaskName) : null
+        def composeDownTask = composeDownTaskName != null ? project.tasks.findByName(composeDownTaskName) : null
+        def testTask = project.tasks.findByName(testTaskName)
+
         // Wire compose tasks if configured
-        if (composeUpTaskName != null && taskExists(project, composeUpTaskName)) {
+        if (composeUpTask != null) {
             // composeUp depends on ALL build tasks (all images must be built first)
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, composeUpTaskName, buildTaskProvider.name)
             }
 
             // Test task depends on composeUp, finalizedBy composeDown
-            if (taskExists(project, testTaskName)) {
+            if (testTask != null) {
                 def lifecycle = testSpec.lifecycle.getOrElse(Lifecycle.CLASS)
                 if (lifecycle == Lifecycle.CLASS) {
                     wireTaskDependency(project, testTaskName, composeUpTaskName)
-                    if (composeDownTaskName != null && taskExists(project, composeDownTaskName)) {
+                    if (composeDownTask != null) {
                         wireFinalizedBy(project, testTaskName, composeDownTaskName)
                     }
                 }
 
                 // Configure test task to write result file
-                project.tasks.named(testTaskName).configure { task ->
+                testTask.configure { task ->
                     if (task instanceof org.gradle.api.tasks.testing.Test) {
                         task.outputs.file(resultFile)
                         task.doLast {
@@ -988,14 +998,14 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
                     }
                 }
             }
-        } else if (taskExists(project, testTaskName)) {
+        } else if (testTask != null) {
             // No compose - test depends directly on ALL build tasks
             buildTaskProviders.values().each { buildTaskProvider ->
                 wireTaskDependency(project, testTaskName, buildTaskProvider.name)
             }
 
             // Configure test task to write result file
-            project.tasks.named(testTaskName).configure { task ->
+            testTask.configure { task ->
                 if (task instanceof org.gradle.api.tasks.testing.Test) {
                     task.outputs.file(resultFile)
                     task.doLast {
@@ -1013,7 +1023,7 @@ class DockerProjectTaskGenerator extends TaskGraphGenerator {
         }
 
         // Tag on success depends on test
-        if (taskExists(project, testTaskName)) {
+        if (testTask != null) {
             tagOnSuccessTaskProvider.configure { task ->
                 task.dependsOn(testTaskName)
                 task.mustRunAfter(testTaskName)

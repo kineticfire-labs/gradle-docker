@@ -23,6 +23,8 @@ import groovy.json.JsonBuilder
 import org.spockframework.runtime.extension.IMethodInterceptor
 import org.spockframework.runtime.extension.IMethodInvocation
 
+import java.net.HttpURLConnection
+import java.net.URL
 import java.nio.file.Path
 import java.time.Duration
 import java.util.concurrent.TimeUnit
@@ -106,6 +108,10 @@ class ComposeClassInterceptor implements IMethodInterceptor {
 
             // Wait for services
             waitForServices(stackName, projectName)
+
+            // Verify HTTP readiness via mapped ports (addresses race condition where
+            // Docker reports healthy but external port forwarding isn't fully ready)
+            verifyHttpReadiness()
 
             // Generate state file
             generateStateFile(stackName, projectName, className)
@@ -283,6 +289,91 @@ class ComposeClassInterceptor implements IMethodInterceptor {
                 println "All services are RUNNING for stack '${stackName}'"
             } catch (Exception e) {
                 System.err.println("Warning: Service running check did not pass within timeout: ${e.message}")
+            }
+        }
+    }
+
+    /**
+     * Verifies HTTP readiness by making actual HTTP requests via the mapped ports.
+     * This addresses a race condition where Docker reports a container as healthy
+     * (internal health check passes) but the external port forwarding isn't fully ready.
+     *
+     * <p>For each service with a mapped HTTP port (typically 8080), this method
+     * attempts to connect and receive a response via the host port.</p>
+     */
+    private void verifyHttpReadiness() {
+        ComposeState state = composeState.get()
+        if (state == null) {
+            println "No compose state available for HTTP readiness check"
+            return
+        }
+
+        List<String> healthyServices = config.waitForHealthy as List<String>
+        if (!healthyServices || healthyServices.isEmpty()) {
+            return
+        }
+
+        int maxAttempts = 10
+        int delayMs = 1000
+        int connectTimeoutMs = 3000
+        int readTimeoutMs = 3000
+
+        println "Verifying HTTP readiness for services: ${healthyServices}"
+
+        for (String serviceName in healthyServices) {
+            def serviceInfo = state.services[serviceName]
+            if (serviceInfo == null) {
+                println "Service '${serviceName}' not found in compose state"
+                continue
+            }
+
+            // Find HTTP port (typically 8080)
+            def httpPort = serviceInfo.publishedPorts.find { port ->
+                port.containerPort == 8080
+            }
+
+            if (httpPort == null) {
+                println "No HTTP port mapping found for service '${serviceName}'"
+                continue
+            }
+
+            int hostPort = httpPort.hostPort
+            String healthUrl = "http://localhost:${hostPort}/health"
+
+            boolean ready = false
+            Exception lastException = null
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++) {
+                try {
+                    HttpURLConnection conn = (HttpURLConnection) new URL(healthUrl).openConnection()
+                    conn.setConnectTimeout(connectTimeoutMs)
+                    conn.setReadTimeout(readTimeoutMs)
+                    conn.setRequestMethod("GET")
+
+                    int responseCode = conn.getResponseCode()
+                    conn.disconnect()
+
+                    if (responseCode >= 200 && responseCode < 400) {
+                        println "HTTP readiness verified for '${serviceName}' on port ${hostPort} (attempt ${attempt})"
+                        ready = true
+                        break
+                    } else {
+                        println "HTTP readiness check returned ${responseCode} for '${serviceName}' (attempt ${attempt})"
+                    }
+                } catch (Exception e) {
+                    lastException = e
+                    if (attempt < maxAttempts) {
+                        println "HTTP readiness attempt ${attempt} failed for '${serviceName}': ${e.message}"
+                        timeService.sleep(delayMs)
+                    }
+                }
+            }
+
+            if (!ready) {
+                println "Warning: HTTP readiness verification failed for '${serviceName}' after ${maxAttempts} attempts"
+                if (lastException != null) {
+                    println "Last error: ${lastException.message}"
+                }
             }
         }
     }

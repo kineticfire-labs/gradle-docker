@@ -965,4 +965,137 @@ class ComposeUpTaskTest extends Specification {
         1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
         noExceptionThrown()
     }
+
+    // ===== HTTP READINESS VERIFICATION TESTS =====
+
+    def "composeUp skips HTTP readiness check when no healthy services configured"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('no-healthy-project')
+        task.stackName.set('no-healthy-stack')
+        // Not setting waitForHealthyServices
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+        // HTTP readiness check should be skipped silently (no services configured)
+    }
+
+    def "composeUp skips HTTP readiness check when healthy services list is empty"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('empty-healthy-project')
+        task.stackName.set('empty-healthy-stack')
+        task.waitForHealthyServices.set([])
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        noExceptionThrown()
+    }
+
+    def "composeUp runs HTTP readiness check when healthy services configured"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('http-check-project')
+        task.stackName.set('http-check-stack')
+        task.waitForHealthyServices.set(['web'])
+        task.waitForHealthyTimeoutSeconds.set(30)
+        task.waitForHealthyPollSeconds.set(2)
+
+        // Service without port 8080 - should log warning and continue
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'healthy', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        noExceptionThrown()
+        // HTTP readiness check runs but finds no port 8080 mapping
+    }
+
+    def "composeUp handles service not found in compose state during HTTP readiness check"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('missing-service-project')
+        task.stackName.set('missing-service-stack')
+        task.waitForHealthyServices.set(['nonexistent-service'])
+        task.waitForHealthyTimeoutSeconds.set(30)
+        task.waitForHealthyPollSeconds.set(2)
+
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'running', [])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        noExceptionThrown()
+        // Should log warning about missing service and continue
+    }
+
+    def "composeUp skips services without port 8080 in HTTP readiness check"() {
+        given:
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.parentFile.mkdirs()
+        composeFile.createNewFile()
+
+        task.composeFiles.from(composeFile)
+        task.projectName.set('no-http-port-project')
+        task.stackName.set('no-http-port-stack')
+        task.waitForHealthyServices.set(['web'])
+        task.waitForHealthyTimeoutSeconds.set(30)
+        task.waitForHealthyPollSeconds.set(2)
+
+        // Service with different port (not 8080)
+        def mockPort = new com.kineticfire.gradle.docker.model.PortMapping(9999, 9999, 'tcp')
+        def mockComposeState = new ComposeState([
+            'web': new ServiceInfo('web-id', 'web', 'healthy', [mockPort])
+        ])
+
+        when:
+        task.composeUp()
+
+        then:
+        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
+        noExceptionThrown()
+        // Should log info about no port 8080 and continue
+    }
 }
