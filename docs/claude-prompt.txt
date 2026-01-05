@@ -9,6 +9,130 @@ clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+    Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+    the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+    with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Review the plan at @docs/design-docs/todo/add-wait-for-log.md .  The plan provides an overview for a new feature and focuses only on how the DSL should work from
+  the user perspective (additional sections will be added later to describe implementation and testing).
+
+  Analyze the plan for factors including but not limited to:
+  - compatibility with existing wait mechanisms in 'dockerTest' like 'waitForHealthy' and 'waitForRunning'
+  - usability (from a user perspective)
+  - if any features are not needed or missing features are needed
+  - the proposed way this feature will work
+
+  Provide your feedback and recommendations.  Do NOT edit files.
+
+
+
+1. Table Format Consistency: The Configuration Properties table uses "Yes" for required but the existing WaitSpec has no
+required property. Consider whether waitForServices being required aligns with how waitForHealthy and waitForRunning
+work (where an empty list means "don't wait for anything").
+
+
+
+
+
+    5. Missing Log Retrieval Architecture
+
+    Problem: The ComposeService.captureLogs() method at line 66 returns a single String for the entire project:
+    CompletableFuture<String> captureLogs(String projectName, LogsConfig config)
+
+    This doesn't support per-service log retrieval needed for pattern matching per service.
+
+    Recommendation: The design should address this by either:
+    1. Specifying a new service method: CompletableFuture<Map<String, String>> captureServiceLogs(projectName, serviceNames)
+    2. Or documenting how to parse service-prefixed log output
+
+6. Missing Feature: Timestamp/Log Position Tracking
+
+  Problem: The design describes polling logs repeatedly, but doesn't address:
+  - How to avoid re-matching already-matched patterns
+  - Log position/offset tracking between polls
+  - Performance implications of re-reading entire log history
+
+  Recommendation: Add implementation note about using docker compose logs --since=<timestamp> or --tail to avoid re-reading full logs on each poll.
+
+
+    10. Integration Test Considerations
+
+    The design should note how this will be tested:
+    - Unit tests with mocked ComposeService
+    - Integration tests need real services with predictable log output
+    - Consider adding a test container that logs specific markers on a timer
+
+
+4. Consider Container State Validation
+
+  The document mentions detecting container crashes (good!), but doesn't specify when this check occurs:
+  - On every poll? (more responsive, slightly more overhead)
+  - Only after pattern match timeout? (simpler, but delayed feedback)
+
+
+6. Consider matchTimeout Per Pattern (Future Enhancement)
+
+  For services with multi-phase startup, users might want different timeouts per pattern:
+  waitForServices.set([
+      'app': [
+          'Database connected',      // Should match within 30s
+          'Cache warmed'             // May take 2 minutes
+      ]
+  ])
+
+
+
+Add a note about 'todo' items when making a plan to:
+  - Document this:  Users can use regex alternation (pattern1|pattern2) for ANY semantics
+  - update the usage documentation at @docs/usage/usage-docker-test.md with waitForLog
+
+
+
+
+
+
+  Your task is to help design a new feature for the 'dockerTest' DSL.  The DSL is used for testing Linux (Docker) images.  The DSL defines configuration blocks:
+  - waitForHealthy -- which waits for a container to be in the 'healthy' state, if it supports a health check
+  - waitForRunning -- which waits for a container to be in the 'running' state, if the container does not support a health check
+
+  Both blocks accept a list of 1 or more containers to wait for using 'waitForService' and a timeout using 'timeoutSeconds'.  These can be used by themselves or
+  together.
+
+  The new feature to design is related:  we want to be able to wait on certain output (string) to appear in the logs to determine that a container is ready.  Like the
+  two blocks described earlier, this should work on 1 or more containers, have a timeout in seconds, and be useable by itself or in conjuction with waitForHealthy
+  and/or waitForRunning.
+
+  We need to look for certain log output per container to determine that the container is ready, such log output might be "Service started" or "ready".  It may be
+  best to accept a regex string.  In order to help the user simplify potentially complex regexes, should we accept more than 1 regex string per container?  Since we
+  now need a regex string (or more) per container to determine if it's ready, we can't accept just a list as with the other waitForHealthy and waitForRunningBlocks;
+  it might be better to use a map with:  <service name> -> <regex>
+
+  I envision the block would be something like:
+
+  waitForLog {
+     waitForService.set( map as above for 1 or more containers to regex )
+     timeoutSeconds.set(60)
+  }
+
+  We can assume that, since we are working with Docker containers, that the log output of the container is properly directed to stdout (as is best practice for Docker
+  containers) so we can logs as such.
+
+  Consider ONLY the DSL aspect first so we can focus on how a user would use this DSL from the plugin so that we can ensure user experience is the best.
+
+  Read the usage document for 'dockerTest' at @docs/usage/usage-docker-test.md to understand the 'waitForHealthy' and 'waitForRunning' DSLs, since the operation of
+  this 'waitForLog' should be similar.
+
+  Analyze this feature description, provide a design that includes answers the to asked question, and give feedback and recommendations.  Do NOT edit code.
+
+
 
 
 
