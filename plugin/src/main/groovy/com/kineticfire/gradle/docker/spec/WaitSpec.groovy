@@ -16,23 +16,25 @@
 
 package com.kineticfire.gradle.docker.spec
 
-import org.gradle.api.Project
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.provider.Property
 
 import javax.inject.Inject
 
 /**
- * Specification for waiting on Docker services
+ * Specification for waiting on Docker services.
+ * 
+ * <p>Note: {@code waitForServices} has no default convention and must be explicitly set.
+ * Validation is performed in {@link ComposeStackSpec} when configuring wait blocks.</p>
  */
 abstract class WaitSpec {
     
     @Inject
     WaitSpec() {
-        // Set defaults
+        // Set defaults for timeout and poll interval
+        // Note: waitForServices has no convention - must be explicitly set
         timeoutSeconds.convention(60)
         pollSeconds.convention(2)
-        waitForServices.convention([])
     }
     
     abstract ListProperty<String> getWaitForServices()

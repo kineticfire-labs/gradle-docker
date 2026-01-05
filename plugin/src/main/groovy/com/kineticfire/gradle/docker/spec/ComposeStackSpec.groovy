@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.Action
+import org.gradle.api.GradleException
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.RegularFileProperty
@@ -67,12 +68,14 @@ abstract class ComposeStackSpec {
         def waitSpec = objectFactory.newInstance(WaitSpec)
         closure.delegate = waitSpec
         closure.call()
+        validateWaitSpec(waitSpec, 'waitForRunning')
         waitForRunning.set(waitSpec)
     }
     
     void waitForRunning(Action<WaitSpec> action) {
         def waitSpec = objectFactory.newInstance(WaitSpec)
         action.execute(waitSpec)
+        validateWaitSpec(waitSpec, 'waitForRunning')
         waitForRunning.set(waitSpec)
     }
     
@@ -80,13 +83,37 @@ abstract class ComposeStackSpec {
         def waitSpec = objectFactory.newInstance(WaitSpec)
         closure.delegate = waitSpec
         closure.call()
+        validateWaitSpec(waitSpec, 'waitForHealthy')
         waitForHealthy.set(waitSpec)
     }
     
     void waitForHealthy(Action<WaitSpec> action) {
         def waitSpec = objectFactory.newInstance(WaitSpec)
         action.execute(waitSpec)
+        validateWaitSpec(waitSpec, 'waitForHealthy')
         waitForHealthy.set(waitSpec)
+    }
+    
+    /**
+     * Validates that a WaitSpec has at least one service configured.
+     * 
+     * @param waitSpec The WaitSpec to validate
+     * @param blockName The name of the DSL block for error messages
+     * @throws GradleException if waitForServices is not set or is empty
+     */
+    private void validateWaitSpec(WaitSpec waitSpec, String blockName) {
+        if (!waitSpec.waitForServices.present || waitSpec.waitForServices.get().isEmpty()) {
+            throw new GradleException(
+                "Configuration error in '${blockName}' block for compose stack '${name}': " +
+                "'waitForServices' must specify at least one service.\n\n" +
+                "Example:\n" +
+                "    ${blockName} {\n" +
+                "        waitForServices.set(['service1', 'service2'])\n" +
+                "        timeoutSeconds.set(60)\n" +
+                "    }\n\n" +
+                "If you don't need to wait for services, remove the empty '${blockName}' block."
+            )
+        }
     }
     
     void logs(@DelegatesTo(value = LogsSpec, strategy = Closure.DELEGATE_FIRST) Closure closure) {
