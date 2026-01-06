@@ -160,17 +160,18 @@ class WaitSpecTest extends Specification {
 
     // ===== EDGE CASES =====
 
-    def "waitForServices has convention of empty list"() {
+    def "waitForServices has no convention - defaults to empty list"() {
         expect:
-        // Verify the convention is set to empty list
+        // Gradle's abstract ListProperty is always present but defaults to empty without a convention
+        // Validation in ComposeStackSpec ensures non-empty lists are required
         waitSpec.waitForServices.present
-        waitSpec.waitForServices.get() == []
         waitSpec.waitForServices.get().isEmpty()
     }
 
-    def "services is initially empty when not configured"() {
+    def "waitForServices is empty when not explicitly configured"() {
         expect:
-        // ListProperty is typically present but empty by default
+        // ListProperty without convention is present but empty
+        waitSpec.waitForServices.present
         waitSpec.waitForServices.get().isEmpty()
     }
 

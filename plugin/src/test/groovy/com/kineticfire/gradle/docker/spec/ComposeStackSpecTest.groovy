@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.spec
 
 import org.gradle.api.Action
+import org.gradle.api.GradleException
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
 
@@ -210,6 +211,94 @@ class ComposeStackSpecTest extends Specification {
         composeStack.waitForHealthy.get().waitForServices.get() == ['database']
         composeStack.waitForHealthy.get().timeoutSeconds.get() == 240
         composeStack.waitForHealthy.get().pollSeconds.get() == 15
+    }
+
+    // ===== WAIT VALIDATION ERROR TESTS =====
+
+    def "waitForHealthy(Closure) throws exception when waitForServices is not set"() {
+        when:
+        composeStack.waitForHealthy {
+            timeoutSeconds = 60
+            // No services specified
+        }
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
+        e.message.contains(composeStack.name)
+    }
+
+    def "waitForHealthy(Closure) throws exception when waitForServices is explicitly empty list"() {
+        when:
+        composeStack.waitForHealthy {
+            waitForServices = []
+            timeoutSeconds = 60
+        }
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
+    }
+
+    def "waitForHealthy(Action) throws exception when waitForServices is not set"() {
+        when:
+        composeStack.waitForHealthy(new Action<WaitSpec>() {
+            @Override
+            void execute(WaitSpec waitSpec) {
+                waitSpec.timeoutSeconds.set(60)
+                // No services specified
+            }
+        })
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
+    }
+
+    def "waitForRunning(Closure) throws exception when waitForServices is not set"() {
+        when:
+        composeStack.waitForRunning {
+            timeoutSeconds = 60
+            // No services specified
+        }
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForRunning' block")
+        e.message.contains("'waitForServices' must specify at least one service")
+        e.message.contains(composeStack.name)
+    }
+
+    def "waitForRunning(Closure) throws exception when waitForServices is explicitly empty list"() {
+        when:
+        composeStack.waitForRunning {
+            waitForServices = []
+            timeoutSeconds = 60
+        }
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForRunning' block")
+        e.message.contains("'waitForServices' must specify at least one service")
+    }
+
+    def "waitForRunning(Action) throws exception when waitForServices is not set"() {
+        when:
+        composeStack.waitForRunning(new Action<WaitSpec>() {
+            @Override
+            void execute(WaitSpec waitSpec) {
+                waitSpec.timeoutSeconds.set(60)
+                // No services specified
+            }
+        })
+
+        then:
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForRunning' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
     // ===== LOGS CONFIGURATION TESTS =====

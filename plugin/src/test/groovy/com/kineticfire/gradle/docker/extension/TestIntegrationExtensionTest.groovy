@@ -16,6 +16,7 @@
 
 package com.kineticfire.gradle.docker.extension
 
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -573,7 +574,7 @@ class TestIntegrationExtensionTest extends Specification {
         !testTask.dependsOn.any { it.toString().contains('composeUp') }
     }
 
-    def "usesCompose with empty waitForServices uses empty string"() {
+    def "usesCompose with empty waitForServices throws exception"() {
         given:
         def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
             project.layout, project.providers)
@@ -583,24 +584,21 @@ class TestIntegrationExtensionTest extends Specification {
         def composeFile = project.file('docker-compose.yml')
         composeFile.text = 'services: {}'
 
+        when:
         dockerTestExt.composeStacks {
             emptyServicesStack {
                 files.from(composeFile)
                 waitForHealthy {
-                    // Empty services list
+                    // Empty services list - should throw exception
                     waitForServices.set([])
                     timeoutSeconds.set(30)
                 }
             }
         }
 
-        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
-
-        when:
-        testIntegrationExt.usesCompose(testTask, 'emptyServicesStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
-
         then:
-        noExceptionThrown()
-        testTask.systemProperties['docker.compose.waitForHealthy.services'] == ''
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 }

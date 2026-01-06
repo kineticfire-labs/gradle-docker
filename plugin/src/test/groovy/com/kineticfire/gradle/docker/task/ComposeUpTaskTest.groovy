@@ -26,6 +26,7 @@ import com.kineticfire.gradle.docker.model.WaitConfig
 import com.kineticfire.gradle.docker.service.ComposeService
 import com.kineticfire.gradle.docker.spec.WaitSpec
 import groovy.json.JsonSlurper
+import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.testfixtures.ProjectBuilder
 import spock.lang.Specification
@@ -363,124 +364,84 @@ class ComposeUpTaskTest extends Specification {
 
     // ===== WAIT FUNCTIONALITY TESTS =====
 
-    def "composeUp waits for healthy services when configured"() {
+    def "waitForHealthy block without services throws exception"() {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
         def composeFile = project.file('docker-compose.yml')
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerTest extension
+        when:
+        // Configure dockerTest extension with empty waitForHealthy block
         project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
                 waitForHealthy {
-                    // Note: ListProperty DSL assignment doesn't work well in unit tests
-                    // Service filtering will be tested in integration tests
+                    // No services specified - should throw exception
                     timeoutSeconds = 30
                     pollSeconds = 2
                 }
             }
         }
 
-        task.composeFiles.from(composeFile)
-        task.projectName.set('test-project')
-        task.stackName.set('testStack')
-
-        def mockComposeState = new ComposeState([
-            'web': new ServiceInfo('web-id', 'web', 'healthy', []),
-            'api': new ServiceInfo('api-id', 'api', 'healthy', [])
-        ])
-
-        when:
-        task.composeUp()
-
         then:
-        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
-        // Wait should not be called because services list is not set (DSL limitation in tests)
-        0 * mockComposeService.waitForServices(_)
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
-    def "composeUp waits for running services when configured"() {
+    def "waitForRunning block without services throws exception"() {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
         def composeFile = project.file('docker-compose.yml')
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerTest extension
+        when:
+        // Configure dockerTest extension with empty waitForRunning block
         project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
                 waitForRunning {
-                    // Note: ListProperty DSL assignment doesn't work well in unit tests
-                    // Service filtering will be tested in integration tests
+                    // No services specified - should throw exception
                     timeoutSeconds = 20
                 }
             }
         }
 
-        task.composeFiles.from(composeFile)
-        task.projectName.set('test-project')
-        task.stackName.set('testStack')
-
-        def mockComposeState = new ComposeState([
-            'redis': new ServiceInfo('redis-id', 'redis', 'running', []),
-            'worker': new ServiceInfo('worker-id', 'worker', 'running', [])
-        ])
-
-        when:
-        task.composeUp()
-
         then:
-        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
-        // Wait should not be called because services list is not set (DSL limitation in tests)
-        0 * mockComposeService.waitForServices(_)
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForRunning' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
-    def "composeUp waits for mixed states when both configured"() {
+    def "waitForHealthy block without services throws exception even when waitForRunning has services"() {
         given:
         project.pluginManager.apply(GradleDockerPlugin)
         def composeFile = project.file('docker-compose.yml')
         composeFile.parentFile.mkdirs()
         composeFile.createNewFile()
 
-        // Configure dockerTest extension with both healthy and running
+        when:
+        // Configure dockerTest extension - waitForHealthy is empty, waitForRunning has services
+        // The first empty block encountered should throw
         project.extensions.getByName('dockerTest').composeStacks {
             testStack {
                 files.from(composeFile)
                 projectName = 'test-project'
                 waitForHealthy {
-                    // Note: ListProperty DSL assignment doesn't work well in unit tests
-                    // Service filtering will be tested in integration tests
+                    // No services specified - should throw exception
                     timeoutSeconds = 30
-                }
-                waitForRunning {
-                    // Note: ListProperty DSL assignment doesn't work well in unit tests
-                    // Service filtering will be tested in integration tests
-                    timeoutSeconds = 20
                 }
             }
         }
 
-        task.composeFiles.from(composeFile)
-        task.projectName.set('test-project')
-        task.stackName.set('testStack')
-
-        def mockComposeState = new ComposeState([
-            'web': new ServiceInfo('web-id', 'web', 'healthy', []),
-            'redis': new ServiceInfo('redis-id', 'redis', 'running', [])
-        ])
-
-        when:
-        task.composeUp()
-
         then:
-        1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
-        // Wait should not be called because services lists are not set (DSL limitation in tests)
-        0 * mockComposeService.waitForServices(_)
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
     def "composeUp does not wait when no wait configured"() {

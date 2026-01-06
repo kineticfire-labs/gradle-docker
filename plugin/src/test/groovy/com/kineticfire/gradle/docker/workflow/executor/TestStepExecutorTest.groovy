@@ -1328,18 +1328,19 @@ class TestStepExecutorTest extends Specification {
 
     // ===== ADDITIONAL COVERAGE TESTS FOR setWaitSpecSystemProperties =====
 
-    def "setWaitSpecSystemProperties uses convention values when not explicitly set"() {
+    def "setWaitSpecSystemProperties handles unset waitForServices"() {
         given:
         def gradleTestTask = project.tasks.create('conventionTest', GradleTestTask)
         def waitSpec = project.objects.newInstance(com.kineticfire.gradle.docker.spec.WaitSpec)
-        // WaitSpec has convention values: timeoutSeconds=60, pollSeconds=2, waitForServices=[]
+        // waitForServices has no convention - it is not present when not explicitly set
+        // timeoutSeconds and pollSeconds still have conventions (60 and 2 respectively)
 
         when:
         executor.setWaitSpecSystemProperties(gradleTestTask, 'docker.compose.wait', waitSpec)
 
         then:
         noExceptionThrown()
-        // Empty services convention means no services property set
+        // Unset services means no services property set
         !gradleTestTask.systemProperties.containsKey('docker.compose.wait.services')
         // But timeout and poll get their convention values
         gradleTestTask.systemProperties['docker.compose.wait.timeoutSeconds'] == '60'

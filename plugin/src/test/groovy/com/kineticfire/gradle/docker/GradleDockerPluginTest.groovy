@@ -2115,7 +2115,7 @@ class GradleDockerPluginTest extends Specification {
 
     // ===== WAIT FOR HEALTHY/RUNNING WITHOUT SERVICES SPECIFIED =====
 
-    def "plugin configures waitForHealthy without explicit services"() {
+    def "plugin throws exception for waitForHealthy without services"() {
         given:
         plugin.apply(project)
         def dockerTestExt = project.extensions.getByType(DockerTestExtension)
@@ -2124,25 +2124,24 @@ class GradleDockerPluginTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.text = "services:\n  db:\n    image: postgres"
 
+        when:
         dockerTestExt.composeStacks {
             healthyDefault {
                 files.from(composeFile)
                 waitForHealthy {
-                    // Don't set waitForServices - use defaults
+                    // Don't set waitForServices - should throw exception
                     timeoutSeconds.set(30)
                 }
             }
         }
 
-        when:
-        project.evaluate()
-
         then:
-        def upTask = project.tasks.getByName('composeUpHealthyDefault')
-        upTask.waitForHealthyTimeoutSeconds.get() == 30
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForHealthy' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
-    def "plugin configures waitForRunning without explicit services"() {
+    def "plugin throws exception for waitForRunning without services"() {
         given:
         plugin.apply(project)
         def dockerTestExt = project.extensions.getByType(DockerTestExtension)
@@ -2151,22 +2150,21 @@ class GradleDockerPluginTest extends Specification {
         composeFile.parentFile.mkdirs()
         composeFile.text = "services:\n  cache:\n    image: redis"
 
+        when:
         dockerTestExt.composeStacks {
             runningDefault {
                 files.from(composeFile)
                 waitForRunning {
-                    // Don't set waitForServices - use defaults
+                    // Don't set waitForServices - should throw exception
                     pollSeconds.set(1)
                 }
             }
         }
 
-        when:
-        project.evaluate()
-
         then:
-        def upTask = project.tasks.getByName('composeUpRunningDefault')
-        upTask.waitForRunningPollSeconds.get() == 1
+        def e = thrown(GradleException)
+        e.message.contains("Configuration error in 'waitForRunning' block")
+        e.message.contains("'waitForServices' must specify at least one service")
     }
 
     // ===== LOGS WITHOUT SERVICES/WRITETO =====
