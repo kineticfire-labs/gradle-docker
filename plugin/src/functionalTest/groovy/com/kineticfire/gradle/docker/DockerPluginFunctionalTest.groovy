@@ -156,7 +156,7 @@ class DockerPluginFunctionalTest extends Specification {
                         projectName.set('test-integration')
                         
                         waitForHealthy {
-                            services.set(['db', 'redis'])
+                            waitForServices.set(['db', 'redis'])
                             timeoutSeconds.set(120)  // 2 minutes
                         }
                     }
@@ -389,5 +389,131 @@ class DockerPluginFunctionalTest extends Specification {
 
         then:
         result.output.contains('Build arguments and labels configured for dockerBuildBuildApp')
+    }
+
+    // ===== WAIT VALIDATION ERROR TESTS =====
+
+    def "build fails when waitForHealthy block has no services"() {
+        given:
+        settingsFile << "rootProject.name = 'test-wait-healthy-validation'"
+        
+        def composeFile = testProjectDir.resolve('docker-compose.yml').toFile()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+        
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    testStack {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForHealthy {
+                            // No services specified - should fail
+                            timeoutSeconds.set(60)
+                        }
+                    }
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks')
+            .buildAndFail()
+
+        then:
+        result.output.contains("Configuration error in 'waitForHealthy' block")
+        result.output.contains("'waitForServices' must specify at least one service")
+    }
+
+    def "build fails when waitForRunning block has no services"() {
+        given:
+        settingsFile << "rootProject.name = 'test-wait-running-validation'"
+        
+        def composeFile = testProjectDir.resolve('docker-compose.yml').toFile()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+        
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    testStack {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForRunning {
+                            // No services specified - should fail
+                            timeoutSeconds.set(60)
+                        }
+                    }
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks')
+            .buildAndFail()
+
+        then:
+        result.output.contains("Configuration error in 'waitForRunning' block")
+        result.output.contains("'waitForServices' must specify at least one service")
+    }
+
+    def "build fails when waitForHealthy block has explicitly empty services list"() {
+        given:
+        settingsFile << "rootProject.name = 'test-wait-empty-list-validation'"
+        
+        def composeFile = testProjectDir.resolve('docker-compose.yml').toFile()
+        composeFile << """
+            services:
+              app:
+                image: alpine:latest
+        """
+        
+        buildFile << """
+            plugins {
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    testStack {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForHealthy {
+                            // Explicitly empty services list - should fail
+                            waitForServices.set([])
+                            timeoutSeconds.set(60)
+                        }
+                    }
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('tasks')
+            .buildAndFail()
+
+        then:
+        result.output.contains("Configuration error in 'waitForHealthy' block")
+        result.output.contains("'waitForServices' must specify at least one service")
     }
 }

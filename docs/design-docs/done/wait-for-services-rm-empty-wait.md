@@ -549,16 +549,16 @@ If you don't need to wait for services, simply omit the `waitForHealthy` or `wai
 
 ## Acceptance Criteria
 
-1. [ ] `WaitSpec.waitForServices` no longer has an empty list convention
-2. [ ] `ComposeStackSpec.waitForHealthy(Closure)` throws `GradleException` when `waitForServices` is empty or not set
-3. [ ] `ComposeStackSpec.waitForHealthy(Action)` throws `GradleException` when `waitForServices` is empty or not set
-4. [ ] `ComposeStackSpec.waitForRunning(Closure)` throws `GradleException` when `waitForServices` is empty or not set
-5. [ ] `ComposeStackSpec.waitForRunning(Action)` throws `GradleException` when `waitForServices` is empty or not set
-6. [ ] Error message includes the stack name, block name, and example of correct usage
-7. [ ] All unit tests pass (update tests as described above)
-8. [ ] All functional tests pass (add validation error tests, update existing tests)
-9. [ ] All integration tests pass (verify existing tests have services configured)
-10. [ ] Documentation updated to reflect required `waitForServices` property
+1. [x] `WaitSpec.waitForServices` no longer has an empty list convention
+2. [x] `ComposeStackSpec.waitForHealthy(Closure)` throws `GradleException` when `waitForServices` is empty or not set
+3. [x] `ComposeStackSpec.waitForHealthy(Action)` throws `GradleException` when `waitForServices` is empty or not set
+4. [x] `ComposeStackSpec.waitForRunning(Closure)` throws `GradleException` when `waitForServices` is empty or not set
+5. [x] `ComposeStackSpec.waitForRunning(Action)` throws `GradleException` when `waitForServices` is empty or not set
+6. [x] Error message includes the stack name, block name, and example of correct usage
+7. [x] All unit tests pass (update tests as described above)
+8. [x] All functional tests pass (add validation error tests, update existing tests)
+9. [x] All integration tests pass (verify existing tests have services configured)
+10. [x] Documentation updated to reflect required `waitForServices` property
 
 ## Risk Assessment
 

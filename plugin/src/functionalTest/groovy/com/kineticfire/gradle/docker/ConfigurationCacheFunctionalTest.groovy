@@ -790,7 +790,7 @@ class ConfigurationCacheFunctionalTest extends Specification {
                         composeFiles('docker-compose.yml')
 
                         waitForHealthy {
-                            services.set(['api'])
+                            waitForServices.set(['api'])
                             timeoutSeconds.set(30)
                         }
                     }

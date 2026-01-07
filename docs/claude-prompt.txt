@@ -9,28 +9,7 @@ clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
-You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
-  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
-  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
-  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
-
-
-
-You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
-    Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
-    the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
-    with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
-
-  Review the plan at @docs/design-docs/todo/add-wait-for-log.md .  The plan provides an overview for a new feature and focuses only on how the DSL should work from
-  the user perspective (additional sections will be added later to describe implementation and testing).
-
-  Analyze the plan for factors including but not limited to:
-  - compatibility with existing wait mechanisms in 'dockerTest' like 'waitForHealthy' and 'waitForRunning'
-  - usability (from a user perspective)
-  - if any features are not needed or missing features are needed
-  - the proposed way this feature will work
-
-  Provide your feedback and recommendations.  Do NOT edit files.
+@docs/design-docs/todo/add-wait-for-log.md 
 
 
 
@@ -39,7 +18,9 @@ required property. Consider whether waitForServices being required aligns with h
 work (where an empty list means "don't wait for anything").
 
 Source Code Changes: done
-Unit Test Changes: 1, 2, 3, 4
+Unit Test Changes: done
+Functional Test Changes
+  - Functional Test Changes
 
 
 

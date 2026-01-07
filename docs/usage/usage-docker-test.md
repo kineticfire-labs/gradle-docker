@@ -508,6 +508,62 @@ dockerTest {
 
 **Best Practice**: Default to `waitForHealthy` for reliable tests.
 
+### Required Properties
+
+When using `waitForHealthy` or `waitForRunning` blocks, the `waitForServices` property is **required**. The build
+will fail with a clear error message if you configure an empty wait block:
+
+```groovy
+// INVALID - will fail with configuration error
+waitForHealthy {
+    timeoutSeconds.set(60)
+    // Missing waitForServices!
+}
+
+// INVALID - will fail with configuration error
+waitForRunning {
+    waitForServices.set([])  // Empty list not allowed
+    timeoutSeconds.set(60)
+}
+
+// VALID - at least one service specified
+waitForHealthy {
+    waitForServices.set(['app', 'db'])
+    timeoutSeconds.set(60)
+}
+```
+
+**Error message example:**
+```
+Configuration error in 'waitForHealthy' block for compose stack 'myTest':
+'waitForServices' must specify at least one service.
+
+Example:
+    waitForHealthy {
+        waitForServices.set(['service1', 'service2'])
+        timeoutSeconds.set(60)
+    }
+
+If you don't need to wait for services, remove the empty 'waitForHealthy' block.
+```
+
+**Rationale:** Empty wait blocks have no semantic meaning - they configure waiting but don't specify what to wait for.
+The plugin follows the "fail fast" principle by catching this misconfiguration early during Gradle configuration,
+rather than silently ignoring it at runtime.
+
+**If you don't need to wait for services**, simply omit the `waitForHealthy` or `waitForRunning` block entirely:
+
+```groovy
+dockerTest {
+    composeStacks {
+        simpleTest {
+            files.from('compose.yml')
+            // No wait block = no waiting
+        }
+    }
+}
+```
+
 ## Choosing a Test Framework
 
 Both **Groovy/Spock** and **Java/JUnit 5** are fully supported. Choose based on your team's preferences:
