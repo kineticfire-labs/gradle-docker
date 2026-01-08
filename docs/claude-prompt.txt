@@ -9,18 +9,85 @@ clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
 
-@docs/design-docs/todo/add-wait-for-log.md 
+@docs/design-docs/todo/add-wait-for-log.md
 
 
+--------------------------------------------
+Recommendations / Gaps to Address
 
-1. Table Format Consistency: The Configuration Properties table uses "Yes" for required but the existing WaitSpec has no
-required property. Consider whether waitForServices being required aligns with how waitForHealthy and waitForRunning
-work (where an empty list means "don't wait for anything").
+  1. Task Cacheability Not Specified
 
-Source Code Changes: done
-Unit Test Changes: done
-Functional Test Changes
-  - Functional Test Changes
+  Issue: The document doesn't specify whether tasks using waitForLog should be cacheable.
+
+  Recommendation: Since waitForLog has external side effects (polling Docker containers, reading logs), tasks performing this operation should be marked:
+  @DisableCachingByDefault(because = "Waits for external Docker container log output")
+
+  2. Service Injection Pattern Not Detailed
+
+  Issue: The spec class design shows abstract getters but doesn't specify how services (Logger, ComposeService) will be injected.
+
+  Recommendation: Ensure the implementation follows the pattern from Part 1 of the compatibility document:
+  @Inject
+  abstract ObjectFactory getObjects();
+
+  3. Validation Timing Clarification Needed
+
+  Issue: Document says "validates configuration at task configuration time" and "All regex patterns are compiled during configuration."
+
+  Concern: While regex compilation is pure computation (acceptable), be careful that:
+  - Validation doesn't call .get() on providers during configuration
+  - Use finalizeValueOnRead() or validate in @TaskAction
+
+  Recommendation: Validate in task action or use a validation provider pattern:
+  // Good: Validate lazily
+  Provider<Boolean> isValid = waitForServices.map(this::validatePatterns);
+
+  4. MapProperty<String, List> Serialization
+
+  Issue: MapProperty<String, List<String>> with nested List values needs verification.
+
+  Recommendation: Verify this nested generic type serializes correctly for configuration cache. If issues arise, consider:
+  - Flattening to a custom serializable value class
+  - Using @Nested annotation if creating a dedicated holder
+
+  5. Spec Class Construction Pattern Missing
+
+  Issue: The document shows the abstract class but not how it's instantiated.
+
+  Recommendation: Follow the established ObjectFactory pattern from Part 1:
+  // In ComposeStackSpec or extension
+  WaitForLogSpec waitForLogSpec = objects.newInstance(WaitForLogSpec.class);
+
+  6. No Mention of @Input/@Internal Annotations
+
+  Issue: If WaitForLogSpec properties flow into task inputs, they need proper annotations.
+
+  Recommendation: Document how spec properties map to task inputs:
+  @Nested
+  @Optional
+  abstract Property<WaitForLogSpec> getWaitForLogSpec();
+  Or flatten properties per Part 2 pattern if @Nested causes issues.
+
+  ---
+  📋 Summary
+
+  | Aspect            | Status        | Notes                                   |
+  |-------------------|---------------|-----------------------------------------|
+  | Provider API      | ✅ Compliant  | Uses Property/MapProperty correctly     |
+  | No Project refs   | ✅ Compliant  | Explicitly addressed                    |
+  | Lazy evaluation   | ✅ Compliant  | All properties are lazy                 |
+  | Serialization     | ⚠️ Verify     | MapProperty<String, List> needs testing |
+  | Task caching      | ❌ Missing    | Needs @DisableCachingByDefault          |
+  | Service injection | ⚠️ Incomplete | Pattern not specified                   |
+  | Validation timing | ⚠️ Clarify    | Avoid .get() during configuration       |
+
+  Overall: The design is largely compliant with Gradle 9/10 requirements. The main gaps are:
+  1. Add explicit task cacheability guidance (@DisableCachingByDefault)
+  2. Specify service injection pattern
+  3. Clarify validation timing to avoid configuration-time .get() calls
+  4. Test MapProperty<String, List<String>> serialization
+
+--------------------------------
 
 
 

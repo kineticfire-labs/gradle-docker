@@ -43,6 +43,18 @@ abstract class WaitForLogSpec {
 }
 ```
 
+**Property Conventions:**
+- `waitForServices`: **No convention** - must be explicitly set. Validation will fail if not configured or empty.
+- `timeoutSeconds`: Convention of `60` (seconds)
+- `pollSeconds`: Convention of `2` (seconds)
+- `rejectPatterns`: Convention of empty map
+- `caseInsensitive`: Convention of `false`
+- `verbose`: Convention of `false`
+- `progressIntervalSeconds`: Convention of `0` (disabled)
+
+This matches the pattern established by `WaitSpec` where `waitForServices` has no convention to enable fail-fast
+validation when the block is configured without specifying services.
+
 The property name `waitForServices` maintains consistency with `WaitSpec` used by `waitForHealthy` and
 `waitForRunning`. The enclosing block name (`waitForLog`) provides context, and the map syntax
 `['service': ['pattern']]` clearly indicates the different configuration structure.
@@ -296,8 +308,10 @@ composeStacks {
 **Execution Order**: When multiple wait blocks are specified, they execute in order:
 `waitForRunning` -> `waitForHealthy` -> `waitForLog`
 
-This order reflects the natural startup sequence: containers must be running before health checks can pass, and
-health checks should pass before checking for application-specific log messages.
+**Note:** The current implementation executes wait blocks in the order `waitForHealthy` -> `waitForRunning`. This
+change updates the execution order to `waitForRunning` -> `waitForHealthy` -> `waitForLog` because waiting for
+running before healthy reflects the natural startup sequence: containers must be running before health checks can
+pass, and health checks should pass before checking for application-specific log messages.
 
 **Important**: If a preceding wait block fails (e.g., `waitForRunning` times out or `waitForHealthy` fails), the
 subsequent wait blocks are **not executed**. The failure is reported immediately and the compose stack is torn down.
