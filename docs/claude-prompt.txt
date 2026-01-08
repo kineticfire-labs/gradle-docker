@@ -8,6 +8,23 @@ clear; ./gradlew -Pplugin_version=1.0.0 clean build publishToMavenLocal
 
 clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+Evaluate the plan at @docs/design-docs/todo/add-wait-for-log.md for its Implementation section only.  The implementation should be complete, clear, and not
+missing anything.  The implementation should describe how to implement the functionality covered in the DSL / User Description section which describes the
+features and how the user will interact with the DSL.  The implementation must be compatible with Gradle 9 and 10 per
+@docs/design-docs/gradle-9-and-10-compatibility.md .
+
+The plan should NOT include tests; these are deferred until later.
+
+Report your findings and recommendations.  Do NOT edit files.
+
+
+
+
 
 @docs/design-docs/todo/add-wait-for-log.md
 
