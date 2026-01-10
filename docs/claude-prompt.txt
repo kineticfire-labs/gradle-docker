@@ -28,6 +28,12 @@ Report your findings and recommendations.  Do NOT edit files.
 
 @docs/design-docs/todo/add-wait-for-log.md
 
+Todo:
+- break plan into separate docs for overview, impl, unit tests, etc., docs, verification
+- ensure that this includes class and method lifecycle now
+- address the feedback below, which was from doing the description
+
+
 
 --------------------------------------------
 Recommendations / Gaps to Address

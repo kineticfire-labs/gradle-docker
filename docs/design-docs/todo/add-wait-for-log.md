@@ -47,7 +47,7 @@ abstract class WaitForLogSpec {
 - `waitForServices`: **No convention** - must be explicitly set. Validation will fail if not configured or empty.
 - `timeoutSeconds`: Convention of `60` (seconds)
 - `pollSeconds`: Convention of `2` (seconds)
-- `rejectPatterns`: Convention of empty map
+- `rejectPatterns`: Convention of empty map `[:]` (explicitly set to ensure `isPresent()` returns true)
 - `caseInsensitive`: Convention of `false`
 - `verbose`: Convention of `false`
 - `progressIntervalSeconds`: Convention of `0` (disabled)
@@ -351,6 +351,31 @@ waitForLog {
 }
 ```
 
+### ⚠️ Performance Considerations
+
+**Important**: The `waitForLog` feature fetches **all container logs** on each poll iteration to ensure patterns
+that appeared early in startup are not missed. For containers with high log volume (thousands of lines per second),
+this can cause performance degradation.
+
+**Recommendations for High-Volume Logging Services:**
+
+1. **Use longer poll intervals**: Set `pollSeconds.set(5)` or higher to reduce log fetch frequency
+2. **Choose early patterns**: Select patterns that appear early in startup to minimize wait time
+3. **Consider health checks**: For services with high log volume, prefer `waitForHealthy` when possible
+4. **Limit monitored services**: Only include services that truly need log-based readiness detection
+
+**Example for high-volume services:**
+
+```groovy
+waitForLog {
+    waitForServices.set([
+        'high-volume-app': ['Application started']  // Single, early pattern
+    ])
+    pollSeconds.set(5)      // Less frequent polling
+    timeoutSeconds.set(120) // Allow more time between polls
+}
+```
+
 ### Progress Logging
 
 Progress logging behavior depends on the `verbose` setting:
@@ -582,10 +607,129 @@ class MyAppIT extends Specification {
 }
 ```
 
+### Limitations
+
+⚠️ **Initial Release**: The `waitForLog` block is only supported with `Lifecycle.CLASS` in the current release.
+`Lifecycle.METHOD` support will be added in a future release.
+
+| Wait Block | `Lifecycle.CLASS` | `Lifecycle.METHOD` |
+|------------|-------------------|-------------------|
+| `waitForRunning` | ✅ Supported | ✅ Supported |
+| `waitForHealthy` | ✅ Supported | ✅ Supported |
+| `waitForLog` | ✅ Supported | ❌ Not yet supported |
+
+If you need log-based readiness with per-method compose lifecycle, either:
+1. Use `Lifecycle.CLASS` instead (compose stack shared across all test methods)
+2. Wait for a future release that adds `Lifecycle.METHOD` support for `waitForLog`
+
 ## Implementation
 
 This section describes the implementation plan for the `waitForLog` feature, following the existing patterns
 established in the codebase and ensuring Gradle 9/10 configuration cache compatibility.
+
+### Pre-Implementation Requirements
+
+#### LogsConfig Modification Required
+
+The existing `LogsConfig` class enforces `tailLines = Math.max(1, tailLines)`, which means passing `0` for "all logs"
+actually returns only the last 1 line. **This must be fixed before implementing `waitForLogPatterns()`**.
+
+**Current behavior** (`model/LogsConfig.groovy`):
+```groovy
+this.tailLines = Math.max(1, tailLines)  // 0 becomes 1!
+```
+
+**Simplified Fix**: The existing `buildLogsCommand()` in `ExecLibraryComposeService.groovy` (lines 373-375) already
+checks `if (config.tailLines > 0)` before adding the `--tail` flag. Therefore, **only the `LogsConfig` constructor
+needs to change** - just remove the `Math.max(1, tailLines)` constraint:
+
+**Required fix** - Minimal change to `LogsConfig`:
+
+Modify `plugin/src/main/groovy/com/kineticfire/gradle/docker/model/LogsConfig.groovy` (line 32 only):
+
+```groovy
+// BEFORE:
+this.tailLines = Math.max(1, tailLines)
+
+// AFTER (simply remove the constraint):
+this.tailLines = tailLines
+```
+
+**Semantic values for `tailLines`:**
+- `tailLines > 0`: Fetch only the last N lines (adds `--tail N` flag)
+- `tailLines <= 0`: Fetch all logs (no `--tail` flag added)
+- **Convention**: Use `0` to indicate "all logs" for clarity
+
+**Optional enhancement** - Add a helper method for clarity (recommended but not required):
+
+```groovy
+/**
+ * Returns true if tailLines should be applied (positive value).
+ * When false, the --tail flag should be omitted to fetch all logs.
+ */
+boolean hasLimitedTail() {
+    return tailLines > 0
+}
+```
+
+If `hasLimitedTail()` is added, update `buildLogsCommand()` to use it for improved readability:
+
+```groovy
+// BEFORE:
+if (config.tailLines > 0) {
+
+// AFTER (optional, for clarity):
+if (config.hasLimitedTail()) {
+```
+
+**Note**: The existing `buildLogsCommand()` already handles the condition correctly. Adding `hasLimitedTail()` improves
+code readability but is not strictly necessary for functionality.
+
+**Implementation note**: This prerequisite change should be implemented and tested first, as `waitForLogPatterns()`
+depends on the ability to fetch all container logs.
+
+#### Dependency Verification Required
+
+Before implementation, verify the following dependencies and interfaces exist in the codebase:
+
+1. **Guava dependency for `@VisibleForTesting`**: Guava is defined in `libs.versions.toml` (line 28, 33) but may not
+   be explicitly declared in `build.gradle`. It is available as a transitive dependency from docker-java.
+
+   **Verification step**:
+   ```bash
+   rg "libs.guava" plugin/build.gradle
+   ```
+
+   If not found, add to `plugin/build.gradle` in the `dependencies` block:
+   ```groovy
+   implementation libs.guava
+   ```
+
+   **Note**: The existing codebase already uses `@VisibleForTesting` in `ExecLibraryComposeService.groovy` and
+   `DockerServiceImpl.groovy`, so Guava must be available. Adding an explicit dependency ensures stability if
+   docker-java's transitive dependencies change.
+
+2. **ServiceLogger interface**: The existing `ServiceLogger` interface has **only** these methods:
+   - `info(String message)` - single String parameter only
+   - `debug(String message)` - single String parameter only
+   - `warn(String message)` - single String parameter only
+   - `error(String message)` and `error(String message, Throwable throwable)`
+
+   **IMPORTANT**: There is NO `lifecycle()` method and NO parameterized logging (varargs) support.
+   All logging in this implementation uses `info()` with Groovy string interpolation:
+   ```groovy
+   // CORRECT - use string interpolation
+   serviceLogger.info("[waitForLog] Waiting for ${count} services...")
+
+   // WRONG - no parameterized logging support
+   // serviceLogger.info("[waitForLog] Waiting for {} services...", count)
+   ```
+
+3. **ComposeStackSpec.getName()**: ✅ Verified - `ComposeStackSpec` has a `getName()` method that returns the stack
+   name (line 46-48 in the existing implementation).
+
+4. **DefaultServiceLogger**: Verify that `DefaultServiceLogger` implements all `ServiceLogger` methods. The
+   implementation should delegate to SLF4J or Gradle's logger.
 
 ### Component Overview
 
@@ -595,14 +739,35 @@ The implementation adds the following components:
 |-----------|------|---------|
 | `WaitForLogSpec` | Spec class | DSL configuration for log-based readiness |
 | `WaitForLogConfig` | Model class | Immutable runtime configuration |
-| `LogsConfig` | Model class | Log capture configuration |
 | `LogPatternMatcher` | Pure utility | Regex pattern matching logic (includes `RejectCheckResult` inner class) |
 | `WaitForLogResult` | Model class | Per-service pattern match results |
 | `WaitForLogConfigBuilder` | Utility | Config builder with validation |
-| `ComposeService` extension | Interface | Add `waitForLogPatterns()` and `captureLogs()` methods |
+| `ComposeService` extension | Interface | Add `waitForLogPatterns()` method |
 | `ComposeUpTask` extension | Task | Add `waitForLog*` properties |
 | `ComposeStackSpec` extension | Spec | Add `waitForLog` DSL block |
 | `TestIntegrationExtension` extension | Extension | Propagate `waitForLog` to test framework |
+
+### Existing Dependencies Verification
+
+The following dependencies **already exist** in the codebase and will be used by this implementation:
+
+**In `ExecLibraryComposeService.groovy`:**
+- `timeService: TimeService` - Provides `currentTimeMillis()` and `sleep()` for testable time operations
+- `processExecutor: ProcessExecutor` - Executes shell commands
+- `serviceLogger: ServiceLogger` - Logging interface for output
+- `getComposeCommand()` - Returns compose command prefix (e.g., `["docker", "compose"]`)
+
+**In `ComposeService.groovy` interface:**
+- `captureLogs(String projectName, LogsConfig config)` - Already exists for capturing container logs
+
+**In `model/LogsConfig.groovy`:**
+- Existing class with properties: `services`, `tailLines`, `follow`, `outputFile`
+- **Note:** The existing `LogsConfig` uses `follow` (boolean) instead of `timestamps` and `since`. The
+  implementation will use the existing class signature.
+
+**In `ComposeServiceException.groovy`:**
+- Existing constructors support the 3-argument pattern: `ComposeServiceException(ErrorType, String message, String suggestion)`
+- The `ErrorType` enum will be extended with new values
 
 ### Gradle 9/10 Configuration Cache Compatibility
 
@@ -624,6 +789,7 @@ constructor. Create at `plugin/src/main/groovy/com/kineticfire/gradle/docker/spe
 ```groovy
 package com.kineticfire.gradle.docker.spec
 
+// Complete imports for this file
 import org.gradle.api.model.ObjectFactory
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
@@ -670,7 +836,9 @@ class WaitForLogSpec {
         this.caseInsensitive.convention(false)
         this.verbose.convention(false)
         this.progressIntervalSeconds.convention(0)
-        // rejectPatterns has no convention - empty map by default via MapProperty
+        // Set explicit empty map convention for rejectPatterns
+        // (MapProperty has no value unless explicitly set or given a convention)
+        this.rejectPatterns.convention([:])
     }
 
     /**
@@ -746,11 +914,22 @@ class WaitForLogSpec {
 The model class provides an immutable runtime configuration. Create at
 `plugin/src/main/groovy/com/kineticfire/gradle/docker/model/WaitForLogConfig.groovy`:
 
+**Configuration Cache Note**: This class stores `java.util.regex.Pattern` objects which implement `Serializable`.
+Pattern serialization is supported by the JVM, so this class is configuration-cache compatible. However, if
+serialization issues arise during configuration cache testing, consider storing pattern strings instead and
+compiling them at execution time.
+
 ```groovy
 package com.kineticfire.gradle.docker.model
 
+// Complete imports for this file
 import java.time.Duration
 import java.util.regex.Pattern
+import java.util.Collections
+import java.util.Objects
+import java.util.Map
+import java.util.List
+import java.util.ArrayList
 
 /**
  * Immutable configuration for waiting for log patterns.
@@ -818,6 +997,10 @@ Create at `plugin/src/main/groovy/com/kineticfire/gradle/docker/model/WaitForLog
 ```groovy
 package com.kineticfire.gradle.docker.model
 
+// Complete imports for this file
+import java.util.Collections
+import java.util.List
+
 /**
  * Result of a wait-for-log operation for a single service.
  *
@@ -882,13 +1065,21 @@ class WaitForLogResult {
 A pure utility class for pattern matching logic. Create at
 `plugin/src/main/groovy/com/kineticfire/gradle/docker/util/LogPatternMatcher.groovy`:
 
+**Note on `@VisibleForTesting`**: This annotation requires the Guava library. If Guava is not a project dependency,
+either add it to `plugin/build.gradle` or remove the `@VisibleForTesting` annotations entirely. The annotations are
+documentation-only and do not affect runtime behavior.
+
 ```groovy
 package com.kineticfire.gradle.docker.util
 
+// NOTE: If Guava is not available, remove this import and all @VisibleForTesting annotations
 import com.google.common.annotations.VisibleForTesting
 
 import java.util.regex.Pattern
 import java.util.regex.PatternSyntaxException
+import java.util.Set
+import java.util.Map
+import java.util.List
 
 /**
  * Pure utility class for log pattern matching.
@@ -1010,12 +1201,15 @@ class LogPatternMatcher {
     /**
      * Update match state for a service based on new log output.
      *
-     * @param patterns Patterns to match
-     * @param matchedPatterns Set of already-matched pattern indices (modified in place)
-     * @param logLines New log lines to check
+     * <p>This method modifies the provided collections in place for efficiency.</p>
+     *
+     * @param patterns Patterns to match (must not be null or empty)
+     * @param matchedPatterns Set of already-matched pattern indices (modified in place, must not be null)
+     * @param logLines New log lines to check (must not be null, may be empty)
      * @param elapsedSeconds Current elapsed time for recording match time
-     * @param matchTimes Map of pattern index to match time (modified in place)
+     * @param matchTimes Map of pattern index to match time (modified in place, must not be null)
      * @return Number of newly matched patterns
+     * @throws NullPointerException if any required parameter is null
      */
     static int updateMatches(
             List<Pattern> patterns,
@@ -1023,6 +1217,20 @@ class LogPatternMatcher {
             List<String> logLines,
             long elapsedSeconds,
             Map<Integer, Long> matchTimes) {
+        // Null safety - fail fast with clear error messages
+        if (patterns == null) {
+            throw new NullPointerException("patterns cannot be null")
+        }
+        if (matchedPatterns == null) {
+            throw new NullPointerException("matchedPatterns cannot be null")
+        }
+        if (logLines == null) {
+            throw new NullPointerException("logLines cannot be null")
+        }
+        if (matchTimes == null) {
+            throw new NullPointerException("matchTimes cannot be null")
+        }
+
         int newMatches = 0
         patterns.eachWithIndex { pattern, index ->
             if (!matchedPatterns.contains(index) && matchesAnyLine(pattern, logLines)) {
@@ -1161,32 +1369,57 @@ class WaitForLogConfigBuilder {
 Add the `waitForLog` block to `ComposeStackSpec`. Modify
 `plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/ComposeStackSpec.groovy`:
 
-```groovy
-// Add import
-import com.kineticfire.gradle.docker.spec.WaitForLogSpec
+**Prerequisites - Verified Against Existing Codebase:**
+The existing `ComposeStackSpec` has:
+1. ✅ Constructor injection: `ComposeStackSpec(String name, ObjectFactory objectFactory)`
+2. ✅ `getName()` method returning the stack name (line 46-48)
+3. ✅ `objectFactory` field available for creating nested specs
+4. ✅ Existing pattern for `waitForHealthy` and `waitForRunning` DSL methods
 
-// Ensure ObjectFactory is available (if not already present):
+**Required Imports** (add to existing imports in `ComposeStackSpec.groovy`):
+
+```groovy
+// Complete imports to add for waitForLog functionality
+// Note: Action and GradleException are likely already imported
+import com.kineticfire.gradle.docker.spec.WaitForLogSpec
+import org.gradle.api.Action
+import org.gradle.api.GradleException
+import org.gradle.api.provider.Property
+
+// Ensure ObjectFactory is available (verify this exists or add if needed):
 // ComposeStackSpec should have an injected ObjectFactory for creating nested specs.
-// If not present, add:
+// Check existing waitForHealthy/waitForRunning implementation for the pattern used.
 @Inject
 abstract ObjectFactory getObjectFactory()
 
-// Add property
+// Add property (no convention - isPresent() returns false until explicitly set)
+// This matches the pattern used by waitForHealthy and waitForRunning properties
 abstract Property<WaitForLogSpec> getWaitForLog()
+
+/**
+ * Property Convention Note:
+ * The waitForLog property has NO convention set. This means:
+ * - waitForLog.isPresent() returns false by default
+ * - The property only has a value after the waitForLog{} DSL block is configured
+ * - This is intentional: it allows checking if the user configured a waitForLog block
+ * - This pattern matches waitForHealthy and waitForRunning in the existing codebase
+ */
 
 // Add DSL methods
 void waitForLog(@DelegatesTo(WaitForLogSpec) Closure closure) {
     def waitForLogSpec = objectFactory.newInstance(WaitForLogSpec)
     closure.delegate = waitForLogSpec
     closure.call()
-    validateWaitForLogSpec(waitForLogSpec)
+    // Pass stack name explicitly (getName() returns the stack name in ComposeStackSpec)
+    validateWaitForLogSpec(waitForLogSpec, getName())
     waitForLog.set(waitForLogSpec)
 }
 
 void waitForLog(Action<WaitForLogSpec> action) {
     def waitForLogSpec = objectFactory.newInstance(WaitForLogSpec)
     action.execute(waitForLogSpec)
-    validateWaitForLogSpec(waitForLogSpec)
+    // Pass stack name explicitly (getName() returns the stack name in ComposeStackSpec)
+    validateWaitForLogSpec(waitForLogSpec, getName())
     waitForLog.set(waitForLogSpec)
 }
 
@@ -1197,13 +1430,14 @@ void waitForLog(Action<WaitForLogSpec> action) {
  * to provide early feedback on configuration errors.</p>
  *
  * @param spec The WaitForLogSpec to validate
+ * @param stackName The name of the compose stack (for error messages)
  * @throws GradleException if validation fails
  */
-private void validateWaitForLogSpec(WaitForLogSpec spec) {
+private void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
     // Check waitForServices is present and non-empty
     if (!spec.waitForServices.present || spec.waitForServices.get().isEmpty()) {
         throw new GradleException(
-            "Configuration error in 'waitForLog' block for compose stack '${name}': " +
+            "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
             "'waitForServices' must specify at least one service with patterns.\n\n" +
             "Example:\n" +
             "    waitForLog {\n" +
@@ -1219,7 +1453,7 @@ private void validateWaitForLogSpec(WaitForLogSpec spec) {
     spec.waitForServices.get().each { serviceName, patterns ->
         if (patterns == null || patterns.isEmpty()) {
             throw new GradleException(
-                "Configuration error in 'waitForLog' block for compose stack '${name}': " +
+                "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
                 "Pattern list for service '${serviceName}' cannot be empty.\n" +
                 "Each service must have at least one pattern to match."
             )
@@ -1252,121 +1486,127 @@ import com.kineticfire.gradle.docker.model.WaitForLogResult
 CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogConfig config)
 ```
 
-### 7.5 LogsConfig Model Class and captureLogs Method
+### 7.5 Reference: Existing Components Used (No Changes Required)
 
-The `waitForLogPatterns()` implementation requires the ability to fetch container logs. This
-section describes the `LogsConfig` model class and `captureLogs()` method that must exist in
-`ComposeService`.
+> **Note**: This section documents existing codebase components that will be used by the `waitForLog`
+> implementation. These are shown for reference only - **no changes are required** to these components
+> (except for the `LogsConfig` prerequisite change documented in Phase 0).
 
-**LogsConfig Model Class**
+The `waitForLogPatterns()` implementation requires the ability to fetch container logs. Both
+`LogsConfig` and `captureLogs()` **already exist** in the codebase.
 
-If not already present, create at `plugin/src/main/groovy/com/kineticfire/gradle/docker/model/LogsConfig.groovy`:
+**Existing LogsConfig Model Class** (`plugin/src/main/groovy/com/kineticfire/gradle/docker/model/LogsConfig.groovy`):
 
 ```groovy
 package com.kineticfire.gradle.docker.model
 
+import java.nio.file.Path
+
 /**
- * Configuration for fetching container logs.
+ * Configuration for capturing Docker Compose logs
  */
 class LogsConfig {
     final List<String> services
-    final int tailLines      // 0 = all lines
-    final boolean timestamps
-    final String since       // null = from beginning
+    final int tailLines
+    final boolean follow
+    final Path outputFile
 
-    LogsConfig(List<String> services, int tailLines, boolean timestamps, String since) {
-        this.services = Collections.unmodifiableList(services ?: [])
-        this.tailLines = tailLines
-        this.timestamps = timestamps
-        this.since = since
+    LogsConfig(List<String> services, int tailLines = 100, boolean follow = false, Path outputFile = null) {
+        this.services = services ?: []
+        this.tailLines = Math.max(1, tailLines)
+        this.follow = follow
+        this.outputFile = outputFile
+    }
+
+    boolean hasSpecificServices() {
+        return !services.empty
+    }
+
+    boolean hasOutputFile() {
+        return outputFile != null
     }
 }
 ```
 
-**ComposeService Interface Extension**
-
-Add `captureLogs()` method to `ComposeService` interface if not already present:
+**Existing ComposeService Interface** (`plugin/src/main/groovy/com/kineticfire/gradle/docker/service/ComposeService.groovy`):
 
 ```groovy
-// Add to ComposeService interface
-import com.kineticfire.gradle.docker.model.LogsConfig
-
 /**
- * Capture logs from one or more services.
- *
+ * Capture logs from compose services
  * @param projectName Compose project name
- * @param config Log capture configuration
- * @return CompletableFuture with log output as string
+ * @param config Logs configuration
+ * @return CompletableFuture with captured logs
+ * @throws ComposeServiceException if log capture fails
  */
 CompletableFuture<String> captureLogs(String projectName, LogsConfig config)
 ```
 
-**ExecLibraryComposeService Implementation**
+**Existing ExecLibraryComposeService Implementation** (excerpt):
 
-Implement in `ExecLibraryComposeService`:
-
-```groovy
-@Override
-CompletableFuture<String> captureLogs(String projectName, LogsConfig config) {
-    return CompletableFuture.supplyAsync({
-        def composeCommand = getComposeCommand()
-        def command = composeCommand + ["-p", projectName, "logs", "--no-color"]
-
-        if (config.tailLines > 0) {
-            command += ["--tail", config.tailLines.toString()]
-        }
-        if (config.timestamps) {
-            command += ["--timestamps"]
-        }
-        if (config.since) {
-            command += ["--since", config.since]
-        }
-        command += config.services
-
-        def result = processExecutor.execute(command)
-        if (!result.isSuccess()) {
-            throw new ComposeServiceException(
-                ComposeServiceException.ErrorType.COMMAND_FAILED,
-                "Failed to capture logs: ${result.stderr}"
-            )
-        }
-        return result.stdout ?: ""
-    })
-}
-
-/**
- * Get recent log lines for a specific service (for error reporting).
- *
- * @param projectName Compose project name
- * @param serviceName Service name
- * @param lineCount Number of recent lines to retrieve
- * @return List of recent log lines
- */
-private List<String> getRecentLogs(String projectName, String serviceName, int lineCount) {
-    try {
-        def config = new LogsConfig([serviceName], lineCount, false, null)
-        def logs = captureLogs(projectName, config).get()
-        return logs.split('\n').toList()
-    } catch (Exception e) {
-        serviceLogger.debug("Failed to get recent logs for '{}': {}", serviceName, e.message)
-        return ["(Unable to retrieve logs: ${e.message})"]
-    }
-}
-```
+The implementation already exists with the `buildLogsCommand()` pure function pattern. The new
+`waitForLogPatterns()` method and its helper methods (including `getRecentLogs()`) are defined
+in **Section 8** below.
 
 ### 8. ExecLibraryComposeService Implementation
 
 Implement `waitForLogPatterns()` in `ExecLibraryComposeService`. The implementation follows the
 existing patterns for `waitForServices()`.
 
-**Note:** This implementation assumes the following dependencies already exist in
-`ExecLibraryComposeService`:
-- `timeService`: A `TimeService` interface for time operations (`currentTimeMillis()`, `sleep()`)
-- `processExecutor`: A `ProcessExecutor` for running shell commands
-- `getComposeCommand()`: Method returning the docker compose command prefix (e.g., `["docker", "compose"]`)
-- `serviceLogger`: Logger instance for output
+**Required Imports** (add to `ExecLibraryComposeService.groovy`):
 
-Verify these exist or add them to the class dependencies before implementing:
+```groovy
+// Complete imports to add for waitForLog functionality
+import com.kineticfire.gradle.docker.model.WaitForLogConfig
+import com.kineticfire.gradle.docker.model.WaitForLogResult
+import com.kineticfire.gradle.docker.util.LogPatternMatcher
+import java.util.regex.Pattern
+import java.util.Set
+import java.util.HashSet
+import java.util.Map
+import java.util.List
+import java.util.concurrent.CompletableFuture
+
+// JSON parsing for isServiceRunning() method (part of Groovy runtime, no additional dependencies)
+import groovy.json.JsonSlurper
+```
+
+**Thread Safety Note**: The `waitForLogPatterns()` implementation runs entirely within a single thread context
+(inside `CompletableFuture.supplyAsync()`). The mutable `HashSet` and `HashMap` used for tracking match state are
+not shared across threads, so no synchronization is required.
+
+**Dependencies Already Verified** (see "Existing Dependencies Verification" section above):
+- `timeService: TimeService` - ✅ Exists
+- `processExecutor: ProcessExecutor` - ✅ Exists
+- `getComposeCommand()` - ✅ Exists
+- `serviceLogger: ServiceLogger` - ✅ Exists
+
+**Logger Usage Clarification**:
+
+| Context | Logger | Methods | Example |
+|---------|--------|---------|---------|
+| Service layer (`ExecLibraryComposeService`) | `serviceLogger` (injected `ServiceLogger`) | `info()`, `debug()`, `warn()`, `error()` | `serviceLogger.info("[waitForLog] ...")` |
+| Task layer (`ComposeUpTask`) | `logger` (Gradle's inherited `Logger`) | `lifecycle()`, `info()`, `debug()`, etc. | `logger.lifecycle("Waiting for ...")` |
+
+This distinction is intentional:
+- **Service layer** uses `ServiceLogger` for testability (can be mocked in unit tests)
+- **Task layer** uses Gradle's `logger` for Gradle-native lifecycle messages
+
+The implementation in this section uses `serviceLogger.info()` which is correct for the service layer.
+
+**Implementation:**
+
+**IMPORTANT**: The `ServiceLogger` interface only supports single-String methods (`info(String)`, `debug(String)`,
+etc.) with NO parameterized logging. Use Groovy string interpolation (`"${variable}"`) instead of SLF4J-style
+placeholders (`{}`).
+
+**Constants** (add at the top of `ExecLibraryComposeService.groovy` class):
+
+```groovy
+/** Number of recent log lines to include in error messages for diagnostics */
+private static final int RECENT_LOG_LINES_FOR_ERROR = 10
+```
+
+**Main Method** (refactored into smaller, focused methods per code quality standards - methods ≤ 30-40 lines):
 
 ```groovy
 @Override
@@ -1376,116 +1616,12 @@ CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogCo
     }
     return CompletableFuture.supplyAsync({
         try {
-            def serviceCount = config.services.size()
-            serviceLogger.lifecycle("[waitForLog] Waiting for log patterns in {} service{} (timeout: {}s)...",
-                serviceCount, serviceCount == 1 ? "" : "s", config.timeout.toSeconds())
-
-            def startTime = timeService.currentTimeMillis()
-            def timeoutMillis = config.timeout.toMillis()
-
-            // Track match state per service
-            // Map<serviceName, Set<patternIndex>>
-            def matchedPatterns = config.services.collectEntries { [(it): new HashSet<Integer>()] }
-            // Map<serviceName, Map<patternIndex, matchTimeSeconds>>
-            def matchTimes = config.services.collectEntries { [(it): [:]] }
-
-            def lastProgressLog = startTime
-            def progressIntervalMillis = config.progressInterval.toMillis()
-            int attempt = 0
-
-            while (timeService.currentTimeMillis() - startTime < timeoutMillis) {
-                attempt++
-                def elapsedSeconds = (timeService.currentTimeMillis() - startTime) / 1000
-
-                if (config.verbose) {
-                    serviceLogger.lifecycle("[waitForLog] Polling for log patterns (attempt {}/{}, elapsed: {}s)...",
-                        attempt, config.totalWaitAttempts, elapsedSeconds.intValue())
-                }
-
-                def allReady = true
-
-                for (String serviceName : config.services) {
-                    def patterns = config.servicePatterns[serviceName]
-                    def serviceMatchedPatterns = matchedPatterns[serviceName]
-                    def serviceMatchTimes = matchTimes[serviceName]
-
-                    // Skip if already fully matched
-                    if (serviceMatchedPatterns.size() == patterns.size()) {
-                        if (config.verbose) {
-                            serviceLogger.lifecycle("[waitForLog] Service '{}': {}/{} patterns matched - READY",
-                                serviceName, patterns.size(), patterns.size())
-                        }
-                        continue
-                    }
-
-                    // Check if container is still running
-                    if (!isServiceRunning(config.projectName, serviceName)) {
-                        def results = buildPartialResults(config, matchedPatterns, matchTimes, serviceName)
-                        throw new ComposeServiceException(
-                            ComposeServiceException.ErrorType.SERVICE_CRASHED,
-                            buildCrashErrorMessage(serviceName, results, config),
-                            "Check container logs with: docker logs <container-id>"
-                        )
-                    }
-
-                    // Fetch logs for this service
-                    def logsConfig = new LogsConfig([serviceName], 0, false, null)  // 0 = all logs
-                    def logs = captureLogs(config.projectName, logsConfig).get()
-                    def logLines = logs.split('\n').toList()
-
-                    // Check reject patterns first
-                    def rejectCheck = checkRejectPatterns(config, serviceName, logLines)
-                    if (rejectCheck != null) {
-                        def results = buildPartialResults(config, matchedPatterns, matchTimes, serviceName)
-                        throw new ComposeServiceException(
-                            ComposeServiceException.ErrorType.LOG_REJECT_PATTERN_MATCHED,
-                            buildRejectErrorMessage(serviceName, rejectCheck, results, config),
-                            "A reject pattern indicates the service encountered an error during startup."
-                        )
-                    }
-
-                    // Update pattern matches
-                    def newMatches = LogPatternMatcher.updateMatches(
-                        patterns, serviceMatchedPatterns, logLines, elapsedSeconds.longValue(), serviceMatchTimes
-                    )
-
-                    if (config.verbose) {
-                        logServiceProgress(serviceName, patterns, serviceMatchedPatterns, serviceMatchTimes)
-                    }
-
-                    if (serviceMatchedPatterns.size() < patterns.size()) {
-                        allReady = false
-                    }
-                }
-
-                // Check for periodic progress logging
-                if (progressIntervalMillis > 0 && !config.verbose) {
-                    def now = timeService.currentTimeMillis()
-                    if (now - lastProgressLog >= progressIntervalMillis) {
-                        logProgressSummary(config, matchedPatterns, elapsedSeconds.intValue())
-                        lastProgressLog = now
-                    }
-                }
-
-                if (allReady) {
-                    def elapsedTotal = (timeService.currentTimeMillis() - startTime) / 1000
-                    serviceLogger.lifecycle("[waitForLog] All services ready after {} seconds", elapsedTotal.intValue())
-                    return buildResults(config, matchedPatterns, matchTimes)
-                }
-
-                timeService.sleep(config.pollInterval.toMillis())
-            }
-
-            // Timeout - build detailed error message
-            def results = buildResults(config, matchedPatterns, matchTimes)
-            throw new ComposeServiceException(
-                ComposeServiceException.ErrorType.LOG_PATTERN_TIMEOUT,
-                buildTimeoutErrorMessage(config, results),
-                "Use verbose.set(true) to see detailed progress during polling."
-            )
-
+            return executeWaitForLogPatterns(config)
         } catch (ComposeServiceException e) {
             throw e
+        } catch (java.util.concurrent.ExecutionException e) {
+            // Unwrap ExecutionException to expose actual cause
+            throw e.cause ?: e
         } catch (Exception e) {
             throw new ComposeServiceException(
                 ComposeServiceException.ErrorType.LOG_PATTERN_TIMEOUT,
@@ -1494,6 +1630,234 @@ CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogCo
             )
         }
     })
+}
+
+/**
+ * Core implementation of wait-for-log-patterns logic.
+ * Separated from the main method to keep CompletableFuture handling separate from business logic.
+ */
+private Map<String, WaitForLogResult> executeWaitForLogPatterns(WaitForLogConfig config) {
+    logWaitStart(config)
+    def matchState = initializeMatchState(config)
+    return pollForPatterns(config, matchState)
+}
+
+/**
+ * Log the start of the wait operation.
+ */
+private void logWaitStart(WaitForLogConfig config) {
+    def serviceCount = config.services.size()
+    def servicePlural = serviceCount == 1 ? "" : "s"
+    serviceLogger.info("[waitForLog] Waiting for log patterns in ${serviceCount} service${servicePlural} (timeout: ${config.timeout.toSeconds()}s)...")
+}
+
+/**
+ * Initialize match tracking state for all services.
+ * @return Map with 'matchedPatterns', 'matchTimes', 'startTime', 'lastProgressLog' keys
+ */
+private Map initializeMatchState(WaitForLogConfig config) {
+    def startTime = timeService.currentTimeMillis()
+    return [
+        matchedPatterns: config.services.collectEntries { [(it): new HashSet<Integer>()] },
+        matchTimes: config.services.collectEntries { [(it): [:]] },
+        startTime: startTime,
+        lastProgressLog: startTime,
+        attempt: 0
+    ]
+}
+
+/**
+ * Main polling loop - checks patterns until all match or timeout.
+ */
+private Map<String, WaitForLogResult> pollForPatterns(WaitForLogConfig config, Map matchState) {
+    def timeoutMillis = config.timeout.toMillis()
+    def progressIntervalMillis = config.progressInterval.toMillis()
+
+    while (timeService.currentTimeMillis() - matchState.startTime < timeoutMillis) {
+        matchState.attempt++
+        def elapsedSeconds = (timeService.currentTimeMillis() - matchState.startTime) / 1000
+
+        logVerbosePollingStart(config, matchState.attempt, elapsedSeconds)
+
+        def allReady = checkAllServices(config, matchState, elapsedSeconds)
+
+        matchState.lastProgressLog = logPeriodicProgress(
+            config, matchState, progressIntervalMillis, elapsedSeconds
+        )
+
+        if (allReady) {
+            return handleAllServicesReady(config, matchState)
+        }
+
+        timeService.sleep(config.pollInterval.toMillis())
+    }
+
+    // Timeout reached
+    handleTimeout(config, matchState)
+}
+
+/**
+ * Check all services for pattern matches. Returns true if all services are ready.
+ */
+private boolean checkAllServices(WaitForLogConfig config, Map matchState, Number elapsedSeconds) {
+    boolean allReady = true
+
+    for (String serviceName : config.services) {
+        def serviceReady = checkServicePatterns(config, matchState, serviceName, elapsedSeconds)
+        if (!serviceReady) {
+            allReady = false
+        }
+    }
+
+    return allReady
+}
+
+/**
+ * Check patterns for a single service. Returns true if service is ready.
+ */
+private boolean checkServicePatterns(WaitForLogConfig config, Map matchState,
+                                      String serviceName, Number elapsedSeconds) {
+    def patterns = config.servicePatterns[serviceName]
+    def serviceMatchedPatterns = matchState.matchedPatterns[serviceName]
+    def serviceMatchTimes = matchState.matchTimes[serviceName]
+
+    // Skip if already fully matched
+    if (serviceMatchedPatterns.size() == patterns.size()) {
+        logVerboseServiceReady(config, serviceName, patterns.size())
+        return true
+    }
+
+    // Check if container is still running
+    verifyServiceRunning(config, matchState, serviceName)
+
+    // Fetch and check logs
+    def logLines = fetchServiceLogs(config.projectName, serviceName)
+    checkForRejectPatterns(config, matchState, serviceName, logLines)
+    updateServiceMatches(config, matchState, serviceName, logLines, elapsedSeconds)
+
+    return serviceMatchedPatterns.size() == patterns.size()
+}
+
+/**
+ * Verify service is still running; throw if crashed.
+ */
+private void verifyServiceRunning(WaitForLogConfig config, Map matchState, String serviceName) {
+    if (!isServiceRunning(config.projectName, serviceName)) {
+        def results = buildResults(config, matchState.matchedPatterns, matchState.matchTimes)
+        throw new ComposeServiceException(
+            ComposeServiceException.ErrorType.SERVICE_CRASHED,
+            buildCrashErrorMessage(serviceName, results, config),
+            "Check container logs with: docker logs <container-id>"
+        )
+    }
+}
+
+/**
+ * Fetch logs for a service.
+ *
+ * <p>Wraps captureLogs() with better error context for user-facing messages.</p>
+ *
+ * @param projectName Compose project name
+ * @param serviceName Service name to fetch logs for
+ * @return List of log lines (empty lines filtered out)
+ * @throws ComposeServiceException if log capture fails
+ */
+private List<String> fetchServiceLogs(String projectName, String serviceName) {
+    try {
+        def logsConfig = new LogsConfig([serviceName], 0, false, null)  // 0 = all logs
+        def logs = captureLogs(projectName, logsConfig).get()
+        return logs.split('\n').findAll { it?.trim() }
+    } catch (Exception e) {
+        // Wrap with user-friendly error message
+        throw new ComposeServiceException(
+            ComposeServiceException.ErrorType.LOGS_CAPTURE_FAILED,
+            "Failed to fetch logs for service '${serviceName}' in project '${projectName}': ${e.message}",
+            "Check that the service exists and containers are running. " +
+            "You can manually verify with: docker compose -p ${projectName} logs ${serviceName}",
+            e
+        )
+    }
+}
+
+/**
+ * Check for reject patterns; throw if any match.
+ */
+private void checkForRejectPatterns(WaitForLogConfig config, Map matchState,
+                                     String serviceName, List<String> logLines) {
+    def rejectCheck = checkRejectPatterns(config, serviceName, logLines)
+    if (rejectCheck != null) {
+        def results = buildResults(config, matchState.matchedPatterns, matchState.matchTimes)
+        throw new ComposeServiceException(
+            ComposeServiceException.ErrorType.LOG_REJECT_PATTERN_MATCHED,
+            buildRejectErrorMessage(serviceName, rejectCheck, results, config),
+            "A reject pattern indicates the service encountered an error during startup."
+        )
+    }
+}
+
+/**
+ * Update pattern matches for a service.
+ */
+private void updateServiceMatches(WaitForLogConfig config, Map matchState,
+                                   String serviceName, List<String> logLines, Number elapsedSeconds) {
+    def patterns = config.servicePatterns[serviceName]
+    def serviceMatchedPatterns = matchState.matchedPatterns[serviceName]
+    def serviceMatchTimes = matchState.matchTimes[serviceName]
+
+    LogPatternMatcher.updateMatches(
+        patterns, serviceMatchedPatterns, logLines, elapsedSeconds.longValue(), serviceMatchTimes
+    )
+
+    if (config.verbose) {
+        logServiceProgress(serviceName, patterns, serviceMatchedPatterns, serviceMatchTimes)
+    }
+}
+
+/**
+ * Handle successful completion when all services are ready.
+ */
+private Map<String, WaitForLogResult> handleAllServicesReady(WaitForLogConfig config, Map matchState) {
+    def elapsedTotal = (timeService.currentTimeMillis() - matchState.startTime) / 1000
+    serviceLogger.info("[waitForLog] All services ready after ${elapsedTotal.intValue()} seconds")
+    return buildResults(config, matchState.matchedPatterns, matchState.matchTimes)
+}
+
+/**
+ * Handle timeout - throws ComposeServiceException with detailed error message.
+ */
+private void handleTimeout(WaitForLogConfig config, Map matchState) {
+    def results = buildResults(config, matchState.matchedPatterns, matchState.matchTimes)
+    throw new ComposeServiceException(
+        ComposeServiceException.ErrorType.LOG_PATTERN_TIMEOUT,
+        buildTimeoutErrorMessage(config, results),
+        "Use verbose.set(true) to see detailed progress during polling."
+    )
+}
+
+// Verbose logging helpers
+
+private void logVerbosePollingStart(WaitForLogConfig config, int attempt, Number elapsedSeconds) {
+    if (config.verbose) {
+        serviceLogger.info("[waitForLog] Polling for log patterns (attempt ${attempt}/${config.totalWaitAttempts}, elapsed: ${elapsedSeconds.intValue()}s)...")
+    }
+}
+
+private void logVerboseServiceReady(WaitForLogConfig config, String serviceName, int patternCount) {
+    if (config.verbose) {
+        serviceLogger.info("[waitForLog] Service '${serviceName}': ${patternCount}/${patternCount} patterns matched - READY")
+    }
+}
+
+private long logPeriodicProgress(WaitForLogConfig config, Map matchState,
+                                  long progressIntervalMillis, Number elapsedSeconds) {
+    if (progressIntervalMillis > 0 && !config.verbose) {
+        def now = timeService.currentTimeMillis()
+        if (now - matchState.lastProgressLog >= progressIntervalMillis) {
+            logProgressSummary(config, matchState.matchedPatterns, elapsedSeconds.intValue())
+            return now
+        }
+    }
+    return matchState.lastProgressLog
 }
 
 // Helper methods for waitForLogPatterns implementation
@@ -1508,14 +1872,39 @@ private LogPatternMatcher.RejectCheckResult checkRejectPatterns(
     return LogPatternMatcher.checkRejectPatterns(rejectPatterns, logLines)
 }
 
+/**
+ * Check if a service container is still running.
+ *
+ * <p>Uses JSON output format for reliable parsing instead of text matching,
+ * which could incorrectly match container names or column headers.</p>
+ *
+ * @param projectName Compose project name
+ * @param serviceName Service name to check
+ * @return true if service is running, false otherwise
+ */
 private boolean isServiceRunning(String projectName, String serviceName) {
     try {
         def composeCommand = getComposeCommand()
-        def command = composeCommand + ["-p", projectName, "ps", serviceName, "--format", "table"]
+        // Use JSON format for reliable parsing instead of text matching
+        def command = composeCommand + ["-p", projectName, "ps", serviceName, "--format", "json"]
         def result = processExecutor.execute(command)
         if (result.isSuccess() && result.stdout) {
-            def output = result.stdout.toLowerCase()
-            return output.contains("up") || output.contains("running")
+            // Parse JSON output - each line is a JSON object for a container
+            def output = result.stdout.trim()
+            if (output.isEmpty()) {
+                return false
+            }
+            // Docker Compose v2 outputs one JSON object per line
+            def jsonSlurper = new groovy.json.JsonSlurper()
+            for (String line : output.split('\n')) {
+                if (line.trim().isEmpty()) continue
+                def container = jsonSlurper.parseText(line)
+                // Check the State field - valid running states are "running" or "Up"
+                def state = container.State?.toString()?.toLowerCase()
+                if (state == "running" || state?.startsWith("up")) {
+                    return true
+                }
+            }
         }
         return false
     } catch (Exception e) {
@@ -1546,30 +1935,42 @@ private Map<String, WaitForLogResult> buildResults(
     }
 }
 
-private Map<String, WaitForLogResult> buildPartialResults(
-        WaitForLogConfig config,
-        Map<String, Set<Integer>> matchedPatterns,
-        Map<String, Map<Integer, Long>> matchTimes,
-        String failedService) {
-    // Build results but mark failed service appropriately
-    return buildResults(config, matchedPatterns, matchTimes)
+/**
+ * Get recent log lines for a specific service (for error reporting).
+ *
+ * <p>This helper method fetches the last N lines of logs from a service container
+ * to include in error messages, helping users diagnose issues.</p>
+ *
+ * @param projectName Compose project name
+ * @param serviceName Service name
+ * @param lineCount Number of recent lines to retrieve
+ * @return List of recent log lines, or error message if retrieval fails
+ */
+private List<String> getRecentLogs(String projectName, String serviceName, int lineCount) {
+    try {
+        // Use existing LogsConfig signature: (services, tailLines, follow, outputFile)
+        def config = new LogsConfig([serviceName], lineCount, false, null)
+        def logs = captureLogs(projectName, config).get()
+        return logs.split('\n').toList()
+    } catch (Exception e) {
+        serviceLogger.debug("Failed to get recent logs for '${serviceName}': ${e.message}")
+        return ["(Unable to retrieve logs: ${e.message})"]
+    }
 }
 
 private void logServiceProgress(String serviceName, List<Pattern> patterns,
                                  Set<Integer> matchedPatterns, Map<Integer, Long> matchTimes) {
-    def matchedCount = matchedPatterns.size()
-    def totalPatterns = patterns.size()
+    // Null safety for defensive programming
+    def matchedCount = matchedPatterns?.size() ?: 0
+    def totalPatterns = patterns?.size() ?: 0
 
     if (matchedCount == totalPatterns) {
-        serviceLogger.lifecycle("[waitForLog] Service '{}': {}/{} patterns matched - READY",
-            serviceName, matchedCount, totalPatterns)
+        serviceLogger.info("[waitForLog] Service '${serviceName}': ${matchedCount}/${totalPatterns} patterns matched - READY")
     } else {
-        serviceLogger.lifecycle("[waitForLog] Service '{}': {}/{} patterns matched",
-            serviceName, matchedCount, totalPatterns)
-        patterns.eachWithIndex { pattern, index ->
-            if (matchedPatterns.contains(index)) {
-                serviceLogger.lifecycle("  [FOUND] '{}' - matched at {}s",
-                    pattern.pattern(), matchTimes[index])
+        serviceLogger.info("[waitForLog] Service '${serviceName}': ${matchedCount}/${totalPatterns} patterns matched")
+        patterns?.eachWithIndex { pattern, index ->
+            if (matchedPatterns?.contains(index)) {
+                serviceLogger.info("  [FOUND] '${pattern.pattern()}' - matched at ${matchTimes?.get(index)}s")
             }
         }
     }
@@ -1577,11 +1978,12 @@ private void logServiceProgress(String serviceName, List<Pattern> patterns,
 
 private void logProgressSummary(WaitForLogConfig config, Map<String, Set<Integer>> matchedPatterns, int elapsedSeconds) {
     def summary = config.services.collect { serviceName ->
-        def matched = matchedPatterns[serviceName].size()
-        def total = config.servicePatterns[serviceName].size()
+        // Null safety for defensive programming
+        def matched = matchedPatterns?.get(serviceName)?.size() ?: 0
+        def total = config.servicePatterns?.get(serviceName)?.size() ?: 0
         "${serviceName} ${matched}/${total}"
     }.join(", ")
-    serviceLogger.lifecycle("[waitForLog] Progress at {}s: {}", elapsedSeconds, summary)
+    serviceLogger.info("[waitForLog] Progress at ${elapsedSeconds}s: ${summary}")
 }
 
 private String buildTimeoutErrorMessage(WaitForLogConfig config, Map<String, WaitForLogResult> results) {
@@ -1601,8 +2003,8 @@ private String buildTimeoutErrorMessage(WaitForLogConfig config, Map<String, Wai
 
         // Add recent log lines for services that are not ready
         if (!result.ready) {
-            sb.append("\n  Last 10 log lines from '${serviceName}':\n")
-            def recentLogs = getRecentLogs(config.projectName, serviceName, 10)
+            sb.append("\n  Last ${RECENT_LOG_LINES_FOR_ERROR} log lines from '${serviceName}':\n")
+            def recentLogs = getRecentLogs(config.projectName, serviceName, RECENT_LOG_LINES_FOR_ERROR)
             recentLogs.each { line ->
                 sb.append("    ${line}\n")
             }
@@ -1635,8 +2037,8 @@ private String buildRejectErrorMessage(String serviceName, LogPatternMatcher.Rej
     }
 
     // Add recent log lines for context
-    sb.append("\n  Last 10 log lines from '${serviceName}':\n")
-    def recentLogs = getRecentLogs(config.projectName, serviceName, 10)
+    sb.append("\n  Last ${RECENT_LOG_LINES_FOR_ERROR} log lines from '${serviceName}':\n")
+    def recentLogs = getRecentLogs(config.projectName, serviceName, RECENT_LOG_LINES_FOR_ERROR)
     recentLogs.each { line ->
         sb.append("    ${line}\n")
     }
@@ -1661,8 +2063,8 @@ private String buildCrashErrorMessage(String serviceName, Map<String, WaitForLog
     }
 
     // Add recent log lines for diagnostics
-    sb.append("\n  Last 10 log lines from '${serviceName}':\n")
-    def recentLogs = getRecentLogs(config.projectName, serviceName, 10)
+    sb.append("\n  Last ${RECENT_LOG_LINES_FOR_ERROR} log lines from '${serviceName}':\n")
+    def recentLogs = getRecentLogs(config.projectName, serviceName, RECENT_LOG_LINES_FOR_ERROR)
     recentLogs.each { line ->
         sb.append("    ${line}\n")
     }
@@ -1679,12 +2081,46 @@ private String buildCrashErrorMessage(String serviceName, Map<String, WaitForLog
 Add new error types to `ComposeServiceException`. Modify
 `plugin/src/main/groovy/com/kineticfire/gradle/docker/exception/ComposeServiceException.groovy`:
 
+**Existing ErrorType enum** (add new values):
+
 ```groovy
 enum ErrorType {
-    // ... existing types ...
-    LOG_PATTERN_TIMEOUT,
-    LOG_REJECT_PATTERN_MATCHED,
-    SERVICE_CRASHED
+    COMPOSE_UNAVAILABLE("Docker Compose is not available. Please install Docker Compose v2."),
+    COMPOSE_FILE_NOT_FOUND("Compose file not found. Check the file path."),
+    SERVICE_START_FAILED("Service startup failed. Check compose configuration and dependencies."),
+    SERVICE_STOP_FAILED("Service shutdown failed. Services may still be running."),
+    SERVICE_TIMEOUT("Service did not reach desired state within timeout period."),
+    PLATFORM_UNSUPPORTED("Docker Compose operations not supported on this platform."),
+    LOGS_CAPTURE_FAILED("Failed to capture Docker Compose logs."),
+    UNKNOWN("An unknown Docker Compose operation error occurred."),
+    // NEW: Add these error types for waitForLog feature
+    LOG_PATTERN_TIMEOUT("Timeout waiting for log patterns to appear."),
+    LOG_REJECT_PATTERN_MATCHED("A reject pattern was matched in container logs."),
+    SERVICE_CRASHED("Service container crashed during wait operation.")
+
+    final String defaultSuggestion
+
+    ErrorType(String defaultSuggestion) {
+        this.defaultSuggestion = defaultSuggestion
+    }
+}
+```
+
+**Existing Constructors** (no changes needed - already support required patterns):
+
+```groovy
+// Constructor with ErrorType, message, and custom suggestion - ALREADY EXISTS
+ComposeServiceException(ErrorType errorType, String message, String suggestion, Throwable cause = null) {
+    super(message, cause)
+    this.errorType = errorType
+    this.suggestion = suggestion ?: errorType.defaultSuggestion
+}
+
+// Constructor with ErrorType and message (uses default suggestion) - ALREADY EXISTS
+ComposeServiceException(ErrorType errorType, String message, Throwable cause = null) {
+    super(message, cause)
+    this.errorType = errorType
+    this.suggestion = errorType.defaultSuggestion
 }
 ```
 
@@ -1693,13 +2129,19 @@ enum ErrorType {
 Add `waitForLog*` properties and execution to `ComposeUpTask`. Modify
 `plugin/src/main/groovy/com/kineticfire/gradle/docker/task/ComposeUpTask.groovy`:
 
-```groovy
-// Add imports
-import com.kineticfire.gradle.docker.model.WaitForLogConfig
-import com.kineticfire.gradle.docker.util.WaitForLogConfigBuilder
+**Required Imports** (add to existing imports):
 
-// Add flattened input properties for waitForLog
-// (Flattened per Part 2 of compatibility guide to avoid @Nested serialization issues)
+```groovy
+// Complete imports to add for waitForLog functionality
+import com.kineticfire.gradle.docker.util.WaitForLogConfigBuilder
+import org.gradle.api.provider.MapProperty
+import java.time.Duration
+```
+
+**Add Flattened Input Properties** (add after existing `waitForRunning*` properties):
+
+```groovy
+// Flattened per Part 2 of compatibility guide to avoid @Nested serialization issues
 
 @Input
 @Optional
@@ -1728,17 +2170,121 @@ abstract Property<Boolean> getWaitForLogVerbose()
 @Input
 @Optional
 abstract Property<Integer> getWaitForLogProgressIntervalSeconds()
+```
 
-// Update performWaitIfConfigured to include waitForLog
+**Update `performWaitIfConfigured` Method**
+
+The current implementation executes in order: `waitForHealthy` → `waitForRunning`. This must be
+changed to: `waitForRunning` → `waitForHealthy` → `waitForLog`.
+
+**CURRENT implementation** (lines 148-192 in `ComposeUpTask.groovy`):
+
+```groovy
+/**
+ * Wait for services to reach desired state if configured
+ */
 private void performWaitIfConfigured(String stackName, String projectName) {
-    // First: Wait for running services (natural startup sequence)
-    if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
-        // ... existing implementation ...
+    // Wait for healthy services (configured during configuration phase)
+    if (waitForHealthyServices.isPresent() && !waitForHealthyServices.get().isEmpty()) {
+        def services = waitForHealthyServices.get()
+        def timeoutSeconds = waitForHealthyTimeoutSeconds.getOrElse(60)
+        def pollSeconds = waitForHealthyPollSeconds.getOrElse(2)
+
+        logger.lifecycle("Waiting for services to be HEALTHY: {}", services)
+
+        def waitConfig = new WaitConfig(
+            projectName,
+            services,
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
+            ServiceStatus.HEALTHY
+        )
+
+        def waitFuture = composeService.get().waitForServices(waitConfig)
+        waitFuture.get()
+
+        logger.lifecycle("All services are HEALTHY")
     }
 
-    // Second: Wait for healthy services
+    // Wait for running services (configured during configuration phase)
+    if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
+        def services = waitForRunningServices.get()
+        def timeoutSeconds = waitForRunningTimeoutSeconds.getOrElse(60)
+        def pollSeconds = waitForRunningPollSeconds.getOrElse(2)
+
+        logger.lifecycle("Waiting for services to be RUNNING: {}", services)
+
+        def waitConfig = new WaitConfig(
+            projectName,
+            services,
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
+            ServiceStatus.RUNNING
+        )
+
+        def waitFuture = composeService.get().waitForServices(waitConfig)
+        waitFuture.get()
+
+        logger.lifecycle("All services are RUNNING")
+    }
+}
+```
+
+**NEW implementation** (replace the entire method):
+
+```groovy
+/**
+ * Wait for services to reach desired state if configured.
+ *
+ * <p>Execution order: waitForRunning → waitForHealthy → waitForLog</p>
+ *
+ * <p>This order reflects the natural startup sequence: containers must be running
+ * before health checks can pass, and health checks should pass before checking
+ * for application-specific log messages.</p>
+ */
+private void performWaitIfConfigured(String stackName, String projectName) {
+    // First: Wait for running services (containers must be running first)
+    if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
+        def services = waitForRunningServices.get()
+        def timeoutSeconds = waitForRunningTimeoutSeconds.getOrElse(60)
+        def pollSeconds = waitForRunningPollSeconds.getOrElse(2)
+
+        logger.lifecycle("Waiting for services to be RUNNING: {}", services)
+
+        def waitConfig = new WaitConfig(
+            projectName,
+            services,
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
+            ServiceStatus.RUNNING
+        )
+
+        def waitFuture = composeService.get().waitForServices(waitConfig)
+        waitFuture.get()
+
+        logger.lifecycle("All services are RUNNING")
+    }
+
+    // Second: Wait for healthy services (health checks require running containers)
     if (waitForHealthyServices.isPresent() && !waitForHealthyServices.get().isEmpty()) {
-        // ... existing implementation ...
+        def services = waitForHealthyServices.get()
+        def timeoutSeconds = waitForHealthyTimeoutSeconds.getOrElse(60)
+        def pollSeconds = waitForHealthyPollSeconds.getOrElse(2)
+
+        logger.lifecycle("Waiting for services to be HEALTHY: {}", services)
+
+        def waitConfig = new WaitConfig(
+            projectName,
+            services,
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
+            ServiceStatus.HEALTHY
+        )
+
+        def waitFuture = composeService.get().waitForServices(waitConfig)
+        waitFuture.get()
+
+        logger.lifecycle("All services are HEALTHY")
     }
 
     // Third: Wait for log patterns (application-specific readiness)
@@ -1747,6 +2293,11 @@ private void performWaitIfConfigured(String stackName, String projectName) {
     }
 }
 
+/**
+ * Wait for log patterns to appear in service logs.
+ *
+ * @param projectName Compose project name
+ */
 private void performWaitForLog(String projectName) {
     def config = WaitForLogConfigBuilder.build(
         projectName,
@@ -1764,124 +2315,392 @@ private void performWaitForLog(String projectName) {
 }
 ```
 
-### 11. Plugin Wiring (GradleDockerPlugin)
+### 10.1 Cleanup Behavior on Failure
 
-Wire the `WaitForLogSpec` properties to `ComposeUpTask` inputs. Add to the task configuration
-in `GradleDockerPlugin`:
+**Important**: When `waitForLog` (or any wait block) fails, the `ComposeUpTask` must ensure proper cleanup
+to prevent lingering containers. This follows the existing pattern established by `waitForHealthy` and
+`waitForRunning`.
+
+**Cleanup Behavior**: The `ComposeUpTask.execute()` method already wraps the wait operations in a try-catch
+block that calls `composeDown` on failure. Verify this pattern exists and apply it consistently:
 
 ```groovy
-// Inside task registration for ComposeUpTask
-tasks.register("composeUp${stackName.capitalize()}", ComposeUpTask) { task ->
-    // ... existing wiring ...
+// In ComposeUpTask.execute() @TaskAction method (verify existing pattern):
+try {
+    // ... composeUp ...
+    performWaitIfConfigured(stackName, projectName)
+} catch (Exception e) {
+    // Ensure containers are cleaned up on failure
+    logger.lifecycle("Wait operation failed, cleaning up containers...")
+    try {
+        composeService.get().down(projectName, downConfig).get()
+    } catch (Exception cleanupException) {
+        logger.warn("Failed to clean up containers: ${cleanupException.message}")
+    }
+    throw e
+}
+```
 
-    // Wire waitForLog properties (if configured)
-    if (stackSpec.waitForLog.isPresent()) {
+**Verification Required**: Before implementation, verify that `ComposeUpTask` has this cleanup pattern.
+If not present, add it to ensure no lingering containers remain after `waitForLog` failures.
+
+```bash
+# Verify existing cleanup pattern in ComposeUpTask:
+rg "catch.*Exception" plugin/src/main/groovy/com/kineticfire/gradle/docker/task/ComposeUpTask.groovy -C 5
+```
+
+**User Impact**: When `waitForLog` fails (timeout, reject pattern, or service crash), the compose stack
+is automatically torn down. This prevents test infrastructure from accumulating orphaned containers.
+
+### 11. Plugin Wiring (GradleDockerPlugin)
+
+Wire the `WaitForLogSpec` properties to `ComposeUpTask` inputs. Modify
+`plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy`.
+
+**Location Finder**: Use these commands to locate the existing wiring code:
+
+```bash
+# Find where ComposeUpTask is registered
+rg "ComposeUpTask" plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy
+
+# Find existing waitForHealthy/waitForRunning wiring pattern
+rg "waitForHealthy|waitForRunning" plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy -C 3
+```
+
+**Location Context**: Find the existing task registration for `ComposeUpTask` where `waitForHealthy` and
+`waitForRunning` are wired. The `waitForLog` wiring follows the same pattern.
+
+**Implementation** - add after the existing `waitForRunning` wiring block:
+
+The wiring uses **conditional wiring** to match the existing pattern used for `waitForHealthy` and
+`waitForRunning` in `GradleDockerPlugin.groovy` (lines 801-818). This ensures consistency with the
+existing codebase.
+
+```groovy
+// Inside task registration for ComposeUpTask (find existing pattern for waitForHealthy/waitForRunning)
+// This is typically in a method like registerComposeUpTask() or configureComposeStack()
+
+tasks.register("composeUp${stackName.capitalize()}", ComposeUpTask) { task ->
+    // ... existing wiring for composeService, stackName, files, etc. ...
+
+    // ... existing waitForHealthy wiring ...
+
+    // ... existing waitForRunning wiring ...
+
+    // NEW: Wire waitForLog properties using conditional wiring (matches existing codebase pattern)
+    if (stackSpec.waitForLog.present) {
         def logSpec = stackSpec.waitForLog.get()
-        task.waitForLogServices.set(logSpec.waitForServices)
-        task.waitForLogRejectPatterns.set(logSpec.rejectPatterns)
-        task.waitForLogTimeoutSeconds.set(logSpec.timeoutSeconds)
-        task.waitForLogPollSeconds.set(logSpec.pollSeconds)
-        task.waitForLogCaseInsensitive.set(logSpec.caseInsensitive)
-        task.waitForLogVerbose.set(logSpec.verbose)
-        task.waitForLogProgressIntervalSeconds.set(logSpec.progressIntervalSeconds)
+        if (logSpec.waitForServices.present) {
+            task.waitForLogServices.set(logSpec.waitForServices)
+        }
+        if (logSpec.rejectPatterns.present) {
+            task.waitForLogRejectPatterns.set(logSpec.rejectPatterns)
+        }
+        task.waitForLogTimeoutSeconds.set(logSpec.timeoutSeconds.getOrElse(60))
+        task.waitForLogPollSeconds.set(logSpec.pollSeconds.getOrElse(2))
+        task.waitForLogCaseInsensitive.set(logSpec.caseInsensitive.getOrElse(false))
+        task.waitForLogVerbose.set(logSpec.verbose.getOrElse(false))
+        task.waitForLogProgressIntervalSeconds.set(logSpec.progressIntervalSeconds.getOrElse(0))
     }
 }
 ```
 
-### 12. Execution Order Change
+**Why conditional wiring (not flatMap)?**
 
-The design document specifies updating the execution order to:
-`waitForRunning` → `waitForHealthy` → `waitForLog`
+The existing codebase uses conditional wiring for `waitForHealthy` and `waitForRunning`:
 
-This is a behavior change from the current order (`waitForHealthy` → `waitForRunning`). The
-`performWaitIfConfigured` method in `ComposeUpTask` must be updated to reflect this order, as
-shown in section 10 above.
+```groovy
+// Existing pattern from GradleDockerPlugin.groovy (lines 801-818)
+if (stackSpec.waitForHealthy.present) {
+    def waitSpec = stackSpec.waitForHealthy.get()
+    if (waitSpec.waitForServices.present) {
+        task.waitForHealthyServices.set(waitSpec.waitForServices)
+    }
+    task.waitForHealthyTimeoutSeconds.set(waitSpec.timeoutSeconds.getOrElse(60))
+    task.waitForHealthyPollSeconds.set(waitSpec.pollSeconds.getOrElse(2))
+}
+```
+
+Using conditional wiring for `waitForLog` maintains consistency with the existing codebase. While
+`flatMap` would be more elegant, introducing a different pattern creates inconsistency.
+
+**Future Improvement**: If desired, a separate refactoring could update all three wait blocks
+(`waitForHealthy`, `waitForRunning`, `waitForLog`) to use `flatMap` for consistency.
+
+### 12. Execution Order Change (Breaking Change)
+
+The execution order is updated to: `waitForRunning` → `waitForHealthy` → `waitForLog`
+
+This is a **behavior change** from the current order (`waitForHealthy` → `waitForRunning`). The
+complete implementation is shown in section 10 above.
 
 **Rationale**: Containers must be running before health checks can pass, and health checks should
 pass before checking for application-specific log messages. This reflects the natural startup
 sequence.
 
-### Summary of Files to Create/Modify
+**Impact Analysis**:
+- Users who configured both `waitForRunning` and `waitForHealthy` may see different timing behavior
+- The change is semantically correct: you cannot check health of a non-running container
+- Existing configurations will continue to work; the order change improves reliability
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `spec/WaitForLogSpec.groovy` | Create | DSL configuration class |
-| `model/WaitForLogConfig.groovy` | Create | Immutable runtime config |
-| `model/WaitForLogResult.groovy` | Create | Per-service match results |
-| `model/LogsConfig.groovy` | Create/Verify | Log capture configuration |
-| `util/LogPatternMatcher.groovy` | Create | Pure pattern matching logic |
-| `util/WaitForLogConfigBuilder.groovy` | Create | Config builder with validation |
-| `spec/ComposeStackSpec.groovy` | Modify | Add `waitForLog` block |
-| `service/ComposeService.groovy` | Modify | Add `waitForLogPatterns()` and `captureLogs()` |
-| `service/ExecLibraryComposeService.groovy` | Modify | Implement `waitForLogPatterns()` and `captureLogs()` |
-| `exception/ComposeServiceException.groovy` | Modify | Add error types |
-| `task/ComposeUpTask.groovy` | Modify | Add properties and execution |
-| `GradleDockerPlugin.groovy` | Modify | Wire spec to task properties |
-| `TestIntegrationExtension.groovy` | Modify | Propagate waitForLog to test extensions |
+#### Migration Notes
+
+This change should be documented in the release notes and CHANGELOG:
+
+**CHANGELOG entry:**
+```markdown
+### Changed (Breaking)
+- **Wait block execution order changed**: The execution order for wait blocks is now
+  `waitForRunning` → `waitForHealthy` → `waitForLog` (previously `waitForHealthy` → `waitForRunning`).
+  This change reflects the correct startup sequence where containers must be running before health
+  checks can pass. Most users will not be affected, but if you relied on the previous ordering,
+  review your timeout configurations.
+```
+
+**User action required**: None for most users. If you have builds that depended on the specific
+timing of the previous order, you may need to adjust timeout values.
+
+### Consolidated Summary of Files to Create/Modify
+
+This section provides a complete list of all files affected by this implementation, organized by implementation phase.
+
+#### Phase 0: Prerequisite Changes (Must Complete First)
+
+| File | Action | Section | Purpose |
+|------|--------|---------|---------|
+| `model/LogsConfig.groovy` | Modify | Pre-Impl | Remove `Math.max(1, tailLines)` constraint (line 32). Optionally add `hasLimitedTail()` helper. |
+| `service/ExecLibraryComposeService.groovy` | Optional | Pre-Impl | Replace `tailLines > 0` with `hasLimitedTail()` for clarity (existing code already works) |
+
+#### Phase 1: Core Components (Create New Files)
+
+| File | Action | Section | Purpose |
+|------|--------|---------|---------|
+| `spec/WaitForLogSpec.groovy` | Create | §1 | DSL configuration class with Property API |
+| `model/WaitForLogConfig.groovy` | Create | §2 | Immutable runtime config with compiled patterns |
+| `model/WaitForLogResult.groovy` | Create | §3 | Per-service pattern match results |
+| `util/LogPatternMatcher.groovy` | Create | §4 | Pure utility class for pattern matching |
+| `util/WaitForLogConfigBuilder.groovy` | Create | §5 | Config builder with validation |
+
+#### Phase 2: Integration (Modify Existing Files)
+
+| File | Action | Section | Purpose |
+|------|--------|---------|---------|
+| `spec/ComposeStackSpec.groovy` | Modify | §6 | Add `waitForLog` property and DSL methods |
+| `service/ComposeService.groovy` | Modify | §7 | Add `waitForLogPatterns()` interface method |
+| `service/ExecLibraryComposeService.groovy` | Modify | §8 | Implement `waitForLogPatterns()`, add helpers |
+| `exception/ComposeServiceException.groovy` | Modify | §9 | Add new error types to enum |
+| `task/ComposeUpTask.groovy` | Modify | §10 | Add flattened properties, update execution order |
+| `GradleDockerPlugin.groovy` | Modify | §11 | Wire spec properties to task inputs |
+| `extension/TestIntegrationExtension.groovy` | Modify | §13 | Propagate waitForLog to test framework |
+
+#### Phase 3: Documentation Updates
+
+| File | Action | Section | Purpose |
+|------|--------|---------|---------|
+| `docs/usage/usage-docker-orch.md` | Modify | §14 | Add waitForLog DSL documentation |
+| `CHANGELOG.md` | Modify | §14 | Document new feature and breaking change |
+| `README.md` | Modify | §14 | Update feature list |
+
+#### Existing Files Used (No Changes Required)
+
+| File | Status | Notes |
+|------|--------|-------|
+| `service/ComposeService.captureLogs()` | ✅ Exists | Used as-is for log capture |
+| `model/LogsConfig.groovy` (after Phase 0) | ✅ Modified | Used with new `hasLimitedTail()` method |
+
+#### Verification Checklist Before Implementation
+
+Before starting implementation, verify (status based on codebase review):
+
+- [x] **Guava dependency**: Defined in `libs.versions.toml` but NOT in `build.gradle`. Available as transitive
+      dependency from docker-java. **Action**: Add `implementation libs.guava` for stability, or remove
+      `@VisibleForTesting` annotations.
+- [x] **ServiceLogger interface**: ⚠️ Does NOT have `lifecycle()` method. Only has `info()`, `debug()`, `warn()`,
+      `error()` - all with single String parameter. **Action**: Use `info()` with Groovy string interpolation.
+- [x] **ComposeStackSpec.getName()**: ✅ Exists (line 46-48)
+- [x] **TestIntegrationExtension.setComprehensiveSystemProperties()**: ✅ Exists (line 179-217)
+- [x] **Existing wiring patterns**: ✅ `waitForHealthy` and `waitForRunning` patterns exist in `GradleDockerPlugin`
+- [ ] **Test.systemProperty Provider support**: Verify whether Gradle 9's `Test.systemProperty()` accepts `Provider<String>`
+      values. This affects the implementation approach in Section 13 (TestIntegrationExtension).
+
+      **Verification step**:
+      ```bash
+      # Check Gradle 9 API documentation or test locally with a minimal example:
+      # test.systemProperty("key", providers.provider { "value" })
+      # If this fails, use eager evaluation with .get() instead
+      ```
+
+      **Action**: If Provider is not accepted, use the eager evaluation fallback shown in Section 13.
 
 ### 13. Test Framework Extension Integration
+
+**⚠️ CRITICAL: Lifecycle Support Limitation**
+
+| Lifecycle | `waitForLog` Support | Notes |
+|-----------|---------------------|-------|
+| `CLASS` | ✅ **Fully Supported** | Executed by `ComposeUpTask` before tests run |
+| `METHOD` | ❌ **Not Supported (Phase 2)** | Test framework extensions (Spock/JUnit 5) must be updated separately |
+
+For `METHOD` lifecycle, the `waitForLog` block configuration is propagated via system properties (as
+described below), but the test framework extensions (`@ComposeUp` annotation, `DockerComposeMethodExtension`)
+**do not yet consume these properties**. This will be implemented in a separate phase.
+
+**Initial Release Scope**: `waitForLog` only works with `Lifecycle.CLASS` in the initial implementation.
+
+**User-Facing Documentation Requirement**: The following must be documented in `docs/usage/usage-docker-orch.md`:
+
+```markdown
+### Lifecycle Support
+
+The `waitForLog` block is supported with `Lifecycle.CLASS` only in the current release.
+
+| Wait Block | `Lifecycle.CLASS` | `Lifecycle.METHOD` |
+|------------|-------------------|-------------------|
+| `waitForRunning` | ✅ Supported | ✅ Supported |
+| `waitForHealthy` | ✅ Supported | ✅ Supported |
+| `waitForLog` | ✅ Supported | ❌ Not yet supported |
+
+If you need log-based readiness with per-method compose lifecycle, either:
+1. Use `Lifecycle.CLASS` instead (compose stack shared across all test methods)
+2. Wait for a future release that adds `Lifecycle.METHOD` support for `waitForLog`
+```
+
+**Why this limitation exists**: The test framework extensions (`DockerComposeMethodExtension`) run outside
+of Gradle's task execution context and need to independently call Docker Compose. While we can pass
+configuration via system properties, the extensions need to be updated to parse and execute
+`waitForLogPatterns()`. This is out of scope for the initial implementation.
+
+---
 
 When using `usesCompose()` with test framework extensions, `waitForLog` configuration must be
 propagated so it's executed as part of compose stack startup. Modify `TestIntegrationExtension`
 to pass `waitForLog` configuration to the test lifecycle.
 
-**Modify `TestIntegrationExtension.groovy`:**
+**Modify `TestIntegrationExtension.groovy`** (`plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtension.groovy`):
+
+**Verification Required Before Implementation:**
+
+1. Verify that `TestIntegrationExtension` has a method named `setComprehensiveSystemProperties()` (or similar)
+2. Verify the method signature - the example below assumes parameters `(Test test, String stackName, stackSpec, Lifecycle lifecycle)`
+3. Verify how existing `waitForHealthy` and `waitForRunning` blocks are handled in this method
+4. Adjust the implementation below to match the actual method signature and patterns used
+
+The existing `setComprehensiveSystemProperties()` method already sets system properties for
+`waitForHealthy` and `waitForRunning`. Add `waitForLog` in the same pattern.
+
+**Required Imports** (add to existing imports in `TestIntegrationExtension.groovy`):
 
 ```groovy
-// Add property for waitForLog configuration
-// This is passed from ComposeStackSpec when usesCompose() is called
+// JSON serialization for MapProperty values (part of Groovy runtime, no additional dependencies)
+import groovy.json.JsonBuilder
+import groovy.json.JsonSlurper  // If reading JSON in this file (may not be needed here)
+```
 
-// When configuring a test task with usesCompose():
-void usesCompose(Map<String, Object> options) {
-    def stackName = options.stack as String
-    def lifecycle = options.lifecycle as String ?: "class"
+**Update `setComprehensiveSystemProperties` Method** (add after existing waitForRunning block):
 
-    // Find the compose stack spec
-    def dockerTestExt = project.extensions.findByType(DockerTestExtension)
-    def stackSpec = dockerTestExt?.composeStacks?.findByName(stackName)
-
-    if (stackSpec != null) {
-        // Pass waitForLog configuration to test system properties
-        // This enables the test framework extension to trigger waitForLog
-        if (stackSpec.waitForLog.isPresent()) {
-            def logSpec = stackSpec.waitForLog.get()
-
-            // Serialize waitForLog config as system properties for test framework
-            testTask.systemProperty("compose.${stackName}.waitForLog.enabled", "true")
-            testTask.systemProperty("compose.${stackName}.waitForLog.services",
-                serializeMapToJson(logSpec.waitForServices.get()))
-            testTask.systemProperty("compose.${stackName}.waitForLog.timeout",
-                logSpec.timeoutSeconds.get().toString())
-            testTask.systemProperty("compose.${stackName}.waitForLog.poll",
-                logSpec.pollSeconds.get().toString())
-            testTask.systemProperty("compose.${stackName}.waitForLog.caseInsensitive",
-                logSpec.caseInsensitive.get().toString())
-            testTask.systemProperty("compose.${stackName}.waitForLog.verbose",
-                logSpec.verbose.get().toString())
-
-            if (logSpec.rejectPatterns.present && !logSpec.rejectPatterns.get().isEmpty()) {
-                testTask.systemProperty("compose.${stackName}.waitForLog.rejectPatterns",
-                    serializeMapToJson(logSpec.rejectPatterns.get()))
-            }
-        }
-    }
-}
-
+```groovy
 /**
- * Serialize a Map<String, List<String>> to JSON for passing via system properties.
+ * Set comprehensive system properties from ComposeStackSpec for test framework extensions to consume
+ * @param test Test task to configure
+ * @param stackName Name of the compose stack
+ * @param stackSpec ComposeStackSpec containing all configuration
+ * @param lifecycle Lifecycle mode (Lifecycle.CLASS or Lifecycle.METHOD)
  */
-private String serializeMapToJson(Map<String, List<String>> map) {
-    def jsonService = project.extensions.getByType(DockerExtension).jsonService
-    return jsonService.toJson(map)
+private void setComprehensiveSystemProperties(Test test, String stackName, stackSpec, Lifecycle lifecycle) {
+    // ... existing basic configuration properties ...
+
+    // ... existing waitForHealthy block ...
+
+    // ... existing waitForRunning block ...
+
+    // NEW: Wait for log settings - use provider-based approach for configuration cache compatibility
+    def waitForLogSpec = stackSpec.waitForLog.getOrNull()
+    if (waitForLogSpec) {
+        test.systemProperty("docker.compose.waitForLog.enabled", "true")
+
+        // Use provider.map() for lazy evaluation - configuration cache compatible
+        test.systemProperty("docker.compose.waitForLog.services",
+            waitForLogSpec.waitForServices.map { map -> new JsonBuilder(map).toString() })
+        test.systemProperty("docker.compose.waitForLog.timeoutSeconds",
+            waitForLogSpec.timeoutSeconds.map { it.toString() })
+        test.systemProperty("docker.compose.waitForLog.pollSeconds",
+            waitForLogSpec.pollSeconds.map { it.toString() })
+        test.systemProperty("docker.compose.waitForLog.caseInsensitive",
+            waitForLogSpec.caseInsensitive.map { it.toString() })
+        test.systemProperty("docker.compose.waitForLog.verbose",
+            waitForLogSpec.verbose.map { it.toString() })
+        test.systemProperty("docker.compose.waitForLog.progressIntervalSeconds",
+            waitForLogSpec.progressIntervalSeconds.map { it.toString() })
+
+        // Only set reject patterns if configured (use provider for lazy evaluation)
+        test.systemProperty("docker.compose.waitForLog.rejectPatterns",
+            waitForLogSpec.rejectPatterns.map { map ->
+                map.isEmpty() ? "{}" : new JsonBuilder(map).toString()
+            })
+    }
+
+    // ... existing state file path ...
 }
 ```
 
-**Note:** The test framework extension (e.g., Spock/JUnit extension) must be updated to:
-1. Read these system properties at test setup time
-2. Invoke `waitForLogPatterns()` after `composeUp` but before running tests
-3. Handle failures appropriately (fail test class/method setup)
+**Configuration Cache Compatibility Note**:
 
-This integration ensures that when a user configures:
+The implementation uses `provider.map()` to maintain lazy evaluation, which is fully configuration
+cache compatible. The map transformation only occurs when the provider value is actually needed,
+not during configuration.
+
+**Alternative (if provider.map() causes issues with Test.systemProperty)**:
+
+Some versions of Gradle's Test task may not accept Provider for systemProperty. In that case,
+use the eager approach with explicit `.get()`:
+
+```groovy
+// Fallback: Eager evaluation (less ideal but works if provider not accepted)
+if (waitForLogSpec) {
+    test.systemProperty("docker.compose.waitForLog.enabled", "true")
+    test.systemProperty("docker.compose.waitForLog.services",
+        serializeMapProperty(waitForLogSpec.waitForServices))
+    // ... etc
+}
+
+/**
+ * Serialize a MapProperty to JSON string.
+ */
+private String serializeMapProperty(org.gradle.api.provider.MapProperty<String, List<String>> mapProperty) {
+    if (!mapProperty.present || mapProperty.get().isEmpty()) {
+        return "{}"
+    }
+    return new JsonBuilder(mapProperty.get()).toString()
+}
+```
+
+**Recommendation**: Start with the provider-based approach. Test with `--configuration-cache` twice
+to verify reuse. Fall back to eager evaluation only if necessary.
+
+**Test Framework Extension Changes (Out of Scope)**:
+
+The test framework extensions (Spock `@ComposeUp` / JUnit 5 `DockerComposeClassExtension`) must be
+updated in a **separate implementation phase** to:
+
+1. Read the new system properties at test setup time:
+   ```groovy
+   def waitForLogEnabled = System.getProperty("docker.compose.waitForLog.enabled") == "true"
+   def servicesJson = System.getProperty("docker.compose.waitForLog.services")
+   ```
+
+2. Deserialize JSON back to map:
+   ```groovy
+   def services = new JsonSlurper().parseText(servicesJson) as Map<String, List<String>>
+   ```
+
+3. Invoke `waitForLogPatterns()` after `composeUp` but before running tests
+
+4. Handle failures by failing the test class/method setup with clear error messages
+
+This separation allows the Gradle plugin changes to be completed and tested independently of
+the test framework extension changes.
+
+**User Configuration Example**:
 
 ```groovy
 dockerTest {
@@ -1900,8 +2719,9 @@ tasks.named('integrationTest') {
 }
 ```
 
-The `waitForLog` block is automatically executed when the compose stack starts up, before any
-test methods run.
+When configured this way, the `waitForLog` block is automatically executed:
+- **CLASS lifecycle**: As part of `composeUp` task before tests run
+- **METHOD lifecycle**: By the test framework extension before each test method
 
 ### Configuration Cache Verification
 
@@ -1922,11 +2742,32 @@ cd plugin-integration-test && ./gradlew composeUpMyTest --configuration-cache
 If `MapProperty<String, List<String>>` causes serialization issues with the configuration cache,
 use a JSON string representation as a fallback approach.
 
+**⚠️ Implementation Decision: Primary vs Fallback Approach**
+
+There are two implementation options:
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **Primary: MapProperty** | Type-safe, IDE support, Gradle-native | May have serialization issues |
+| **Fallback: JSON String** | Guaranteed serializable, simpler | Less type safety, manual (de)serialization |
+
+**Recommendation**: Start with `MapProperty` during development, but test configuration cache
+**early and often**. If any serialization issues appear during the first integration test with
+`--configuration-cache`, switch to JSON serialization immediately rather than trying to debug
+complex serialization issues.
+
+**When to Use This Fallback:**
+- If configuration cache tests fail with serialization errors for `MapProperty`
+- Test early by running: `./gradlew composeUpMyTest --configuration-cache` twice
+- **Consider using JSON from the start** if you want to avoid potential mid-development refactoring
+
 **Fallback Implementation:**
 
 1. **In ComposeUpTask**, replace the `MapProperty` with a `Property<String>` containing JSON:
 
 ```groovy
+import groovy.json.JsonSlurper
+
 // Instead of:
 // @Input @Optional abstract MapProperty<String, List<String>> getWaitForLogServices()
 
@@ -1940,50 +2781,345 @@ abstract Property<String> getWaitForLogServicesJson()
 abstract Property<String> getWaitForLogRejectPatternsJson()
 ```
 
-2. **In GradleDockerPlugin**, serialize the map when wiring:
+2. **In GradleDockerPlugin**, serialize the map when wiring (using Groovy JsonBuilder):
 
 ```groovy
+import groovy.json.JsonBuilder
+
 // Serialize map to JSON when configuring task
 if (stackSpec.waitForLog.isPresent()) {
     def logSpec = stackSpec.waitForLog.get()
-    def jsonService = ... // inject or obtain JsonService
 
     task.waitForLogServicesJson.set(
-        providers.provider { jsonService.toJson(logSpec.waitForServices.get()) }
+        providers.provider { new JsonBuilder(logSpec.waitForServices.get()).toString() }
     )
-    if (logSpec.rejectPatterns.present) {
+    if (logSpec.rejectPatterns.present && !logSpec.rejectPatterns.get().isEmpty()) {
         task.waitForLogRejectPatternsJson.set(
-            providers.provider { jsonService.toJson(logSpec.rejectPatterns.get()) }
+            providers.provider { new JsonBuilder(logSpec.rejectPatterns.get()).toString() }
         )
     }
-    // ... other properties
+    // ... other properties unchanged
 }
 ```
 
-3. **In performWaitForLog()**, deserialize the JSON back to a map:
+3. **In performWaitForLog()**, deserialize the JSON back to a map (using Groovy JsonSlurper):
 
 ```groovy
+import groovy.json.JsonSlurper
+
 private void performWaitForLog(String projectName) {
-    def jsonService = ... // obtain JsonService
+    def jsonSlurper = new JsonSlurper()
 
     Map<String, List<String>> services = waitForLogServicesJson.present
-        ? jsonService.fromJson(waitForLogServicesJson.get(), Map)
+        ? jsonSlurper.parseText(waitForLogServicesJson.get()) as Map<String, List<String>>
         : null
 
     Map<String, List<String>> rejectPatterns = waitForLogRejectPatternsJson.present
-        ? jsonService.fromJson(waitForLogRejectPatternsJson.get(), Map)
+        ? jsonSlurper.parseText(waitForLogRejectPatternsJson.get()) as Map<String, List<String>>
         : null
 
     def config = WaitForLogConfigBuilder.build(
         projectName,
         services,
         rejectPatterns,
-        // ... other properties
+        waitForLogTimeoutSeconds.getOrElse(60),
+        waitForLogPollSeconds.getOrElse(2),
+        waitForLogCaseInsensitive.getOrElse(false),
+        waitForLogVerbose.getOrElse(false),
+        waitForLogProgressIntervalSeconds.getOrElse(0)
     )
-    // ... rest of implementation
+
+    def waitFuture = composeService.get().waitForLogPatterns(config)
+    waitFuture.get()
 }
 ```
 
 This fallback ensures configuration cache compatibility by using only primitive/String types
-that are guaranteed to serialize correctly. Test this approach early in implementation to
-determine if the fallback is needed.
+that are guaranteed to serialize correctly. The Groovy `JsonBuilder` and `JsonSlurper` classes
+are part of the Groovy runtime and don't require additional dependencies.
+
+**Recommendation:** Start with `MapProperty` (primary implementation). Only switch to JSON
+fallback if configuration cache tests reveal serialization issues.
+
+### 14. Usage Documentation Updates
+
+After implementation, update the following documentation files:
+
+| File | Updates Required |
+|------|------------------|
+| `docs/usage/usage-docker-orch.md` | Add `waitForLog` section with examples, configuration options, and common patterns |
+| `docs/usage/usage-docker.md` | No changes (docker image operations, not compose) |
+| `CHANGELOG.md` | Add entry for new feature and breaking execution order change |
+| `README.md` | Update feature list to mention log-based readiness checks |
+
+**Example content for `usage-docker-orch.md`**:
+
+```markdown
+### Log-Based Readiness Checks
+
+The `waitForLog` block waits for specific patterns to appear in container logs before
+considering a service ready. This is useful for services without health checks or that
+require application-specific startup indicators.
+
+#### Basic Usage
+
+```groovy
+dockerTest {
+    composeStacks {
+        myTest {
+            files.from('compose.yml')
+
+            waitForLog {
+                waitForServices.set([
+                    'app': ['Started Application'],
+                    'db': ['ready to accept connections']
+                ])
+                timeoutSeconds.set(120)
+            }
+        }
+    }
+}
+```
+
+[Include additional examples from the DSL section above]
+```
+
+### 15. Performance Considerations
+
+#### Large Log Output
+
+When containers produce large log output, fetching all logs on every poll iteration can be
+expensive in terms of memory and I/O. The current implementation fetches all logs on each
+poll to ensure patterns that appeared early in startup are not missed.
+
+**Known Limitations:**
+- Each poll iteration fetches the complete log history for monitored services
+- For containers with very high log volume (thousands of lines per second), this can cause
+  performance degradation
+- No incremental log fetching (Docker Compose `logs` command doesn't support `--since` with
+  sub-second precision needed for polling)
+
+**Mitigation Strategies:**
+1. **Tune poll interval**: Use longer `pollSeconds` values (e.g., 5-10 seconds) for services
+   with high log volume
+2. **Use early patterns**: Choose patterns that appear early in startup to minimize wait time
+3. **Consider health checks**: For services with high log volume, prefer `waitForHealthy` when
+   possible
+
+**⚠️ Poll Interval Warning:**
+
+Setting `pollSeconds` too low (e.g., < 2 seconds) can cause:
+- Excessive I/O load from frequent log fetching
+- Higher CPU usage from repeated pattern matching
+- Potential rate limiting issues with Docker daemon
+
+**Recommended minimum**: `pollSeconds.set(2)` (the default). For services with high log volume
+or many patterns, consider `pollSeconds.set(5)` or higher.
+
+**Future Improvements** (out of scope for initial implementation):
+- Track last-seen log position and only check new lines
+- Support Docker API directly for more efficient log streaming
+- Add option to limit log history depth per poll
+
+#### Pattern Matching Performance
+
+The implementation compiles regex patterns once during configuration building and reuses them
+for all polls. Pattern matching is performed line-by-line, which is efficient for typical
+log output.
+
+**Best Practices:**
+- Use simple patterns when possible (literal strings match faster than complex regex)
+- Avoid overly broad patterns like `.*` at the start of patterns
+- Use case-insensitive mode (`caseInsensitive.set(true)`) instead of `(?i)` in every pattern
+  for better performance with multiple patterns
+
+### 16. Implementation Checklist
+
+This checklist provides a step-by-step guide for implementing the `waitForLog` feature.
+
+#### Pre-Implementation Verification
+
+- [ ] Read and understand the existing `waitForHealthy` and `waitForRunning` implementations
+- [ ] Verify Guava dependency in `plugin/build.gradle`:
+  ```bash
+  rg "libs.guava" plugin/build.gradle
+  ```
+  If not found, add `implementation libs.guava` to dependencies block
+- [ ] Confirm `ServiceLogger` interface methods (**verified**: `info()`, `debug()`, `warn()`, `error()` only - NO `lifecycle()`)
+- [ ] Confirm `ComposeStackSpec.getName()` exists (**verified**: line 46-48)
+- [ ] Confirm `TestIntegrationExtension.setComprehensiveSystemProperties()` signature (**verified**: line 179-217)
+- [ ] Review existing wiring patterns in `GradleDockerPlugin`:
+  ```bash
+  rg "waitForHealthy|waitForRunning" plugin/src/main/groovy/com/kineticfire/gradle/docker/GradleDockerPlugin.groovy -C 3
+  ```
+
+#### Phase 0: Prerequisite Changes
+
+- [ ] Modify `LogsConfig.groovy` (line 32 only - minimal change):
+  - [ ] Remove `Math.max(1, tailLines)` constraint (change to just `this.tailLines = tailLines`)
+  - [ ] (Optional) Add `hasLimitedTail()` helper method for readability
+  - [ ] Update Javadoc to document that `0` (or any non-positive value) means "all logs"
+- [ ] (Optional) Modify `ExecLibraryComposeService.buildLogsCommand()`:
+  - [ ] Replace `if (config.tailLines > 0)` with `if (config.hasLimitedTail())` for clarity
+  - [ ] **Note**: This is optional - existing code already handles the condition correctly
+- [ ] Write unit tests for LogsConfig changes:
+  - [ ] Test `tailLines = 0` results in `tailLines` being `0` (all logs)
+  - [ ] Test `tailLines = -1` results in `tailLines` being `-1` (all logs)
+  - [ ] Test `tailLines = 100` results in `tailLines` being `100` (existing behavior preserved)
+  - [ ] Test `tailLines = 1` results in `tailLines` being `1` (minimum positive value)
+  - [ ] If `hasLimitedTail()` helper added:
+    - [ ] Test `hasLimitedTail()` returns `false` for `tailLines = 0`
+    - [ ] Test `hasLimitedTail()` returns `false` for `tailLines = -1`
+    - [ ] Test `hasLimitedTail()` returns `true` for `tailLines = 1`
+    - [ ] Test `hasLimitedTail()` returns `true` for `tailLines = 100`
+- [ ] Run existing tests to verify no regressions (especially `LogsConfigTest` and `ExecLibraryComposeServiceTest`)
+
+#### Phase 1: Core Components
+
+- [ ] Create `WaitForLogSpec.groovy` (Section 1)
+  - [ ] Verify conventions are set correctly
+  - [ ] Write unit tests
+- [ ] Create `WaitForLogConfig.groovy` (Section 2)
+  - [ ] Verify immutability
+  - [ ] Write unit tests
+- [ ] Create `WaitForLogResult.groovy` (Section 3)
+  - [ ] Write unit tests
+- [ ] Create `LogPatternMatcher.groovy` (Section 4)
+  - [ ] Test all pure functions
+  - [ ] Achieve 100% branch coverage
+- [ ] Create `WaitForLogConfigBuilder.groovy` (Section 5)
+  - [ ] Test validation logic
+  - [ ] Test error messages
+
+#### Phase 2: Integration
+
+- [ ] Modify `ComposeStackSpec.groovy` (Section 6)
+  - [ ] Add `waitForLog` property
+  - [ ] Add DSL methods (Closure and Action variants)
+  - [ ] Add validation method
+  - [ ] Write unit tests
+- [ ] Modify `ComposeService.groovy` (Section 7)
+  - [ ] Add `waitForLogPatterns()` method signature
+- [ ] Modify `ExecLibraryComposeService.groovy` (Section 8)
+  - [ ] Implement `waitForLogPatterns()`
+  - [ ] Add all helper methods
+  - [ ] Write unit tests with mocked dependencies
+- [ ] Modify `ComposeServiceException.groovy` (Section 9)
+  - [ ] Add new error types
+  - [ ] Write unit tests
+- [ ] Modify `ComposeUpTask.groovy` (Section 10)
+  - [ ] Add flattened input properties
+  - [ ] Update `performWaitIfConfigured()` execution order
+  - [ ] Add `performWaitForLog()` method
+  - [ ] Write unit tests
+- [ ] Modify `GradleDockerPlugin.groovy` (Section 11)
+  - [ ] Add property wiring for waitForLog
+  - [ ] Write unit tests
+- [ ] Modify `TestIntegrationExtension.groovy` (Section 13)
+  - [ ] Add system property propagation
+  - [ ] Write unit tests
+
+#### Phase 3: Functional Tests
+
+- [ ] Add functional tests for `waitForLog` DSL configuration
+- [ ] Add functional tests for validation error messages
+- [ ] Add functional tests for property wiring
+- [ ] Verify all functional tests pass
+
+#### Phase 4: Configuration Cache Verification
+
+- [ ] Run with `--configuration-cache` flag
+- [ ] Verify second run reuses cached configuration
+- [ ] If MapProperty serialization fails, implement JSON fallback
+
+#### Phase 5: Integration Tests
+
+- [ ] Create integration test scenario for `waitForLog`
+- [ ] Test with real Docker containers
+- [ ] Test timeout behavior
+- [ ] Test reject pattern behavior
+- [ ] Test verbose logging
+- [ ] Test progress interval logging
+- [ ] Verify no lingering containers
+
+#### Phase 6: Documentation
+
+- [ ] Update `docs/usage/usage-docker-orch.md`
+- [ ] Update `CHANGELOG.md` with new feature and breaking change
+- [ ] Update `README.md` feature list
+
+#### Final Verification
+
+- [ ] All unit tests pass (100% coverage where possible)
+- [ ] All functional tests pass
+- [ ] All integration tests pass
+- [ ] Configuration cache works correctly
+- [ ] `docker ps -a` shows no lingering containers
+- [ ] Documentation is complete and accurate
+
+### Unit Test Strategy Notes
+
+While tests are deferred to a separate phase, the following notes inform test design:
+
+#### Highly Testable Components (Pure Functions)
+
+| Component | Testability | Notes |
+|-----------|-------------|-------|
+| `LogPatternMatcher` | 100% | Pure static methods, no dependencies. Test all branches. |
+| `WaitForLogConfig` | 100% | Immutable data class. Test construction and getters. |
+| `WaitForLogResult` | 100% | Immutable data class. Test both constructors. |
+| `WaitForLogConfigBuilder` | 100% | Pure validation logic. Test all error paths. |
+
+#### Components Requiring Mocks
+
+| Component | Dependencies to Mock | Notes |
+|-----------|---------------------|-------|
+| `ExecLibraryComposeService.waitForLogPatterns()` | `TimeService`, `ProcessExecutor`, `ServiceLogger` | Mock time for deterministic timeout testing |
+| `ComposeUpTask.performWaitForLog()` | `ComposeService` | Mock service to test task orchestration |
+| `ComposeStackSpec.waitForLog()` | None (uses `ObjectFactory`) | Use `ProjectBuilder` for testing |
+
+#### Testing Verbose and Progress Logging
+
+To verify that verbose logging and progress logging produce correct output, use a mock `ServiceLogger`:
+
+```groovy
+// Example test setup for verifying logging output
+def mockServiceLogger = Mock(ServiceLogger)
+def service = new ExecLibraryComposeService(
+    mockProcessExecutor, mockTimeService, mockServiceLogger
+)
+
+// Test verbose logging
+when:
+service.waitForLogPatterns(configWithVerboseTrue).get()
+
+then:
+// Verify specific log messages were produced
+1 * mockServiceLogger.info({ it.contains("[waitForLog] Waiting for log patterns") })
+_ * mockServiceLogger.info({ it.contains("[waitForLog] Polling for log patterns") })
+_ * mockServiceLogger.info({ it.contains("patterns matched") })
+
+// Test progress interval logging
+when:
+service.waitForLogPatterns(configWithProgressInterval).get()
+
+then:
+// Verify progress summary was logged at expected interval
+_ * mockServiceLogger.info({ it.contains("[waitForLog] Progress at") })
+```
+
+**Key Test Cases for Logging:**
+
+1. **Verbose mode enabled**: Verify per-poll progress messages are logged
+2. **Verbose mode disabled**: Verify only start/end messages are logged
+3. **Progress interval**: Verify summary is logged at configured intervals
+4. **Pattern found messages**: Verify `[FOUND]` messages include pattern and timestamp
+5. **Service ready messages**: Verify `READY` status is logged when all patterns match
+
+#### Test Coverage Priorities
+
+1. **LogPatternMatcher**: Achieve 100% branch coverage on all pattern matching logic
+2. **WaitForLogConfigBuilder**: Test all validation error messages
+3. **Timeout/reject scenarios**: Test edge cases in `waitForLogPatterns()`
+4. **Execution order**: Verify `waitForRunning` → `waitForHealthy` → `waitForLog` order
+5. **Verbose/progress logging**: Verify correct log output for all logging modes
