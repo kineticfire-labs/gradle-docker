@@ -36,7 +36,7 @@ The overview of the design is at `add-wait-for-log-0000-overview.md`.
 - [ ] Error handling (timeout, service crash, reject pattern) documented
 - [ ] Total timeout calculation explained
 - [ ] Test framework extension integration documented
-- [ ] Limitations documented (Lifecycle.METHOD not supported with enforcement error message)
+- [ ] Lifecycle support documented (both CLASS and METHOD fully supported)
 - [ ] Docker Compose v2+ requirement documented
 
 ## DSL / User Description
@@ -668,36 +668,25 @@ class MyAppIT extends Specification {
 }
 ```
 
-### Limitations
+### Lifecycle Support
 
-⚠️ **Initial Release**: The `waitForLog` block is only supported with `Lifecycle.CLASS` in the current release.
-`Lifecycle.METHOD` support will be added in a future release.
+All wait blocks support both `Lifecycle.CLASS` and `Lifecycle.METHOD`:
 
 | Wait Block | `Lifecycle.CLASS` | `Lifecycle.METHOD` |
 |------------|-------------------|-------------------|
 | `waitForRunning` | ✅ Supported | ✅ Supported |
 | `waitForHealthy` | ✅ Supported | ✅ Supported |
-| `waitForLog` | ✅ Supported | ❌ Not yet supported |
+| `waitForLog` | ✅ Supported | ✅ Supported |
 
-**Enforcement**: If you configure `waitForLog` with `Lifecycle.METHOD`, the build will fail with a clear error
-message explaining the limitation and suggesting alternatives. This prevents silent misconfiguration where
-the `waitForLog` block would be ignored.
+**Lifecycle.CLASS**: The compose stack is started once before all test methods in the class. The `waitForLog`
+check runs during the `composeUp` Gradle task, before any test methods execute. All test methods share the
+same running containers.
 
-**Example error when using waitForLog with Lifecycle.METHOD:**
-```
-Configuration error: 'waitForLog' is not yet supported with Lifecycle.METHOD.
-The 'waitForLog' block in compose stack 'myTest' cannot be used with per-method lifecycle.
+**Lifecycle.METHOD**: Fresh containers are started before each test method. The `waitForLog` check runs in
+the test framework extension's `beforeEach()` hook, ensuring containers are ready before each test method
+executes. Containers are torn down after each test method.
 
-Options:
-  1. Change to Lifecycle.CLASS: usesCompose(stack: 'myTest', lifecycle: 'class')
-  2. Remove the 'waitForLog' block and use 'waitForHealthy' or 'waitForRunning' instead
-
-Lifecycle.METHOD support for 'waitForLog' will be added in a future release.
-```
-
-If you need log-based readiness with per-method compose lifecycle, either:
-1. Use `Lifecycle.CLASS` instead (compose stack shared across all test methods)
-2. Wait for a future release that adds `Lifecycle.METHOD` support for `waitForLog`
+### Limitations
 
 ⚠️ **Docker Compose v2+ Required**: The `waitForLog` feature requires Docker Compose v2.x or later due to its use of
 `docker compose ps --format json` for service status checks. Docker Compose v1 (the Python-based `docker-compose`

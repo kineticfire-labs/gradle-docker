@@ -82,17 +82,22 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 
   **IMPORTANT**: This verification MUST pass before proceeding with implementation. If it fails, implement
   the JSON String fallback (Option A in Section 17) instead of native `MapProperty<String, List<String>>`.
-- [ ] Add Guava dependency to `plugin/build.gradle`:
+- [ ] **ACTION REQUIRED - Add Guava dependency to `plugin/build.gradle`**:
   Guava is defined in `libs.versions.toml` but **not currently declared** in `build.gradle`.
-  Add `implementation libs.guava` to the `dependencies` block after existing implementation entries.
-  Verify with:
-  ```bash
-  rg "libs.guava" plugin/build.gradle
-  ```
-- [ ] Verify Guava is available on the compile classpath:
-  ```bash
-  cd plugin && ./gradlew dependencies --configuration compileClasspath | grep guava
-  ```
+  This is a **required action**, not just verification. Add `implementation libs.guava` to the
+  `dependencies` block after existing implementation entries.
+
+  **Steps**:
+  1. Open `plugin/build.gradle`
+  2. Add `implementation libs.guava` in the `dependencies` block
+  3. Verify the addition:
+     ```bash
+     rg "libs.guava" plugin/build.gradle
+     ```
+  4. Verify Guava is available on the compile classpath:
+     ```bash
+     cd plugin && ./gradlew dependencies --configuration compileClasspath | grep guava
+     ```
 - [ ] Confirm `ServiceLogger` interface methods (**verified**: `info()`, `debug()`, `warn()`, `error()` only - NO
       `lifecycle()`)
 - [ ] Confirm `ComposeStackSpec.getName()` exists (**verified**: line 46-48)
@@ -167,6 +172,18 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   ```bash
   rg "interface SystemPropertyService|class.*SystemPropertyService" plugin/src/main/groovy -C 3
   ```
+- [ ] **Verify existing system property format for waitForRunning/waitForHealthy**:
+  The helper methods in Section 12.5 assume specific formats for existing system properties. Verify
+  these formats match how `TestIntegrationExtension` currently serializes them:
+  ```bash
+  # Check how waitForRunning services are serialized
+  rg "waitForRunning.*systemProperty|systemProperty.*waitForRunning" plugin/src/main/groovy -C 5
+
+  # Check how waitForHealthy services are serialized
+  rg "waitForHealthy.*systemProperty|systemProperty.*waitForHealthy" plugin/src/main/groovy -C 5
+  ```
+  **Expected format**: Services should be serialized as comma-separated values (e.g., `"app,db,redis"`).
+  If a different format is used, update Section 12.5 helper methods to match.
 
 ### Phase 0: Prerequisite Changes
 
@@ -249,17 +266,21 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   - [ ] Add property wiring for waitForLog
   - [ ] Write unit tests
 - [ ] Modify `TestIntegrationExtension.groovy` (Section 12)
-  - [ ] Add system property propagation for `waitForLog`
-  - [ ] Write unit tests
+  - [ ] Add system property propagation for `waitForLog` (both CLASS and METHOD lifecycles)
+  - [ ] Write unit tests for system property propagation
 - [ ] Modify `DockerComposeMethodExtension.groovy` (Section 12.5)
   - [ ] Update `waitForStackToBeReady()` to read DSL system properties
   - [ ] Add `performWaitForRunning()` method
   - [ ] Add `performWaitForHealthy()` method
-  - [ ] Add `performWaitForLog()` method
-  - [ ] Add JSON parsing helper methods
+  - [ ] Add `performWaitForLog()` method (full lifecycle support)
+  - [ ] Add helper methods (parseIntProperty, parseBooleanProperty, parseJsonMapProperty)
   - [ ] Write unit tests
 - [ ] Modify `DockerComposeClassExtension.groovy` (Section 12.5)
-  - [ ] Update `waitForStackToBeReady()` to read DSL system properties (same pattern as METHOD)
+  - [ ] Update `waitForStackToBeReady()` to read DSL system properties
+  - [ ] Add `performWaitForLog()` method call (executes before test class runs)
+  - [ ] Write unit tests
+- [ ] Modify `JUnitComposeService.groovy` (Section 12.5.5)
+  - [ ] Add `waitForLogPatterns()` delegation method (if not using @Delegate pattern)
   - [ ] Write unit tests
 
 ### Phase 3: Functional Tests
@@ -267,6 +288,8 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 - [ ] Add functional tests for `waitForLog` DSL configuration
 - [ ] Add functional tests for validation error messages
 - [ ] Add functional tests for property wiring
+- [ ] Add functional test for `waitForLog` with `Lifecycle.CLASS`
+- [ ] Add functional test for `waitForLog` with `Lifecycle.METHOD`
 - [ ] Verify all functional tests pass
 
 ### Phase 4: Configuration Cache Verification
@@ -305,10 +328,12 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   - [ ] Test progress interval logging
   - [ ] Verify no lingering containers
 - [ ] Create integration test scenario for `waitForLog` with METHOD lifecycle
-  - [ ] Test with real Docker containers (fresh per method)
+  - [ ] Test with real Docker containers
   - [ ] Test timeout behavior
   - [ ] Test reject pattern behavior
-  - [ ] Verify containers are cleaned up after each method
+  - [ ] Test verbose logging
+  - [ ] Test progress interval logging
+  - [ ] Verify no lingering containers
 - [ ] Create integration test scenario for `waitForRunning` with METHOD lifecycle
   - [ ] Verify DSL settings are honored (not hardcoded)
 - [ ] Create integration test scenario for `waitForHealthy` with METHOD lifecycle
@@ -317,7 +342,10 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 ### Phase 6: Documentation
 
 - [ ] Update `docs/usage/usage-docker-orch.md`
-- [ ] Update `CHANGELOG.md` with new feature and breaking change
+- [ ] **BREAKING CHANGE**: Update `CHANGELOG.md` with:
+  - [ ] New `waitForLog` feature description with full lifecycle support (CLASS and METHOD)
+  - [ ] Breaking change: execution order changed from `waitForHealthy` -> `waitForRunning` to
+        `waitForRunning` -> `waitForHealthy` -> `waitForLog` (see Section 13)
 - [ ] Update `README.md` feature list
 
 ### Final Verification
@@ -2326,19 +2354,22 @@ Update `TestIntegrationExtension.setComprehensiveSystemProperties()` to propagat
 via system properties for test framework extensions to consume.
 
 **Lifecycle Support:**
-- `Lifecycle.CLASS`: Properties are propagated and used by `ComposeUpTask` (Gradle task handles wait logic)
+- `Lifecycle.CLASS`: Properties are propagated and used by `ComposeUpTask` (Gradle task handles wait logic
+  during `composeUp` task execution).
 - `Lifecycle.METHOD`: Properties are propagated via system properties and consumed by test framework
-  extensions (`DockerComposeMethodExtension`) which handle wait logic in `beforeEach()`
+  extensions (`DockerComposeMethodExtension`) which handle wait logic in `beforeEach()`.
 
 Both lifecycles are fully supported. The test framework extensions (Section 12.5) read the system
 properties and execute the appropriate wait operations.
 
 Modify `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtension.groovy`:
 
-**Add to `setComprehensiveSystemProperties()` method** (after the `waitForRunning` properties block, around line 210):
+**Add system property propagation for waitForLog** (after the `waitForRunning` properties block, around line 210):
 
 ```groovy
-// Wait for log settings - check if Property is present
+// Wait for log settings - propagate for both CLASS and METHOD lifecycles
+// For CLASS: ComposeUpTask handles wait logic; properties also available to test code
+// For METHOD: DockerComposeMethodExtension reads properties and executes wait in beforeEach()
 def waitForLogSpec = stackSpec.waitForLog.getOrNull()
 if (waitForLogSpec) {
     // Serialize the services map as JSON for system property
@@ -2391,6 +2422,12 @@ in the JUnit 5 test framework extensions. Currently, `DockerComposeMethodExtensi
 `DockerComposeClassExtension` have hardcoded wait behavior that ignores DSL settings. This update
 fixes that gap.
 
+**Code Style Note**: The code examples in this section use Groovy syntax (the actual extension files
+are `.groovy` files). If the actual files are Java (`.java`), adjust the syntax accordingly:
+- Remove `def` keywords, use explicit types
+- Add semicolons
+- Use explicit generic types instead of diamond operator where needed
+
 **Problem Statement:**
 
 The current `DockerComposeMethodExtension.waitForStackToBeReady()` implementation has these issues:
@@ -2401,7 +2438,8 @@ The current `DockerComposeMethodExtension.waitForStackToBeReady()` implementatio
 **Solution:**
 
 Update the test framework extensions to read the system properties set by `TestIntegrationExtension`
-and execute the appropriate wait operations in the correct order.
+and execute the appropriate wait operations in the correct order:
+`waitForRunning` -> `waitForHealthy` -> `waitForLog`
 
 #### 12.5.1 System Property Constants
 
@@ -2436,29 +2474,58 @@ private static final String WAIT_FOR_LOG_PROGRESS_INTERVAL = "docker.compose.wai
 
 #### 12.5.2 Updated waitForStackToBeReady() Method
 
-Replace the existing `waitForStackToBeReady()` method in both extensions with this implementation
-that honors DSL settings:
+Replace the existing `waitForStackToBeReady()` method in **`DockerComposeMethodExtension`** with this
+implementation that honors DSL settings for all wait blocks including `waitForLog`:
 
-```java
+```groovy
 /**
  * Wait for services to reach desired state based on DSL configuration.
  *
  * <p>Execution order: waitForRunning -> waitForHealthy -> waitForLog</p>
- * <p>This matches the order used in ComposeUpTask for consistency.</p>
+ * <p>This method supports full lifecycle (METHOD) for all wait blocks.</p>
  */
 private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws Exception {
-    System.out.println("Waiting for containers to become ready...");
+    System.out.println("Waiting for containers to become ready...")
 
     // Step 1: Wait for RUNNING services (if configured)
-    performWaitForRunning(uniqueProjectName);
+    performWaitForRunning(uniqueProjectName)
 
     // Step 2: Wait for HEALTHY services (if configured)
-    performWaitForHealthy(uniqueProjectName);
+    performWaitForHealthy(uniqueProjectName)
 
     // Step 3: Wait for log patterns (if configured)
-    performWaitForLog(uniqueProjectName);
+    performWaitForLog(uniqueProjectName)
 
-    System.out.println("All configured wait conditions satisfied for stack '" + stackName + "'");
+    System.out.println("All configured wait conditions satisfied for stack '" + stackName + "'")
+}
+```
+
+For **`DockerComposeClassExtension`**, the implementation also includes the `performWaitForLog()` call.
+**Note**: While `ComposeUpTask.performWaitIfConfigured()` could handle `waitForLog` for CLASS lifecycle
+during the Gradle task execution phase, calling `performWaitForLog()` in the CLASS extension ensures
+consistency between CLASS and METHOD lifecycles and provides flexibility for future enhancements where
+test classes may need to re-verify readiness conditions.
+
+```groovy
+/**
+ * Wait for services to reach desired state based on DSL configuration.
+ *
+ * <p>Execution order: waitForRunning -> waitForHealthy -> waitForLog</p>
+ * <p>This method supports full lifecycle (CLASS) for all wait blocks.</p>
+ */
+private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws Exception {
+    System.out.println("Waiting for containers to become ready...")
+
+    // Step 1: Wait for RUNNING services (if configured)
+    performWaitForRunning(uniqueProjectName)
+
+    // Step 2: Wait for HEALTHY services (if configured)
+    performWaitForHealthy(uniqueProjectName)
+
+    // Step 3: Wait for log patterns (if configured)
+    performWaitForLog(uniqueProjectName)
+
+    System.out.println("All configured wait conditions satisfied for stack '" + stackName + "'")
 }
 
 /**
@@ -2639,19 +2706,57 @@ import java.util.HashMap;
 import java.util.Map;
 ```
 
-#### 12.5.5 ComposeService Interface Update
+#### 12.5.5 JUnitComposeService Implementation
 
-Verify that `JUnitComposeService` (used by the test framework extensions) implements the
-`waitForLogPatterns()` method added in Section 7. If `JUnitComposeService` delegates to
-`ExecLibraryComposeService`, no additional changes are needed.
+`JUnitComposeService` (used by the test framework extensions) must implement the `waitForLogPatterns()`
+method added to the `ComposeService` interface in Section 7.
 
 **Verification command:**
 ```bash
-rg "waitForLogPatterns" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/service -A 5
+rg "class JUnitComposeService" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit -A 30
 ```
 
-If `JUnitComposeService` doesn't implement this method, add it by delegating to the underlying
-compose service implementation.
+**Expected finding**: `JUnitComposeService` likely delegates to an underlying `ComposeService` implementation
+(probably `ExecLibraryComposeService`). If so, the delegation pattern should already handle the new method.
+
+**If `JUnitComposeService` does NOT implement `waitForLogPatterns()`**, add the following delegation method:
+
+```groovy
+// In JUnitComposeService.groovy
+
+@Override
+CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogConfig config) {
+    // Delegate to the underlying compose service implementation
+    return delegate.waitForLogPatterns(config)
+}
+```
+
+**Required imports** (add if not present):
+```groovy
+import com.kineticfire.gradle.docker.model.WaitForLogConfig
+import com.kineticfire.gradle.docker.model.WaitForLogResult
+import java.util.concurrent.CompletableFuture
+```
+
+**Alternative - If `JUnitComposeService` uses `@Delegate` annotation**:
+
+If the class uses Groovy's `@Delegate` annotation pattern, no changes are needed - the delegation is automatic:
+```groovy
+class JUnitComposeService implements ComposeService {
+    @Delegate
+    private final ComposeService delegate  // Automatically delegates all interface methods
+    // ...
+}
+```
+
+**Verification after implementation**:
+```bash
+# Verify the method exists
+rg "waitForLogPatterns" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit
+
+# Run unit tests to ensure delegation works
+cd plugin && ./gradlew test --tests "*JUnitComposeService*"
+```
 
 #### 12.5.6 Backward Compatibility
 

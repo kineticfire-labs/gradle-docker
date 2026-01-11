@@ -49,3 +49,30 @@ The design document consists of these documents:
 **Note**: Unit tests, functional tests, and integration tests do not have separate plan documents. Test requirements
 should be derived from the implementation plan and existing project testing standards documented in
 `docs/project-standards/testing/`.
+
+## Review Notes
+
+### Implementation Plan Review (2026-01-10)
+
+The implementation plan (0200) was reviewed and updated to address the following findings:
+
+1. **Full Lifecycle Support Confirmed**: The `waitForLog` feature supports both `Lifecycle.CLASS` and
+   `Lifecycle.METHOD` from the initial release. Both documents (0100 and 0200) were updated to:
+   - Remove all validation code that would reject METHOD lifecycle
+   - Remove Section 12.6 (Lifecycle.METHOD Validation) as it is no longer needed
+   - Update Section 12.5 to implement `performWaitForLog()` for both METHOD and CLASS extensions
+   - Update Phase 5 integration tests checklist to include METHOD lifecycle tests for `waitForLog`
+
+2. **JUnitComposeService Implementation**: Section 12.5.5 was updated with explicit implementation code
+   for the `waitForLogPatterns()` delegation method, including verification commands and test requirements.
+
+3. **System Property Format Verification**: Added verification step in Pre-Implementation checklist to
+   confirm that existing `waitForRunning` and `waitForHealthy` system property formats match the parsing
+   code in Section 12.5.
+
+4. **Guava Dependency**: Changed from verification to explicit action item in Pre-Implementation checklist.
+
+5. **Code Style Clarification**: Added note in Section 12.5 about Java vs Groovy code style.
+
+6. **Breaking Change Visibility**: Updated Phase 6 Documentation checklist to explicitly call out the
+   breaking change for CHANGELOG.md.
