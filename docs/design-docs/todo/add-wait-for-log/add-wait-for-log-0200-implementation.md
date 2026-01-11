@@ -20,6 +20,68 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 ### Pre-Implementation Verification
 
 - [ ] Read and understand the existing `waitForHealthy` and `waitForRunning` implementations
+- [ ] **Verify abstract MapProperty pattern limitation**: Test whether Gradle can handle
+  `abstract MapProperty<String, List<String>>` with `@Inject`. Create a scratch test to verify:
+  ```groovy
+  // In a test file or scratch project, try:
+  abstract class TestMapPropertySpec {
+      @Inject TestMapPropertySpec() {}
+      abstract MapProperty<String, List<String>> getTestMap()
+  }
+  // Then instantiate via: objectFactory.newInstance(TestMapPropertySpec)
+  ```
+  **Expected result**: This will likely fail due to nested generic type erasure - Gradle cannot infer
+  the inner `List<String>` type. If it fails, the non-abstract class pattern with constructor injection
+  (as designed in Section 1) is required. If it succeeds, consider refactoring `WaitForLogSpec` to use
+  the abstract pattern for consistency with `WaitSpec`.
+
+  **Verification command** (run unit test after creating test class):
+  ```bash
+  cd plugin && ./gradlew test --tests "*TestMapPropertySpec*"
+  ```
+- [ ] **Verify MapProperty<String, List<String>> configuration cache serialization**: The above test verifies
+  *instantiation*, but configuration cache also requires *serialization/deserialization*. Create a minimal
+  functional test project to verify:
+  ```groovy
+  // In a scratch functional test project (plugin/src/functionalTest/groovy):
+  // 1. Create a task with abstract MapProperty<String, List<String>> input
+  // 2. Run with --configuration-cache twice
+  // 3. Verify second run reuses cached configuration
+
+  // TestTask.groovy
+  @UntrackedTask(because = "Test task")
+  abstract class TestMapPropertyTask extends DefaultTask {
+      @Input
+      @Optional
+      abstract MapProperty<String, List<String>> getTestMap()
+
+      @TaskAction
+      void run() {
+          println "Test map: ${testMap.getOrElse([:])}"
+      }
+  }
+
+  // build.gradle
+  tasks.register('testMapProperty', TestMapPropertyTask) {
+      testMap.set([
+          'service1': ['pattern1', 'pattern2'],
+          'service2': ['pattern3']
+      ])
+  }
+  ```
+  **Verification commands** (MUST run both to verify cache reuse):
+  ```bash
+  # First run - stores configuration cache
+  ./gradlew testMapProperty --configuration-cache
+
+  # Second run - MUST say "Reusing configuration cache" (not "Calculating task graph")
+  ./gradlew testMapProperty --configuration-cache
+  ```
+  **If serialization fails**: See "MapProperty Serialization Fallback Strategies" section (Section 17) for
+  alternative approaches. The recommended fallback is JSON String encoding.
+
+  **IMPORTANT**: This verification MUST pass before proceeding with implementation. If it fails, implement
+  the JSON String fallback (Option A in Section 17) instead of native `MapProperty<String, List<String>>`.
 - [ ] Add Guava dependency to `plugin/build.gradle`:
   Guava is defined in `libs.versions.toml` but **not currently declared** in `build.gradle`.
   Add `implementation libs.guava` to the `dependencies` block after existing implementation entries.
@@ -87,6 +149,24 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   ```bash
   rg "import org.gradle.api.GradleException" plugin/src/main/groovy/com/kineticfire/gradle/docker/spec/ComposeStackSpec.groovy
   ```
+- [ ] Review `DockerComposeMethodExtension.waitForStackToBeReady()` implementation:
+  ```bash
+  rg "waitForStackToBeReady" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/DockerComposeMethodExtension.groovy -A 30
+  ```
+  **Note**: Current implementation has hardcoded HEALTHY status and ignores DSL settings. This will be fixed
+  as part of full lifecycle support (Section 12.5).
+- [ ] Review `DockerComposeClassExtension` for similar patterns:
+  ```bash
+  rg "waitForStackToBeReady" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/DockerComposeClassExtension.groovy -A 30
+  ```
+- [ ] Verify `JUnitComposeService` implements `ComposeService` interface:
+  ```bash
+  rg "class JUnitComposeService|implements ComposeService" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit -C 2
+  ```
+- [ ] Verify `SystemPropertyService` interface for reading system properties in test framework extensions:
+  ```bash
+  rg "interface SystemPropertyService|class.*SystemPropertyService" plugin/src/main/groovy -C 3
+  ```
 
 ### Phase 0: Prerequisite Changes
 
@@ -121,6 +201,8 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 ### Phase 1: Core Components
 
 - [ ] Create `WaitForLogSpec.groovy` (Section 1)
+  - [ ] **PREREQUISITE**: Complete Pre-Implementation Verification for MapProperty serialization
+  - [ ] If serialization verification failed, implement JSON String fallback per Section 17 FIRST
   - [ ] Verify conventions are set correctly
   - [ ] Write unit tests
 - [ ] Create `WaitForLogConfig.groovy` (Section 2)
@@ -167,10 +249,18 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   - [ ] Add property wiring for waitForLog
   - [ ] Write unit tests
 - [ ] Modify `TestIntegrationExtension.groovy` (Section 12)
-  - [ ] Add system property propagation
-  - [ ] Add Lifecycle.METHOD validation (throw error if waitForLog used with METHOD lifecycle)
+  - [ ] Add system property propagation for `waitForLog`
   - [ ] Write unit tests
-  - [ ] Test Lifecycle.METHOD + waitForLog throws clear error message
+- [ ] Modify `DockerComposeMethodExtension.groovy` (Section 12.5)
+  - [ ] Update `waitForStackToBeReady()` to read DSL system properties
+  - [ ] Add `performWaitForRunning()` method
+  - [ ] Add `performWaitForHealthy()` method
+  - [ ] Add `performWaitForLog()` method
+  - [ ] Add JSON parsing helper methods
+  - [ ] Write unit tests
+- [ ] Modify `DockerComposeClassExtension.groovy` (Section 12.5)
+  - [ ] Update `waitForStackToBeReady()` to read DSL system properties (same pattern as METHOD)
+  - [ ] Write unit tests
 
 ### Phase 3: Functional Tests
 
@@ -181,21 +271,48 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 
 ### Phase 4: Configuration Cache Verification
 
-- [ ] Run with `--configuration-cache` flag
-- [ ] Verify second run reuses cached configuration
-- [ ] Verify Pattern objects serialize/deserialize correctly across configuration cache runs
-- [ ] Test with complex regex patterns containing special characters (e.g., `\\[`, `.*?`, `(?i)`)
-- [ ] If MapProperty serialization fails, implement JSON fallback
+- [ ] **MapProperty<String, List<String>> serialization verification** (CRITICAL):
+  - [ ] Create functional test with `waitForLog` DSL containing multiple services
+  - [ ] Run with `--configuration-cache` flag (first run)
+  - [ ] Run with `--configuration-cache` flag again - **MUST say "Reusing configuration cache"**
+  - [ ] If second run says "Calculating task graph", serialization has failed - implement fallback
+- [ ] **Pattern content verification**:
+  - [ ] Test with simple patterns: `['Started Application']`
+  - [ ] Test with regex special characters: `['\\[INFO\\].*started', 'port:\\s+\\d+']`
+  - [ ] Test with escape sequences: `['message: \\"ready\\"', 'path\\\\to\\\\file']`
+  - [ ] Test with case-insensitive flag patterns: `['(?i)ready', '(?i)started']`
+  - [ ] Verify patterns match correctly after cache restore (values not corrupted)
+- [ ] **Multi-service verification**:
+  - [ ] Test with 3+ services in `waitForServices` map
+  - [ ] Test with services having different numbers of patterns (1, 3, 5 patterns)
+  - [ ] Test with `rejectPatterns` populated for some but not all services
+- [ ] **Edge case verification**:
+  - [ ] Test with empty `rejectPatterns` (should serialize as empty map `{}`)
+  - [ ] Test with very long pattern strings (500+ characters)
+  - [ ] Test with Unicode characters in patterns
+- [ ] **If MapProperty serialization fails**:
+  - [ ] Implement JSON String fallback per Section 17
+  - [ ] Re-run all above tests with fallback implementation
+  - [ ] Document the limitation in release notes
 
 ### Phase 5: Integration Tests
 
-- [ ] Create integration test scenario for `waitForLog`
-- [ ] Test with real Docker containers
-- [ ] Test timeout behavior
-- [ ] Test reject pattern behavior
-- [ ] Test verbose logging
-- [ ] Test progress interval logging
-- [ ] Verify no lingering containers
+- [ ] Create integration test scenario for `waitForLog` with CLASS lifecycle
+  - [ ] Test with real Docker containers
+  - [ ] Test timeout behavior
+  - [ ] Test reject pattern behavior
+  - [ ] Test verbose logging
+  - [ ] Test progress interval logging
+  - [ ] Verify no lingering containers
+- [ ] Create integration test scenario for `waitForLog` with METHOD lifecycle
+  - [ ] Test with real Docker containers (fresh per method)
+  - [ ] Test timeout behavior
+  - [ ] Test reject pattern behavior
+  - [ ] Verify containers are cleaned up after each method
+- [ ] Create integration test scenario for `waitForRunning` with METHOD lifecycle
+  - [ ] Verify DSL settings are honored (not hardcoded)
+- [ ] Create integration test scenario for `waitForHealthy` with METHOD lifecycle
+  - [ ] Verify DSL settings are honored (timeout, poll interval)
 
 ### Phase 6: Documentation
 
@@ -404,9 +521,18 @@ constructor. Create at `plugin/src/main/groovy/com/kineticfire/gradle/docker/spe
 > The `@SuppressWarnings('unchecked')` annotation is necessary because `mapProperty(String, List)` loses the inner
 > `<String>` type information at runtime.
 >
-> **Verification**: Before implementation, verify that Gradle cannot handle `abstract MapProperty<String, List<String>>`
-> with `@Inject`. If it can, the abstract approach would be preferred for consistency with `WaitSpec`. The non-abstract
-> approach documented here is the fallback when abstract properties fail for nested generics.
+> **IMPORTANT - Verification Required**: Before implementing this class, complete BOTH verification checklist items
+> in the Pre-Implementation Verification section:
+> 1. "Verify abstract MapProperty pattern limitation" - Tests instantiation
+> 2. "Verify MapProperty<String, List<String>> configuration cache serialization" - Tests serialization
+>
+> - **If instantiation verification fails** (expected): Use the non-abstract class pattern shown below.
+> - **If instantiation verification succeeds**: Refactor `WaitForLogSpec` to use the abstract pattern for consistency
+>   with `WaitSpec`. Change to `abstract class WaitForLogSpec` with abstract property getters and an empty
+>   `@Inject` constructor.
+> - **If configuration cache serialization fails**: Implement the JSON String fallback documented in Section 17
+>   (MapProperty Serialization Fallback Strategies). This is a blocking issue that must be resolved before
+>   proceeding with full implementation.
 
 ```groovy
 package com.kineticfire.gradle.docker.spec
@@ -2194,10 +2320,18 @@ if (stackSpec.waitForLog.present) {
 }
 ```
 
-### 12. Test Framework Extension Integration
+### 12. Test Framework Extension Integration (TestIntegrationExtension)
 
 Update `TestIntegrationExtension.setComprehensiveSystemProperties()` to propagate `waitForLog` configuration
 via system properties for test framework extensions to consume.
+
+**Lifecycle Support:**
+- `Lifecycle.CLASS`: Properties are propagated and used by `ComposeUpTask` (Gradle task handles wait logic)
+- `Lifecycle.METHOD`: Properties are propagated via system properties and consumed by test framework
+  extensions (`DockerComposeMethodExtension`) which handle wait logic in `beforeEach()`
+
+Both lifecycles are fully supported. The test framework extensions (Section 12.5) read the system
+properties and execute the appropriate wait operations.
 
 Modify `plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtension.groovy`:
 
@@ -2250,52 +2384,299 @@ import groovy.json.JsonBuilder
 >
 > If JSON serialization issues arise, consider Base64 encoding the pattern strings as a fallback.
 
-**Lifecycle Support Limitation:**
-- `Lifecycle.CLASS`: Fully supported - properties are propagated and used by `ComposeUpTask`
-- `Lifecycle.METHOD`: Not supported in initial release - test framework extensions would need to parse
-  the system properties and call the compose service directly. This will be added in a future release.
+### 12.5 Test Framework Extension Updates (Full Lifecycle Support)
 
-**Lifecycle.METHOD Enforcement:**
+This section implements full lifecycle support for `waitForRunning`, `waitForHealthy`, and `waitForLog`
+in the JUnit 5 test framework extensions. Currently, `DockerComposeMethodExtension` and
+`DockerComposeClassExtension` have hardcoded wait behavior that ignores DSL settings. This update
+fixes that gap.
 
-To prevent silent misconfiguration, add validation in `TestIntegrationExtension` that throws an error
-if `waitForLog` is configured with `Lifecycle.METHOD`.
+**Problem Statement:**
 
-**Implementation Location and Context:**
+The current `DockerComposeMethodExtension.waitForStackToBeReady()` implementation has these issues:
+1. Uses hardcoded `ServiceStatus.HEALTHY` - ignores `waitForRunning` entirely
+2. Uses hardcoded timeout (60s) and poll interval (2s) - ignores DSL `timeoutSeconds` and `pollSeconds`
+3. Does not support `waitForLog` at all
 
-1. **Find the method**: Look for `configureTestTask()` or similar method in `TestIntegrationExtension.groovy`
-   that handles the `usesCompose()` DSL call. Use:
-   ```bash
-   rg "usesCompose|configureTestTask|Lifecycle" plugin/src/main/groovy/com/kineticfire/gradle/docker/extension/TestIntegrationExtension.groovy -C 5
-   ```
+**Solution:**
 
-2. **Locate the insertion point**: Find where `lifecycle` is determined/validated (look for
-   `Lifecycle.METHOD` or `Lifecycle.CLASS` comparisons). The new validation should be added
-   **immediately after** the lifecycle is parsed/determined but **before** any task configuration
-   that would use the waitForLog settings.
+Update the test framework extensions to read the system properties set by `TestIntegrationExtension`
+and execute the appropriate wait operations in the correct order.
 
-3. **Add the validation**: Insert this code block after determining the lifecycle mode:
+#### 12.5.1 System Property Constants
 
-```groovy
-// Validate waitForLog is not used with Lifecycle.METHOD (not yet supported)
-// This check must occur BEFORE configuring system properties or task dependencies
-if (lifecycle == Lifecycle.METHOD && stackSpec.waitForLog.present) {
-    throw new GradleException(
-        "Configuration error: 'waitForLog' is not yet supported with Lifecycle.METHOD.\\n" +
-        "The 'waitForLog' block in compose stack '${stackSpec.name}' cannot be used with " +
-        "per-method lifecycle.\\n\\n" +
-        "Options:\\n" +
-        "  1. Change to Lifecycle.CLASS: usesCompose(stack: '${stackSpec.name}', lifecycle: 'class')\\n" +
-        "  2. Remove the 'waitForLog' block and use 'waitForHealthy' or 'waitForRunning' instead\\n\\n" +
-        "Lifecycle.METHOD support for 'waitForLog' will be added in a future release."
-    )
+Add constants for the new system properties. These should be added to both `DockerComposeMethodExtension`
+and `DockerComposeClassExtension`:
+
+```java
+// Existing constants
+private static final String COMPOSE_STACK_PROPERTY = "docker.compose.stack";
+private static final String COMPOSE_PROJECT_PROPERTY = "docker.compose.project";
+private static final String COMPOSE_FILES_PROPERTY = "docker.compose.files";
+
+// Wait for running settings
+private static final String WAIT_FOR_RUNNING_SERVICES = "docker.compose.waitForRunning.services";
+private static final String WAIT_FOR_RUNNING_TIMEOUT = "docker.compose.waitForRunning.timeoutSeconds";
+private static final String WAIT_FOR_RUNNING_POLL = "docker.compose.waitForRunning.pollSeconds";
+
+// Wait for healthy settings
+private static final String WAIT_FOR_HEALTHY_SERVICES = "docker.compose.waitForHealthy.services";
+private static final String WAIT_FOR_HEALTHY_TIMEOUT = "docker.compose.waitForHealthy.timeoutSeconds";
+private static final String WAIT_FOR_HEALTHY_POLL = "docker.compose.waitForHealthy.pollSeconds";
+
+// Wait for log settings
+private static final String WAIT_FOR_LOG_SERVICES = "docker.compose.waitForLog.services";
+private static final String WAIT_FOR_LOG_REJECT_PATTERNS = "docker.compose.waitForLog.rejectPatterns";
+private static final String WAIT_FOR_LOG_TIMEOUT = "docker.compose.waitForLog.timeoutSeconds";
+private static final String WAIT_FOR_LOG_POLL = "docker.compose.waitForLog.pollSeconds";
+private static final String WAIT_FOR_LOG_CASE_INSENSITIVE = "docker.compose.waitForLog.caseInsensitive";
+private static final String WAIT_FOR_LOG_VERBOSE = "docker.compose.waitForLog.verbose";
+private static final String WAIT_FOR_LOG_PROGRESS_INTERVAL = "docker.compose.waitForLog.progressIntervalSeconds";
+```
+
+#### 12.5.2 Updated waitForStackToBeReady() Method
+
+Replace the existing `waitForStackToBeReady()` method in both extensions with this implementation
+that honors DSL settings:
+
+```java
+/**
+ * Wait for services to reach desired state based on DSL configuration.
+ *
+ * <p>Execution order: waitForRunning -> waitForHealthy -> waitForLog</p>
+ * <p>This matches the order used in ComposeUpTask for consistency.</p>
+ */
+private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws Exception {
+    System.out.println("Waiting for containers to become ready...");
+
+    // Step 1: Wait for RUNNING services (if configured)
+    performWaitForRunning(uniqueProjectName);
+
+    // Step 2: Wait for HEALTHY services (if configured)
+    performWaitForHealthy(uniqueProjectName);
+
+    // Step 3: Wait for log patterns (if configured)
+    performWaitForLog(uniqueProjectName);
+
+    System.out.println("All configured wait conditions satisfied for stack '" + stackName + "'");
+}
+
+/**
+ * Wait for services to reach RUNNING state.
+ */
+private void performWaitForRunning(String projectName) throws Exception {
+    String servicesProperty = systemPropertyService.getProperty(WAIT_FOR_RUNNING_SERVICES);
+    if (servicesProperty == null || servicesProperty.isEmpty()) {
+        return;
+    }
+
+    List<String> services = Arrays.asList(servicesProperty.split(","));
+    int timeoutSeconds = parseIntProperty(WAIT_FOR_RUNNING_TIMEOUT, 60);
+    int pollSeconds = parseIntProperty(WAIT_FOR_RUNNING_POLL, 2);
+
+    System.out.println("Waiting for services to be RUNNING: " + services);
+
+    WaitConfig waitConfig = new WaitConfig(
+        projectName,
+        services,
+        Duration.ofSeconds(timeoutSeconds),
+        Duration.ofSeconds(pollSeconds),
+        ServiceStatus.RUNNING
+    );
+
+    composeService.waitForServices(waitConfig).get();
+    System.out.println("All services are RUNNING");
+}
+
+/**
+ * Wait for services to reach HEALTHY state.
+ */
+private void performWaitForHealthy(String projectName) throws Exception {
+    String servicesProperty = systemPropertyService.getProperty(WAIT_FOR_HEALTHY_SERVICES);
+    if (servicesProperty == null || servicesProperty.isEmpty()) {
+        return;
+    }
+
+    List<String> services = Arrays.asList(servicesProperty.split(","));
+    int timeoutSeconds = parseIntProperty(WAIT_FOR_HEALTHY_TIMEOUT, 60);
+    int pollSeconds = parseIntProperty(WAIT_FOR_HEALTHY_POLL, 2);
+
+    System.out.println("Waiting for services to be HEALTHY: " + services);
+
+    WaitConfig waitConfig = new WaitConfig(
+        projectName,
+        services,
+        Duration.ofSeconds(timeoutSeconds),
+        Duration.ofSeconds(pollSeconds),
+        ServiceStatus.HEALTHY
+    );
+
+    composeService.waitForServices(waitConfig).get();
+    System.out.println("All services are HEALTHY");
+}
+
+/**
+ * Wait for log patterns to appear in service logs.
+ */
+private void performWaitForLog(String projectName) throws Exception {
+    String servicesJson = systemPropertyService.getProperty(WAIT_FOR_LOG_SERVICES);
+    if (servicesJson == null || servicesJson.isEmpty() || servicesJson.equals("{}")) {
+        return;
+    }
+
+    // Parse JSON configuration
+    Map<String, List<String>> services = parseJsonMapProperty(servicesJson);
+    if (services.isEmpty()) {
+        return;
+    }
+
+    Map<String, List<String>> rejectPatterns = parseJsonMapProperty(
+        systemPropertyService.getProperty(WAIT_FOR_LOG_REJECT_PATTERNS)
+    );
+
+    int timeoutSeconds = parseIntProperty(WAIT_FOR_LOG_TIMEOUT, 60);
+    int pollSeconds = parseIntProperty(WAIT_FOR_LOG_POLL, 2);
+    boolean caseInsensitive = parseBooleanProperty(WAIT_FOR_LOG_CASE_INSENSITIVE, false);
+    boolean verbose = parseBooleanProperty(WAIT_FOR_LOG_VERBOSE, false);
+    int progressIntervalSeconds = parseIntProperty(WAIT_FOR_LOG_PROGRESS_INTERVAL, 0);
+
+    System.out.println("Waiting for log patterns in services: " + services.keySet());
+
+    // Build WaitForLogConfig using the builder
+    WaitForLogConfig config = WaitForLogConfigBuilder.build(
+        projectName,
+        services,
+        rejectPatterns,
+        timeoutSeconds,
+        pollSeconds,
+        caseInsensitive,
+        verbose,
+        progressIntervalSeconds
+    );
+
+    composeService.waitForLogPatterns(config).get();
+    System.out.println("All log patterns matched");
 }
 ```
 
-4. **Required import**: Add `import org.gradle.api.GradleException` at the top of the file if not
-   already present.
+#### 12.5.3 Helper Methods
 
-This validation ensures users get a clear, actionable error message instead of silently having their
-`waitForLog` configuration ignored.
+Add these helper methods to both extensions:
+
+```java
+/**
+ * Parse an integer system property with a default value.
+ */
+private int parseIntProperty(String propertyName, int defaultValue) {
+    String value = systemPropertyService.getProperty(propertyName);
+    if (value == null || value.isEmpty()) {
+        return defaultValue;
+    }
+    try {
+        return Integer.parseInt(value);
+    } catch (NumberFormatException e) {
+        System.err.println("Warning: Invalid integer for " + propertyName + ": " + value +
+                          ", using default: " + defaultValue);
+        return defaultValue;
+    }
+}
+
+/**
+ * Parse a boolean system property with a default value.
+ */
+private boolean parseBooleanProperty(String propertyName, boolean defaultValue) {
+    String value = systemPropertyService.getProperty(propertyName);
+    if (value == null || value.isEmpty()) {
+        return defaultValue;
+    }
+    return Boolean.parseBoolean(value);
+}
+
+/**
+ * Parse a JSON map system property into Map<String, List<String>>.
+ *
+ * @param json JSON string in format: {"key1": ["val1", "val2"], "key2": ["val3"]}
+ * @return Parsed map, or empty map if json is null/empty/invalid
+ */
+@SuppressWarnings("unchecked")
+private Map<String, List<String>> parseJsonMapProperty(String json) {
+    if (json == null || json.isEmpty()) {
+        return Collections.emptyMap();
+    }
+    try {
+        // Use Groovy's JsonSlurper for parsing
+        Object parsed = new groovy.json.JsonSlurper().parseText(json);
+        if (parsed instanceof Map) {
+            Map<String, Object> rawMap = (Map<String, Object>) parsed;
+            Map<String, List<String>> result = new HashMap<>();
+            for (Map.Entry<String, Object> entry : rawMap.entrySet()) {
+                if (entry.getValue() instanceof List) {
+                    List<String> values = new ArrayList<>();
+                    for (Object item : (List<?>) entry.getValue()) {
+                        values.add(String.valueOf(item));
+                    }
+                    result.put(entry.getKey(), values);
+                }
+            }
+            return result;
+        }
+        return Collections.emptyMap();
+    } catch (Exception e) {
+        System.err.println("Warning: Failed to parse JSON map: " + e.getMessage());
+        return Collections.emptyMap();
+    }
+}
+```
+
+#### 12.5.4 Required Imports
+
+Add these imports to both `DockerComposeMethodExtension.java` and `DockerComposeClassExtension.java`:
+
+```java
+import com.kineticfire.gradle.docker.model.WaitForLogConfig;
+import com.kineticfire.gradle.docker.util.WaitForLogConfigBuilder;
+import java.util.HashMap;
+import java.util.Map;
+```
+
+#### 12.5.5 ComposeService Interface Update
+
+Verify that `JUnitComposeService` (used by the test framework extensions) implements the
+`waitForLogPatterns()` method added in Section 7. If `JUnitComposeService` delegates to
+`ExecLibraryComposeService`, no additional changes are needed.
+
+**Verification command:**
+```bash
+rg "waitForLogPatterns" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit/service -A 5
+```
+
+If `JUnitComposeService` doesn't implement this method, add it by delegating to the underlying
+compose service implementation.
+
+#### 12.5.6 Backward Compatibility
+
+The updated implementation maintains backward compatibility:
+
+1. **No DSL configured**: If no `waitForRunning`, `waitForHealthy`, or `waitForLog` blocks are
+   configured, the system properties won't be set, and the wait methods will return early (no-op).
+
+2. **Legacy hardcoded behavior removed**: The previous hardcoded `HEALTHY` check with default
+   timeout is removed. Users must now explicitly configure wait behavior in the DSL.
+
+3. **Migration path**: Users relying on the implicit HEALTHY check should add explicit
+   `waitForHealthy` configuration:
+   ```groovy
+   dockerTest {
+       composeStacks {
+           myStack {
+               waitForHealthy {
+                   waitForServices.set(['my-service'])
+                   timeoutSeconds.set(60)
+               }
+           }
+       }
+   }
+   ```
 
 ### 13. Execution Order Change (Breaking Change)
 
@@ -2468,4 +2849,183 @@ docker compose -p <project-name> down
 # or
 docker ps -a  # Find leftover containers
 docker rm -f <container-ids>
+```
+
+### 17. MapProperty Serialization Fallback Strategies
+
+This section documents fallback strategies if `MapProperty<String, List<String>>` fails to serialize correctly
+for Gradle's configuration cache. The pre-implementation verification (see checklist) should identify this
+issue before implementation begins.
+
+#### Background
+
+The `waitForLog` feature requires storing a map where:
+- **Key**: Service name (String)
+- **Value**: List of regex pattern strings (List<String>)
+
+This nested generic type (`MapProperty<String, List<String>>`) is a **new pattern** in this codebase. All existing
+`MapProperty` usages are simple `MapProperty<String, String>` key-value pairs.
+
+**Risk Assessment**:
+| Risk | Likelihood | Impact |
+|------|------------|--------|
+| Instantiation fails for abstract property | LOW | HIGH |
+| Configuration cache serialization fails | LOW-MEDIUM | HIGH |
+| Deserialization produces incorrect data | LOW | HIGH |
+
+#### Option A: JSON String Encoding (RECOMMENDED FALLBACK)
+
+Replace `MapProperty<String, List<String>>` with `MapProperty<String, String>` where the value is a JSON-encoded
+list of patterns.
+
+**WaitForLogSpec changes**:
+```groovy
+// BEFORE (nested generic):
+private final MapProperty<String, List<String>> waitForServices
+
+// AFTER (JSON-encoded):
+private final MapProperty<String, String> waitForServicesJson
+
+// Add helper method for DSL convenience:
+void waitForServices(Map<String, List<String>> services) {
+    def jsonBuilder = new groovy.json.JsonBuilder()
+    services.each { serviceName, patterns ->
+        waitForServicesJson.put(serviceName, jsonBuilder(patterns).toString())
+    }
+}
+```
+
+**ComposeUpTask changes**:
+```groovy
+// BEFORE:
+@Input
+@Optional
+abstract MapProperty<String, List<String>> getWaitForLogServices()
+
+// AFTER:
+@Input
+@Optional
+abstract MapProperty<String, String> getWaitForLogServicesJson()
+
+// In performWaitForLog(), parse JSON before use:
+def services = waitForLogServicesJson.get().collectEntries { serviceName, patternsJson ->
+    def patterns = new groovy.json.JsonSlurper().parseText(patternsJson) as List<String>
+    [(serviceName): patterns]
+}
+```
+
+**Pros**:
+- Minimal code changes
+- Proven serialization (String is always safe)
+- Already used for system property propagation in TestIntegrationExtension
+
+**Cons**:
+- Runtime JSON parsing overhead (negligible for typical use)
+- Less type-safe at compile time
+- Slightly more complex DSL implementation
+
+#### Option B: Custom Holder Class with @Nested
+
+Create a dedicated class to hold per-service patterns, using `@Nested` annotation for Gradle to track as
+structured input.
+
+**New class - ServicePatternSpec**:
+```groovy
+class ServicePatternSpec {
+    final String serviceName
+    final ListProperty<String> patterns
+
+    @Inject
+    ServicePatternSpec(String serviceName, ObjectFactory objects) {
+        this.serviceName = serviceName
+        this.patterns = objects.listProperty(String)
+    }
+}
+```
+
+**WaitForLogSpec changes**:
+```groovy
+// BEFORE:
+private final MapProperty<String, List<String>> waitForServices
+
+// AFTER:
+private final ListProperty<ServicePatternSpec> servicePatterns
+
+void service(String name, @DelegatesTo(ServicePatternSpec) Closure closure) {
+    def spec = objectFactory.newInstance(ServicePatternSpec, name)
+    closure.delegate = spec
+    closure.call()
+    servicePatterns.add(spec)
+}
+```
+
+**DSL usage changes**:
+```groovy
+// BEFORE:
+waitForLog {
+    waitForServices.set([
+        'app': ['Started Application', 'Listening on port'],
+        'db': ['ready for connections']
+    ])
+}
+
+// AFTER:
+waitForLog {
+    service('app') {
+        patterns.addAll('Started Application', 'Listening on port')
+    }
+    service('db') {
+        patterns.add('ready for connections')
+    }
+}
+```
+
+**Pros**:
+- Type-safe
+- Gradle-idiomatic with `@Nested` support
+- Better IDE completion
+
+**Cons**:
+- More verbose DSL
+- More classes to maintain
+- Significant refactoring required
+
+#### Option C: Flatten Completely
+
+Use separate properties for each aspect, with service names as a list and patterns as a concatenated string
+with delimiter.
+
+**Not recommended** due to:
+- DSL becomes unwieldy for many services
+- Parsing complexity increases
+- Error-prone delimiter handling
+
+#### Recommendation
+
+If `MapProperty<String, List<String>>` fails configuration cache verification:
+
+1. **Implement Option A (JSON String)** - It requires minimal changes and the pattern is already proven
+   in `TestIntegrationExtension` for system property propagation.
+
+2. **Do NOT attempt Option B or C** unless Option A also fails (extremely unlikely).
+
+3. **Document the limitation** in release notes:
+   ```markdown
+   ### Implementation Notes
+   - Service patterns are stored as JSON-encoded strings internally for configuration cache compatibility
+   - This is transparent to DSL users - the Map<String, List<String>> API remains unchanged
+   ```
+
+#### Verification After Fallback Implementation
+
+If a fallback is implemented, re-run all Phase 4 configuration cache tests:
+
+```bash
+# Full verification suite
+cd plugin && ./gradlew clean test functionalTest --configuration-cache
+cd plugin && ./gradlew clean test functionalTest --configuration-cache  # Must reuse cache
+
+# Integration test verification
+cd plugin && ./gradlew -Pplugin_version=1.0.0 build publishToMavenLocal
+cd plugin-integration-test && ./gradlew cleanAll integrationTest --configuration-cache
 ```
