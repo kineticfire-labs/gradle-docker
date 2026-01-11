@@ -184,6 +184,24 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   ```
   **Expected format**: Services should be serialized as comma-separated values (e.g., `"app,db,redis"`).
   If a different format is used, update Section 12.5 helper methods to match.
+- [ ] **Verify ProcessExecutor.execute() return type interface**:
+  The implementation assumes `result.isSuccess()` and `result.stdout` exist on the process execution result.
+  ```bash
+  rg "interface ProcessExecutor|class ProcessExecutor" plugin/src/main/groovy -A 10
+  rg "class.*Result|ProcessResult|ExecutionResult" plugin/src/main/groovy -A 10
+  ```
+  **Expected**: Result object with `isSuccess()` method and `stdout` property. If the interface differs,
+  update Section 8 helper methods (`isServiceRunning`, `getServiceExitCode`, `getComposeProjectServices`).
+- [ ] **Verify required imports exist in ExecLibraryComposeService**:
+  ```bash
+  # Check Duration import
+  rg "import java.time.Duration" plugin/src/main/groovy/com/kineticfire/gradle/docker/service/ExecLibraryComposeService.groovy
+
+  # Check existing HashSet/HashMap usage patterns
+  rg "HashSet|HashMap" plugin/src/main/groovy/com/kineticfire/gradle/docker/service/ExecLibraryComposeService.groovy
+  ```
+  **Note**: Groovy auto-imports `java.util.*`, so explicit imports may not be needed. Verify compilation
+  succeeds with the new code.
 
 ### Phase 0: Prerequisite Changes
 
@@ -342,10 +360,9 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
 ### Phase 6: Documentation
 
 - [ ] Update `docs/usage/usage-docker-orch.md`
-- [ ] **BREAKING CHANGE**: Update `CHANGELOG.md` with:
+- [ ] Update `CHANGELOG.md` with:
   - [ ] New `waitForLog` feature description with full lifecycle support (CLASS and METHOD)
-  - [ ] Breaking change: execution order changed from `waitForHealthy` -> `waitForRunning` to
-        `waitForRunning` -> `waitForHealthy` -> `waitForLog` (see Section 13)
+  - [ ] Execution order is now `waitForRunning` -> `waitForHealthy` -> `waitForLog`
 - [ ] Update `README.md` feature list
 
 ### Final Verification
@@ -1286,7 +1303,7 @@ private void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
         )
     }
 
-    // Validate each service has at least one pattern
+    // Validate each service has at least one pattern and all patterns are strings
     spec.waitForServices.get().each { serviceName, patterns ->
         if (patterns == null || patterns.isEmpty()) {
             throw new GradleException(
@@ -1294,6 +1311,16 @@ private void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
                 "Pattern list for service '${serviceName}' cannot be empty.\n" +
                 "Each service must have at least one pattern to match."
             )
+        }
+        // Type-safety check: ensure all patterns are strings (catches type erasure issues)
+        patterns.each { pattern ->
+            if (!(pattern instanceof String)) {
+                throw new GradleException(
+                    "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
+                    "Pattern values must be strings, got: ${pattern?.getClass()?.name ?: 'null'}\n" +
+                    "For service '${serviceName}', ensure all patterns are quoted strings."
+                )
+            }
         }
     }
 
@@ -1463,6 +1490,14 @@ This distinction is intentional:
  */
 private static final int RECENT_LOG_LINES_FOR_ERROR = 10
 ```
+
+> **Thread Pool Note**: `CompletableFuture.supplyAsync()` uses the common ForkJoinPool by default.
+> This matches existing patterns in `ExecLibraryComposeService` for `waitForServices()`. If thread
+> isolation is needed in the future, consider injecting an `Executor` parameter.
+
+> **JsonSlurper Thread Safety Note**: `JsonSlurper` is not thread-safe when using the `LAX` parser type.
+> The current implementation is single-threaded within `supplyAsync()`, so this is safe. If parallelizing
+> service checks in the future, create a new `JsonSlurper` instance per thread or use `JsonSlurper.setType(JsonParserType.INDEX_OVERLAY)`.
 
 **Complete Implementation** (add to `ExecLibraryComposeService.groovy`):
 
@@ -2034,7 +2069,8 @@ private ComposeServiceException buildTimeoutException(
         def matchTimes = matchTimesByService[serviceName]
 
         def status = matchedPatterns.size() == patterns.size() ? "READY" : "NOT READY"
-        sb.append("Service '${serviceName}' - ${status} (${matchedPatterns.size()}/${patterns.size()} patterns matched):\n")
+        def matchCount = "${matchedPatterns.size()}/${patterns.size()}"
+        sb.append("Service '${serviceName}' - ${status} (${matchCount} patterns matched):\n")
 
         patterns.eachWithIndex { pattern, index ->
             def matched = matchedPatterns.contains(index)
@@ -2061,7 +2097,8 @@ private ComposeServiceException buildTimeoutException(
     }
 
     sb.append("Hint: Check if the expected log message format matches your pattern.\n")
-    sb.append("      Patterns are case-${config.caseInsensitive ? 'insensitive' : 'sensitive'} regex expressions.\n")
+    def caseSensitivity = config.caseInsensitive ? 'insensitive' : 'sensitive'
+    sb.append("      Patterns are case-${caseSensitivity} regex expressions.\n")
     sb.append("      Use verbose.set(true) to see detailed progress during polling.")
 
     return new ComposeServiceException(
@@ -2296,6 +2333,11 @@ private void performWaitForLog(String projectName) {
     def services = waitForLogServices.get()
     logger.lifecycle("Waiting for log patterns in services: {}", services.keySet())
 
+    // NOTE on getOrNull() vs getOrElse():
+    // - rejectPatterns uses getOrNull() because WaitForLogConfigBuilder.build() accepts null
+    //   and handles it appropriately (treats as empty map)
+    // - Scalar properties use getOrElse() with defaults for consistency with the wiring in
+    //   GradleDockerPlugin (Section 11) which also provides these defaults
     def config = WaitForLogConfigBuilder.build(
         projectName,
         services,
@@ -2440,6 +2482,14 @@ The current `DockerComposeMethodExtension.waitForStackToBeReady()` implementatio
 Update the test framework extensions to read the system properties set by `TestIntegrationExtension`
 and execute the appropriate wait operations in the correct order:
 `waitForRunning` -> `waitForHealthy` -> `waitForLog`
+
+> **Service Dependency Note**: The test framework extensions use `composeService` (a `ComposeService` instance)
+> to execute wait operations. This service is typically obtained via constructor injection or field injection
+> during extension initialization. Verify that existing extension code provides this dependency before adding
+> the new `performWaitForLog()` calls:
+> ```bash
+> rg "composeService|ComposeService" plugin/src/main/groovy/com/kineticfire/gradle/docker/junit -C 3
+> ```
 
 #### 12.5.1 System Property Constants
 
@@ -2758,58 +2808,27 @@ rg "waitForLogPatterns" plugin/src/main/groovy/com/kineticfire/gradle/docker/jun
 cd plugin && ./gradlew test --tests "*JUnitComposeService*"
 ```
 
-#### 12.5.6 Backward Compatibility
+#### 12.5.6 Behavior When No Wait Blocks Configured
 
-The updated implementation maintains backward compatibility:
+If no `waitForRunning`, `waitForHealthy`, or `waitForLog` blocks are configured in the DSL,
+the system properties won't be set, and the wait methods will return early (no-op). This is
+the expected behavior - containers will be started but no readiness checks will be performed.
 
-1. **No DSL configured**: If no `waitForRunning`, `waitForHealthy`, or `waitForLog` blocks are
-   configured, the system properties won't be set, and the wait methods will return early (no-op).
+### 13. Execution Order
 
-2. **Legacy hardcoded behavior removed**: The previous hardcoded `HEALTHY` check with default
-   timeout is removed. Users must now explicitly configure wait behavior in the DSL.
-
-3. **Migration path**: Users relying on the implicit HEALTHY check should add explicit
-   `waitForHealthy` configuration:
-   ```groovy
-   dockerTest {
-       composeStacks {
-           myStack {
-               waitForHealthy {
-                   waitForServices.set(['my-service'])
-                   timeoutSeconds.set(60)
-               }
-           }
-       }
-   }
-   ```
-
-### 13. Execution Order Change (Breaking Change)
-
-The execution order in `ComposeUpTask.performWaitIfConfigured()` is updated from:
-- `waitForHealthy` -> `waitForRunning`
-
-To:
+The execution order in `ComposeUpTask.performWaitIfConfigured()` is:
 - `waitForRunning` -> `waitForHealthy` -> `waitForLog`
 
 **Rationale**: This order reflects the natural startup sequence:
 1. Containers must be running before health checks can pass
 2. Health checks should pass before checking for application-specific log messages
 
-**CHANGELOG entry:**
-```markdown
-### Changed (Breaking)
-- **Wait block execution order changed**: The execution order for wait blocks is now
-  `waitForRunning` -> `waitForHealthy` -> `waitForLog` (previously `waitForHealthy` -> `waitForRunning`).
-  This reflects the natural container startup sequence and ensures containers are running before
-  health checks are evaluated.
-```
-
 ### 14. Usage Documentation Updates
 
 | File | Updates Required |
 |------|------------------|
 | `docs/usage/usage-docker-orch.md` | Add `waitForLog` section with examples |
-| `CHANGELOG.md` | Document new feature and breaking change |
+| `CHANGELOG.md` | Document new `waitForLog` feature with full lifecycle support |
 | `README.md` | Update feature list |
 
 ### 15. Performance Considerations
@@ -2853,6 +2872,10 @@ periods), this can cause memory pressure.
 **Future Enhancement**: Consider adding a `maxLogLines` property in a future release to cap log retrieval.
 This would trade off the ability to match very early patterns for bounded memory usage. For now, the
 DSL/User Description documents this limitation in the "Performance Considerations" section.
+
+**Gradle Daemon Considerations**: If running repeated integration tests with high-volume logging services,
+logs accumulate in the Gradle daemon's heap across test runs. Consider using `--no-daemon` for CI builds
+or restarting the daemon periodically (`./gradlew --stop`) to reclaim memory between test runs.
 
 #### Non-Existent Compose Project Handling
 

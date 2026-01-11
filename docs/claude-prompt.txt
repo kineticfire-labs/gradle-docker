@@ -21,6 +21,9 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
   Feedback:
 
 
+
+## Implementation review
+
 You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
 Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
 the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
@@ -40,6 +43,8 @@ compatible with Gradle 9 and 10 per @docs/design-docs/gradle-9-and-10-compatibil
 The plan should NOT include tests or documentation; these are deferred until later.
 
 Report your findings and recommendations.  Do NOT edit files.
+
+
 
 
 
