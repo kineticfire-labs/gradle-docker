@@ -10,10 +10,15 @@ Read these documents first:
 
 Define the implementation plan to achieve the desired functionality.
 
-This document should NOT include tests -- those are deferred to other documents.
+This document should NOT include tests or documentation tasks -- those are deferred to other documents:
+- Unit tests: `add-wait-for-log-0300-unit-tests.md`
+- Functional tests: `add-wait-for-log-0400-functional-tests.md`
+- Integration tests: `add-wait-for-log-0500-integration-tests.md`
+- Documentation: `add-wait-for-log-0600-documentation.md`
 
-The overview of the design is at `add-wait-for-log-0000-overview.md`.
-The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`.
+Related documents:
+- Overview: `add-wait-for-log-0000-overview.md`
+- DSL user description: `add-wait-for-log-0100-dsl-user-description.md`
 
 ## Checklist
 
@@ -222,16 +227,8 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   Ensure all usages will work correctly with the new `hasLimitedTail()` method
 - [ ] Modify `ExecLibraryComposeService.buildLogsCommand()`:
   - [ ] Replace `if (config.tailLines > 0)` with `if (config.hasLimitedTail())` for clarity
-- [ ] Write unit tests for LogsConfig changes:
-  - [ ] Test `tailLines = 0` results in `tailLines` being `0` (all logs)
-  - [ ] Test `tailLines = -1` results in `tailLines` being `-1` (all logs)
-  - [ ] Test `tailLines = 100` results in `tailLines` being `100` (existing behavior preserved)
-  - [ ] Test `tailLines = 1` results in `tailLines` being `1` (minimum positive value)
-  - [ ] Test `hasLimitedTail()` returns `false` for `tailLines = 0`
-  - [ ] Test `hasLimitedTail()` returns `false` for `tailLines = -1`
-  - [ ] Test `hasLimitedTail()` returns `true` for `tailLines = 1`
-  - [ ] Test `hasLimitedTail()` returns `true` for `tailLines = 100`
 - [ ] Run existing tests to verify no regressions (especially `LogsConfigTest` and `ExecLibraryComposeServiceTest`)
+- [ ] Unit tests: See `add-wait-for-log-0300-unit-tests.md` for LogsConfig test specifications
 
 ### Phase 1: Core Components
 
@@ -239,25 +236,12 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   - [ ] **PREREQUISITE**: Complete Pre-Implementation Verification for MapProperty serialization
   - [ ] If serialization verification failed, implement JSON String fallback per Section 17 FIRST
   - [ ] Verify conventions are set correctly
-  - [ ] Write unit tests
 - [ ] Create `WaitForLogConfig.groovy` (Section 2)
   - [ ] Verify immutability
-  - [ ] Write unit tests
-  - [ ] Test `getTotalWaitAttempts()` edge cases:
-    - [ ] Test `timeout < pollInterval` (e.g., timeout=1s, poll=2s) returns 1
-    - [ ] Test `timeout == pollInterval` returns 1
-    - [ ] Test ceiling division works (e.g., timeout=61s, poll=2s returns 31, not 30)
-    - [ ] Test large values don't cause integer overflow
 - [ ] Create `WaitForLogResult.groovy` (Section 3)
-  - [ ] Write unit tests
 - [ ] Create `LogPatternMatcher.groovy` (Section 4)
-  - [ ] Test all pure functions
-  - [ ] Achieve 100% branch coverage
 - [ ] Create `WaitForLogConfigBuilder.groovy` (Section 5)
-  - [ ] Test validation logic
-  - [ ] Test error messages
-  - [ ] Test orphaned reject patterns warning is logged
-  - [ ] Test `pollSeconds > timeoutSeconds` warning is logged
+- [ ] Unit tests for Phase 1: See `add-wait-for-log-0300-unit-tests.md`
 
 ### Phase 2: Integration
 
@@ -265,114 +249,62 @@ The DSL / user description is at `add-wait-for-log-0100-dsl-user-description.md`
   - [ ] Add `waitForLog` property
   - [ ] Add DSL methods (Closure and Action variants)
   - [ ] Add validation method
-  - [ ] Write unit tests
 - [ ] Modify `ComposeService.groovy` (Section 7)
   - [ ] Add `waitForLogPatterns()` method signature
 - [ ] Modify `ExecLibraryComposeService.groovy` (Section 8)
   - [ ] Implement `waitForLogPatterns()`
   - [ ] Add all helper methods
-  - [ ] Write unit tests with mocked dependencies
 - [ ] Modify `ComposeServiceException.groovy` (Section 9)
   - [ ] Add new error types
-  - [ ] Write unit tests
 - [ ] Modify `ComposeUpTask.groovy` (Section 10)
   - [ ] Add flattened input properties
   - [ ] Update `performWaitIfConfigured()` execution order
   - [ ] Add `performWaitForLog()` method
-  - [ ] Write unit tests
 - [ ] Modify `GradleDockerPlugin.groovy` (Section 11)
   - [ ] Add property wiring for waitForLog
-  - [ ] Write unit tests
 - [ ] Modify `TestIntegrationExtension.groovy` (Section 12)
   - [ ] Add system property propagation for `waitForLog` (both CLASS and METHOD lifecycles)
-  - [ ] Write unit tests for system property propagation
 - [ ] Modify `DockerComposeMethodExtension.groovy` (Section 12.5)
   - [ ] Update `waitForStackToBeReady()` to read DSL system properties
   - [ ] Add `performWaitForRunning()` method
   - [ ] Add `performWaitForHealthy()` method
   - [ ] Add `performWaitForLog()` method (full lifecycle support)
   - [ ] Add helper methods (parseIntProperty, parseBooleanProperty, parseJsonMapProperty)
-  - [ ] Write unit tests
 - [ ] Modify `DockerComposeClassExtension.groovy` (Section 12.5)
   - [ ] Update `waitForStackToBeReady()` to read DSL system properties
   - [ ] Add `performWaitForLog()` method call (executes before test class runs)
-  - [ ] Write unit tests
 - [ ] Modify `JUnitComposeService.groovy` (Section 12.5.5)
   - [ ] Add `waitForLogPatterns()` delegation method (if not using @Delegate pattern)
-  - [ ] Write unit tests
+- [ ] Unit tests for Phase 2: See `add-wait-for-log-0300-unit-tests.md`
 
 ### Phase 3: Functional Tests
 
-- [ ] Add functional tests for `waitForLog` DSL configuration
-- [ ] Add functional tests for validation error messages
-- [ ] Add functional tests for property wiring
-- [ ] Add functional test for `waitForLog` with `Lifecycle.CLASS`
-- [ ] Add functional test for `waitForLog` with `Lifecycle.METHOD`
-- [ ] Verify all functional tests pass
+See `add-wait-for-log-0400-functional-tests.md` for functional test specifications.
 
 ### Phase 4: Configuration Cache Verification
 
-- [ ] **MapProperty<String, List<String>> serialization verification** (CRITICAL):
-  - [ ] Create functional test with `waitForLog` DSL containing multiple services
-  - [ ] Run with `--configuration-cache` flag (first run)
-  - [ ] Run with `--configuration-cache` flag again - **MUST say "Reusing configuration cache"**
-  - [ ] If second run says "Calculating task graph", serialization has failed - implement fallback
-- [ ] **Pattern content verification**:
-  - [ ] Test with simple patterns: `['Started Application']`
-  - [ ] Test with regex special characters: `['\\[INFO\\].*started', 'port:\\s+\\d+']`
-  - [ ] Test with escape sequences: `['message: \\"ready\\"', 'path\\\\to\\\\file']`
-  - [ ] Test with case-insensitive flag patterns: `['(?i)ready', '(?i)started']`
-  - [ ] Verify patterns match correctly after cache restore (values not corrupted)
-- [ ] **Multi-service verification**:
-  - [ ] Test with 3+ services in `waitForServices` map
-  - [ ] Test with services having different numbers of patterns (1, 3, 5 patterns)
-  - [ ] Test with `rejectPatterns` populated for some but not all services
-- [ ] **Edge case verification**:
-  - [ ] Test with empty `rejectPatterns` (should serialize as empty map `{}`)
-  - [ ] Test with very long pattern strings (500+ characters)
-  - [ ] Test with Unicode characters in patterns
-- [ ] **If MapProperty serialization fails**:
-  - [ ] Implement JSON String fallback per Section 17
-  - [ ] Re-run all above tests with fallback implementation
-  - [ ] Document the limitation in release notes
+See `add-wait-for-log-0400-functional-tests.md` for configuration cache verification test specifications.
+
+Note: If MapProperty serialization fails, implement JSON String fallback per Section 17 of this document.
 
 ### Phase 5: Integration Tests
 
-- [ ] Create integration test scenario for `waitForLog` with CLASS lifecycle
-  - [ ] Test with real Docker containers
-  - [ ] Test timeout behavior
-  - [ ] Test reject pattern behavior
-  - [ ] Test verbose logging
-  - [ ] Test progress interval logging
-  - [ ] Verify no lingering containers
-- [ ] Create integration test scenario for `waitForLog` with METHOD lifecycle
-  - [ ] Test with real Docker containers
-  - [ ] Test timeout behavior
-  - [ ] Test reject pattern behavior
-  - [ ] Test verbose logging
-  - [ ] Test progress interval logging
-  - [ ] Verify no lingering containers
-- [ ] Create integration test scenario for `waitForRunning` with METHOD lifecycle
-  - [ ] Verify DSL settings are honored (not hardcoded)
-- [ ] Create integration test scenario for `waitForHealthy` with METHOD lifecycle
-  - [ ] Verify DSL settings are honored (timeout, poll interval)
+See `add-wait-for-log-0500-integration-tests.md` for integration test specifications.
 
 ### Phase 6: Documentation
 
-- [ ] Update `docs/usage/usage-docker-orch.md`
-- [ ] Update `CHANGELOG.md` with:
-  - [ ] New `waitForLog` feature description with full lifecycle support (CLASS and METHOD)
-  - [ ] Execution order is now `waitForRunning` -> `waitForHealthy` -> `waitForLog`
-- [ ] Update `README.md` feature list
+See `add-wait-for-log-0600-documentation.md` for documentation specifications.
 
 ### Final Verification
 
-- [ ] All unit tests pass (100% coverage where possible)
-- [ ] All functional tests pass
-- [ ] All integration tests pass
-- [ ] Configuration cache works correctly
+- [ ] Configuration cache works correctly (Phase 4)
 - [ ] `docker ps -a` shows no lingering containers
-- [ ] Documentation is complete and accurate
+- [ ] Documentation is complete and accurate (Phase 6)
+- [ ] All tests pass - see test documents:
+  - `add-wait-for-log-0300-unit-tests.md`
+  - `add-wait-for-log-0400-functional-tests.md`
+  - `add-wait-for-log-0500-integration-tests.md`
+- [ ] Documentation complete - see `add-wait-for-log-0600-documentation.md`
 
 ---
 
@@ -2824,6 +2756,8 @@ The execution order in `ComposeUpTask.performWaitIfConfigured()` is:
 2. Health checks should pass before checking for application-specific log messages
 
 ### 14. Usage Documentation Updates
+
+See `add-wait-for-log-0600-documentation.md` for detailed documentation specifications.
 
 | File | Updates Required |
 |------|------------------|
