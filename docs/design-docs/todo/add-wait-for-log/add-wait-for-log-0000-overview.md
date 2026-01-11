@@ -13,6 +13,16 @@ documents that, together, represent the full design document.
 - [ ] Implementation plan complete (0200)
 - [ ] Documentation notes prepared (0600)
 
+### Test Planning
+
+Test requirements are derived from the implementation plan (0200) and existing project testing standards
+(`docs/project-standards/testing/`). The test documents (0300, 0400, 0500) serve as placeholders for tracking
+test implementation progress during development:
+
+- [ ] Unit tests implemented per implementation plan (0300)
+- [ ] Functional tests implemented per implementation plan (0400)
+- [ ] Integration tests implemented per implementation plan (0500)
+
 ## Overview
 
 The `waitForLog` block is a new readiness check mechanism for the `dockerTest` DSL that waits for specific log output
@@ -32,7 +42,7 @@ The design document consists of these documents:
 3. `add-wait-for-log-0200-implementation.md`: Defines the implementation plan to achieve the desired functionality.
 4. `add-wait-for-log-0300-unit-tests.md`: Defines unit tests.
 5. `add-wait-for-log-0400-functional-tests.md`: Defines functional tests.
-6. `add-wait-for-log-0500-functional-tests.md`: Defines integration tests.
+6. `add-wait-for-log-0500-integration-tests.md`: Defines integration tests.
 7. `add-wait-for-log-0600-documentation.md`: Notes on documentation updates/additions/changes (informal notes, not a
    formal plan).
 

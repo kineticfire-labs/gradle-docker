@@ -1,5 +1,10 @@
 # Design Document: Add `waitForLog` Block to `dockerTest` DSL -- DSL / User Description
 
+## Prerequisites
+
+Read these documents first:
+- `add-wait-for-log-0000-overview.md` - Feature overview and context
+
 ## Purpose
 
 Explain the functionality that should be achieved and how the user will interact with the new functionality,
@@ -26,11 +31,13 @@ The overview of the design is at `add-wait-for-log-0000-overview.md`.
 - [ ] Common patterns for popular services (Spring Boot, PostgreSQL, Redis, etc.)
 - [ ] Performance considerations documented
 - [ ] Progress logging behavior documented (default, verbose, periodic)
-- [ ] Validation error messages documented
+- [ ] Validation error messages documented (including unknown service, orphaned reject patterns)
+- [ ] Configuration warnings documented (pollSeconds > timeoutSeconds edge case)
 - [ ] Error handling (timeout, service crash, reject pattern) documented
 - [ ] Total timeout calculation explained
 - [ ] Test framework extension integration documented
-- [ ] Limitations documented (Lifecycle.METHOD not supported)
+- [ ] Limitations documented (Lifecycle.METHOD not supported with enforcement error message)
+- [ ] Docker Compose v2+ requirement documented
 
 ## DSL / User Description
 
@@ -163,6 +170,10 @@ dockerTest {
 | `timeoutSeconds` | `Property<Integer>` | No | 60 | Maximum seconds to wait for all patterns to appear before failing. |
 | `pollSeconds` | `Property<Integer>` | No | 2 | How often (in seconds) to check container logs for patterns. |
 | `progressIntervalSeconds` | `Property<Integer>` | No | 0 | When > 0, logs a summary of pattern match status at this interval (in seconds) even when `verbose` is false. Set to 0 to disable. Useful for long-running waits to show progress without full verbose output. |
+
+**⚠️ Configuration Warning**: If `pollSeconds` is greater than `timeoutSeconds`, a warning is logged because only one
+poll attempt will occur before timeout. Example: with `timeoutSeconds=5` and `pollSeconds=10`, the wait will timeout
+after the first (and only) poll attempt at t=0 if patterns aren't already present.
 
 ### Configuration Cache Compatibility
 
@@ -523,6 +534,33 @@ Configuration error in 'waitForLog' block: Invalid regex pattern for service 'ap
 Hint: Escape special regex characters with \\ (e.g., \\[ to match literal [)
 ```
 
+#### Unknown Service Name
+
+If a configured service name doesn't exist in the compose project (e.g., typo), the error is caught early
+with a helpful message listing available services:
+
+```
+Service(s) not found in compose project 'myproject': [appp].
+Available services: [app, db, redis]
+
+Hint: Check for typos in service names in your waitForLog configuration.
+```
+
+This validation runs at the start of the wait loop (after containers are created) and prevents silent
+timeouts caused by misspelled service names.
+
+#### Orphaned Reject Patterns Warning
+
+If `rejectPatterns` contains services that are not in `waitForServices`, a warning is logged:
+
+```
+[waitForLog] WARNING: rejectPatterns contains services not in waitForServices: [unknown-service].
+These reject patterns will never be checked.
+```
+
+This is a warning (not an error) because the configuration is technically valid, but likely indicates a
+misconfiguration.
+
 ### Error Handling
 
 When a timeout occurs, the plugin provides a detailed error message including elapsed time and match timing
@@ -641,6 +679,34 @@ class MyAppIT extends Specification {
 | `waitForHealthy` | ✅ Supported | ✅ Supported |
 | `waitForLog` | ✅ Supported | ❌ Not yet supported |
 
+**Enforcement**: If you configure `waitForLog` with `Lifecycle.METHOD`, the build will fail with a clear error
+message explaining the limitation and suggesting alternatives. This prevents silent misconfiguration where
+the `waitForLog` block would be ignored.
+
+**Example error when using waitForLog with Lifecycle.METHOD:**
+```
+Configuration error: 'waitForLog' is not yet supported with Lifecycle.METHOD.
+The 'waitForLog' block in compose stack 'myTest' cannot be used with per-method lifecycle.
+
+Options:
+  1. Change to Lifecycle.CLASS: usesCompose(stack: 'myTest', lifecycle: 'class')
+  2. Remove the 'waitForLog' block and use 'waitForHealthy' or 'waitForRunning' instead
+
+Lifecycle.METHOD support for 'waitForLog' will be added in a future release.
+```
+
 If you need log-based readiness with per-method compose lifecycle, either:
 1. Use `Lifecycle.CLASS` instead (compose stack shared across all test methods)
 2. Wait for a future release that adds `Lifecycle.METHOD` support for `waitForLog`
+
+⚠️ **Docker Compose v2+ Required**: The `waitForLog` feature requires Docker Compose v2.x or later due to its use of
+`docker compose ps --format json` for service status checks. Docker Compose v1 (the Python-based `docker-compose`
+command) uses a different JSON format that is not compatible.
+
+| Docker Compose Version | Support |
+|------------------------|---------|
+| v2.x+ (`docker compose`) | ✅ Fully supported |
+| v1.x (`docker-compose`) | ❌ Not supported |
+
+If you are using Docker Compose v1, you will see JSON parsing errors when using `waitForLog`. Upgrade to Docker
+Compose v2 (included with Docker Desktop 3.4+) or use `waitForHealthy` / `waitForRunning` instead.

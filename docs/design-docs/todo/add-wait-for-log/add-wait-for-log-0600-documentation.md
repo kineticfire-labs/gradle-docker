@@ -1,5 +1,11 @@
 # Design Document: Add `waitForLog` Block to `dockerTest` DSL -- Documentation Notes
 
+## Prerequisites
+
+Read these documents first:
+- `add-wait-for-log-0000-overview.md` - Feature overview and context
+- `add-wait-for-log-0100-dsl-user-description.md` - DSL syntax (source for user documentation)
+
 ## Purpose
 
 Informal notes on documentation updates, additions, and changes required for the `waitForLog` feature.
