@@ -167,26 +167,19 @@ You are Principal Software Engineer and expert at Java, Gradle, custom Gradle pl
 
 
 
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
 
+  Review the plan at @docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0000-overview.md , which is composed of several documents, for:
+  - consistency within each individual document
+  - consistency across all documents
+  - the design and implementation plan which is broken into: description, implementation, unit tests, functional tests, and integration tests
+  - the documentation plan
+  - the readiness for implementation
 
-
-Todo:
-- address the feedback below, which was from doing the description
-- Document this:  Users can use regex alternation (pattern1|pattern2) for ANY semantics
-- update the usage documentation at @docs/usage/usage-docker-test.md with waitForLog
-
-
-
---------------------------------------------
-Recommendations / Gaps to Address
-
-
-    10. Integration Test Considerations
-
-    The design should note how this will be tested:
-    - Unit tests with mocked ComposeService
-    - Integration tests need real services with predictable log output
-    - Consider adding a test container that logs specific markers on a timer
+  Apply your recommendations, if any, to update the plans then tell me what you updated and why.
 
 
 

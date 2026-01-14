@@ -18,26 +18,26 @@ The overview of the design is at `add-wait-for-log-0000-overview.md`.
 
 ### DSL Documentation Completeness
 
-- [ ] Functionality goals defined
-- [ ] Spec class properties documented
-- [ ] Property conventions specified
-- [ ] DSL syntax (both `.set()` and direct assignment styles)
-- [ ] Configuration properties table with types, required/optional, defaults, and descriptions
-- [ ] Configuration cache compatibility requirements documented
-- [ ] Pattern matching semantics documented
-- [ ] Regex escaping guide included
-- [ ] Usage examples for common scenarios
-- [ ] Combined usage with other wait blocks documented
-- [ ] Common patterns for popular services (Spring Boot, PostgreSQL, Redis, etc.)
-- [ ] Performance considerations documented
-- [ ] Progress logging behavior documented (default, verbose, periodic)
-- [ ] Validation error messages documented (including unknown service, orphaned reject patterns)
-- [ ] Configuration warnings documented (pollSeconds > timeoutSeconds edge case)
-- [ ] Error handling (timeout, service crash, reject pattern) documented
-- [ ] Total timeout calculation explained
-- [ ] Test framework extension integration documented
-- [ ] Lifecycle support documented (both CLASS and METHOD fully supported)
-- [ ] Docker Compose v2+ requirement documented
+- [x] Functionality goals defined
+- [x] Spec class properties documented
+- [x] Property conventions specified
+- [x] DSL syntax (both `.set()` and direct assignment styles)
+- [x] Configuration properties table with types, required/optional, defaults, and descriptions
+- [x] Configuration cache compatibility requirements documented
+- [x] Pattern matching semantics documented
+- [x] Regex escaping guide included
+- [x] Usage examples for common scenarios
+- [x] Combined usage with other wait blocks documented
+- [x] Common patterns for popular services (Spring Boot, PostgreSQL, Redis, etc.)
+- [x] Performance considerations documented
+- [x] Progress logging behavior documented (default, verbose, periodic)
+- [x] Validation error messages documented (including unknown service, orphaned reject patterns)
+- [x] Configuration warnings documented (pollSeconds > timeoutSeconds edge case)
+- [x] Error handling (timeout, service crash, reject pattern) documented
+- [x] Total timeout calculation explained
+- [x] Test framework extension integration documented
+- [x] Lifecycle support documented (both CLASS and METHOD fully supported)
+- [x] Docker Compose v2+ requirement documented
 
 ## DSL / User Description
 
@@ -342,10 +342,9 @@ composeStacks {
 **Execution Order**: When multiple wait blocks are specified, they execute in order:
 `waitForRunning` -> `waitForHealthy` -> `waitForLog`
 
-**Note:** The current implementation executes wait blocks in the order `waitForHealthy` -> `waitForRunning`. This
-change updates the execution order to `waitForRunning` -> `waitForHealthy` -> `waitForLog` because waiting for
-running before healthy reflects the natural startup sequence: containers must be running before health checks can
-pass, and health checks should pass before checking for application-specific log messages.
+**Rationale:** The execution order `waitForRunning` -> `waitForHealthy` -> `waitForLog` follows the natural startup
+sequence: containers must be running before health checks can pass, and health checks should pass before checking
+for application-specific log messages. This order ensures each subsequent check builds on the previous one.
 
 **Important**: If a preceding wait block fails (e.g., `waitForRunning` times out or `waitForHealthy` fails), the
 subsequent wait blocks are **not executed**. The failure is reported immediately and the compose stack is torn down.

@@ -87,7 +87,7 @@ Create and publish a Gradle 9 plugin that provides Docker integration for:
 ### Adhere to Plugin Usage
 - Follow plugin usage:
    - for 'docker' DSL (e.g., tasks for build, tag, save, publish): `docs/usage/usage-docker.md`.
-   - for 'dockerTest' DSL (e.g., using 'docker compose' for image testing): `docs/usage/usage-docker-orch.md`.
+   - for 'dockerTest' DSL (e.g., using 'docker compose' for image testing): `docs/usage/usage-docker-test.md`.
 - If necessary to modify the usage, then update these documents.
 
 ### Follow Development Workflow
