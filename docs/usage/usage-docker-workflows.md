@@ -97,6 +97,8 @@ dockerTest {
             files.from('src/integrationTest/resources/compose/app.yml')
             projectName = 'my-app-test'
 
+            // Wait options: waitForHealthy, waitForRunning, waitForLog
+            // See usage-docker-test.md for full details on all wait options
             waitForHealthy {
                 waitForServices.set(['app'])
                 timeoutSeconds.set(60)
@@ -477,6 +479,7 @@ dockerTest {
         appTest {
             files.from('src/integrationTest/resources/compose/app.yml')
             projectName = 'my-app-test'
+            // Wait options available: waitForHealthy, waitForRunning, waitForLog
             waitForHealthy {
                 waitForServices.set(['app'])
                 timeoutSeconds.set(60)
@@ -815,6 +818,6 @@ The pipeline validates this and throws an error if `maxParallelForks > 1` with M
 ## Related Documentation
 
 - [Docker DSL Guide](usage-docker.md) - Image building, tagging, saving, publishing
-- [Docker Orch DSL Guide](usage-docker-orch.md) - Compose stack management
+- [Docker Test DSL Guide](usage-docker-test.md) - Compose stack management, wait blocks (waitForHealthy, waitForRunning, waitForLog)
 - [Spock/JUnit Test Extensions](spock-junit-test-extensions.md) - @ComposeUp and lifecycle annotations
 - [Method Lifecycle Implementation](../design-docs/todo/add-method-lifecycle-workflow/add-method-workflow-analysis.md)

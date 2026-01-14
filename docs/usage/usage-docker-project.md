@@ -148,13 +148,29 @@ The `test` block configures Docker Compose stack and test execution.
 | `compose` | `String` | (required) | Path to Docker Compose file |
 | `waitForHealthy` | `List<String>` | `[]` | Services to wait for HEALTHY status |
 | `waitForRunning` | `List<String>` | `[]` | Services to wait for RUNNING status |
+| `waitForLog` | `Map<String, List<String>>` | `[:]` | Services with log patterns to wait for |
 | `lifecycle` | `String` | `'class'` | Container lifecycle: `'class'` or `'method'` |
 | `testTaskName` | `String` | `'integrationTest'` | Test task to execute |
 | `projectName` | `String` | (derived from project) | Compose project name |
-| `timeoutSeconds` | `Integer` | `60` | Timeout for health/running checks |
+| `timeoutSeconds` | `Integer` | `60` | Timeout for health/running/log checks |
 | `pollSeconds` | `Integer` | `2` | Poll interval for status checks |
 
 **Note**: The `test` block is optional. If omitted, no compose stack is created and the pipeline has only a build step.
+
+**Wait execution order**: When multiple wait conditions are specified, they execute in order:
+`waitForRunning` → `waitForHealthy` → `waitForLog`
+
+**waitForLog example** (for application-specific readiness):
+```groovy
+test {
+    compose.set('src/integrationTest/resources/compose/app.yml')
+    waitForLog.set([
+        'app': ['Started Application in .* seconds'],
+        'db': ['ready to accept connections']
+    ])
+    timeoutSeconds.set(120)
+}
+```
 
 ### onSuccess { } Block
 

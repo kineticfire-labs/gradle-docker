@@ -440,7 +440,20 @@ afterEvaluate {
 **Key Capability**: The plugin automatically waits for containers to be ready before running tests, preventing flaky
 tests caused by containers that aren't fully started.
 
-### Wait Options
+### Wait Options Overview
+
+The plugin provides three wait mechanisms that can be used individually or in combination:
+
+| Wait Type | What It Checks | Best For |
+|-----------|----------------|----------|
+| `waitForRunning` | Container process started | Simple services, no health check needed |
+| `waitForHealthy` | Container health check passed | Services requiring initialization (databases, APIs) |
+| `waitForLog` | Specific log patterns appeared | Application-specific readiness (startup messages) |
+
+**Execution Order**: When multiple wait blocks are configured, they execute in order:
+`waitForRunning` → `waitForHealthy` → `waitForLog`
+
+If any wait block fails, subsequent blocks are skipped and the failure is reported immediately.
 
 #### waitForHealthy (RECOMMENDED)
 
@@ -496,22 +509,126 @@ dockerTest {
 }
 ```
 
+#### waitForLog
+
+- **What it means**: Specific log patterns appeared in container output
+- **When to use**: Application-specific readiness that can't be detected by health checks
+- **Requirement**: Docker Compose v2.x+ required
+
+```gradle
+dockerTest {
+    composeStacks {
+        appTest {
+            files.from('compose.yml')
+            waitForLog {
+                // Required: Map of service name to pattern list
+                // ALL patterns in the list must match before service is ready
+                waitForServices.set([
+                    'app': ['Started Application in .* seconds'],
+                    'db': ['PostgreSQL init complete', 'ready to accept connections']
+                ])
+
+                // Optional: Fail immediately if these patterns appear
+                rejectPatterns.set([
+                    'app': ['FATAL', 'Exception.*startup'],
+                    'db': ['FATAL', 'failed to start']
+                ])
+
+                timeoutSeconds.set(120)  // Default: 60
+                pollSeconds.set(2)       // Default: 2
+                caseInsensitive.set(false)  // Default: false
+                verbose.set(true)        // Default: false - logs detailed progress
+                progressIntervalSeconds.set(30)  // Default: 0 (disabled)
+            }
+        }
+    }
+}
+```
+
+**waitForLog Properties:**
+
+| Property | Type | Required | Default | Description |
+|----------|------|----------|---------|-------------|
+| `waitForServices` | `Map<String, List<String>>` | Yes | - | Map of service names to pattern list. ALL patterns must match. |
+| `rejectPatterns` | `Map<String, List<String>>` | No | `[:]` | Fail immediately if ANY pattern matches. |
+| `timeoutSeconds` | `Integer` | No | 60 | Maximum seconds to wait before failing. |
+| `pollSeconds` | `Integer` | No | 2 | How often to check container logs. |
+| `caseInsensitive` | `Boolean` | No | `false` | Case-insensitive pattern matching. |
+| `verbose` | `Boolean` | No | `false` | Log detailed progress during polling. |
+| `progressIntervalSeconds` | `Integer` | No | 0 | Log summary at this interval (0 = disabled). |
+
+**Pattern Matching:**
+- Patterns are Java regex expressions matched as substrings against each log line
+- Multiple patterns per service = ALL must match (AND logic)
+- Use regex alternation for OR logic: `'(Started|Ready|Initialized)'`
+- Reject patterns use OR logic: ANY match triggers immediate failure
+
+**Common Patterns for Popular Services:**
+```groovy
+waitForLog {
+    waitForServices.set([
+        'spring-app': ['Started .* in .* seconds'],
+        'postgres': ['database system is ready to accept connections'],
+        'mysql': ['ready for connections'],
+        'redis': ['Ready to accept connections'],
+        'kafka': ['\\[KafkaServer id=\\d+\\] started'],
+        'nginx': ['start worker process']
+    ])
+}
+```
+
+**Performance Note**: `waitForLog` fetches all container logs on each poll. For high-volume logging services:
+- Use longer poll intervals (`pollSeconds.set(5)`)
+- Choose patterns that appear early in startup
+- Consider `waitForHealthy` when possible
+
 ### Decision Guide
 
-| Factor | waitForRunning | waitForHealthy |
-|--------|----------------|----------------|
-| **Service has health check** | Optional | ✅ Required |
-| **Service needs initialization** | ❌ Not reliable | ✅ Recommended |
-| **Speed** | ⚡ Faster | ⏱️ Waits for health |
-| **Test reliability** | ⚠️ May fail if not ready | ✅ Runs when ready |
-| **Examples** | Static files, proxies | Databases, web apps, APIs |
+| Factor | waitForRunning | waitForHealthy | waitForLog |
+|--------|----------------|----------------|------------|
+| **Service has health check** | Optional | ✅ Required | Optional |
+| **Service needs initialization** | ❌ Not reliable | ✅ Recommended | ✅ Recommended |
+| **Detects app-specific readiness** | ❌ No | ❌ No (generic health) | ✅ Yes |
+| **Speed** | ⚡ Fastest | ⏱️ Waits for health | ⏱️ Waits for patterns |
+| **Test reliability** | ⚠️ May fail if not ready | ✅ Runs when ready | ✅ Runs when ready |
+| **Examples** | Static files, proxies | Databases, web apps | Spring Boot apps, custom startup |
 
-**Best Practice**: Default to `waitForHealthy` for reliable tests.
+**Best Practice**: Default to `waitForHealthy` for reliable tests. Use `waitForLog` when you need application-specific
+readiness detection (e.g., "Started Application" messages) that health checks can't provide.
+
+**Combined Usage Example:**
+```gradle
+composeStacks {
+    fullTest {
+        files.from('compose.yml')
+
+        // Step 1: Wait for containers to be running
+        waitForRunning {
+            waitForServices.set(['nginx'])  // No health check available
+            timeoutSeconds.set(30)
+        }
+
+        // Step 2: Wait for health checks to pass
+        waitForHealthy {
+            waitForServices.set(['app', 'db'])
+            timeoutSeconds.set(60)
+        }
+
+        // Step 3: Wait for application-specific log output
+        waitForLog {
+            waitForServices.set([
+                'app': ['Startup complete - ready to serve requests']
+            ])
+            timeoutSeconds.set(30)
+        }
+    }
+}
+```
 
 ### Required Properties
 
-When using `waitForHealthy` or `waitForRunning` blocks, the `waitForServices` property is **required**. The build
-will fail with a clear error message if you configure an empty wait block:
+When using `waitForHealthy`, `waitForRunning`, or `waitForLog` blocks, the `waitForServices` property is **required**.
+The build will fail with a clear error message if you configure an empty wait block:
 
 ```groovy
 // INVALID - will fail with configuration error
@@ -531,9 +648,25 @@ waitForHealthy {
     waitForServices.set(['app', 'db'])
     timeoutSeconds.set(60)
 }
+
+// VALID - waitForLog with at least one service and pattern
+waitForLog {
+    waitForServices.set([
+        'app': ['Started Application']
+    ])
+}
+
+// INVALID - waitForLog with empty pattern list
+waitForLog {
+    waitForServices.set([
+        'app': []  // Empty pattern list not allowed
+    ])
+}
 ```
 
-**Error message example:**
+**Error message examples:**
+
+For `waitForHealthy` or `waitForRunning`:
 ```
 Configuration error in 'waitForHealthy' block for compose stack 'myTest':
 'waitForServices' must specify at least one service.
@@ -547,11 +680,28 @@ Example:
 If you don't need to wait for services, remove the empty 'waitForHealthy' block.
 ```
 
+For `waitForLog`:
+```
+Configuration error in 'waitForLog' block for compose stack 'myTest':
+Pattern list for service 'app' cannot be empty.
+Each service must have at least one pattern to match.
+```
+
+For invalid regex in `waitForLog`:
+```
+Configuration error in 'waitForLog' block: Invalid regex pattern for service 'app'.
+  Pattern: 'Started [invalid'
+  Error: Unclosed character class near index 8
+
+Hint: Escape special regex characters with \\ (e.g., \\[ to match literal [)
+```
+
 **Rationale:** Empty wait blocks have no semantic meaning - they configure waiting but don't specify what to wait for.
 The plugin follows the "fail fast" principle by catching this misconfiguration early during Gradle configuration,
 rather than silently ignoring it at runtime.
 
-**If you don't need to wait for services**, simply omit the `waitForHealthy` or `waitForRunning` block entirely:
+**If you don't need to wait for services**, simply omit the `waitForHealthy`, `waitForRunning`, or `waitForLog`
+block entirely:
 
 ```groovy
 dockerTest {

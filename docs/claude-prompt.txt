@@ -93,6 +93,77 @@ deferred until later.
 Update the plan with all of your recommendations, then give me a summary of your findings.
 
 
+## Integration test review
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+Follow exactly the guidance on integration tests from CLAUDE.md file in the section "Adhere to Integration Testing Requirements".
+
+Your task is to review integration test plan for new functionality.  The design document was very large, so it has been split into
+smaller documents.  Read the overview for the design at
+@docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0000-overview.md .
+
+Evaluate the plan for the integration tests ONLY which is at
+@docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0500-integration-tests.md .  The integration tests should be complete,
+clear, and not missing anything.  The integration test plan must achieve 100% DSL / usage / options coverage for the
+implementation plan at @docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0200-implementation.md .
+
+The plan must only include integration tests.  Do NOT include unit tests or functional tests or documentation; these are
+deferred until later.
+
+Update the plan with all of your recommendations, then give me a summary of the updates you made.
+
+
+
+## Documentation plan review
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+Your task is to review the documentation plan for new functionality.  The design document was very large, so it has been split into
+smaller documents.  Read the overview for the design at
+@docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0000-overview.md .
+
+Evaluate the plan for the documentation ONLY which is at
+@docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0600-documentation.md .
+
+The documentation must include, as needed, the following documents.  These documents are intended for internal developers
+of the project (not external users) and must be informal, concise, and example-based; these are written from the
+perspective of the user using the DSL.
+- docs/usage/usage-docker.md
+- docs/usage/usage-test.md
+- docs/usage/usage-workflows.md
+- docs/usage/usage-project.md
+
+The plan must only include the documentation.
+
+Update the plan with all of your recommendations, then give me a summary of the updates you made.
+
+
+
+# find documentation
+
+You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
+  Compose.  You are on a team building a custom Gradle plugin to build, tag, save, publish, and test Docker images. Read
+  the @CLAUDE.md file to understand the project and follow the guidelines exactly.  All of your code must be compatible
+  with Gradle 9 and 10 (especially the configuration build cache) per @docs/design-docs/gradle-9-and-10-compatibility.md .
+
+  Your task is to review the documentation plan for new functionality.  The design document was very large, so it has been split into
+  smaller documents.  Read the overview for the design at
+  @docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0000-overview.md .
+
+  The documentation plan is at @docs/design-docs/todo/add-wait-for-log/add-wait-for-log-0600-documentation.md .
+
+  Specifically, evaluate if any other documents need to be updated and, if so, include that in the plan.  Scan the code base and identify any other documentation
+  that should be updated.  There are likely README.md files in the integration tests at plugin-integration-test/ directory and sub-directories that should be
+  updated that explain the integration tests, document what they test (to help ensure coverage), and track port usage.
+
+  Do not include the README.md file at the top-level of this project. Update the plan and tell me what you updated.
 
 
 
