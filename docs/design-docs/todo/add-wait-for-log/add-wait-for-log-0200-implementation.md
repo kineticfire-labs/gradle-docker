@@ -232,79 +232,52 @@ Related documents:
 
 ### Phase 1: Core Components
 
-- [ ] Create `WaitForLogSpec.groovy` (Section 1)
-  - [ ] **PREREQUISITE**: Complete Pre-Implementation Verification for MapProperty serialization
-  - [ ] If serialization verification failed, implement JSON String fallback per Section 17 FIRST
-  - [ ] Verify conventions are set correctly
-- [ ] Create `WaitForLogConfig.groovy` (Section 2)
-  - [ ] Verify immutability
-- [ ] Create `WaitForLogResult.groovy` (Section 3)
-- [ ] Create `LogPatternMatcher.groovy` (Section 4)
-- [ ] Create `WaitForLogConfigBuilder.groovy` (Section 5)
+- [x] Create `WaitForLogSpec.groovy` (Section 1)
+  - [x] **PREREQUISITE**: Complete Pre-Implementation Verification for MapProperty serialization
+  - [x] If serialization verification failed, implement JSON String fallback per Section 17 FIRST
+  - [x] Verify conventions are set correctly
+- [x] Create `WaitForLogConfig.groovy` (Section 2)
+  - [x] Verify immutability
+- [x] Create `WaitForLogResult.groovy` (Section 3)
+- [x] Create `LogPatternMatcher.groovy` (Section 4)
+- [x] Create `WaitForLogConfigBuilder.groovy` (Section 5)
 - [ ] Unit tests for Phase 1: See `add-wait-for-log-0300-unit-tests.md`
 
 ### Phase 2: Integration
 
-- [ ] Modify `ComposeStackSpec.groovy` (Section 6)
-  - [ ] Add `waitForLog` property
-  - [ ] Add DSL methods (Closure and Action variants)
-  - [ ] Add validation method
-- [ ] Modify `ComposeService.groovy` (Section 7)
-  - [ ] Add `waitForLogPatterns()` method signature
-- [ ] Modify `ExecLibraryComposeService.groovy` (Section 8)
-  - [ ] Implement `waitForLogPatterns()`
-  - [ ] Add all helper methods
-- [ ] Modify `ComposeServiceException.groovy` (Section 9)
-  - [ ] Add new error types
-- [ ] Modify `ComposeUpTask.groovy` (Section 10)
-  - [ ] Add flattened input properties
-  - [ ] Update `performWaitIfConfigured()` execution order
-  - [ ] Add `performWaitForLog()` method
-- [ ] Modify `GradleDockerPlugin.groovy` (Section 11)
-  - [ ] Add property wiring for waitForLog
-- [ ] Modify `TestIntegrationExtension.groovy` (Section 12)
-  - [ ] Add system property propagation for `waitForLog` (both CLASS and METHOD lifecycles)
-- [ ] Modify `DockerComposeMethodExtension.groovy` (Section 12.5)
-  - [ ] Update `waitForStackToBeReady()` to read DSL system properties
-  - [ ] Add `performWaitForRunning()` method
-  - [ ] Add `performWaitForHealthy()` method
-  - [ ] Add `performWaitForLog()` method (full lifecycle support)
-  - [ ] Add helper methods (parseIntProperty, parseBooleanProperty, parseJsonMapProperty)
-- [ ] Modify `DockerComposeClassExtension.groovy` (Section 12.5)
-  - [ ] Update `waitForStackToBeReady()` to read DSL system properties
-  - [ ] Add `performWaitForLog()` method call (executes before test class runs)
-- [ ] Modify `JUnitComposeService.groovy` (Section 12.5.5)
-  - [ ] Add `waitForLogPatterns()` delegation method (if not using @Delegate pattern)
-- [ ] Unit tests for Phase 2: See `add-wait-for-log-0300-unit-tests.md`
+- [x] Modify `ComposeStackSpec.groovy` (Section 6)
+  - [x] Add `waitForLog` property
+  - [x] Add DSL methods (Closure and Action variants)
+  - [x] Add validation method
+- [x] Modify `ComposeService.groovy` (Section 7)
+  - [x] Add `waitForLogPatterns()` method signature
+- [x] Modify `ExecLibraryComposeService.groovy` (Section 8)
+  - [x] Implement `waitForLogPatterns()`
+  - [x] Add all helper methods
+- [x] Modify `ComposeServiceException.groovy` (Section 9)
+  - [x] Add new error types
+- [x] Modify `ComposeUpTask.groovy` (Section 10)
+  - [x] Add flattened input properties
+  - [x] Update `performWaitIfConfigured()` execution order
+  - [x] Add `performWaitForLog()` method
+- [x] Modify `GradleDockerPlugin.groovy` (Section 11)
+  - [x] Add property wiring for waitForLog
+- [x] Modify `TestIntegrationExtension.groovy` (Section 12)
+  - [x] Add system property propagation for `waitForLog` (both CLASS and METHOD lifecycles)
+- [x] Modify `DockerComposeMethodExtension.groovy` (Section 12.5)
+  - [x] Update `waitForStackToBeReady()` to read DSL system properties
+  - [x] Add `performWaitForRunning()` method
+  - [x] Add `performWaitForHealthy()` method
+  - [x] Add `performWaitForLog()` method (full lifecycle support)
+  - [x] Add helper methods (parseIntProperty, parseBooleanProperty, parseJsonMapProperty)
+- [x] Modify `DockerComposeClassExtension.groovy` (Section 12.5)
+  - [x] Update `waitForStackToBeReady()` to read DSL system properties
+  - [x] Add `performWaitForLog()` method call (executes before test class runs)
+- [x] Modify `JUnitComposeService.groovy` (Section 12.5.5)
+  - [x] Add `waitForLogPatterns()` delegation method (if not using @Delegate pattern)
 
-### Phase 3: Functional Tests
 
-See `add-wait-for-log-0400-functional-tests.md` for functional test specifications.
 
-### Phase 4: Configuration Cache Verification
-
-See `add-wait-for-log-0400-functional-tests.md` for configuration cache verification test specifications.
-
-Note: If MapProperty serialization fails, implement JSON String fallback per Section 17 of this document.
-
-### Phase 5: Integration Tests
-
-See `add-wait-for-log-0500-integration-tests.md` for integration test specifications.
-
-### Phase 6: Documentation
-
-See `add-wait-for-log-0600-documentation.md` for documentation specifications.
-
-### Final Verification
-
-- [ ] Configuration cache works correctly (Phase 4)
-- [ ] `docker ps -a` shows no lingering containers
-- [ ] Documentation is complete and accurate (Phase 6)
-- [ ] All tests pass - see test documents:
-  - `add-wait-for-log-0300-unit-tests.md`
-  - `add-wait-for-log-0400-functional-tests.md`
-  - `add-wait-for-log-0500-integration-tests.md`
-- [ ] Documentation complete - see `add-wait-for-log-0600-documentation.md`
 
 ---
 
