@@ -17,6 +17,7 @@
 package com.kineticfire.gradle.docker.extension
 
 import com.kineticfire.gradle.docker.Lifecycle
+import groovy.json.JsonBuilder
 import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.file.ProjectLayout
@@ -208,6 +209,36 @@ abstract class TestIntegrationExtension {
                 waitForRunningSpec.timeoutSeconds.getOrElse(60).toString())
             test.systemProperty("docker.compose.waitForRunning.pollSeconds",
                 waitForRunningSpec.pollSeconds.getOrElse(2).toString())
+        }
+
+        // Wait for log settings - propagate for both CLASS and METHOD lifecycles
+        // For CLASS: ComposeUpTask handles wait logic; properties also available to test code
+        // For METHOD: DockerComposeMethodExtension reads properties and executes wait in beforeEach()
+        def waitForLogSpec = stackSpec.waitForLog.getOrNull()
+        if (waitForLogSpec) {
+            // Serialize the services map as JSON for system property
+            def servicesJson = new JsonBuilder(
+                waitForLogSpec.waitForServices.getOrElse([:])
+            ).toString()
+            test.systemProperty("docker.compose.waitForLog.services", servicesJson)
+
+            // Serialize reject patterns as JSON
+            def rejectPatternsJson = new JsonBuilder(
+                waitForLogSpec.rejectPatterns.getOrElse([:])
+            ).toString()
+            test.systemProperty("docker.compose.waitForLog.rejectPatterns", rejectPatternsJson)
+
+            // Scalar properties
+            test.systemProperty("docker.compose.waitForLog.timeoutSeconds",
+                waitForLogSpec.timeoutSeconds.getOrElse(60).toString())
+            test.systemProperty("docker.compose.waitForLog.pollSeconds",
+                waitForLogSpec.pollSeconds.getOrElse(2).toString())
+            test.systemProperty("docker.compose.waitForLog.caseInsensitive",
+                waitForLogSpec.caseInsensitive.getOrElse(false).toString())
+            test.systemProperty("docker.compose.waitForLog.verbose",
+                waitForLogSpec.verbose.getOrElse(false).toString())
+            test.systemProperty("docker.compose.waitForLog.progressIntervalSeconds",
+                waitForLogSpec.progressIntervalSeconds.getOrElse(0).toString())
         }
 
         // State file path

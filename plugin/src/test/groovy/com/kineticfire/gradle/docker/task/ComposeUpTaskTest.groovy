@@ -608,18 +608,18 @@ class ComposeUpTaskTest extends Specification {
         then:
         1 * mockComposeService.upStack(_ as ComposeConfig) >> CompletableFuture.completedFuture(mockComposeState)
 
-        and: "wait for healthy services is called"
-        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
-            assert config.targetState == ServiceStatus.HEALTHY
-            assert config.services == ['web']
-            return CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
-        }
-
-        and: "wait for running services is called"
+        and: "wait for running services is called first (execution order: running -> healthy -> log)"
         1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
             assert config.targetState == ServiceStatus.RUNNING
             assert config.services == ['cache', 'queue']
             return CompletableFuture.completedFuture(ServiceStatus.RUNNING)
+        }
+
+        and: "wait for healthy services is called second"
+        1 * mockComposeService.waitForServices(_ as WaitConfig) >> { WaitConfig config ->
+            assert config.targetState == ServiceStatus.HEALTHY
+            assert config.services == ['web']
+            return CompletableFuture.completedFuture(ServiceStatus.HEALTHY)
         }
     }
 

@@ -20,12 +20,16 @@ import com.kineticfire.gradle.docker.model.ComposeConfig
 import com.kineticfire.gradle.docker.model.ComposeState
 import com.kineticfire.gradle.docker.model.ServiceStatus
 import com.kineticfire.gradle.docker.model.WaitConfig
+import com.kineticfire.gradle.docker.model.WaitForLogConfig
+import com.kineticfire.gradle.docker.model.WaitForLogResult
 import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.util.WaitForLogConfigBuilder
 import groovy.json.JsonBuilder
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
 import org.gradle.api.provider.ListProperty
+import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.provider.Provider
 import org.gradle.api.tasks.Input
@@ -100,6 +104,35 @@ abstract class ComposeUpTask extends DefaultTask {
     @Optional
     abstract Property<Integer> getWaitForRunningPollSeconds()
 
+    // waitForLog flattened properties
+    @Input
+    @Optional
+    abstract MapProperty<String, List<String>> getWaitForLogServices()
+
+    @Input
+    @Optional
+    abstract MapProperty<String, List<String>> getWaitForLogRejectPatterns()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForLogTimeoutSeconds()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForLogPollSeconds()
+
+    @Input
+    @Optional
+    abstract Property<Boolean> getWaitForLogCaseInsensitive()
+
+    @Input
+    @Optional
+    abstract Property<Boolean> getWaitForLogVerbose()
+
+    @Input
+    @Optional
+    abstract Property<Integer> getWaitForLogProgressIntervalSeconds()
+
     @TaskAction
     void composeUp() {
         def projectName = this.projectName.get()
@@ -143,10 +176,34 @@ abstract class ComposeUpTask extends DefaultTask {
     }
 
     /**
-     * Wait for services to reach desired state if configured
+     * Wait for services to reach desired state if configured.
+     * 
+     * <p>Execution order: waitForRunning -> waitForHealthy -> waitForLog</p>
      */
     private void performWaitIfConfigured(String stackName, String projectName) {
-        // Wait for healthy services (configured during configuration phase)
+        // Wait for running services FIRST (basic container availability)
+        if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
+            def services = waitForRunningServices.get()
+            def timeoutSeconds = waitForRunningTimeoutSeconds.getOrElse(60)
+            def pollSeconds = waitForRunningPollSeconds.getOrElse(2)
+
+            logger.lifecycle("Waiting for services to be RUNNING: {}", services)
+
+            def waitConfig = new WaitConfig(
+                projectName,
+                services,
+                Duration.ofSeconds(timeoutSeconds),
+                Duration.ofSeconds(pollSeconds),
+                ServiceStatus.RUNNING
+            )
+
+            def waitFuture = composeService.get().waitForServices(waitConfig)
+            waitFuture.get()
+
+            logger.lifecycle("All services are RUNNING")
+        }
+
+        // Wait for healthy services SECOND (Docker health check status)
         if (waitForHealthyServices.isPresent() && !waitForHealthyServices.get().isEmpty()) {
             def services = waitForHealthyServices.get()
             def timeoutSeconds = waitForHealthyTimeoutSeconds.getOrElse(60)
@@ -168,27 +225,43 @@ abstract class ComposeUpTask extends DefaultTask {
             logger.lifecycle("All services are HEALTHY")
         }
 
-        // Wait for running services (configured during configuration phase)
-        if (waitForRunningServices.isPresent() && !waitForRunningServices.get().isEmpty()) {
-            def services = waitForRunningServices.get()
-            def timeoutSeconds = waitForRunningTimeoutSeconds.getOrElse(60)
-            def pollSeconds = waitForRunningPollSeconds.getOrElse(2)
+        // Wait for log patterns THIRD (application-level readiness)
+        performWaitForLog(projectName)
+    }
 
-            logger.lifecycle("Waiting for services to be RUNNING: {}", services)
-
-            def waitConfig = new WaitConfig(
-                projectName,
-                services,
-                Duration.ofSeconds(timeoutSeconds),
-                Duration.ofSeconds(pollSeconds),
-                ServiceStatus.RUNNING
-            )
-
-            def waitFuture = composeService.get().waitForServices(waitConfig)
-            waitFuture.get()
-
-            logger.lifecycle("All services are RUNNING")
+    /**
+     * Wait for log patterns if configured.
+     */
+    private void performWaitForLog(String projectName) {
+        if (!waitForLogServices.isPresent() || waitForLogServices.get().isEmpty()) {
+            return
         }
+
+        def servicePatterns = waitForLogServices.get()
+        def rejectPatterns = waitForLogRejectPatterns.getOrElse([:])
+        def timeoutSeconds = waitForLogTimeoutSeconds.getOrElse(60)
+        def pollSeconds = waitForLogPollSeconds.getOrElse(2)
+        def caseInsensitive = waitForLogCaseInsensitive.getOrElse(false)
+        def verbose = waitForLogVerbose.getOrElse(false)
+        def progressIntervalSeconds = waitForLogProgressIntervalSeconds.getOrElse(0)
+
+        logger.lifecycle("Waiting for log patterns in {} service(s)...", servicePatterns.size())
+
+        def config = WaitForLogConfigBuilder.build(
+            projectName,
+            servicePatterns,
+            rejectPatterns,
+            timeoutSeconds,
+            pollSeconds,
+            caseInsensitive,
+            verbose,
+            progressIntervalSeconds
+        )
+
+        def waitFuture = composeService.get().waitForLogPatterns(config)
+        def results = waitFuture.get()
+
+        logger.lifecycle("All log patterns matched")
     }
 
     /**

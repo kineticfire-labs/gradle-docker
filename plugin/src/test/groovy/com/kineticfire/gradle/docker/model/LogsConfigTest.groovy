@@ -108,12 +108,22 @@ class LogsConfigTest extends Specification {
         config.services == []
     }
 
-    def "enforces minimum tail lines of 1"() {
+    def "allows zero and negative tailLines for fetching all logs"() {
         expect:
-        new LogsConfig([], 0).tailLines == 1
-        new LogsConfig([], -5).tailLines == 1
+        new LogsConfig([], 0).tailLines == 0
+        new LogsConfig([], -5).tailLines == -5
         new LogsConfig([], 1).tailLines == 1
         new LogsConfig([], 10).tailLines == 10
+    }
+
+    def "hasLimitedTail returns true only for positive tailLines"() {
+        expect:
+        !new LogsConfig([], 0).hasLimitedTail()
+        !new LogsConfig([], -5).hasLimitedTail()
+        !new LogsConfig([], -1).hasLimitedTail()
+        new LogsConfig([], 1).hasLimitedTail()
+        new LogsConfig([], 10).hasLimitedTail()
+        new LogsConfig([], 100).hasLimitedTail()
     }
 
     def "hasSpecificServices returns correct values"() {
@@ -193,8 +203,8 @@ class LogsConfigTest extends Specification {
         expect:
         // Fields are final, so they cannot be reassigned
         config.services != null
-        config.tailLines > 0
-        config.follow != null
+        config.tailLines == 100  // default value
+        config.follow == false
         // outputFile can be null, that's valid
     }
 

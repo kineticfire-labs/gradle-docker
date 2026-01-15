@@ -32,6 +32,9 @@ class ComposeServiceException extends RuntimeException {
         SERVICE_TIMEOUT("Service did not reach desired state within timeout period."),
         PLATFORM_UNSUPPORTED("Docker Compose operations not supported on this platform."),
         LOGS_CAPTURE_FAILED("Failed to capture Docker Compose logs."),
+        LOG_PATTERN_TIMEOUT("Timeout waiting for log patterns. Check if services are producing expected output."),
+        LOG_PATTERN_REJECTED("Reject pattern matched in service logs. Check for error conditions."),
+        SERVICE_CRASHED("Service container exited unexpectedly. Check service configuration."),
         UNKNOWN("An unknown Docker Compose operation error occurred.")
         
         final String defaultSuggestion

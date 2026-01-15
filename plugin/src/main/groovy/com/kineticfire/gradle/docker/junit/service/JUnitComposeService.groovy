@@ -18,6 +18,7 @@ package com.kineticfire.gradle.docker.junit.service
 
 import com.kineticfire.gradle.docker.model.*
 import com.kineticfire.gradle.docker.service.ComposeService
+import com.kineticfire.gradle.docker.util.LogPatternMatcher
 
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
@@ -225,7 +226,7 @@ class JUnitComposeService implements ComposeService {
                     command << "--follow"
                 }
 
-                if (config.tailLines > 0) {
+                if (config.hasLimitedTail()) {
                     command << "--tail" << config.tailLines.toString()
                 }
 
@@ -245,6 +246,125 @@ class JUnitComposeService implements ComposeService {
                 throw new RuntimeException("Failed to capture logs: ${e.message}", e)
             }
         })
+    }
+
+    @Override
+    CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogConfig config) {
+        if (config == null) {
+            throw new NullPointerException("WaitForLogConfig cannot be null")
+        }
+        return CompletableFuture.supplyAsync({
+            try {
+                println "Waiting for log patterns in services: ${config.services.keySet()}"
+
+                long startTime = System.currentTimeMillis()
+                long timeoutMillis = config.timeoutSeconds * 1000L
+                long pollMillis = config.pollSeconds * 1000L
+
+                // Track matched patterns per service
+                Map<String, Set<String>> matchedPatterns = [:]
+                config.services.keySet().each { service ->
+                    matchedPatterns[service] = new HashSet<>()
+                }
+
+                while (System.currentTimeMillis() - startTime < timeoutMillis) {
+                    boolean allMatched = true
+
+                    for (Map.Entry<String, List<String>> entry : config.services.entrySet()) {
+                        String serviceName = entry.key
+                        List<String> patterns = entry.value
+
+                        // Fetch logs for the service
+                        String logs = fetchServiceLogs(config.projectName, serviceName)
+
+                        // Check reject patterns first
+                        if (config.rejectPatterns.containsKey(serviceName)) {
+                            for (String rejectPattern : config.rejectPatterns[serviceName]) {
+                                if (LogPatternMatcher.matches(logs, rejectPattern, config.caseInsensitive)) {
+                                    throw new RuntimeException(
+                                        "Reject pattern matched in service '${serviceName}': ${rejectPattern}"
+                                    )
+                                }
+                            }
+                        }
+
+                        // Check for required patterns
+                        for (String pattern : patterns) {
+                            if (!matchedPatterns[serviceName].contains(pattern)) {
+                                if (LogPatternMatcher.matches(logs, pattern, config.caseInsensitive)) {
+                                    matchedPatterns[serviceName].add(pattern)
+                                    if (config.verbose) {
+                                        println "  Matched pattern in ${serviceName}: ${pattern}"
+                                    }
+                                }
+                            }
+                        }
+
+                        // Check if all patterns matched for this service
+                        if (matchedPatterns[serviceName].size() < patterns.size()) {
+                            allMatched = false
+                        }
+                    }
+
+                    if (allMatched) {
+                        println "All log patterns matched"
+                        return buildResults(config.services, matchedPatterns)
+                    }
+
+                    Thread.sleep(pollMillis)
+                }
+
+                // Timeout - report which patterns are still missing
+                def missingPatterns = [:]
+                config.services.each { serviceName, patterns ->
+                    def missing = patterns.findAll { !matchedPatterns[serviceName].contains(it) }
+                    if (missing) {
+                        missingPatterns[serviceName] = missing
+                    }
+                }
+                throw new RuntimeException(
+                    "Timeout waiting for log patterns. Missing patterns: ${missingPatterns}"
+                )
+
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt()
+                throw new RuntimeException("Interrupted while waiting for log patterns", e)
+            } catch (Exception e) {
+                if (e.message?.startsWith("Timeout") || e.message?.startsWith("Reject pattern")) {
+                    throw e
+                }
+                throw new RuntimeException("Error waiting for log patterns: ${e.message}", e)
+            }
+        })
+    }
+
+    private String fetchServiceLogs(String projectName, String serviceName) {
+        try {
+            def result = processExecutor.execute(
+                "docker", "compose",
+                "-p", projectName,
+                "logs", "--no-color", serviceName
+            )
+            return result.exitCode == 0 ? result.output : ""
+        } catch (Exception e) {
+            System.err.println("Error fetching logs for service ${serviceName}: ${e.message}")
+            return ""
+        }
+    }
+
+    private Map<String, WaitForLogResult> buildResults(
+        Map<String, List<String>> services,
+        Map<String, Set<String>> matchedPatterns
+    ) {
+        def results = [:]
+        services.each { serviceName, patterns ->
+            results[serviceName] = new WaitForLogResult(
+                serviceName,
+                patterns as List,
+                matchedPatterns[serviceName].toList()
+            )
+        }
+        return results
     }
 
     private Map<String, ServiceInfo> getStackServices(String projectName) {

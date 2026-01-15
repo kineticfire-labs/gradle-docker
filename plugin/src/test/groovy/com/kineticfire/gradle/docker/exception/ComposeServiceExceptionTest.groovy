@@ -206,6 +206,9 @@ class ComposeServiceExceptionTest extends Specification {
             'SERVICE_TIMEOUT',
             'PLATFORM_UNSUPPORTED',
             'LOGS_CAPTURE_FAILED',
+            'LOG_PATTERN_TIMEOUT',
+            'LOG_PATTERN_REJECTED',
+            'SERVICE_CRASHED',
             'UNKNOWN'
         ]
 
@@ -225,6 +228,9 @@ class ComposeServiceExceptionTest extends Specification {
         ComposeServiceException.ErrorType.SERVICE_STOP_FAILED.defaultSuggestion.contains("Services may still be running")
         ComposeServiceException.ErrorType.SERVICE_TIMEOUT.defaultSuggestion.contains("timeout period")
         ComposeServiceException.ErrorType.PLATFORM_UNSUPPORTED.defaultSuggestion.contains("not supported")
+        ComposeServiceException.ErrorType.LOG_PATTERN_TIMEOUT.defaultSuggestion.contains("log patterns")
+        ComposeServiceException.ErrorType.LOG_PATTERN_REJECTED.defaultSuggestion.contains("Reject pattern")
+        ComposeServiceException.ErrorType.SERVICE_CRASHED.defaultSuggestion.contains("Service container")
         ComposeServiceException.ErrorType.UNKNOWN.defaultSuggestion.contains("unknown")
     }
 

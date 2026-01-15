@@ -210,25 +210,25 @@ Related documents:
 
 ### Phase 0: Prerequisite Changes
 
-- [ ] Modify `LogsConfig.groovy`:
-  - [ ] Remove `Math.max(1, tailLines)` constraint (change to just `this.tailLines = tailLines`)
-  - [ ] Add `hasLimitedTail()` helper method for readability (required for code clarity)
-  - [ ] Update Javadoc to document that `0` (or any non-positive value) means "all logs"
-- [ ] **Verify LogsConfig change impact** - search for all `LogsConfig` usages:
+- [x] Modify `LogsConfig.groovy`:
+  - [x] Remove `Math.max(1, tailLines)` constraint (change to just `this.tailLines = tailLines`)
+  - [x] Add `hasLimitedTail()` helper method for readability (required for code clarity)
+  - [x] Update Javadoc to document that `0` (or any non-positive value) means "all logs"
+- [x] **Verify LogsConfig change impact** - search for all `LogsConfig` usages:
   ```bash
   rg "LogsConfig" plugin/src/main/groovy --type groovy
   rg "tailLines" plugin/src/main/groovy --type groovy
   ```
   Confirm all callers handle `tailLines <= 0` correctly (no code assumes `tailLines >= 1`)
-- [ ] **Verify no other code paths depend on `tailLines > 0` pattern**:
+- [x] **Verify no other code paths depend on `tailLines > 0` pattern**:
   ```bash
   rg "tailLines.*>.*0|tailLines.*<.*1" plugin/src/main/groovy --type groovy
   ```
   Ensure all usages will work correctly with the new `hasLimitedTail()` method
-- [ ] Modify `ExecLibraryComposeService.buildLogsCommand()`:
-  - [ ] Replace `if (config.tailLines > 0)` with `if (config.hasLimitedTail())` for clarity
-- [ ] Run existing tests to verify no regressions (especially `LogsConfigTest` and `ExecLibraryComposeServiceTest`)
-- [ ] Unit tests: See `add-wait-for-log-0300-unit-tests.md` for LogsConfig test specifications
+- [x] Modify `ExecLibraryComposeService.buildLogsCommand()`:
+  - [x] Replace `if (config.tailLines > 0)` with `if (config.hasLimitedTail())` for clarity
+- [x] Run existing tests to verify no regressions (especially `LogsConfigTest` and `ExecLibraryComposeServiceTest`)
+- [x] Unit tests: See `add-wait-for-log-0300-unit-tests.md` for LogsConfig test specifications
 
 ### Phase 1: Core Components
 

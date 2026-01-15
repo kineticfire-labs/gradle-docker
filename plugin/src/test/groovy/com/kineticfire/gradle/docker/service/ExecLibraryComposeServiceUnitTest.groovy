@@ -848,9 +848,9 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         "all options combined"        | "proj4"      | ["web"]           | 100       | true
     }
 
-    def "buildLogsCommand includes tail even when zero passed (LogsConfig enforces min of 1)"() {
+    def "buildLogsCommand omits tail when zero passed (fetches all logs)"() {
         given:
-        // LogsConfig uses Math.max(1, tailLines), so 0 becomes 1
+        // LogsConfig with tailLines = 0 means "fetch all logs" (no --tail flag)
         def config = new LogsConfig(["service1"], 0, false)
         def baseCommand = ['docker', 'compose']
 
@@ -858,8 +858,8 @@ class ExecLibraryComposeServiceUnitTest extends Specification {
         def command = service.buildLogsCommand("test-project", config, baseCommand)
 
         then:
-        command.contains('--tail')
-        command.contains('1')  // LogsConfig enforces minimum of 1
+        !command.contains('--tail')  // No tail flag when tailLines <= 0
+        command.contains('service1')
     }
 
     // ============ captureLogs Tests ============

@@ -64,4 +64,16 @@ interface ComposeService {
      * @throws ComposeServiceException if log capture fails
      */
     CompletableFuture<String> captureLogs(String projectName, LogsConfig config)
+
+    /**
+     * Wait for log patterns to appear in service logs.
+     *
+     * <p>This method polls container logs until all specified patterns are found for each
+     * service, or until timeout/reject pattern match/service crash occurs.</p>
+     *
+     * @param config Wait-for-log configuration with patterns, timeout, etc.
+     * @return CompletableFuture with results per service
+     * @throws ComposeServiceException if timeout, reject pattern match, or service crash
+     */
+    CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogConfig config)
 }

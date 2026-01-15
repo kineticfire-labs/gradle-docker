@@ -63,6 +63,7 @@ abstract class ComposeStackSpec {
     abstract Property<WaitSpec> getWaitForRunning()
     abstract Property<WaitSpec> getWaitForHealthy()
     abstract Property<LogsSpec> getLogs()
+    abstract Property<WaitForLogSpec> getWaitForLog()
     
     void waitForRunning(@DelegatesTo(WaitSpec) Closure closure) {
         def waitSpec = objectFactory.newInstance(WaitSpec)
@@ -95,6 +96,32 @@ abstract class ComposeStackSpec {
     }
     
     /**
+     * Configure log-based readiness checking using a Closure.
+     *
+     * @param closure Configuration closure for WaitForLogSpec
+     */
+    void waitForLog(@DelegatesTo(WaitForLogSpec) Closure closure) {
+        def waitForLogSpec = objectFactory.newInstance(WaitForLogSpec)
+        closure.delegate = waitForLogSpec
+        closure.resolveStrategy = Closure.DELEGATE_FIRST
+        closure.call()
+        validateWaitForLogSpec(waitForLogSpec, name)
+        waitForLog.set(waitForLogSpec)
+    }
+
+    /**
+     * Configure log-based readiness checking using an Action.
+     *
+     * @param action Configuration action for WaitForLogSpec
+     */
+    void waitForLog(Action<WaitForLogSpec> action) {
+        def waitForLogSpec = objectFactory.newInstance(WaitForLogSpec)
+        action.execute(waitForLogSpec)
+        validateWaitForLogSpec(waitForLogSpec, name)
+        waitForLog.set(waitForLogSpec)
+    }
+    
+    /**
      * Validates that a WaitSpec has at least one service configured.
      * 
      * @param waitSpec The WaitSpec to validate
@@ -114,6 +141,58 @@ abstract class ComposeStackSpec {
                 "If you don't need to wait for services, remove the empty '${blockName}' block."
             )
         }
+    }
+
+    /**
+     * Validates that a WaitForLogSpec has valid configuration.
+     *
+     * <p>This is Phase 1 validation (configuration time) - checks structural validity.
+     * Regex pattern compilation is deferred to Phase 2 (execution time) in
+     * WaitForLogConfigBuilder to avoid configuration cache issues.</p>
+     *
+     * @param spec The WaitForLogSpec to validate
+     * @param stackName The name of the compose stack (for error messages)
+     * @throws GradleException if validation fails
+     */
+    private void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
+        // Check waitForServices is present and non-empty
+        if (!spec.waitForServices.present || spec.waitForServices.get().isEmpty()) {
+            throw new GradleException(
+                "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
+                "'waitForServices' must specify at least one service with patterns.\n\n" +
+                "Example:\n" +
+                "    waitForLog {\n" +
+                "        waitForServices.set([\n" +
+                "            'app': ['Started Application']\n" +
+                "        ])\n" +
+                "    }\n\n" +
+                "If you don't need log-based readiness checks, remove the empty 'waitForLog' block."
+            )
+        }
+
+        // Validate each service has at least one pattern and all patterns are strings
+        spec.waitForServices.get().each { serviceName, patterns ->
+            if (patterns == null || patterns.isEmpty()) {
+                throw new GradleException(
+                    "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
+                    "Pattern list for service '${serviceName}' cannot be empty.\n" +
+                    "Each service must have at least one pattern to match."
+                )
+            }
+            // Type-safety check: ensure all patterns are strings (catches type erasure issues)
+            patterns.each { pattern ->
+                if (!(pattern instanceof String)) {
+                    throw new GradleException(
+                        "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
+                        "Pattern values must be strings, got: ${pattern?.getClass()?.name ?: 'null'}\n" +
+                        "For service '${serviceName}', ensure all patterns are quoted strings."
+                    )
+                }
+            }
+        }
+
+        // Note: Regex pattern validation is deferred to task execution time (Phase 2)
+        // to avoid potential configuration cache issues with Pattern compilation
     }
     
     void logs(@DelegatesTo(value = LogsSpec, strategy = Closure.DELEGATE_FIRST) Closure closure) {

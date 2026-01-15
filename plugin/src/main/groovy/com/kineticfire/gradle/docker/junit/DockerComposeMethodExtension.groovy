@@ -18,7 +18,9 @@ package com.kineticfire.gradle.docker.junit;
 
 import com.kineticfire.gradle.docker.junit.service.*;
 import com.kineticfire.gradle.docker.model.*;
+import com.kineticfire.gradle.docker.model.WaitForLogConfig;
 import com.kineticfire.gradle.docker.service.ComposeService;
+import com.kineticfire.gradle.docker.util.WaitForLogConfigBuilder;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
@@ -30,7 +32,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -56,6 +60,25 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
     private static final String COMPOSE_FILES_PROPERTY = "docker.compose.files";  // Changed from "file" to "files" (plural) to match usesCompose()
     private static final String COMPOSE_WAIT_SERVICES_PROPERTY = "docker.compose.waitServices";
     private static final String COMPOSE_STATE_FILE_PROPERTY = "COMPOSE_STATE_FILE";
+
+    // Wait for running settings
+    private static final String WAIT_FOR_RUNNING_SERVICES = "docker.compose.waitForRunning.services";
+    private static final String WAIT_FOR_RUNNING_TIMEOUT = "docker.compose.waitForRunning.timeoutSeconds";
+    private static final String WAIT_FOR_RUNNING_POLL = "docker.compose.waitForRunning.pollSeconds";
+
+    // Wait for healthy settings
+    private static final String WAIT_FOR_HEALTHY_SERVICES = "docker.compose.waitForHealthy.services";
+    private static final String WAIT_FOR_HEALTHY_TIMEOUT = "docker.compose.waitForHealthy.timeoutSeconds";
+    private static final String WAIT_FOR_HEALTHY_POLL = "docker.compose.waitForHealthy.pollSeconds";
+
+    // Wait for log settings
+    private static final String WAIT_FOR_LOG_SERVICES = "docker.compose.waitForLog.services";
+    private static final String WAIT_FOR_LOG_REJECT_PATTERNS = "docker.compose.waitForLog.rejectPatterns";
+    private static final String WAIT_FOR_LOG_TIMEOUT = "docker.compose.waitForLog.timeoutSeconds";
+    private static final String WAIT_FOR_LOG_POLL = "docker.compose.waitForLog.pollSeconds";
+    private static final String WAIT_FOR_LOG_CASE_INSENSITIVE = "docker.compose.waitForLog.caseInsensitive";
+    private static final String WAIT_FOR_LOG_VERBOSE = "docker.compose.waitForLog.verbose";
+    private static final String WAIT_FOR_LOG_PROGRESS_INTERVAL = "docker.compose.waitForLog.progressIntervalSeconds";
 
     // Store the unique project name per test thread to ensure cleanup uses the same name
     private final ThreadLocal<String> uniqueProjectName = new ThreadLocal<>();
@@ -342,34 +365,184 @@ public class DockerComposeMethodExtension implements BeforeEachCallback, AfterEa
         }
     }
     
+    /**
+     * Wait for services to reach desired state based on DSL configuration.
+     *
+     * <p>Execution order: waitForRunning -> waitForHealthy -> waitForLog</p>
+     * <p>This method supports full lifecycle (METHOD) for all wait blocks.</p>
+     */
     private void waitForStackToBeReady(String stackName, String uniqueProjectName) throws Exception {
-        // Use ComposeService to wait for services
-        System.out.println("Waiting for containers to become healthy...");
+        System.out.println("Waiting for containers to become ready...");
 
-        // Read wait services from system property, fall back to default for plugin integration tests
-        String waitServicesProperty = systemPropertyService.getProperty(COMPOSE_WAIT_SERVICES_PROPERTY);
-        List<String> services;
-        if (waitServicesProperty != null && !waitServicesProperty.isEmpty()) {
-            services = Arrays.asList(waitServicesProperty.split(","));
-        } else {
-            // Default for plugin integration tests
-            services = Collections.singletonList("time-server");
+        // Step 1: Wait for RUNNING services (if configured)
+        performWaitForRunning(uniqueProjectName);
+
+        // Step 2: Wait for HEALTHY services (if configured)
+        performWaitForHealthy(uniqueProjectName);
+
+        // Step 3: Wait for log patterns (if configured)
+        performWaitForLog(uniqueProjectName);
+
+        System.out.println("All configured wait conditions satisfied for stack '" + stackName + "'");
+    }
+
+    /**
+     * Wait for services to reach RUNNING state.
+     */
+    private void performWaitForRunning(String projectName) throws Exception {
+        String servicesProperty = systemPropertyService.getProperty(WAIT_FOR_RUNNING_SERVICES);
+        if (servicesProperty == null || servicesProperty.isEmpty()) {
+            return;
         }
 
+        List<String> services = Arrays.asList(servicesProperty.split(","));
+        int timeoutSeconds = parseIntProperty(WAIT_FOR_RUNNING_TIMEOUT, 60);
+        int pollSeconds = parseIntProperty(WAIT_FOR_RUNNING_POLL, 2);
+
+        System.out.println("Waiting for services to be RUNNING: " + services);
+
         WaitConfig waitConfig = new WaitConfig(
-            uniqueProjectName,
+            projectName,
             services,
-            Duration.ofSeconds(60),
-            Duration.ofSeconds(2),
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
+            ServiceStatus.RUNNING
+        );
+
+        composeService.waitForServices(waitConfig).get();
+        System.out.println("All services are RUNNING");
+    }
+
+    /**
+     * Wait for services to reach HEALTHY state.
+     */
+    private void performWaitForHealthy(String projectName) throws Exception {
+        String servicesProperty = systemPropertyService.getProperty(WAIT_FOR_HEALTHY_SERVICES);
+        if (servicesProperty == null || servicesProperty.isEmpty()) {
+            return;
+        }
+
+        List<String> services = Arrays.asList(servicesProperty.split(","));
+        int timeoutSeconds = parseIntProperty(WAIT_FOR_HEALTHY_TIMEOUT, 60);
+        int pollSeconds = parseIntProperty(WAIT_FOR_HEALTHY_POLL, 2);
+
+        System.out.println("Waiting for services to be HEALTHY: " + services);
+
+        WaitConfig waitConfig = new WaitConfig(
+            projectName,
+            services,
+            Duration.ofSeconds(timeoutSeconds),
+            Duration.ofSeconds(pollSeconds),
             ServiceStatus.HEALTHY
         );
 
+        composeService.waitForServices(waitConfig).get();
+        System.out.println("All services are HEALTHY");
+    }
+
+    /**
+     * Wait for log patterns to appear in service logs.
+     */
+    private void performWaitForLog(String projectName) throws Exception {
+        String servicesJson = systemPropertyService.getProperty(WAIT_FOR_LOG_SERVICES);
+        if (servicesJson == null || servicesJson.isEmpty() || servicesJson.equals("{}")) {
+            return;
+        }
+
+        // Parse JSON configuration
+        Map<String, List<String>> services = parseJsonMapProperty(servicesJson);
+        if (services.isEmpty()) {
+            return;
+        }
+
+        Map<String, List<String>> rejectPatterns = parseJsonMapProperty(
+            systemPropertyService.getProperty(WAIT_FOR_LOG_REJECT_PATTERNS)
+        );
+
+        int timeoutSeconds = parseIntProperty(WAIT_FOR_LOG_TIMEOUT, 60);
+        int pollSeconds = parseIntProperty(WAIT_FOR_LOG_POLL, 2);
+        boolean caseInsensitive = parseBooleanProperty(WAIT_FOR_LOG_CASE_INSENSITIVE, false);
+        boolean verbose = parseBooleanProperty(WAIT_FOR_LOG_VERBOSE, false);
+        int progressIntervalSeconds = parseIntProperty(WAIT_FOR_LOG_PROGRESS_INTERVAL, 0);
+
+        System.out.println("Waiting for log patterns in services: " + services.keySet());
+
+        // Build WaitForLogConfig using the builder
+        WaitForLogConfig config = WaitForLogConfigBuilder.build(
+            projectName,
+            services,
+            rejectPatterns,
+            timeoutSeconds,
+            pollSeconds,
+            caseInsensitive,
+            verbose,
+            progressIntervalSeconds
+        );
+
+        composeService.waitForLogPatterns(config).get();
+        System.out.println("All log patterns matched");
+    }
+
+    /**
+     * Parse an integer system property with a default value.
+     */
+    private int parseIntProperty(String propertyName, int defaultValue) {
+        String value = systemPropertyService.getProperty(propertyName);
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
         try {
-            composeService.waitForServices(waitConfig).get();
-            System.out.println("All services are healthy for stack '" + stackName + "'");
+            return Integer.parseInt(value);
+        } catch (NumberFormatException e) {
+            System.err.println("Warning: Invalid integer for " + propertyName + ": " + value +
+                              ", using default: " + defaultValue);
+            return defaultValue;
+        }
+    }
+
+    /**
+     * Parse a boolean system property with a default value.
+     */
+    private boolean parseBooleanProperty(String propertyName, boolean defaultValue) {
+        String value = systemPropertyService.getProperty(propertyName);
+        if (value == null || value.isEmpty()) {
+            return defaultValue;
+        }
+        return Boolean.parseBoolean(value);
+    }
+
+    /**
+     * Parse a JSON map system property into Map<String, List<String>>.
+     *
+     * @param json JSON string in format: {"key1": ["val1", "val2"], "key2": ["val3"]}
+     * @return Parsed map, or empty map if json is null/empty/invalid
+     */
+    @SuppressWarnings("unchecked")
+    private Map<String, List<String>> parseJsonMapProperty(String json) {
+        if (json == null || json.isEmpty()) {
+            return Collections.emptyMap();
+        }
+        try {
+            // Use Groovy's JsonSlurper for parsing
+            Object parsed = new groovy.json.JsonSlurper().parseText(json);
+            if (parsed instanceof Map) {
+                Map<String, Object> rawMap = (Map<String, Object>) parsed;
+                Map<String, List<String>> result = new HashMap<>();
+                for (Map.Entry<String, Object> entry : rawMap.entrySet()) {
+                    if (entry.getValue() instanceof List) {
+                        List<String> values = new ArrayList<>();
+                        for (Object item : (List<?>) entry.getValue()) {
+                            values.add(String.valueOf(item));
+                        }
+                        result.put(entry.getKey(), values);
+                    }
+                }
+                return result;
+            }
+            return Collections.emptyMap();
         } catch (Exception e) {
-            System.err.println("Warning: Service health check did not pass within timeout: " + e.getMessage());
-            // Don't throw - let tests proceed even if health check times out
+            System.err.println("Warning: Failed to parse JSON map: " + e.getMessage());
+            return Collections.emptyMap();
         }
     }
     

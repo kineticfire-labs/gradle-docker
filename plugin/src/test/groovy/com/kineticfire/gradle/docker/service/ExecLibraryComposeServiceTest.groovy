@@ -242,7 +242,18 @@ class ExecLibraryComposeServiceTest extends Specification {
             Objects.requireNonNull(config, "LogsConfig cannot be null")
             return CompletableFuture.completedFuture("mock logs")
         }
-        
+
+        @Override
+        CompletableFuture<Map<String, WaitForLogResult>> waitForLogPatterns(WaitForLogConfig config) {
+            Objects.requireNonNull(config, "WaitForLogConfig cannot be null")
+            // Return empty results for mock implementation
+            Map<String, WaitForLogResult> results = [:]
+            config.services.each { serviceName, patterns ->
+                results[serviceName] = new WaitForLogResult(serviceName, patterns, patterns)
+            }
+            return CompletableFuture.completedFuture(results)
+        }
+
         ServiceStatus parseServiceState(String status) {
             if (!status || status.trim().isEmpty()) return ServiceStatus.UNKNOWN
             

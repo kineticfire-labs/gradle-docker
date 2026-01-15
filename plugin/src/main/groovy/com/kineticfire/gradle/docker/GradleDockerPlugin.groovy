@@ -816,6 +816,29 @@ class GradleDockerPlugin implements Plugin<Project> {
             task.waitForRunningTimeoutSeconds.set(waitSpec.timeoutSeconds.getOrElse(60))
             task.waitForRunningPollSeconds.set(waitSpec.pollSeconds.getOrElse(2))
         }
+
+        // Configure wait-for-log settings (Gradle 10 compatibility)
+        // Uses conditional wiring pattern matching waitForHealthy and waitForRunning
+        if (stackSpec.waitForLog.present) {
+            def waitForLogSpec = stackSpec.waitForLog.get()
+
+            // Wire the services map (required)
+            if (waitForLogSpec.waitForServices.present) {
+                task.waitForLogServices.set(waitForLogSpec.waitForServices)
+            }
+
+            // Wire optional properties with defaults
+            // NOTE: Using getOrElse() is intentionally defensive even though conventions are set in WaitForLogSpec.
+            // This ensures robustness if: (1) conventions are accidentally removed during refactoring,
+            // (2) the spec is constructed without ObjectFactory (edge case), or (3) convention behavior changes.
+            // The slight redundancy is acceptable for improved maintainability and fail-safe behavior.
+            task.waitForLogRejectPatterns.set(waitForLogSpec.rejectPatterns.getOrElse([:]))
+            task.waitForLogTimeoutSeconds.set(waitForLogSpec.timeoutSeconds.getOrElse(60))
+            task.waitForLogPollSeconds.set(waitForLogSpec.pollSeconds.getOrElse(2))
+            task.waitForLogCaseInsensitive.set(waitForLogSpec.caseInsensitive.getOrElse(false))
+            task.waitForLogVerbose.set(waitForLogSpec.verbose.getOrElse(false))
+            task.waitForLogProgressIntervalSeconds.set(waitForLogSpec.progressIntervalSeconds.getOrElse(0))
+        }
     }
     
     private void configureComposeDownTask(task, stackSpec, composeService, project) {

@@ -19,28 +19,45 @@ package com.kineticfire.gradle.docker.model
 import java.nio.file.Path
 
 /**
- * Configuration for capturing Docker Compose logs
+ * Configuration for capturing Docker Compose logs.
+ *
+ * <p><b>tailLines semantic values:</b></p>
+ * <ul>
+ *   <li>{@code tailLines > 0}: Fetch only the last N lines (adds {@code --tail N} flag)</li>
+ *   <li>{@code tailLines <= 0}: Fetch all logs (no {@code --tail} flag added)</li>
+ * </ul>
+ * <p>Use {@link #hasLimitedTail()} to check if tailLines should be applied.</p>
  */
 class LogsConfig {
     final List<String> services
     final int tailLines
     final boolean follow
     final Path outputFile
-    
+
     LogsConfig(List<String> services, int tailLines = 100, boolean follow = false, Path outputFile = null) {
         this.services = services ?: []
-        this.tailLines = Math.max(1, tailLines)
+        this.tailLines = tailLines
         this.follow = follow
         this.outputFile = outputFile
     }
-    
+
+    /**
+     * Returns true if tailLines should be applied (positive value).
+     * When false, the --tail flag should be omitted to fetch all logs.
+     *
+     * @return true if tailLines is positive, false otherwise
+     */
+    boolean hasLimitedTail() {
+        return tailLines > 0
+    }
+
     /**
      * Check if specific services are configured
      */
     boolean hasSpecificServices() {
         return !services.empty
     }
-    
+
     /**
      * Check if output should be written to file
      */

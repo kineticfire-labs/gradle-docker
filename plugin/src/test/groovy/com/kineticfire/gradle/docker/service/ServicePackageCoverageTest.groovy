@@ -194,7 +194,7 @@ class ServicePackageCoverageTest extends Specification {
         command.contains('--remove-orphans')
     }
 
-    def "buildLogsCommand with zero tailLines still includes tail parameter"() {
+    def "buildLogsCommand with zero tailLines omits tail parameter (fetches all logs)"() {
         given:
         def mockExecutor = Mock(ProcessExecutor)
         def mockValidator = Mock(CommandValidator)
@@ -203,15 +203,15 @@ class ServicePackageCoverageTest extends Specification {
         mockValidator.validateDockerCompose() >> {}
 
         def service = new TestableComposeService(mockExecutor, mockValidator, mockLogger, mockTimeService)
-        // LogsConfig enforces minimum of 1 for tailLines
+        // LogsConfig with tailLines = 0 means "fetch all logs" (no --tail flag)
         def config = new LogsConfig(["service1"], 0, false)
 
         when:
         def command = service.buildLogsCommand("test-project", config, ['docker', 'compose'])
 
         then:
-        command.contains('--tail')
-        command.contains('1')  // LogsConfig enforces minimum of 1
+        !command.contains('--tail')  // No tail flag when tailLines <= 0
+        command.contains('service1')
     }
 
     def "buildLogsCommand includes all services"() {
