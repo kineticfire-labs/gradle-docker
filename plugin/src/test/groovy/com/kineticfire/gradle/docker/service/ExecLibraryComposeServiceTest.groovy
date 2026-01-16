@@ -24,6 +24,7 @@ import spock.lang.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import java.time.Duration
+import org.gradle.api.services.BuildServiceParameters
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ExecutionException
 
@@ -199,6 +200,148 @@ class ExecLibraryComposeServiceTest extends Specification {
         service.parseServiceState("   ") == ServiceStatus.UNKNOWN
         service.parseServiceState("up down") == ServiceStatus.RUNNING // Contains 'up'
         service.parseServiceState("exit code 0") == ServiceStatus.STOPPED // Contains 'exit'
+    }
+
+    // ===== TESTS FOR buildLogsCommand() with hasLimitedTail() =====
+
+    def "buildLogsCommand omits --tail flag when tailLines is 0"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], 0, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        !command.contains('--tail')
+        command.containsAll(['docker', 'compose', '-p', 'test-project', 'logs', 'app'])
+    }
+
+    def "buildLogsCommand omits --tail flag when tailLines is negative"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], -1, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        !command.contains('--tail')
+        command.containsAll(['docker', 'compose', '-p', 'test-project', 'logs', 'app'])
+    }
+
+    def "buildLogsCommand includes --tail flag when tailLines is positive"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], 100, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command.contains('--tail')
+        command.contains('100')
+    }
+
+    def "buildLogsCommand includes --tail 1 when tailLines is 1"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], 1, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command.contains('--tail')
+        command.contains('1')
+    }
+
+    def "buildLogsCommand includes --follow flag when follow is true"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], 50, true, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command.contains('--follow')
+        command.contains('--tail')
+        command.contains('50')
+    }
+
+    def "buildLogsCommand omits service names when services list is empty"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig([], 100, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command == ['docker', 'compose', '-p', 'test-project', 'logs', '--tail', '100']
+    }
+
+    def "buildLogsCommand includes multiple services when specified"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app', 'db', 'cache'], 200, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command.containsAll(['app', 'db', 'cache'])
+    }
+
+    def "buildLogsCommand handles very large tailLines value"() {
+        given:
+        def testableService = new TestableExecLibraryComposeService()
+        def config = new LogsConfig(['app'], Integer.MAX_VALUE, false, null)
+        def baseCommand = ['docker', 'compose']
+
+        when:
+        def command = testableService.buildLogsCommand('test-project', config, baseCommand)
+
+        then:
+        command.contains('--tail')
+        command.contains(Integer.MAX_VALUE.toString())
+    }
+
+    /**
+     * Testable subclass of ExecLibraryComposeService that exposes protected methods for testing.
+     * This avoids the need to use reflection and follows the @VisibleForTesting pattern.
+     */
+    static class TestableExecLibraryComposeService extends ExecLibraryComposeService {
+
+        TestableExecLibraryComposeService() {
+            // Initialize fields directly to avoid parent constructor's validation calls
+        }
+
+        // Required by BuildService interface
+        @Override
+        BuildServiceParameters.None getParameters() {
+            return null
+        }
+
+        // Override to skip Docker Compose validation during initialization
+        @Override
+        protected List<String> getComposeCommand() {
+            return ['docker', 'compose']
+        }
+
+        // Expose the protected method for testing
+        @Override
+        List<String> buildLogsCommand(String projectName, LogsConfig config, List<String> baseCommand) {
+            return super.buildLogsCommand(projectName, config, baseCommand)
+        }
     }
 
     /**
