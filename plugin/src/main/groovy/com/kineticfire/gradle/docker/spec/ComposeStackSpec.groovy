@@ -179,9 +179,10 @@ abstract class ComposeStackSpec {
                     "Each service must have at least one pattern to match."
                 )
             }
-            // Type-safety check: ensure all patterns are strings (catches type erasure issues)
+            // Type-safety check: ensure all patterns are string-like (catches type erasure issues)
+            // Accept both String and GString (Groovy interpolated strings)
             patterns.each { pattern ->
-                if (!(pattern instanceof String)) {
+                if (!(pattern instanceof CharSequence)) {
                     throw new GradleException(
                         "Configuration error in 'waitForLog' block for compose stack '${stackName}': " +
                         "Pattern values must be strings, got: ${pattern?.getClass()?.name ?: 'null'}\n" +

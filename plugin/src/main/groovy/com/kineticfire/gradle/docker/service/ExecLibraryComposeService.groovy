@@ -494,7 +494,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         while (timeService.currentTimeMillis() - startTime < timeoutMillis) {
             attemptNumber++
             def currentTime = timeService.currentTimeMillis()
-            def elapsedSeconds = (currentTime - startTime) / 1000
+            long elapsedSeconds = (currentTime - startTime) / 1000 as long
 
             if (config.verbose) {
                 logVerbosePollingStart(attemptNumber, config.totalWaitAttempts, elapsedSeconds)
@@ -533,7 +533,7 @@ abstract class ExecLibraryComposeService implements BuildService<BuildServicePar
         }
 
         // Timeout reached
-        def elapsedSeconds = (timeService.currentTimeMillis() - startTime) / 1000
+        long elapsedSeconds = (timeService.currentTimeMillis() - startTime) / 1000 as long
         throw buildTimeoutException(config, matchedPatternsByService, matchTimesByService, elapsedSeconds)
     }
 

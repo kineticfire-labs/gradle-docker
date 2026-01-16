@@ -601,4 +601,283 @@ class TestIntegrationExtensionTest extends Specification {
         e.message.contains("Configuration error in 'waitForHealthy' block")
         e.message.contains("'waitForServices' must specify at least one service")
     }
+
+    // ===== WAIT FOR LOG SYSTEM PROPERTY TESTS =====
+
+    def "usesCompose configures waitForLog system properties"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            logStack {
+                files.from(composeFile)
+                waitForLog {
+                    waitForServices.set([
+                        'app': ['Started', 'Ready'],
+                        'db': ['accepting connections']
+                    ])
+                    rejectPatterns.set([
+                        'app': ['Error', 'Fatal']
+                    ])
+                    timeoutSeconds.set(120)
+                    pollSeconds.set(5)
+                    caseInsensitive.set(true)
+                    verbose.set(true)
+                    progressIntervalSeconds.set(15)
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'logStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+
+        // Services should be JSON serialized
+        def servicesJson = testTask.systemProperties['docker.compose.waitForLog.services']
+        servicesJson != null
+        servicesJson.contains('app')
+        servicesJson.contains('Started')
+        servicesJson.contains('Ready')
+        servicesJson.contains('db')
+        servicesJson.contains('accepting connections')
+
+        // Reject patterns should be JSON serialized
+        def rejectJson = testTask.systemProperties['docker.compose.waitForLog.rejectPatterns']
+        rejectJson != null
+        rejectJson.contains('app')
+        rejectJson.contains('Error')
+        rejectJson.contains('Fatal')
+
+        // Scalar properties
+        testTask.systemProperties['docker.compose.waitForLog.timeoutSeconds'] == '120'
+        testTask.systemProperties['docker.compose.waitForLog.pollSeconds'] == '5'
+        testTask.systemProperties['docker.compose.waitForLog.caseInsensitive'] == 'true'
+        testTask.systemProperties['docker.compose.waitForLog.verbose'] == 'true'
+        testTask.systemProperties['docker.compose.waitForLog.progressIntervalSeconds'] == '15'
+    }
+
+    def "usesCompose configures waitForLog with default values"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            defaultLogStack {
+                files.from(composeFile)
+                waitForLog {
+                    // Only set required services, use defaults for everything else
+                    waitForServices.set(['app': ['Started']])
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'defaultLogStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+
+        // Services should be set
+        def servicesJson = testTask.systemProperties['docker.compose.waitForLog.services']
+        servicesJson != null
+        servicesJson.contains('app')
+        servicesJson.contains('Started')
+
+        // Default values for optional properties
+        testTask.systemProperties['docker.compose.waitForLog.rejectPatterns'] == '{}'
+        testTask.systemProperties['docker.compose.waitForLog.timeoutSeconds'] == '60'
+        testTask.systemProperties['docker.compose.waitForLog.pollSeconds'] == '2'
+        testTask.systemProperties['docker.compose.waitForLog.caseInsensitive'] == 'false'
+        testTask.systemProperties['docker.compose.waitForLog.verbose'] == 'false'
+        testTask.systemProperties['docker.compose.waitForLog.progressIntervalSeconds'] == '0'
+    }
+
+    def "usesCompose does not set waitForLog properties when not configured"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            noLogStack {
+                files.from(composeFile)
+                // No waitForLog configured
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'noLogStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+
+        // waitForLog properties should NOT be set
+        testTask.systemProperties['docker.compose.waitForLog.services'] == null
+        testTask.systemProperties['docker.compose.waitForLog.rejectPatterns'] == null
+        testTask.systemProperties['docker.compose.waitForLog.timeoutSeconds'] == null
+        testTask.systemProperties['docker.compose.waitForLog.pollSeconds'] == null
+        testTask.systemProperties['docker.compose.waitForLog.caseInsensitive'] == null
+        testTask.systemProperties['docker.compose.waitForLog.verbose'] == null
+        testTask.systemProperties['docker.compose.waitForLog.progressIntervalSeconds'] == null
+    }
+
+    def "usesCompose configures waitForLog alongside other wait specs"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            allWaitsStack {
+                files.from(composeFile)
+                waitForRunning {
+                    waitForServices.set(['app'])
+                    timeoutSeconds.set(30)
+                }
+                waitForHealthy {
+                    waitForServices.set(['db'])
+                    timeoutSeconds.set(90)
+                }
+                waitForLog {
+                    waitForServices.set(['app': ['Application started']])
+                    timeoutSeconds.set(120)
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'allWaitsStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+
+        // All three wait specs should be configured
+        testTask.systemProperties['docker.compose.waitForRunning.services'] == 'app'
+        testTask.systemProperties['docker.compose.waitForRunning.timeoutSeconds'] == '30'
+
+        testTask.systemProperties['docker.compose.waitForHealthy.services'] == 'db'
+        testTask.systemProperties['docker.compose.waitForHealthy.timeoutSeconds'] == '90'
+
+        def servicesJson = testTask.systemProperties['docker.compose.waitForLog.services']
+        servicesJson != null
+        servicesJson.contains('app')
+        servicesJson.contains('Application started')
+        testTask.systemProperties['docker.compose.waitForLog.timeoutSeconds'] == '120'
+    }
+
+    def "usesCompose configures waitForLog for METHOD lifecycle"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            methodLogStack {
+                files.from(composeFile)
+                waitForLog {
+                    waitForServices.set(['app': ['Ready']])
+                    timeoutSeconds.set(45)
+                    verbose.set(true)
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'methodLogStack', com.kineticfire.gradle.docker.Lifecycle.METHOD)
+
+        then:
+        noExceptionThrown()
+
+        // waitForLog should still be configured for METHOD lifecycle
+        // (the test framework extension uses these properties)
+        def servicesJson = testTask.systemProperties['docker.compose.waitForLog.services']
+        servicesJson != null
+        servicesJson.contains('app')
+        servicesJson.contains('Ready')
+        testTask.systemProperties['docker.compose.waitForLog.timeoutSeconds'] == '45'
+        testTask.systemProperties['docker.compose.waitForLog.verbose'] == 'true'
+
+        // But METHOD lifecycle should NOT wire task dependencies
+        !testTask.dependsOn.any { it.toString().contains('composeUp') }
+    }
+
+    def "usesCompose configures waitForLog with regex patterns in JSON"() {
+        given:
+        def testIntegrationExt = project.objects.newInstance(TestIntegrationExtension, project.name,
+            project.layout, project.providers)
+        def dockerTestExt = project.objects.newInstance(DockerTestExtension)
+        testIntegrationExt.setDockerTestExtension(dockerTestExt)
+
+        def composeFile = project.file('docker-compose.yml')
+        composeFile.text = 'services: {}'
+
+        dockerTestExt.composeStacks {
+            regexLogStack {
+                files.from(composeFile)
+                waitForLog {
+                    waitForServices.set([
+                        'app': ['\\[INFO\\].*started', 'port:\\s+\\d+']
+                    ])
+                    rejectPatterns.set([
+                        'app': ['Exception:\\s+.*']
+                    ])
+                }
+            }
+        }
+
+        def testTask = project.tasks.register('integrationTest', org.gradle.api.tasks.testing.Test).get()
+
+        when:
+        testIntegrationExt.usesCompose(testTask, 'regexLogStack', com.kineticfire.gradle.docker.Lifecycle.CLASS)
+
+        then:
+        noExceptionThrown()
+
+        // JSON should preserve regex patterns
+        def servicesJson = testTask.systemProperties['docker.compose.waitForLog.services']
+        servicesJson != null
+        // JSON escapes backslashes, so \\ becomes \\\\
+        servicesJson.contains('INFO')
+        servicesJson.contains('started')
+        servicesJson.contains('port')
+
+        def rejectJson = testTask.systemProperties['docker.compose.waitForLog.rejectPatterns']
+        rejectJson != null
+        rejectJson.contains('Exception')
+    }
 }
