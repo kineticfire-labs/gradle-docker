@@ -1,4 +1,4 @@
-# Design Document: Add `waitForLog` Block to `dockerTest` DSL -- Unit Tests
+# Design Document: Add `waitForLog` Block to `dockerTest` DSL -- Unit Tests ✅ COMPLETE
 
 ## Prerequisites
 
@@ -20,80 +20,101 @@ Define unit test specifications for the `waitForLog` feature implementation. Tes
 
 ## Checklist
 
-### Phase 0: Prerequisite Changes
-- [ ] Unit tests for `LogsConfig` modifications (`LogsConfigTest.groovy`)
-  - [ ] Tests for `tailLines = 0` behavior (Gap #18)
-  - [ ] Tests for `tailLines = -1` behavior (Gap #18)
-  - [ ] Tests for `hasLimitedTail()` method - positive values (Gap #18)
-  - [ ] Tests for `hasLimitedTail()` method - zero value (Gap #18)
-  - [ ] Tests for `hasLimitedTail()` method - negative values (Gap #18)
-- [ ] Unit tests for `ExecLibraryComposeService.buildLogsCommand()` change
-  - [ ] Verify `hasLimitedTail()` method is used (extend existing `ExecLibraryComposeServiceTest.groovy`)
+### Phase 0: Prerequisite Changes ✅
+- [x] Unit tests for `LogsConfig` modifications (`LogsConfigTest.groovy`)
+  - [x] Tests for `tailLines = 0` behavior (Gap #18)
+  - [x] Tests for `tailLines = -1` behavior (Gap #18)
+  - [x] Tests for `hasLimitedTail()` method - positive values (Gap #18)
+  - [x] Tests for `hasLimitedTail()` method - zero value (Gap #18)
+  - [x] Tests for `hasLimitedTail()` method - negative values (Gap #18)
+- [x] Unit tests for `ExecLibraryComposeService.buildLogsCommand()` change
+  - [x] Verify `hasLimitedTail()` method is used (extend existing `ExecLibraryComposeServiceTest.groovy`)
 
-### Phase 1: Core Components
-- [ ] Unit tests for `WaitForLogSpec` (`WaitForLogSpecTest.groovy`)
-- [ ] Unit tests for `WaitForLogConfig` (`WaitForLogConfigTest.groovy`)
-  - [ ] Tests for `toString()` format includes all key fields (Gap #19)
-- [ ] Unit tests for `WaitForLogResult` (`WaitForLogResultTest.groovy`)
-  - [ ] Tests for secondary constructor (rejected result) (Gap #16)
-  - [ ] Tests for `PatternMatch` inner class (Gap #21)
-- [ ] Unit tests for `LogPatternMatcher` (`LogPatternMatcherTest.groovy`)
-  - [ ] Tests for `compilePattern(null, false)` throws NullPointerException (Gap #5)
-  - [ ] Tests for `RejectCheckResult` inner class (Gap #15)
-  - [ ] Tests for private constructor via reflection for coverage (Gap #20)
-- [ ] Unit tests for `WaitForLogConfigBuilder` (`WaitForLogConfigBuilderTest.groovy`)
-  - [ ] Tests for private constructor via reflection for coverage (Gap #23)
+### Phase 1: Core Components ✅
+- [x] Unit tests for `WaitForLogSpec` (`WaitForLogSpecTest.groovy`)
+- [x] Unit tests for `WaitForLogConfig` (`WaitForLogConfigTest.groovy`)
+  - [x] Tests for `toString()` format includes all key fields (Gap #19)
+- [x] Unit tests for `WaitForLogResult` (`WaitForLogResultTest.groovy`)
+  - [x] Tests for secondary constructor (rejected result) (Gap #16)
+  - [x] Tests for `PatternMatch` inner class (Gap #21)
+- [x] Unit tests for `LogPatternMatcher` (`LogPatternMatcherTest.groovy`)
+  - [x] Tests for `compilePattern(null, false)` throws NullPointerException (Gap #5)
+  - [x] Tests for `RejectCheckResult` inner class (Gap #15)
+  - [x] Tests for private constructor via reflection for coverage (Gap #20)
+- [x] Unit tests for `WaitForLogConfigBuilder` (`WaitForLogConfigBuilderTest.groovy`)
+  - [x] Tests for private constructor via reflection for coverage (Gap #23)
 
-### Phase 2: Integration Components
-- [ ] Unit tests for `ComposeStackSpec.waitForLog` extension (`ComposeStackSpecWaitForLogTest.groovy`)
-- [ ] Unit tests for `ComposeServiceException` new error types (`ComposeServiceExceptionTest.groovy` - extend)
-- [ ] Unit tests for `ExecLibraryComposeService.waitForLogPatterns()`
+### Phase 2: Integration Components ✅
+- [x] Unit tests for `ComposeStackSpec.waitForLog` extension (`ComposeStackSpecWaitForLogTest.groovy`)
+- [x] Unit tests for `ComposeServiceException` new error types (`ComposeServiceExceptionTest.groovy` - extend)
+- [x] Unit tests for `ExecLibraryComposeService.waitForLogPatterns()`
       (`ExecLibraryComposeServiceWaitForLogTest.groovy`)
-  - [ ] Tests for `getComposeProjectServices()` method
-    - [ ] Use JSON format mock outputs matching Docker Compose v2 (Gap #1)
-  - [ ] Tests for `validateServicesExist()` empty project case
-    - [ ] Use correct method signature `validateServicesExist(config)` (Gap #2)
-    - [ ] Test specific error message for empty compose project (Gap #11)
-  - [ ] Tests for `fetchServiceLogs()` edge cases (null, empty, whitespace output)
-    - [ ] Expect `List<String>` return type (Gap #4)
-  - [ ] Tests for `isServiceRunning()` JSON parse error logging
-    - [ ] Use JSON format mock outputs (Gap #1)
-  - [ ] Tests for `getServiceExitCode()` method (Gap #3)
-  - [ ] Tests for `waitForLogPatterns(null)` throws NullPointerException (Gap #13)
-  - [ ] Tests for InterruptedException handling (Gap #14)
-  - [ ] Tests for ExecutionException unwrapping (Gap #17)
-  - [ ] Tests for `getRecentLogs()` complete implementation (Gap #10)
-  - [ ] Tests for `CheckAllServicesResult` factory methods (Gap #12)
-  - [ ] Tests for RECENT_LOG_LINES_FOR_ERROR constant usage (Gap #22)
-- [ ] Unit tests for `ComposeUpTask` waitForLog properties (`ComposeUpTaskWaitForLogTest.groovy`)
-  - [ ] Tests for exception propagation from `waitForLogPatterns()`
-  - [ ] Tests for partial wait block configuration scenarios
-- [ ] Unit tests for `GradleDockerPlugin` waitForLog wiring (`GradleDockerPluginWaitForLogTest.groovy`)
-- [ ] Unit tests for `TestIntegrationExtension` waitForLog properties
-      (`TestIntegrationExtensionWaitForLogTest.groovy`)
+  - [x] Tests for `getComposeProjectServices()` method
+    - [x] Use JSON format mock outputs matching Docker Compose v2 (Gap #1)
+  - [x] Tests for `validateServicesExist()` empty project case
+    - [x] Use correct method signature `validateServicesExist(config)` (Gap #2)
+    - [x] Test specific error message for empty compose project (Gap #11)
+  - [x] Tests for `fetchServiceLogs()` edge cases (null, empty, whitespace output)
+    - [x] Expect `List<String>` return type (Gap #4)
+  - [x] Tests for `isServiceRunning()` JSON parse error logging
+    - [x] Use JSON format mock outputs (Gap #1)
+  - [x] Tests for `getServiceExitCode()` method (Gap #3)
+  - [x] Tests for `waitForLogPatterns(null)` throws NullPointerException (Gap #13)
+  - [x] Tests for InterruptedException handling (Gap #14)
+  - [x] Tests for ExecutionException unwrapping (Gap #17)
+  - [x] Tests for `getRecentLogs()` complete implementation (Gap #10)
+  - [x] Tests for `CheckAllServicesResult` factory methods (Gap #12)
+  - [x] Tests for RECENT_LOG_LINES_FOR_ERROR constant usage (Gap #22)
+- [x] Unit tests for `ComposeUpTask` waitForLog properties (`ComposeUpTaskWaitForLogTest.groovy`)
+  - [x] Tests for exception propagation from `waitForLogPatterns()`
+  - [x] Tests for partial wait block configuration scenarios
+- [x] Unit tests for `GradleDockerPlugin` waitForLog wiring (`GradleDockerPluginWaitForLogTest.groovy`)
+- [x] Unit tests for `TestIntegrationExtension` waitForLog properties
+      (`TestIntegrationExtensionTest.groovy` - waitForLog tests added to existing file)
 
-### Phase 3: Test Framework Extensions
-- [ ] Unit tests for `DockerComposeMethodExtension` waitForLog (`DockerComposeMethodExtensionWaitForLogTest.groovy`)
-  - [ ] Tests for `performWaitForRunning()` method
-  - [ ] Tests for `performWaitForHealthy()` method
-  - [ ] Tests for `performWaitForLog()` method
-  - [ ] Tests for `parseIntProperty()` helper
-    - [ ] Tests for whitespace handling (Gap #6)
-  - [ ] Tests for `parseBooleanProperty()` helper
-    - [ ] Tests for non-standard values (parameterized test) (Gap #7)
-  - [ ] Tests for `parseJsonMapProperty()` helper
-  - [ ] Tests for updated `waitForStackToBeReady()` method
-- [ ] Unit tests for `DockerComposeClassExtension` waitForLog (`DockerComposeClassExtensionWaitForLogTest.groovy`)
-  - [ ] Same test coverage as Method extension
-- [ ] Unit tests for `JUnitComposeService` waitForLog delegation (`JUnitComposeServiceWaitForLogTest.groovy`)
-  - [ ] Tests for `waitForLogPatterns()` delegation method
+### Phase 3: Test Framework Extensions ✅
+- [x] Unit tests for `DockerComposeMethodExtension` waitForLog (`DockerComposeMethodExtensionWaitForLogTest.groovy`)
+  - [x] Tests for `performWaitForRunning()` method
+  - [x] Tests for `performWaitForHealthy()` method
+  - [x] Tests for `performWaitForLog()` method
+  - [x] Tests for `parseIntProperty()` helper
+    - [x] Tests for whitespace handling (Gap #6)
+  - [x] Tests for `parseBooleanProperty()` helper
+    - [x] Tests for non-standard values (parameterized test) (Gap #7)
+  - [x] Tests for `parseJsonMapProperty()` helper
+  - [x] Tests for updated `waitForStackToBeReady()` method
+- [x] Unit tests for `DockerComposeClassExtension` waitForLog (`DockerComposeClassExtensionWaitForLogTest.groovy`)
+  - [x] Same test coverage as Method extension
+- [x] Unit tests for `JUnitComposeService` waitForLog delegation (`JUnitComposeServiceWaitForLogTest.groovy`)
+  - [x] Tests for `waitForLogPatterns()` delegation method
 
-### Final Verification
-- [ ] All unit tests pass
-- [ ] 100% line and branch coverage achieved (or gaps documented)
-- [ ] No compilation warnings
-- [ ] All test files include required import statements (Gap #9)
-- [ ] Warning test approach documented if using System.err capture (Gap #8)
+### Final Verification ✅
+- [x] All unit tests pass (BUILD SUCCESSFUL with 2233+ tests)
+- [x] 100% line and branch coverage achieved (or gaps documented in `docs/design-docs/testing/unit-test-gaps.md`)
+- [x] No compilation warnings (verified with `--warning-mode=all`)
+- [x] All test files include required import statements (Gap #9)
+- [x] Warning test approach documented if using System.err capture (Gap #8) - standard pattern used in
+      `WaitForLogConfigBuilderTest.groovy`: save original System.err, replace with ByteArrayOutputStream,
+      execute code, verify captured output, restore original System.err in cleanup block
+
+---
+
+## Plan Status: ✅ COMPLETE
+
+All phases completed:
+- Phase 0: Prerequisite Changes ✅
+- Phase 1: Core Components ✅
+- Phase 2: Integration Components ✅
+- Phase 3: Test Framework Extensions ✅
+- Final Verification ✅
+
+Coverage Summary (as of completion):
+- Instructions: 87.3%
+- Branches: 82.8%
+- Lines: 91.2%
+
+Remaining coverage gaps are documented in `docs/design-docs/testing/unit-test-gaps.md` and represent
+external boundaries (Docker daemon calls, Docker Compose CLI, process execution) that cannot be unit tested.
 
 ---
 
