@@ -344,6 +344,9 @@ tasks.register('functionalTest', Test) {
     // Force sequential execution to avoid race conditions
     maxParallelForks = 1
     
+    // Fork a new JVM for each test class to prevent test pollution
+    forkEvery = 1
+    
     // Ensure TestKit uses the correct flags when running nested Gradle builds
     environment 'GRADLE_OPTS', '--no-daemon --no-parallel --no-configuration-cache'
 }

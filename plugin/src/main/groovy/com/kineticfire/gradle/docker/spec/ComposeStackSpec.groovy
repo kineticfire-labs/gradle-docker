@@ -128,7 +128,7 @@ abstract class ComposeStackSpec {
      * @param blockName The name of the DSL block for error messages
      * @throws GradleException if waitForServices is not set or is empty
      */
-    private void validateWaitSpec(WaitSpec waitSpec, String blockName) {
+    protected void validateWaitSpec(WaitSpec waitSpec, String blockName) {
         if (!waitSpec.waitForServices.present || waitSpec.waitForServices.get().isEmpty()) {
             throw new GradleException(
                 "Configuration error in '${blockName}' block for compose stack '${name}': " +
@@ -154,7 +154,7 @@ abstract class ComposeStackSpec {
      * @param stackName The name of the compose stack (for error messages)
      * @throws GradleException if validation fails
      */
-    private void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
+    protected void validateWaitForLogSpec(WaitForLogSpec spec, String stackName) {
         // Check waitForServices is present and non-empty
         if (!spec.waitForServices.present || spec.waitForServices.get().isEmpty()) {
             throw new GradleException(

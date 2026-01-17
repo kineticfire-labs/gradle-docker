@@ -117,7 +117,7 @@ abstract class DockerTestExtension {
         validateEnvFiles(stackSpec)
     }
     
-    private void validateEnvFiles(ComposeStackSpec stackSpec) {
+    protected void validateEnvFiles(ComposeStackSpec stackSpec) {
         if (!stackSpec.envFiles.empty) {
             stackSpec.envFiles.each { file ->
                 if (!file.exists()) {
