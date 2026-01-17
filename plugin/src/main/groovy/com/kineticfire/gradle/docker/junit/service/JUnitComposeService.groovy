@@ -22,6 +22,7 @@ import com.kineticfire.gradle.docker.util.LogPatternMatcher
 
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
+import java.util.regex.Pattern
 
 /**
  * Standalone ComposeService implementation for JUnit extensions.
@@ -255,46 +256,50 @@ class JUnitComposeService implements ComposeService {
         }
         return CompletableFuture.supplyAsync({
             try {
-                println "Waiting for log patterns in services: ${config.services.keySet()}"
+                println "Waiting for log patterns in services: ${config.servicePatterns.keySet()}"
 
                 long startTime = System.currentTimeMillis()
-                long timeoutMillis = config.timeoutSeconds * 1000L
-                long pollMillis = config.pollSeconds * 1000L
+                long timeoutMillis = config.timeout.toMillis()
+                long pollMillis = config.pollInterval.toMillis()
 
-                // Track matched patterns per service
+                // Track matched patterns per service (using pattern strings for tracking)
                 Map<String, Set<String>> matchedPatterns = [:]
-                config.services.keySet().each { service ->
+                config.servicePatterns.keySet().each { service ->
                     matchedPatterns[service] = new HashSet<>()
                 }
 
                 while (System.currentTimeMillis() - startTime < timeoutMillis) {
                     boolean allMatched = true
 
-                    for (Map.Entry<String, List<String>> entry : config.services.entrySet()) {
+                    for (Map.Entry<String, List<Pattern>> entry : config.servicePatterns.entrySet()) {
                         String serviceName = entry.key
-                        List<String> patterns = entry.value
+                        List<Pattern> patterns = entry.value
 
                         // Fetch logs for the service
                         String logs = fetchServiceLogs(config.projectName, serviceName)
+                        List<String> logLines = logs ? logs.split('\n') as List : []
 
                         // Check reject patterns first
                         if (config.rejectPatterns.containsKey(serviceName)) {
-                            for (String rejectPattern : config.rejectPatterns[serviceName]) {
-                                if (LogPatternMatcher.matches(logs, rejectPattern, config.caseInsensitive)) {
-                                    throw new RuntimeException(
-                                        "Reject pattern matched in service '${serviceName}': ${rejectPattern}"
-                                    )
-                                }
+                            def rejectResult = LogPatternMatcher.checkRejectPatterns(
+                                config.rejectPatterns[serviceName],
+                                logLines
+                            )
+                            if (rejectResult != null) {
+                                throw new RuntimeException(
+                                    "Reject pattern matched in service '${serviceName}': ${rejectResult.patternString}"
+                                )
                             }
                         }
 
                         // Check for required patterns
-                        for (String pattern : patterns) {
-                            if (!matchedPatterns[serviceName].contains(pattern)) {
-                                if (LogPatternMatcher.matches(logs, pattern, config.caseInsensitive)) {
-                                    matchedPatterns[serviceName].add(pattern)
+                        for (Pattern pattern : patterns) {
+                            String patternString = pattern.pattern()
+                            if (!matchedPatterns[serviceName].contains(patternString)) {
+                                if (LogPatternMatcher.matchesAnyLine(pattern, logLines)) {
+                                    matchedPatterns[serviceName].add(patternString)
                                     if (config.verbose) {
-                                        println "  Matched pattern in ${serviceName}: ${pattern}"
+                                        println "  Matched pattern in ${serviceName}: ${patternString}"
                                     }
                                 }
                             }
@@ -308,7 +313,7 @@ class JUnitComposeService implements ComposeService {
 
                     if (allMatched) {
                         println "All log patterns matched"
-                        return buildResults(config.services, matchedPatterns)
+                        return buildResultsFromPatterns(config.servicePatterns, matchedPatterns)
                     }
 
                     Thread.sleep(pollMillis)
@@ -316,8 +321,9 @@ class JUnitComposeService implements ComposeService {
 
                 // Timeout - report which patterns are still missing
                 def missingPatterns = [:]
-                config.services.each { serviceName, patterns ->
-                    def missing = patterns.findAll { !matchedPatterns[serviceName].contains(it) }
+                config.servicePatterns.each { serviceName, patterns ->
+                    def patternStrings = patterns.collect { it.pattern() }
+                    def missing = patternStrings.findAll { !matchedPatterns[serviceName].contains(it) }
                     if (missing) {
                         missingPatterns[serviceName] = missing
                     }
@@ -358,10 +364,34 @@ class JUnitComposeService implements ComposeService {
     ) {
         def results = [:]
         services.each { serviceName, patterns ->
+            def patternMatches = patterns.collect { pattern ->
+                boolean matched = matchedPatterns[serviceName].contains(pattern)
+                new WaitForLogResult.PatternMatch(pattern, matched, matched ? 0L : null)
+            }
             results[serviceName] = new WaitForLogResult(
                 serviceName,
-                patterns as List,
-                matchedPatterns[serviceName].toList()
+                patternMatches,
+                patternMatches.every { it.matched }
+            )
+        }
+        return results
+    }
+
+    private Map<String, WaitForLogResult> buildResultsFromPatterns(
+        Map<String, List<Pattern>> servicePatterns,
+        Map<String, Set<String>> matchedPatterns
+    ) {
+        def results = [:]
+        servicePatterns.each { serviceName, patterns ->
+            def patternMatches = patterns.collect { pattern ->
+                String patternString = pattern.pattern()
+                boolean matched = matchedPatterns[serviceName].contains(patternString)
+                new WaitForLogResult.PatternMatch(patternString, matched, matched ? 0L : null)
+            }
+            results[serviceName] = new WaitForLogResult(
+                serviceName,
+                patternMatches,
+                patternMatches.every { it.matched }
             )
         }
         return results
