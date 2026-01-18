@@ -13,6 +13,9 @@ clear; ./gradlew -Pplugin_version=1.0.0 cleanAll integrationTest
 functional:
 - DSL Configuration Tests
 - Convention Tests
+- Validation Error Tests
+
+
 
 
 You are Principal Software Engineer and expert at Java, Gradle, custom Gradle plugins, Groovy, Docker, and Docker
