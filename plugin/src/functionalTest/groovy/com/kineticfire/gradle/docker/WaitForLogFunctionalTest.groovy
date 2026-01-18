@@ -659,4 +659,479 @@ services:
         result.output.contains("Verbose: true")
         result.output.contains("ProgressIntervalSeconds: 15")
     }
+
+    // ===== Section 2: Convention Tests =====
+
+    // Section 2.1 Default Conventions
+
+    def "waitForLog default timeoutSeconds convention is 60"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultTimeout {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // timeoutSeconds NOT set - should default to 60
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultTimeout')
+                    def timeout = upTask.waitForLogTimeoutSeconds.get()
+                    println "Default timeout: \${timeout}"
+                    assert timeout == 60
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default timeout: 60")
+    }
+
+    def "waitForLog default pollSeconds convention is 2"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultPoll {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // pollSeconds NOT set - should default to 2
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultPoll')
+                    def poll = upTask.waitForLogPollSeconds.get()
+                    println "Default poll: \${poll}"
+                    assert poll == 2
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default poll: 2")
+    }
+
+    def "waitForLog default caseInsensitive convention is false"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultCase {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // caseInsensitive NOT set - should default to false
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultCase')
+                    def caseInsensitive = upTask.waitForLogCaseInsensitive.get()
+                    println "Default caseInsensitive: \${caseInsensitive}"
+                    assert caseInsensitive == false
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default caseInsensitive: false")
+    }
+
+    def "waitForLog default verbose convention is false"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultVerbose {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // verbose NOT set - should default to false
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultVerbose')
+                    def verbose = upTask.waitForLogVerbose.get()
+                    println "Default verbose: \${verbose}"
+                    assert verbose == false
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default verbose: false")
+    }
+
+    def "waitForLog default progressIntervalSeconds convention is 0 (disabled)"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultProgress {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // progressIntervalSeconds NOT set - should default to 0
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultProgress')
+                    def progressInterval = upTask.waitForLogProgressIntervalSeconds.get()
+                    println "Default progressInterval: \${progressInterval}"
+                    assert progressInterval == 0
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default progressInterval: 0")
+    }
+
+    def "waitForLog default rejectPatterns convention is empty map"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    defaultReject {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // rejectPatterns NOT set - should default to empty map
+                        }
+                    }
+                }
+            }
+
+            task verifyDefault {
+                doLast {
+                    def upTask = tasks.getByName('composeUpDefaultReject')
+                    def rejectPatterns = upTask.waitForLogRejectPatterns.get()
+                    println "Default rejectPatterns: \${rejectPatterns}"
+                    assert rejectPatterns.isEmpty()
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyDefault')
+            .build()
+
+        then:
+        result.output.contains("Default rejectPatterns: [:]")
+    }
+
+    // Section 2.2 Convention Override
+
+    def "waitForLog conventions can be overridden"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    overrideConventions {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // Override all conventions
+                            timeoutSeconds.set(180)
+                            pollSeconds.set(5)
+                            caseInsensitive.set(true)
+                            verbose.set(true)
+                            progressIntervalSeconds.set(15)
+                        }
+                    }
+                }
+            }
+
+            task verifyOverrides {
+                doLast {
+                    def upTask = tasks.getByName('composeUpOverrideConventions')
+                    println "Timeout: \${upTask.waitForLogTimeoutSeconds.get()}"
+                    println "Poll: \${upTask.waitForLogPollSeconds.get()}"
+                    println "CaseInsensitive: \${upTask.waitForLogCaseInsensitive.get()}"
+                    println "Verbose: \${upTask.waitForLogVerbose.get()}"
+                    println "ProgressInterval: \${upTask.waitForLogProgressIntervalSeconds.get()}"
+
+                    assert upTask.waitForLogTimeoutSeconds.get() == 180
+                    assert upTask.waitForLogPollSeconds.get() == 5
+                    assert upTask.waitForLogCaseInsensitive.get() == true
+                    assert upTask.waitForLogVerbose.get() == true
+                    assert upTask.waitForLogProgressIntervalSeconds.get() == 15
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyOverrides')
+            .build()
+
+        then:
+        result.output.contains("Timeout: 180")
+        result.output.contains("Poll: 5")
+        result.output.contains("CaseInsensitive: true")
+        result.output.contains("Verbose: true")
+        result.output.contains("ProgressInterval: 15")
+    }
+
+    def "waitForLog all default conventions apply when no overrides specified"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    allDefaults {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            // Only required property set - all others should use convention defaults
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                        }
+                    }
+                }
+            }
+
+            task verifyAllDefaults {
+                doLast {
+                    def upTask = tasks.getByName('composeUpAllDefaults')
+
+                    // Verify all default conventions
+                    def timeout = upTask.waitForLogTimeoutSeconds.get()
+                    def poll = upTask.waitForLogPollSeconds.get()
+                    def caseInsensitive = upTask.waitForLogCaseInsensitive.get()
+                    def verbose = upTask.waitForLogVerbose.get()
+                    def progress = upTask.waitForLogProgressIntervalSeconds.get()
+                    def reject = upTask.waitForLogRejectPatterns.get()
+
+                    println "timeoutSeconds default: \${timeout}"
+                    println "pollSeconds default: \${poll}"
+                    println "caseInsensitive default: \${caseInsensitive}"
+                    println "verbose default: \${verbose}"
+                    println "progressIntervalSeconds default: \${progress}"
+                    println "rejectPatterns default empty: \${reject.isEmpty()}"
+
+                    assert timeout == 60 : "timeoutSeconds should default to 60"
+                    assert poll == 2 : "pollSeconds should default to 2"
+                    assert caseInsensitive == false : "caseInsensitive should default to false"
+                    assert verbose == false : "verbose should default to false"
+                    assert progress == 0 : "progressIntervalSeconds should default to 0"
+                    assert reject.isEmpty() : "rejectPatterns should default to empty map"
+
+                    println "All convention defaults verified successfully"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyAllDefaults')
+            .build()
+
+        then:
+        result.output.contains("timeoutSeconds default: 60")
+        result.output.contains("pollSeconds default: 2")
+        result.output.contains("caseInsensitive default: false")
+        result.output.contains("verbose default: false")
+        result.output.contains("progressIntervalSeconds default: 0")
+        result.output.contains("rejectPatterns default empty: true")
+        result.output.contains("All convention defaults verified successfully")
+    }
+
+    def "waitForLog partial override preserves unset convention defaults"() {
+        given:
+        buildFile << """
+            plugins {
+                id 'java'
+                id 'com.kineticfire.gradle.docker'
+            }
+
+            dockerTest {
+                composeStacks {
+                    partialOverride {
+                        composeFile.set(file('docker-compose.yml'))
+                        waitForLog {
+                            waitForServices.set([
+                                'app': ['Started Application']
+                            ])
+                            // Only override some properties - others should keep defaults
+                            timeoutSeconds.set(120)
+                            verbose.set(true)
+                            // pollSeconds NOT set - should remain 2
+                            // caseInsensitive NOT set - should remain false
+                            // progressIntervalSeconds NOT set - should remain 0
+                            // rejectPatterns NOT set - should remain empty
+                        }
+                    }
+                }
+            }
+
+            task verifyPartialOverride {
+                doLast {
+                    def upTask = tasks.getByName('composeUpPartialOverride')
+
+                    // Check overridden values
+                    def timeout = upTask.waitForLogTimeoutSeconds.get()
+                    def verbose = upTask.waitForLogVerbose.get()
+
+                    // Check preserved defaults
+                    def poll = upTask.waitForLogPollSeconds.get()
+                    def caseInsensitive = upTask.waitForLogCaseInsensitive.get()
+                    def progress = upTask.waitForLogProgressIntervalSeconds.get()
+                    def reject = upTask.waitForLogRejectPatterns.get()
+
+                    println "Overridden - timeout: \${timeout}"
+                    println "Overridden - verbose: \${verbose}"
+                    println "Default preserved - poll: \${poll}"
+                    println "Default preserved - caseInsensitive: \${caseInsensitive}"
+                    println "Default preserved - progress: \${progress}"
+                    println "Default preserved - rejectPatterns empty: \${reject.isEmpty()}"
+
+                    // Verify overrides
+                    assert timeout == 120 : "timeoutSeconds should be overridden to 120"
+                    assert verbose == true : "verbose should be overridden to true"
+
+                    // Verify defaults preserved
+                    assert poll == 2 : "pollSeconds should remain default 2"
+                    assert caseInsensitive == false : "caseInsensitive should remain default false"
+                    assert progress == 0 : "progressIntervalSeconds should remain default 0"
+                    assert reject.isEmpty() : "rejectPatterns should remain default empty"
+
+                    println "Partial override with preserved defaults verified successfully"
+                }
+            }
+        """
+
+        when:
+        def result = GradleRunner.create()
+            .withProjectDir(testProjectDir.toFile())
+            .withPluginClasspath(System.getProperty("java.class.path").split(File.pathSeparator).collect { new File(it) })
+            .withArguments('verifyPartialOverride')
+            .build()
+
+        then:
+        result.output.contains("Overridden - timeout: 120")
+        result.output.contains("Overridden - verbose: true")
+        result.output.contains("Default preserved - poll: 2")
+        result.output.contains("Default preserved - caseInsensitive: false")
+        result.output.contains("Default preserved - progress: 0")
+        result.output.contains("Default preserved - rejectPatterns empty: true")
+        result.output.contains("Partial override with preserved defaults verified successfully")
+    }
 }
